@@ -81,7 +81,7 @@ If work_type is `change` and architecture_required is `false` AND no UI involved
 
 If current phase is final (release for bets, comms for incidents):
 - Confirm completion, update status to `done` or appropriate terminal state
-- Project Manager updates status doc
+- Delivery Manager updates status doc
 
 ### Notes (historical)
 

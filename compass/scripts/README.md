@@ -2,7 +2,7 @@
 
 Reference utility scripts and templates that complement Compass workflows. Each entry is single-file. Adopt as-is or fork for team-specific needs.
 
-**Owner convention:** scripts in this directory are operated by the **Project Manager** role (matching the existing `/status` + `/plan` ownership of "make work visible" jobs). The `agent-handoff.yml` template is consumed by Engineer / Reviewer roles through CI rather than invoked by PM directly — it lives here because it ships with Compass as a reference, alongside `token-usage.py`.
+**Owner convention:** scripts in this directory are operated by the **Delivery Manager** agent (matching the existing `/status` + `/plan` ownership of "make work visible" jobs). Renamed from Project Manager in v0.3.15. The `agent-handoff.yml` template is consumed by Engineer / Reviewer agents through CI rather than invoked by Delivery Manager directly — it lives here because it ships with Compass as a reference, alongside `token-usage.py`.
 
 ---
 
@@ -80,7 +80,7 @@ The script reads these markers from the workflow file referenced by the session'
 - **Debugging / explainability** — when a workflow run feels expensive, see where the tokens went
 - **Team reporting** — aggregate across many sessions (current script handles one at a time; team-wide rollup is v0.3.x+ territory)
 
-PM-owned by convention — see `compass/roles/project-manager.md` for token-usage rollup as a PM responsibility.
+Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md` (Task `rollup-token-usage`) for token-usage rollup as a Delivery Manager responsibility. (Renamed + migrated v0.3.15; legacy role file `compass/roles/project-manager.md` retained during v0.3.x grace period.)
 
 ---
 

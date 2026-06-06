@@ -6,7 +6,7 @@ period_start: <first improvement version, e.g., v0.1.8>
 period_end: <last improvement version, e.g., v0.1.12>
 improvement_count: 5
 created: YYYY-MM-DD
-author: <role — typically Project Manager for project retros, framework Architect for framework retros>
+author: <agent — typically Delivery Manager for project retros, framework Architect for framework retros>
 parent_log: compass/workflows/improvements.md   # OR docs/improvements.md for project-level retros
 ---
 

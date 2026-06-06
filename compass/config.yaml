@@ -135,7 +135,7 @@ tool_assignments:
   reviewer:                 codex     # defaults.reviews — writes E2E + automation framework
   security_reviewer:        codex     # defaults.reviews
   tech_writer:              claude    # defaults.tech-writes
-  project_manager:          claude    # defaults.product
+  delivery_manager:         claude    # defaults.product — renamed from project_manager in v0.3.15 (block deprecated for v0.4 removal anyway)
 
 # ─── Connectors (MCP) ─────────────────────────────────────────────────
 # Wire these up in .mcp.json. The framework references them by name here.

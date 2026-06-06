@@ -54,7 +54,7 @@ OR
    - DRI Log section
 8. **Mirror to Jira/Trello/Confluence** as an epic
 9. **HITL gate** — human reviews and marks `status: approved`
-10. **Project Manager updates `docs/status.md`**
+10. **Delivery Manager updates `docs/status.md`**
 
 ## Output
 

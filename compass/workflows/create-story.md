@@ -36,7 +36,7 @@ PM decomposes the bet into **one** shippable story at a time. After a story ship
    - DRI Log
 8. **Mirror to Jira/Linear** as story under bet's epic
 9. **HITL gate** (if `hitl_level: every_phase` — otherwise auto-advance to ready)
-10. **Project Manager updates `docs/status.md`**
+10. **Delivery Manager updates `docs/status.md`**
 
 ## Output
 

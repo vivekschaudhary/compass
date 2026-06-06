@@ -86,15 +86,15 @@ Things that could shift the schedule materially.
 
 ### Decisions
 
-- [YYYY-MM-DD] [Project Manager] <scheduling decision> — rationale: <why> — area: <tag>
+- [YYYY-MM-DD] [Delivery Manager] <scheduling decision> — rationale: <why> — area: <tag>
 
 ### Risks
 
-- [YYYY-MM-DD] [Project Manager] <plan-level risk> — likelihood — impact — mitigation
+- [YYYY-MM-DD] [Delivery Manager] <plan-level risk> — likelihood — impact — mitigation
 
 ### Issues
 
-- [YYYY-MM-DD] [Project Manager] <issue> — severity — owner — status
+- [YYYY-MM-DD] [Delivery Manager] <issue> — severity — owner — status
 
 ---
 

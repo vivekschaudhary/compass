@@ -23,7 +23,7 @@ The retro **reports**, it doesn't **prescribe**. Patterns surfaced feed future i
 
 1. **Verify gate:** `compass/workflows/improvements.md` exists with ≥5 entries (or in backfill mode, has any entries).
 2. **Identify next batch:** read the improvements log; find the first 5 entries that don't have a retro covering them. (Retros are sequential and disjoint — improvement 1-5 in retro #001, 6-10 in #002, etc.)
-3. **Load Project Manager role context** (`compass/roles/project-manager.md`) for project retros, OR framework-Architect persona for framework retros (Compass on Compass).
+3. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md`) for project retros, OR framework-Architect persona for framework retros (Compass on Compass). (Delivery Manager migrated + renamed from Project Manager in v0.3.15; legacy role file retained during v0.3.x grace period.)
 4. **Read all 5 improvements** fully — both the entries in `improvements.md` AND the underlying CHANGELOG entries for each version.
 5. **Synthesize across the batch** using the retro template (`compass/templates/retro.md`):
    - **Common patterns (positive)** — what's working that shows up multiple times

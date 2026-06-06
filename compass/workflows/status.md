@@ -1,6 +1,6 @@
 # Workflow: /status
 
-Surfaces current state of all in-flight work. Invokes Project Manager role.
+Surfaces current state of all in-flight work. Invokes Delivery Manager agent.
 
 ## Trigger
 
@@ -8,7 +8,7 @@ Surfaces current state of all in-flight work. Invokes Project Manager role.
 
 ## Process
 
-1. **Load Project Manager role context** (`compass/roles/project-manager.md`)
+1. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md` — migrated + renamed v0.3.15; legacy role file at `compass/roles/project-manager.md` retained during v0.3.x grace period for unmigrated workflows but the agent file wins on divergence)
 2. **Gather state:**
    - Last `docs/status.md`
    - **`docs/foundation/plan.md`** if it exists — the living project plan owns the time-bound schedule. `/status` reads it to populate ETAs / in-flight / next-up. Don't recompute schedule data here; `/plan` does that.
@@ -18,7 +18,7 @@ Surfaces current state of all in-flight work. Invokes Project Manager role.
    - `docs/changelog.md` for recent shipped
    - Stale items (phase > 5 days, awaiting approval > 2 days, plan `last_refreshed` > 3 days)
    - Open P0/P1 issues across all bets
-3. **Update `docs/status.md`** following Project Manager's template:
+3. **Update `docs/status.md`** following Delivery Manager's template:
    - In flight (per-bet phase, owner, awaiting, ETA from `plan.md`)
    - Next up (unblocked bets from `plan.md`)
    - Awaiting human approval

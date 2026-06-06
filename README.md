@@ -60,7 +60,7 @@ Do the work. Build for stories; the others for the reactive cases.
 You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/measure` typically run themselves.
 
 ```
-/status                         → Project Manager's rolling status
+/status                         → Delivery Manager's rolling status
 /scan <bet>                     → Snyk-style continuous quality scanner — 6 SDLC phases
 /metrics                        → Outcomes (won/learning/inconclusive) + open-findings posture
 /plan                           → Living time-bound schedule (run manually or via cron)

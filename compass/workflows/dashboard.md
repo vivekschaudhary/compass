@@ -23,7 +23,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
 ## Process
 
 1. **Verify gate:** `docs/foundation/product.md` exists (any status). If not, refuse with pointer to `/setup-product`.
-2. **Load Project Manager role context** (`compass/roles/project-manager.md`) — PM owns rolling visibility, dashboard fits the role.
+2. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md`) — Delivery Manager owns rolling visibility; dashboard fits the role. (Migrated + renamed v0.3.15; legacy role file at `compass/roles/project-manager.md` retained during v0.3.x grace period.)
 3. **Discover source artifacts:**
    - **Foundation:** `docs/foundation/product.md`, `architecture.md`, `architecture-research.md` (if exists)
    - **Plan:** `docs/foundation/plan.md` (if exists)

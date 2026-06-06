@@ -84,7 +84,7 @@ Bootstrap the foundational product bet for a new project. Slots into `/setup-pro
 
 **Handoffs:**
 - Upstream: `researcher.cite-evidence-6-category-9-moat` (must complete first for evidence)
-- Downstream: HUMAN flips `status: approved`. Then `project-manager.update-status` task takes over for the `docs/status.md` update. (Until `project-manager` agent migrates in v0.3.15+, this step uses `compass/roles/project-manager.md`.)
+- Downstream: HUMAN flips `status: approved`. Then `delivery-manager.update-status` task takes over for the `docs/status.md` update (`compass/agents/delivery-manager.md`; migrated + renamed from Project Manager in v0.3.15).
 
 ### Task: `draft-brief`
 

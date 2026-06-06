@@ -45,7 +45,7 @@ Artifacts the framework produces live in `docs/`:
 | ------------- | ------------- | --- |
 | `engineer`, `architect`, `enterprise-architect`, `scanner` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold work; pure-chat hosts are degraded |
 | `reviewer`, `security-reviewer` | `[codex, gemini]` — explicitly EXCLUDES claude | **Independent-model review** — must be a different model than the implementer (see structural rationale below) |
-| `pm`, `researcher`, `ux-writer`, `designer`, `tech-writer`, `project-manager` (= delivery manager) | `[chatgpt, claude, codex, gemini]` | Product / research / UX work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
+| `pm`, `researcher`, `ux-writer`, `designer`, `tech-writer`, `delivery-manager` | `[chatgpt, claude, codex, gemini]` | Product / research / UX / visibility work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
 | `support` | `[any]` | Incident triage runs wherever the on-call is |
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent.
@@ -73,7 +73,7 @@ v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surfac
 | Reviewer (Codex; writes E2E + automation)  | `compass/roles/reviewer.md` (+ `.codex/prompts/reviewer.md`)     | legacy           |
 | Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md` (+ `.codex/prompts/security-reviewer.md`) | legacy |
 | Tech Writer                                | `compass/roles/tech-writer.md`                                   | legacy           |
-| Project Manager (→ Delivery Manager v0.4)  | `compass/roles/project-manager.md`                               | legacy           |
+| Delivery Manager (was Project Manager)     | `compass/agents/delivery-manager.md`                             | ✅ v0.3.15       |
 | Scanner (read-only; produces findings)     | `compass/roles/scanner.md`                                       | legacy           |
 
 When playing an agent, **read its full file from the source-of-truth path above**. For migrated agents (✅), the file is self-sufficient and includes its own task definitions. For legacy roles, load the role file + read the workflow file for task steps (v0.3.0-alpha-shape workflows still embed step bodies).

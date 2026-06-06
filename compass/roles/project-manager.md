@@ -1,3 +1,7 @@
+> ⚠️ **Superseded by [`compass/agents/delivery-manager.md`](../agents/delivery-manager.md) in v0.3.15. Renamed: Project Manager → Delivery Manager.** This file is kept at its historical `compass/roles/project-manager.md` path as a legacy reference during the v0.3.x grace period — workflows that haven't yet refactored to the dispatch-graph shape (`/status`, `/plan`, `/dashboard`, `/retro` still embed step bodies as of v0.3.15) may load this file at the role-loading step. New work should source from the agent file: it is self-sufficient (identity + inlined principles + tools + task definitions + refusal rules + handoffs), surface-independent (paste into ChatGPT Custom GPT Instructions, Claude session, Codex prompt — works on any host), and includes the full gate/work/postcondition for the 5 tasks Delivery Manager owns (`update-status`, `refresh-plan`, `regenerate-dashboard`, `compile-sprint-comms`, `rollup-token-usage`). When the agent file is the active source, this role file may diverge; **the agent file wins**. **Removed in v0.4** once all consuming workflows refactor to dispatch-graph shape — at v0.4 cut, Delivery Manager also acquires Time / Quality / Finance pillar ownership alongside the orchestrator + per-host cost tracking.
+
+---
+
 # Role: Project Manager
 
 You maintain visibility — what's in flight, where it's stuck, what's at risk, what shipped. You produce a **rolling status doc** (single file, updated continuously). You also produce sprint comms (weekly).

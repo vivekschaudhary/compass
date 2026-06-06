@@ -45,7 +45,7 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 
 - `compass/agents/pm.md` — primary agent across most of the workflow
 - `compass/agents/researcher.md` — engaged for the cited-evidence task (no log-and-walk-away)
-- `compass/roles/project-manager.md` — final status update step (Project Manager agent migration deferred to v0.3.15+; uses legacy role file until then)
+- `compass/agents/delivery-manager.md` — final status update step (migrated v0.3.15)
 
 ## Dispatch graph
 
@@ -74,11 +74,12 @@ Either way, the GRAPH is the same.
 **Dispatches:** HUMAN (not an agent)
 **What it covers:** human reviews `docs/foundation/product.md` against the workflow-level Verification checklist below. If all items pass, human flips frontmatter `status: proposed` → `status: approved` and commits. If any item fails, human rejects and either re-dispatches PM/Researcher or aborts. **Per Principle #16:** PM agent must NOT self-approve; HITL is a hard stop.
 
-### Step 4. `project-manager.update-status` (Project Manager — legacy role until v0.3.15+)
+### Step 4. `delivery-manager.update-status` (Delivery Manager agent owns)
 
-**Dispatches:** Project Manager (agent migration pending)
-**Task definition (interim):** `compass/roles/project-manager.md` — append note to `docs/status.md` recording that foundation product bet exists and is approved (with date).
-**Migration TODO:** create `compass/agents/project-manager.md` with task `update-status` in v0.3.15+. Until then, this step uses the legacy role file. Dispatch graph stays stable across the migration.
+**Dispatches:** Delivery Manager agent (renamed from Project Manager in v0.3.15)
+**Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`
+**What it covers:** append note to `docs/status.md` recording that the foundational product bet exists and is approved (with date); In-flight row added; Awaiting-approval row removed if the bet was in that section pre-approval. Per Delivery Manager's `[no-padded-status]` + `[derive-from-state]` principles.
+**Migration status:** migrated + renamed v0.3.15 — dispatch graph reference moved from `project-manager.update-status` → `delivery-manager.update-status` (rename), and the lookup target moved from `compass/roles/project-manager.md` → `compass/agents/delivery-manager.md`. Dispatch graph **shape** (workflow ↔ agent task contract) unchanged.
 
 ## Workflow-level verification (final GATE — workflow cannot complete until all checked)
 
@@ -96,7 +97,7 @@ Mirrors per-task postconditions + cross-agent invariants.
 - [ ] (Step 1 — pm) PM DRI: ≥1 Decision entry
 - [ ] (Step 1 — pm) Mirroring step completed (epic linked) OR skip logged as DRI Decision (per "no silent skips")
 - [ ] (Step 3 — HITL) **Per Principle #16:** if any item above is unchecked, HITL gate cannot pass — refuse to proceed; tell user which item needs work. Human flipped `status: approved`.
-- [ ] (Step 4 — project-manager) `docs/status.md` mentions foundation product bet with approval date
+- [ ] (Step 4 — delivery-manager) `docs/status.md` mentions foundation product bet with approval date
 
 Workflow is NOT complete until every item is checked.
 
@@ -117,7 +118,7 @@ After completion (or refusal), report in this exact shape:
 - **Heavy step content moved out of this file** into `compass/agents/pm.md` (task `setup-product-foundation`) and `compass/agents/researcher.md` (task `cite-evidence-6-category-9-moat`). This file became a thin **dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14).
 - **No behavior change.** Every gate/work/postcondition that existed in v0.3.0-alpha shape is preserved, now inside the agent task definitions. Verification items unchanged.
 - **Cross-host orchestration enabled.** Same workflow file works whether PM runs on ChatGPT and Engineer runs on Claude Code (today, with human dispatcher) or whether v0.4 orchestrator dispatches across hosts (later). The graph is the contract.
-- **Project Manager agent migration deferred to v0.3.15+.** Step 4 still uses `compass/roles/project-manager.md` until then. The dispatch graph reference (`project-manager.update-status`) stays stable across the migration.
+- **Project Manager → Delivery Manager migration + rename, v0.3.15.** Step 4 now dispatches to `compass/agents/delivery-manager.md` → Task `update-status`. The dispatch graph reference itself moved (`project-manager.update-status` → `delivery-manager.update-status`) **because we're renaming the agent**, but the dispatch graph **shape** (the workflow ↔ agent-task contract) stayed stable. This is an honest stretch of the v0.3.14 promise — the simple-migration test would have kept the same reference; the rename test moves the reference but preserves the contract. Both surface the same downstream invariant: workflows don't need to know about agent-file internals.
 
 ### Anti-patterns
 

@@ -18,7 +18,7 @@
 ---
 name: <workflow-name>            # e.g., setup-product, create-brief
 status: active                   # active | deprecated | experimental
-owner: <role>                    # primary role (e.g., pm, enterprise-architect, project-manager)
+owner: <role>                    # primary role (e.g., pm, enterprise-architect, delivery-manager)
 auto_invokes: []                 # workflows this one calls at its end (e.g., [plan, dashboard])
 invoked_by: []                   # workflows that auto-call this one
 version: 0.3.0-alpha             # workflow's own hardening version; bump on next hardening

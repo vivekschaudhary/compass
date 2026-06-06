@@ -21,7 +21,7 @@ Maintains the **living project plan** — a time-bound schedule derived from per
 
 1. **Verify gate:** `docs/foundation/portfolio.md` exists with `status: approved`. Otherwise refuse.
 2. **State detection** per table above.
-3. **Load Project Manager role context** (`compass/roles/project-manager.md`) — PM owns rolling project scheduling.
+3. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md`) — Delivery Manager owns rolling project scheduling. (Migrated + renamed v0.3.15; legacy role file at `compass/roles/project-manager.md` retained during v0.3.x grace period.)
 4. **Read all current artifacts:**
    - `docs/foundation/portfolio.md` — bet list, dependency graph, parallel-build candidates.
    - For each MVP bet:
