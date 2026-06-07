@@ -251,7 +251,7 @@ tool_assignments:
 
 **Non-default agents may require manual setup** depending on their type:
 
-- **CLI-based agents** (`claude`, `codex`, `gemini`): need a per-tool prompt directory (`.codex/prompts/<role>.md`, `.gemini/prompts/<role>.md`). Until v0.3.9 ships `compass/scripts/setup-agent.py` to generate these, copy the pattern from existing `.codex/prompts/reviewer.md` (it's a thin wrapper pointing at `compass/roles/<role>.md`).
+- **CLI-based agents** (`claude`, `codex`, `gemini`): need a per-tool prompt directory (`.codex/prompts/<role>.md`, `.gemini/prompts/<role>.md`). Until v0.3.9 ships `compass/scripts/setup-agent.py` to generate these, copy the pattern from existing `.codex/prompts/reviewer.md` (it's a thin wrapper pointing at `compass/agents/<agent>.md` for migrated agents, or `compass/roles/<role>.md` for legacy ones during the v0.3.x grace period).
 
 - **API-based agents** (`openai`, `deepseek`, `codestral`): use an upstream adapter library — **LiteLLM recommended** (handles 100+ providers, unified API, Python + JS). Alternatives: **Vercel AI SDK** (TypeScript-first), **OpenRouter** (hosted proxy), **LangChain LLM providers**. Compass passes `compass/roles/<role>.md` as the system prompt; the adapter routes to the right provider given a model string (e.g., LiteLLM uses `openai/gpt-5`, `deepseek/deepseek-chat`, `mistral/codestral-latest`). Auth via standard env vars (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`).
 

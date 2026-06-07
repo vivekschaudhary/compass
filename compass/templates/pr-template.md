@@ -39,9 +39,9 @@ Canonical PR template content. Copied to .github/PULL_REQUEST_TEMPLATE.md
 
 ## Review handoff
 
-**Engineer (Claude or other):** Implementation complete per bet architecture. Codex should review per `compass/roles/reviewer.md`.
+**Engineer (Claude or other):** Implementation complete per bet architecture. Codex should review per `compass/agents/reviewer.md`.
 
-**Reviewer (Codex):** Read `AGENTS.md`, this bet's architecture and brief, then review this diff. Architect compliance check included. Post structured findings per the format in `compass/roles/reviewer.md`.
+**Reviewer (Codex):** Read `AGENTS.md`, this bet's architecture and brief, then review this diff. Architect compliance check included. Post structured findings per the format in `compass/agents/reviewer.md`.
 
 **Security review:** auto-triggered if diff touches auth, PII, payments, secrets, external input, sessions, or crypto. Per `compass/roles/security-reviewer.md`.
 

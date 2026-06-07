@@ -78,7 +78,7 @@ Pre-v0.3.14, this file declared "you play every Compass role EXCEPT Reviewer / S
 
 Under `[agent-as-surface-independent-unit]` (canon v0.3.14):
 - **Role authority moved to agent files.** Each `compass/agents/<agent>.md` declares its own `preferred_hosts: [...]`. Workflow dispatch graphs name `<agent>.<task>` per step. The host (Claude Code, here) just runs whatever the dispatch graph names.
-- **Cross-host independence preserved structurally.** The Reviewer agent (when migrated in v0.3.15+) will declare `preferred_hosts: [codex, gemini]` (NOT claude) — making the implementer/reviewer model split enforced at the agent level, not via CLAUDE.md prose. Until then, the legacy `compass/roles/reviewer.md` and `compass/roles/security-reviewer.md` remain Codex-assigned (see `compass/config.yaml` and `.codex/prompts/`).
+- **Cross-host independence preserved structurally.** The Reviewer agent (migrated v0.3.16) declares `preferred_hosts: [codex, gemini]` (NOT claude) — making the implementer/reviewer model split enforced at the agent-frontmatter level, not via CLAUDE.md prose. Security Reviewer still pending migration; the legacy `compass/roles/security-reviewer.md` and `.codex/prompts/security-reviewer.md` remain Codex-assigned via `compass/config.yaml` until its own migration session.
 - **No same-host self-review.** Even though Claude Code CAN execute any agent file, do not run reviewer / security-reviewer tasks against code Claude Code wrote. The cross-model review independence is a Compass design principle; respect it at runtime.
 
 ## Notes for the orchestrator (v0.4 — not yet present)

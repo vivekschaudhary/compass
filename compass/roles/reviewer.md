@@ -1,13 +1,5 @@
----
-# Freshness markers — per [freshness-check] pattern in compass/framework/canon.md.
-# This file documents the expected Codex review output shape. External-tool drift
-# (Codex CLI updates, format changes) makes this go stale silently. Workflows that
-# depend on this doc (currently /build Phase 5) refuse if last_verified is older
-# than freshness_window_days. Update `last_verified` after manually confirming
-# the format against external_source.
-last_verified: 2026-06-01
-freshness_window_days: 30
-external_source: https://github.com/openai/codex
+> ⚠️ **Superseded by [`compass/agents/reviewer.md`](../agents/reviewer.md) in v0.3.16.** This file is kept at its historical `compass/roles/reviewer.md` path as a legacy reference during the v0.3.x grace period — but the agent file is the source-of-truth: it is self-sufficient (identity + inlined principles + tools + 2 task definitions for `review-pr` + `write-e2e-tests` + refusal rules + handoffs), surface-independent (paste into Codex CLI prompt, Gemini CLI prompt — works on any non-Claude reviewer host per cross-host integrity), and carries the **freshness frontmatter** (`last_verified`, `freshness_window_days`, `external_source`) that was previously here. `/build` Phase 5 Step 12a now reads the freshness markers from the agent file, not this one — **freshness markers were relocated to the agent file as a single source of truth to avoid drift**. When the agent file is the active source, this role file may diverge; **the agent file wins**. **Removed in v0.4** once `/build` and `/ops` workflows refactor to dispatch-graph shape (currently their step bodies still embed methodology and load this file's content directly).
+
 ---
 
 # Role: Reviewer (Codex)

@@ -56,7 +56,7 @@ Engineer implements an approved story. Codex reviews. Architect compliance enfor
 
 <!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=8 -->
 
-8. **Load Reviewer role context** (`compass/roles/reviewer.md`) — Codex
+8. **Load Reviewer agent** (`compass/agents/reviewer.md`) — Codex (migrated v0.3.16; legacy role file at `compass/roles/reviewer.md` retained during v0.3.x grace period but the agent file wins)
 9. **Codex writes E2E tests** for AC user flows (top-level `e2e/` folder)
 10. **Codex commits with `test:` prefix**
 
@@ -79,15 +79,15 @@ Engineer implements an approved story. Codex reviews. Architect compliance enfor
 
 <!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=12a -->
 
-12a. **Freshness-check precondition (load-bearing).** Before Codex review begins, verify `compass/roles/reviewer.md` is current. Per `[freshness-check]` (canon.md) — read the file's frontmatter:
+12a. **Freshness-check precondition (load-bearing).** Before Codex review begins, verify `compass/agents/reviewer.md` is current. Per `[freshness-check]` (canon.md) — read the file's frontmatter:
 
-   - **If missing `last_verified`:** treat as infinitely stale. **Refuse with:** "compass/roles/reviewer.md is missing freshness markers. Backfill `last_verified`, `freshness_window_days`, and `external_source` after verifying the Codex review format is current."
-   - **If `today - last_verified > freshness_window_days`:** **refuse with:** "compass/roles/reviewer.md last verified <last_verified> (>{freshness_window_days} days). The Codex review format may have drifted. Verify against `<external_source>`; update both the 'Expected Codex output shape' section and `last_verified` once confirmed current. Re-invoke `/build` after."
+   - **If missing `last_verified`:** treat as infinitely stale. **Refuse with:** "compass/agents/reviewer.md is missing freshness markers. Backfill `last_verified`, `freshness_window_days`, and `external_source` after verifying the Codex review format is current."
+   - **If `today - last_verified > freshness_window_days`:** **refuse with:** "compass/agents/reviewer.md last verified <last_verified> (>{freshness_window_days} days). The Codex review format may have drifted. Verify against `<external_source>`; update both the 'Output summary contract' section and `last_verified` once confirmed current. Re-invoke `/build` after."
    - **Else:** proceed.
 
-   This is the pull-bridge round-1 defense against external-tool drift (per `[freshness-check]` v0.3.3 → v0.3.4 detection → v0.4 push). Without this gate, Codex format changes silently break the review parsing — exactly the friction that prompted the pattern.
+   This is the pull-bridge round-1 defense against external-tool drift (per `[freshness-check]` v0.3.3 → v0.3.4 detection → v0.4 push). Without this gate, Codex format changes silently break the review parsing — exactly the friction that prompted the pattern. _Note: freshness markers were relocated from `compass/roles/reviewer.md` → `compass/agents/reviewer.md` in v0.3.16 alongside the Reviewer migration. Single source of truth on the agent file._
 
-13. **CI runs.** Codex review begins ONLY after CI is green. **If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml` template, `[agent-handoff]` v0.3.5), the reviewer fires automatically on CI-green — Engineer does not need to invoke it manually. Otherwise the reviewer is invoked manually** (open terminal, run `codex` against the reviewer prompt referencing the PR number — see `compass/roles/reviewer.md`). Both paths terminate at the same place (structured findings posted as a PR comment); automation removes the tool-switch + manual prompt paste only.
+13. **CI runs.** Codex review begins ONLY after CI is green. **If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml` template, `[agent-handoff]` v0.3.5), the reviewer fires automatically on CI-green — Engineer does not need to invoke it manually. Otherwise the reviewer is invoked manually** (open terminal, run `codex` against the reviewer prompt referencing the PR number — see `compass/agents/reviewer.md` task `review-pr`). Both paths terminate at the same place (structured findings posted as a PR comment); automation removes the tool-switch + manual prompt paste only.
 14. **Codex reviews** — posts structured findings on PR (BLOCKER / ISSUE / NIT)
 15. **Architect compliance check** is part of Codex review (bet architecture as reference)
 16. **Security Reviewer (Codex)** auto-engages if diff touches auth/PII/payments/secrets/external input/sessions

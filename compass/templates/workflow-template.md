@@ -192,7 +192,7 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   latter. Closes the `polished-but-broken` anti-pattern (tests pass +
   build green + narrative coherent + behavior wrong). 4th enforcement-
   class Compass-original. Applied in /build Phase 2 step 7 + Codex review
-  Step 0 (compass/roles/reviewer.md).
+  Step 0 (compass/agents/reviewer.md — migrated v0.3.16).
 -->
 
 ### 1. <Step title>

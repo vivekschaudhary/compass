@@ -133,7 +133,7 @@ The template ships with four reviewer blocks (Codex / Claude headless / Gemini /
 
 ### Manual fallback always supported
 
-If the template isn't installed, the Engineer → Reviewer handoff stays manual exactly as it was pre-v0.3.5: terminal → `codex` → reviewer prompt → PR. Both paths terminate at the same place (findings as PR comment); automation removes the tool-switch only. See `compass/roles/reviewer.md` → "How you're invoked."
+If the template isn't installed, the Engineer → Reviewer handoff stays manual exactly as it was pre-v0.3.5: terminal → `codex` → reviewer prompt → PR. Both paths terminate at the same place (findings as PR comment); automation removes the tool-switch only. See `compass/agents/reviewer.md` task `review-pr` for the full review process (migrated from `compass/roles/reviewer.md` in v0.3.16).
 
 ---
 

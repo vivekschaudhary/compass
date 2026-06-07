@@ -70,7 +70,7 @@ v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surfac
 | UX Writer                                  | `compass/roles/ux-writer.md`                                     | legacy           |
 | Architect (per-bet)                        | `compass/roles/architect.md`                                     | legacy           |
 | Enterprise/Solution Architect              | `compass/roles/enterprise-architect.md`                          | legacy           |
-| Reviewer (Codex; writes E2E + automation)  | `compass/roles/reviewer.md` (+ `.codex/prompts/reviewer.md`)     | legacy           |
+| Reviewer (Codex; writes E2E + automation)  | `compass/agents/reviewer.md` (+ `.codex/prompts/reviewer.md`)    | ✅ v0.3.16       |
 | Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md` (+ `.codex/prompts/security-reviewer.md`) | legacy |
 | Tech Writer                                | `compass/roles/tech-writer.md`                                   | legacy           |
 | Delivery Manager (was Project Manager)     | `compass/agents/delivery-manager.md`                             | ✅ v0.3.15       |

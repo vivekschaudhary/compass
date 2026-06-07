@@ -15,7 +15,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 - **Retro #006** (v0.3.9 → v0.3.13): [retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md](retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md) — **fired ON TIME at #30** (2nd consecutive on-time retro; hard line worked again). 5 improvements in 1 day. Surfaces 3 codification-ready candidates: `[user-as-load-bearing-oversight]` (3+ instances) · `[L-layered-progressive-rollout]` (2 instances) · `[surface-shapes-output]` (2 instances). `[hard-line-declaration]` empirically validated 3rd time (cadence-class commitments). Release-class taxonomy stable at 7 classes (capability-extension introduced v0.3.13).
 
-**Next retro fires after improvement #35.** (Retro #006 fired at #30 ON TIME 2026-06-02. **v0.3.15 = #32 (3 of 5 needed before Retro #007).** Hard line still in effect — if Retro #007 slips, it's a 2nd retro-cadence regression; treat as recurring soft-spec failure and deepen `[hard-line-declaration]` mechanism (e.g., make counter visible in dashboard Actions tab).)
+**Next retro fires after improvement #35.** (Retro #006 fired at #30 ON TIME 2026-06-02. **v0.3.16 = #33 (2 of 5 needed before Retro #007).** Hard line still in effect — if Retro #007 slips, it's a 2nd retro-cadence regression; treat as recurring soft-spec failure and deepen `[hard-line-declaration]` mechanism (e.g., make counter visible in dashboard Actions tab).)
 
 ## Template
 
@@ -1444,3 +1444,112 @@ The user observed the real-world pattern: "create the bets across all and then h
 - **Custom GPT char limit for delivery-manager.md.** New agent file is ~11KB (longer than `pm.md` at ~7KB; closer to `researcher.md` at ~6.5KB). OpenAI Custom GPT Instructions cap is ~8000 chars. **delivery-manager.md exceeds the cap.** If the agent is going to ChatGPT, the file needs trimming — push host-capability table + extended task definitions to REFERENCED, keep Identity + Core principles + Refusal rules INLINED. Counter-instance to v0.3.14's "sized to fit comfortably" claim. Worth its own improvement entry when ChatGPT-host usage surfaces.
 - **Counter at #32. Hard line still in effect from Retro #006** — if Retro #007 slips, treat as 2nd retro-cadence regression and deepen `[hard-line-declaration]` mechanism. 3 more improvements to fire Retro #007.
 
+
+### 2026-06-06 — Reviewer agent migrated; cross-host integrity enforced at agent-frontmatter level; `[freshness-markers-follow-source-of-truth]` surfaced; `[tool-wrappers-own-their-cadence]` boundary REFINED (v0.3.16)
+
+**Friction:** Reviewer was the next-up agent migration after delivery-manager (v0.3.15). Three intertwined frictions surfaced.
+
+(1) **Cross-host integrity needed enforcement at the agent-frontmatter level, not prose.** Pre-v0.3.16, the "reviewer must use a different model than implementer" rule was enforced via prose across 10+ files (AGENTS.md "Host division of labor", CLAUDE.md, README.md, SETUP.md, canon.md v0.3.5/v0.3.8 descriptions, `compass/roles/reviewer.md` header, `compass/config.yaml` `tool_assignments:` comments, `.codex/prompts/reviewer.md`, `compass/scripts/agent-handoff.yml`). The v0.3.14 spec target named the fix explicitly (CLAUDE.md: "The Reviewer agent (when migrated in v0.3.15+) will declare `preferred_hosts: [codex, gemini]` (NOT claude)"). v0.3.16 lands that fix.
+
+(2) **Freshness frontmatter had to MOVE WITH the source-of-truth.** `compass/roles/reviewer.md` was the only legacy role file carrying `[freshness-check]` markers (`last_verified: 2026-06-01`, `freshness_window_days: 30`, `external_source: https://github.com/openai/codex`). `/build` Phase 5 Step 12a reads those markers as a load-bearing gate. Three options surfaced: keep markers on legacy file (drift risk — legacy file is now banner-only); duplicate to both (drift risk by design); move to agent file (single source of truth). **Picked option 3** — workflow Step 12a updated to read the agent file's frontmatter.
+
+(3) **`.codex/prompts/reviewer.md` in-scope decision tested the v0.3.15 boundary.** v0.3.15 had codified `[tool-wrappers-own-their-cadence]` (framework renames don't chase per-host wrappers) and explicitly predicted the next test: "Likely when (a) Reviewer migrates and someone tries to update `.codex/prompts/reviewer.md` as part of the rename". v0.3.16 hit that test. Two readings: (a) skip the update per the boundary — wrapper is out of scope; OR (b) update it because Reviewer is **Codex-assigned by design** — the Codex prompt is *this* agent's natural dispatch surface, so the update is in-cadence, not "chasing wrappers." Flagged the decision at plan time; user approved (b). **The boundary didn't trigger a 2nd instance — it got REFINED:** "framework rename doesn't chase ORTHOGONAL wrappers; agent migration DOES touch the wrapper for THAT agent's assigned host."
+
+**Change:**
+
+- **`compass/agents/reviewer.md` created** (~10KB) — self-sufficient agent file. Frontmatter: `name: reviewer`, **`preferred_hosts: [codex, gemini]` (EXCLUDES claude — load-bearing cross-host integrity)**, `required_tools: [filesystem_read, shell_exec, github_write_artifact, mcp_github]`, `optional_tools: [web_search, mcp_sentry]`, `participates_in_workflows: [build, ops]`, `version: 0.3.16`. **Freshness markers relocated** from legacy role file. 5 core principles INLINED (`[mechanical-output-verification]`, `[freshness-check]`, `[role-boundary]`, `[refuse-escalate]`, `[hold-positions-in-disputes]`). 2 tasks: `review-pr` (full 7-step process incl. Step 0 framework-registration check + Step 4 review-time freshness on NEW load-bearing claims) + `write-e2e-tests`. Output summary contract is the freshness target (Codex review comment format). Host-capability degradation table covers codex / gemini / pure-chat. **Host preference note** opens with cross-host-integrity-not-convenience framing — `preferred_hosts: [codex, gemini]` excludes claude on purpose, not as a host-preference convenience.
+- **`compass/roles/reviewer.md` signposted as superseded.** v0.3.14-pattern banner; explicitly states the freshness frontmatter was relocated (so the legacy file no longer carries the load-bearing markers); names the `/build` Phase 5 Step 12a path update; "agent file wins on divergence"; "removed in v0.4" deadline. Legacy body intact.
+- **`.codex/prompts/reviewer.md` updated to dispatch at the new agent file** — both the "Read these in order" list and the "Follow ... exactly" execute instruction flipped from `compass/roles/reviewer.md` → `compass/agents/reviewer.md`. Inline audit-trail note explains the migration. **Per the refined `[tool-wrappers-own-their-cadence]` principle:** Reviewer is Codex-assigned-by-design, so the Codex prompt is *this* agent's natural dispatch surface and the update is in-cadence.
+- **`compass/workflows/build.md` Phase 5 updated.** Step 8 load instruction → `compass/agents/reviewer.md`. Step 12a freshness-check precondition reads frontmatter from the new path; refusal messages updated; section name reference updated ("Expected Codex output shape" → "Output summary contract"). Step 13 manual-invocation pointer updated. ROLE_BOUNDARY markers unchanged (`role=reviewer` matches the agent name). Workflow stays in v0.3.0-alpha step-body shape; refactor declared as next v0.3.16+ improvement per `[declare-not-implement]`.
+- **`AGENTS.md` row 73** flipped: `compass/roles/reviewer.md (+ .codex/prompts/reviewer.md)` / `legacy` → `compass/agents/reviewer.md (+ .codex/prompts/reviewer.md)` / `✅ v0.3.16`. Migration column: 5 ✅ / 8 legacy.
+- **`CLAUDE.md` cross-host-independence paragraph** updated from prediction ("when migrated in v0.3.15+ will declare ...") → past-tense ("migrated v0.3.16; declares `preferred_hosts: [codex, gemini]` ..."). Security Reviewer's pending-migration note retained.
+- **PR templates** (`compass/templates/pr-template.md` + `.github/PULL_REQUEST_TEMPLATE.md`): 2 file-path references each flipped to `compass/agents/reviewer.md`. Security Reviewer references stay at `compass/roles/security-reviewer.md`.
+- **`compass/scripts/README.md`** "Manual fallback" pointer flipped to `compass/agents/reviewer.md` task `review-pr`.
+- **`SETUP.md` "CLI-based agents" guidance** updated to note migrated-vs-legacy path distinction during v0.3.x grace period.
+
+**Forward-link surfaced:** **`[freshness-markers-follow-source-of-truth]`** as a 1-instance codification candidate. When an agent migrates and the source-of-truth moves, freshness frontmatter MOVES WITH IT — workflows that read the markers update the path. Promote on 2nd instance (likely when another freshness-marker-carrying file migrates, or when a per-bet artifact gains freshness markers).
+
+**Boundary refinement on `[tool-wrappers-own-their-cadence]`:** v0.3.15 named the pattern with the example "framework renames don't chase per-host wrappers." v0.3.16 distinguishes: **the principle applies to ORTHOGONAL wrappers** (Delivery Manager rename → don't touch `.claude/skills/dashboard/SKILL.md`); **NOT to the host wrapper for the agent being migrated** (Reviewer migration → DO touch `.codex/prompts/reviewer.md` because Reviewer is Codex-assigned-by-design). The boundary test: is this wrapper the dispatch surface for THIS specific agent on ITS assigned host? If yes, in scope. If no, out of scope. Pattern stays at 1 instance (v0.3.15 codification + v0.3.16 refinement, not a 2nd independent instance); promote on 2nd FRAMEWORK rename or agent migration that exercises the same boundary distinction.
+
+**Files touched (framework-canonical only):** new — `compass/agents/reviewer.md`. Edited — `compass/roles/reviewer.md` (banner + frontmatter removed), `.codex/prompts/reviewer.md` (dispatch updated), `compass/workflows/build.md` (Phase 5 Steps 8/12a/13), `AGENTS.md` (row 73), `CLAUDE.md` (cross-host paragraph), `compass/templates/pr-template.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `compass/scripts/README.md`, `SETUP.md`, `CHANGELOG.md` (v0.3.16), `compass/workflows/improvements.md` (this entry).
+
+**Watch for:**
+
+- **Security Reviewer migration is the obvious next agent.** Same `[different-model-reviewer]` rationale applies; `.codex/prompts/security-reviewer.md` follows the same in-cadence-update logic as Reviewer's. Should be smaller scope (fewer cross-references; Security Reviewer is more narrowly scoped to auth/PII/secrets paths).
+- **`/build` workflow refactor to dispatch-graph shape** is now well-overdue. v0.3.14 migrated Engineer; v0.3.16 migrated Reviewer; both `/build`'s primary agents are now migrated, but `/build` itself still embeds step bodies. Refactoring `/build` to dispatch-graph shape (per the v0.3.14 `/setup-product` precedent) would be a substantial release on its own — and would surface `[workflow-as-dispatch-graph]` 2nd instance (currently at 1 from v0.3.14).
+- **Codex freshness window expires 2026-07-01** (last_verified: 2026-06-01 + 30 days). Codex CLI v1.x continues to evolve; recheck the Output summary contract section against [github.com/openai/codex](https://github.com/openai/codex) at that point, update both the section AND `last_verified` if the format is still current. If Codex's output drifts, `/build` Phase 5 will catch the mismatch on a real review failure — but the structural defense is this date check.
+- **`[freshness-markers-follow-source-of-truth]` 2nd instance**: likely when next freshness-marker-carrying file migrates, OR if a per-bet artifact (like a feature brief that depends on a third-party API contract) gains freshness markers.
+- **Cross-host integrity now agent-frontmatter-enforced, but `tool_assignments:` block still exists** in `compass/config.yaml`. Block is deprecated for v0.4 removal — keep it during grace period for projects with local overrides. Removal happens alongside `compass/roles/*` deletion in v0.4.
+- **Custom GPT char limit irrelevant for Reviewer.** Unlike delivery-manager (v0.3.15 cap-violation flag), Reviewer's preferred_hosts excludes ChatGPT, so the 8000-char Custom GPT cap doesn't apply. ~10KB file size is fine.
+- **Counter at #33. Hard line still in effect from Retro #006** — Retro #007 fires after #35. 2 more improvements needed.
+
+---
+
+### QUEUED — 2026-06-06 — Multi-altitude retros (fractal pattern across role / workflow / bet / project / org / framework)
+
+> **STATUS: queued, not shipped.** This entry is a **design carryover**, not a shipped improvement. **Counter does NOT tick** for queued entries. Surfaced via a design conversation in the v0.3.16 session; will move to a shipped-entry shape (with stamped version, files-touched, watch-for) when the trigger conditions below fire and it actually gets built.
+
+**Friction (latent, not yet acute):** Retros today are **single-altitude** — only `compass/workflows/improvements.md` (framework altitude) has retros wired. `compass/workflows/retro.md` line 65 already declared a project-altitude variant (*"Same workflow shape, different `parent_log`. Project retros would use `docs/improvements.md` and write to `docs/retros/`. Currently only framework retros are wired; project-retro variant can generalize when a project asks for it"*) but never built it. **The deeper architectural gap** surfaced in the v0.3.16 session: the user's framing — *"Retros like the plan are at every role or workflow based. Should we keep retros at roles/workflows and then consolidate to project and org, follow the same workflow?"* — is the cleanest unification. Retros should be **fractal**: same workflow shape applied at every altitude, with bottom-up consolidation via the `parent_log:` field that already exists in the retro template. Today the bottom-up signal is invisible — patterns visible at role/workflow level never bubble up; patterns visible at project level never reach the framework. The user's original ask was cross-program (org-altitude) consolidation; the design generalizes to all 6 altitudes.
+
+**Design (locked):**
+
+The 6-altitude fractal model:
+
+```
+Altitude        | What it retros on                              | Source log (data)                              | Cadence trigger
+----------------|------------------------------------------------|------------------------------------------------|--------------------
+Role            | Per-role / per-agent activity                  | Per-role activity log (NEW)                    | Every N task invocations
+Workflow        | Per-workflow execution patterns                | Per-workflow run log (NEW)                     | Every N runs
+Bet             | Bet outcome + DRI log + scope drift            | Bet's DRI log + outcome (existing)             | At bet outcome transition (won/learning/inconclusive)
+Project         | Cross-bet patterns within a project            | All bet retros + role/workflow retros in proj  | Manual or cron (monthly)
+Org / Cross-program | Patterns across multiple projects          | All project retros across configured paths     | Quarterly cron or manual
+Framework       | Compass framework evolution                    | compass/workflows/improvements.md (existing)   | Every 5 improvements (existing — UNCHANGED)
+```
+
+**Same workflow file (`/retro`) at every altitude.** Same template (`compass/templates/retro.md` — already shaped right). Each retro file gains 2 new frontmatter fields:
+- `altitude: role | workflow | bet | project | org | framework`
+- `consolidates_from: [<paths>]` — for higher altitudes that aggregate child retros
+
+Existing `parent_log:` field stays; its semantic generalizes from a 2-value enum (framework vs project) to N-altitude. **Existing framework retro mechanism unchanged** — gets reframed as "the framework's altitude=framework retro" under the recursive model.
+
+**Source-log shape for role + workflow altitudes (locked Q1):** **new per-altitude log files** — `docs/role-activity/<role>.md` and `docs/workflow-runs/<workflow>.md`. Agents (PM, Delivery Manager, Reviewer, Engineer) append structured entries (timestamp · pattern · evidence · instance count) as they surface patterns mid-task. **This is the load-bearing new capability** — without agent-side logging, role/workflow retros have no source data. (Alternative considered + rejected: derive from existing DRI logs. Reason for rejection: DRI is per-bet, not per-role; role retros would depend on bets existing first; harder synthesis.)
+
+**Dispatch:** `/retro` defaults to the altitude implied by invocation context (inside framework repo → framework altitude — existing behavior; inside a project → project altitude); explicit override via `--altitude=<x>` arg (e.g., `/retro --altitude=bet PROJ-42`, `/retro --altitude=org`).
+
+**Aggregation discipline.** A higher-altitude retro reads all child retros + child raw entries within the named scope, synthesizes the pattern catalog at THAT altitude, archives. Each retro is immutable (`status: archive`); patterns that recur across altitudes get promoted UP at the next-altitude retro, not by re-editing.
+
+**Files this would touch (when built):**
+
+- `compass/templates/retro.md` — add `altitude` + `consolidates_from` frontmatter
+- `compass/workflows/retro.md` — generalize from 2 altitudes to 6; document dispatch + aggregation contract
+- `compass/framework/canon.md` — register the new pattern (working name: `[fractal-retro]` or `[same-shape-at-altitude]`); name the anti-pattern it closes (working name: `[retro-as-single-altitude-loses-the-bottom-up-signal]`)
+- `compass/templates/role-activity-log.md` (NEW)
+- `compass/templates/workflow-run-log.md` (NEW)
+- Each migrated agent in `compass/agents/*.md` — add "Logging patterns mid-task" section
+- `compass/scripts/aggregate-retros.py` (NEW) — for org-altitude rollup across configured project paths
+- `AGENTS.md` — update Patterns section; add Principle line on bottom-up aggregation
+- `CHANGELOG.md` + `compass/workflows/improvements.md` — release entry + shipped-entry append at build time
+
+**Trigger to actually build this:**
+
+Build when ANY of these fire:
+1. A second project starts using Compass and the user wants cross-project pattern visibility (the original ask).
+2. An agent (Reviewer, Engineer, Delivery Manager) surfaces a pattern mid-task that doesn't have a natural log to land in — proves the role/workflow log gap is acute.
+3. The next Retro #007 (after improvement #35) surfaces a recurring drift signal across multiple migrations that role/workflow retros would have caught earlier — proves the bottom-up signal is missing in practice.
+4. v0.4 orchestrator design enters scoping — multi-altitude retros are a natural fit alongside the orchestrator + Finance pillar.
+
+**Scope at build time (recommended minimum):** ship the schema generalization + ONE new altitude end-to-end (project altitude is the obvious first — it's already declared at line 65). Other altitudes (role, workflow, bet, org) get schema support but stay declared-not-implemented per `[declare-not-implement]` until each is needed. Aggregator script ships only when org-altitude is actually used.
+
+**What this would validate structurally:**
+
+- **First recursive workflow in Compass.** Bets are fractal (foundation → OKR → feature → story); metrics are fractal top-down; plans are single-altitude rollup. Retros would become the first WORKFLOW that's fractal.
+- **`parent_log:` field generalizes** without frontmatter rename — existing retros stay valid.
+- **`[user-as-load-bearing-oversight]` accrues another instance** — this entire design came from the user's *"Retros like the plan are at every role or workflow based"* observation in a session that was otherwise focused on the Reviewer migration. Pattern continues to compound; canon promotion case for Retro #007 grows stronger.
+
+**Watch for (between now and build):**
+
+- **Whether the original cross-program ask resurfaces** — if user starts running Compass against a second project and wants consolidated retros, that's trigger #1 firing. Build the project altitude + aggregator script as minimum.
+- **Whether agents start writing patterns into DRI logs that don't belong there** — if a Reviewer-spotted pattern about Engineer behavior keeps landing in a bet's DRI log because there's nowhere better to put it, that's trigger #2 firing.
+- **`[declare-not-implement]` 3rd instance.** Declaring multi-altitude retros now and deferring the build is itself an instance of the pattern (v0.3.5 + v0.3.8 same-day correction were the original two instances per canon v0.3.9). When this design eventually ships, the entry will note this third instance and likely surface `[declare-not-implement]` for canon strengthening (already codified, but instances compound).
+- **Existing framework retro stays the canonical "framework altitude" retro.** Don't touch it during the build — backwards-compat is the regression-safe gate.
+- **Counter stays at #33.** Queued entries don't tick. When this builds, the shipped-entry that replaces this carryover will tick the counter.
