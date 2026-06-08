@@ -17,7 +17,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40** (**4th consecutive on-time retro**; hard line empirically validated past saturation). **5 improvements in 1 day** (2nd single-day 5-improvement cycle; Retro #006 was 1st). **2 codifications shipped in-cycle:** `[user-as-load-bearing-oversight]` v0.3.19 + `[agent-file-compression]` v0.3.22. Observability-class grew to 3 members (largest non-enforcement class). **`[agent-file-compression]` is the first Compass-original codified alongside its mechanical defense in the same release** (check-agent-cap.py) — closes the prior 4-release lag pattern. **PROMOTE TO CANON recommended:** `[workflow-as-dispatch-graph]` (2 instances: /setup-product v0.3.14 + /build v0.3.23) — would be 3rd architecture-discipline class member. **DEFER:** `[task-ownership-locality]` (consolidate naming with workflow-as-dispatch-graph at 3rd-instance evaluation). **Watch-for:** `[codify-with-mechanical-defense-same-release]` (1 instance) + `[explicit-dispatch-surfaces-latent-participation]` (1 instance) + 2 consumer-project candidates (`[external-primary-with-cached-pointer]`, `[host-preference-validation]` — each 1 instance from user's Wealth-at-Fingertips work). **100% user-driven origin** across all 5 improvements again — `[user-as-load-bearing-oversight]` continues to validate at every cycle boundary.
 
-**Next retro fires after improvement #45.** (Retro #008 fired at #40 ON TIME 2026-06-08. **v0.3.24 = #41 (1 of 5 before Retro #009).** Hard line continues — 4 consecutive on-time retros now (Retro #005 → #008); `[hard-line-declaration]` empirically validated past saturation. If Retro #009 also fires on time, **consider whether counter-visibility prose in this header can be tightened** (the discipline is muscle memory; the prose may be over-correction). Don't relax YET; one more cycle confirms structural durability.)
+**Next retro fires after improvement #45.** (Retro #008 fired at #40 ON TIME 2026-06-08. **v0.4.0-alpha-0 = #42 (2 of 5 before Retro #009).** Hard line continues — 4 consecutive on-time retros now (Retro #005 → #008); `[hard-line-declaration]` empirically validated past saturation. If Retro #009 also fires on time, **consider whether counter-visibility prose in this header can be tightened** (the discipline is muscle memory; the prose may be over-correction). Don't relax YET; one more cycle confirms structural durability.)
 
 ## Template
 
@@ -1794,3 +1794,32 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **`[explicit-dispatch-surfaces-latent-participation]`** — 1 instance (PM's `participates_in_workflows:` updated when `/build` migrated). Watch for 2nd instance on the next workflow migration.
 - **Orchestrator v0.4-alpha-0** — Task 3 of today's arc. `[workflow-as-dispatch-graph]` codification is the structural foundation; orchestrator skeleton is the executable proof. Both happen today.
 - **12 remaining embedded-methodology workflows** — priority migration order in `compass/framework/mvp.md`. Each migration adds one more automatable path to the v0.4 execution graph.
+
+### 2026-06-08 — Orchestrator v0.4-alpha-0 skeleton shipped — first working dispatch of Compass workflow steps to Claude API (v0.4.0-alpha-0) — Task 3 of today's 3-task arc
+
+**Friction:** Compass workflows require manual host-switching: human opens PM Custom GPT on ChatGPT, runs the step, copies output, switches to Claude Code for filesystem steps, etc. Without an orchestrator, every workflow run is a human-dispatched sequence of copy-paste operations. The MVP framing (locked in v0.3.24 `compass/framework/mvp.md`) identified the orchestrator as the unlock: with it, a CLI command runs a workflow end-to-end.
+
+**Change:**
+- `compass/orchestrator/` (new Python package) — 6 files totaling ~350 lines, Python 3.9+ stdlib + `anthropic` SDK:
+  - `graph.py` — dispatch graph parser: reads workflow `.md`, scopes to `## Dispatch graph` section, extracts `### Step N.` headers into `WorkflowStep` dataclass list; classifies agent dispatch / HITL / workflow-level steps
+  - `hosts/claude.py` — Claude API adapter: agent `.md` → system prompt; task + user context → user message; `claude-opus-4-8` default; fail-fast on missing API key
+  - `hitl.py` — HITL gate handler: banner + y/n prompt + graceful EOF/KeyboardInterrupt
+  - `run.py` — CLI: `--dry-run` / `--step N` / `--context TEXT` / `--model ID` / `--project-dir PATH`; fail-fast API key check before prompting; agent file resolution (agents/ → roles/ fallback)
+  - `README.md` — setup, usage, architecture, known gaps, v0.4-beta roadmap
+- `CHANGELOG.md` — v0.4.0-alpha-0 entry added above v0.3.24
+- `compass/workflows/improvements.md` — this entry + header counter v0.3.24=#41 → v0.4.0-alpha-0=#42 (2 of 5 before Retro #009)
+
+**Verification:**
+- `--dry-run /setup-product`: 4 steps correctly parsed (pm.setup-product-foundation · researcher.cite-evidence · HITL · delivery-manager.update-status)
+- `--dry-run /build`: 8 steps correctly parsed (5 agent dispatches · 1 HITL · 2 workflow-level)
+- Fail-fast API key check exits immediately with clear message before prompting user
+- Agent file resolution confirmed for all 5 migrated agents
+
+**Files touched (3 modified + 6 new):** `CHANGELOG.md` · `compass/workflows/improvements.md` · `compass/orchestrator/` (6 new files).
+
+**Watch for:**
+
+- **v0.4-beta scope:** multi-host dispatch per `preferred_hosts:` (Codex for Reviewer — the cross-model independence that makes Compass reviews load-bearing); artifact write automation; structured state passing between steps; `pip install compass` entry point.
+- **Next workflow migration = next automatable path.** The orchestrator can already run `/setup-product` (4 steps) and `/build` (8 steps, 5 dispatchable). Each additional dispatch-graph migration adds one more path without touching orchestrator code. Priority per `compass/framework/mvp.md`: `/create-bet-architecture` (requires Architect migration) + `/create-brief`.
+- **`anthropic` SDK version pinning.** Currently uses whatever is installed. Before v0.4-beta, pin to a specific version in `requirements.txt` or `pyproject.toml`.
+- **Single-host limitation.** All steps go to Claude API including Reviewer steps — which violates the cross-model independence constraint (`[role-boundary]` v0.3.4 + Reviewer `preferred_hosts: [codex, gemini]`). This is explicitly scoped to alpha; multi-host dispatch is the first v0.4-beta requirement. Don't run the orchestrator's reviewer steps against production code until multi-host ships.

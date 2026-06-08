@@ -14,6 +14,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.4.0-alpha-0] — 2026-06-08
+
+> **Orchestrator v0.4-alpha-0 — MVP unlock: Compass workflows are now executable.** First working end-to-end dispatch: CLI walks a dispatch-graph workflow, loads agent files as system prompts, dispatches to Claude API. Dry-run validates both migrated dispatch graphs (`/setup-product` + `/build`) correctly — 4 steps + 8 steps respectively, agents + HITL gates all parsed. API dispatch path wired and tested (requires `ANTHROPIC_API_KEY`). **Task 3 of today's 3-task arc.** Counter ticks to #42.
+
+### Added
+
+- **`compass/orchestrator/`** (new Python package — `compass/orchestrator/__init__.py`)
+- **`compass/orchestrator/graph.py`** — dispatch graph parser. Reads `compass/workflows/<workflow>.md`, scopes to the `## Dispatch graph` section, extracts `### Step N.` headers. Classifies steps as: agent dispatch (`<agent>.<task>` from backtick pair in title), HITL gate (`**Dispatches:** HUMAN`), or workflow-level (mechanical steps without agent dispatch). Returns `WorkflowStep` dataclass list.
+- **`compass/orchestrator/hosts/claude.py`** — Claude API adapter. Loads agent `.md` file as `system` prompt, sends task name + user context as `user` message, calls `anthropic.Anthropic.messages.create()`, returns response text. Configurable model (default: `claude-opus-4-8`). Raises `RuntimeError` on missing `ANTHROPIC_API_KEY`; raises `ImportError` with install hint on missing `anthropic` SDK.
+- **`compass/orchestrator/hitl.py`** — HITL gate handler. Prints gate banner (step number + title), prompts `y/n`, returns bool. Handles `EOF`/`KeyboardInterrupt` gracefully (returns False = halt).
+- **`compass/orchestrator/run.py`** — CLI entry point (`python -m compass.orchestrator.run`). Flags: `--dry-run` (print graph, no API), `--step N` (single-step execution), `--context TEXT` (inline input for first agent step, skips interactive prompt), `--model ID`, `--project-dir PATH`. Fail-fast API key check before prompting. Handles workflow-level steps gracefully (print "handle manually" + skip). Agent file resolution: tries `compass/agents/` first, falls back to `compass/roles/`.
+- **`compass/orchestrator/README.md`** — setup, usage examples, options table, architecture, v0.4-alpha-0 known gaps, v0.4-beta roadmap.
+
+### Verified
+
+- `--dry-run` for `/setup-product`: 4 steps (pm.setup-product-foundation · researcher.cite-evidence-6-category-9-moat · HITL · delivery-manager.update-status) — correct.
+- `--dry-run` for `/build`: 8 steps (engineer.implement-story · reviewer.write-e2e-tests · reviewer.review-pr · engineer.respond-to-review · pm.arbitrate-dispute · HITL · workflow:Mechanical merge constraints · workflow:Post-merge tech-writer) — correct.
+- Fail-fast API key check works (exits immediately with clear message if `ANTHROPIC_API_KEY` not set).
+- Agent file resolution works for all 5 migrated agents (pm, researcher, engineer, reviewer, delivery-manager).
+
+### Notes
+
+- **v0.4-alpha-0 scope:** single-host (all → Claude API); stdout-only output (no artifact write); no structured state passing between steps; interactive input only (except `--context` for Step 1); no resume on error.
+- **v0.4-beta** adds: multi-host dispatch per `preferred_hosts:` (Codex CLI for Reviewer, Gemini fallback); artifact write automation (step output → `docs/` commit); structured state passing; `pip install compass` entry point; `compass/config.yaml` hitl_level integration.
+- The `[workflow-as-dispatch-graph]` codification (v0.3.24) is directly load-bearing for this release: the orchestrator's graph parser depends on workflows being in dispatch-graph shape. The 2 migrated workflows become the first 2 automatable paths; each future workflow migration adds another.
+
 ## [0.3.24] — 2026-06-08
 
 > **`[workflow-as-dispatch-graph]` codified as 16th Compass-original — 3rd architecture-discipline class member.** Executes Retro #008's explicit PROMOTE TO CANON recommendation (2 instances: `/setup-product` v0.3.14 + `/build` v0.3.23). Architecture-discipline class grows to 3 members (joining `[agent-as-surface-independent-unit]` v0.3.14 + `[fractal-retro]` v0.3.17); now tied with observability as largest non-enforcement class. **Core insight:** agents own methodology (gate/work/postcondition per task); workflows own sequence (dispatch graph). Together they form the composition model that the v0.4 orchestrator requires — a dispatch graph is directly machine-walkable; embedded-methodology workflows cannot be executed by machine. **Also ships `compass/framework/mvp.md`** — MVP scope locked: orchestrator-first + vertical slice through Product/Build/GTM/Support agent pack + "start sending" checklist. **Counter ticks to #41 (1 of 5 before Retro #009).**
