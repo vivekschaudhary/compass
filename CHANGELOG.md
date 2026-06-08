@@ -14,6 +14,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.20] — 2026-06-07
+
+> **Aspirational refinement of v0.3.19 `[user-as-load-bearing-oversight]`: orchestrator (v0.4) catches mechanizable cases; user oversight shrinks to architectural-decisions-only residual.** v0.3.19 codified the pattern *descriptively* (user IS load-bearing today). User caught the missing aspirational complement same-session: *"ideally user as load bearing oversight is what we need to get away from .. maybe add another improvement that we want the orchestrator to make these decisions ... most of them. except the architecture ones"*. That observation is itself instance #12 of `[user-as-load-bearing-oversight]` — the framework's pattern is self-validating in real-time, including against its own incomplete codifications. v0.3.20 ships the refinement: explicit architectural-vs-mechanizable decision taxonomy + v0.4 orchestrator's accountability to minimize the user-oversight surface. Per `[declare-not-implement]` — declared, not built (orchestrator is v0.4 scope). Counter ticks to #37; Retro #008 fires after #40 (3 of 5 remaining).
+
+### Added
+
+- **Architectural-vs-mechanizable decision taxonomy** added to `[user-as-load-bearing-oversight]` discipline implications via the v0.3.20 improvements.md entry. Names which case-types stay with user (genuine human judgment) vs which the v0.4 orchestrator catches.
+
+  **Stays with user (architectural — genuine human-judgment territory; ~30% of historical instances):**
+  - Designing new patterns (e.g., v0.3.17 multi-altitude retro architecture observation)
+  - Refining principle boundaries from new evidence (e.g., v0.3.16 `.codex/prompts/reviewer.md` boundary refinement of v0.3.15's `[tool-wrappers-own-their-cadence]`)
+  - Setting strategic direction (e.g., v0.4 scope, what to ship next when multiple paths are valid)
+  - Approving HITL gates (foundation approval, brief approval, merge approval)
+  - Evidence citation the framework can't have (e.g., v0.3.17 PR-redo loop data)
+  - Naming decisions (rename direction calls; canon-entry naming choices)
+  - Cross-bet prioritization
+
+  **Orchestrator catches (mechanizable — should NOT need user; ~70% of historical instances):**
+  - Framework-vs-project boundary violations (freedom-bootstrap mistake) — refusal check on `framework: compass` config + canon.md presence
+  - Phantom writes / volume mismatches — post-write `ls` verification
+  - Spec-following errors (v0.3.15 rename direction) — workflow-instruction checklist; explicit "do now vs defer" tagging in spec text
+  - Tool-wrapper boundary classification (`.claude/skills/` vs framework-canonical files) — file-classification manifest
+  - Watch-for latency (3-release delay on cap-violation) — severity tags (`P0` = blocks next release; `P1` = blocks Retro N+1; etc.) + automated tracking
+  - Counter visibility (cap-violations, freshness windows, retro-due flags) — automated checks surfaced in dashboard Actions tab
+  - Retro PROMOTE follow-through tracking — ensure next-improvement actually addresses the PROMOTE
+- **Forward-link candidate `[orchestrator-as-residual-shrinker]`** surfaced as 1-instance codification candidate. **Anti-pattern named: `framework-leans-on-user-for-mechanizable-residual`** — when framework treats user as load-bearing for cases that have stable mechanical signatures (boundary violations, spec mismatches, counter visibility), the framework is structurally lazy. The user is the residual for things the framework CAN'T mechanically catch (architectural judgment); the framework owes the user mechanical defense everywhere else. **Codify when 2nd instance accrues** — likely when v0.4 orchestrator design enters scoping and the taxonomy gets applied to a 2nd mechanizable case the orchestrator catches.
+
+### Changed
+
+- **`AGENTS.md` `[user-as-load-bearing-oversight]` Patterns entry gains a v0.3.20 Aspiration note** — points at the architectural-vs-mechanizable taxonomy + v0.4 orchestrator scope. The Patterns entry's discipline implication #4 ("framework hardens mechanically when same correction recurs ≥3 times") gets sharpened: the orchestrator IS the hardening mechanism, and the architectural/mechanizable taxonomy IS the framework's accountability for which residual stays with user.
+
+### Notes
+
+- **v0.3.19's codification was descriptively correct but aspirationally incomplete.** v0.3.20 closes the gap. The honest framing is: `[user-as-load-bearing-oversight]` names the structural truth of today; **the goal is to shrink the user's load-bearing surface to architectural-only over time**, with v0.4 orchestrator as the load-bearing mechanism for the mechanizable residual.
+- **`[user-as-load-bearing-oversight]` instance #12 accrued in real-time during v0.3.19 codification.** User caught the missing aspirational complement; v0.3.20 adds it. The pattern is recursively self-validating — even the codification of the pattern needed user oversight to be complete. **Worth noting as a vivid example of why the pattern is durable** (not a 1-time observation; ongoing structural reality).
+- **`[declare-not-implement]` 5th instance.** v0.3.20 declares the orchestrator's responsibility + the taxonomy; does NOT build the orchestrator. v0.4 ships the orchestrator with the taxonomy as a load-bearing input. Pattern empirically validated 5× across releases now.
+- **Counter ticks to #37.** Retro #008 fires after #40 per `[fractal-retro]` cadence (3 more improvements).
+- **Cadence:** v0.3.20 = ~15-min aspirational-refinement release. Same release-class as a watch-for follow-up (e.g., v0.3.11 pruning per Retro #005). Small + focused + closes-gap-from-prior-release pattern.
+- **Files (3):** `AGENTS.md` (Aspiration note on existing Patterns entry); `CHANGELOG.md` (v0.3.20 entry); `compass/workflows/improvements.md` (entry #37 + header counter v0.3.19=#36 → v0.3.20=#37).
+
 ## [0.3.19] — 2026-06-07
 
 > **`[user-as-load-bearing-oversight]` codified — 14th Compass-original, 2nd observability-class member; observability shape now structurally validated.** Direct follow-through on Retro #007's PROMOTE recommendation (shipped same day, `b3ea044`). When the framework's mechanical discipline (refuse-escalate, soft-spec-hardening, cite-or-mark-na, freshness-check, workflow gates, retro cadence) produces wrong-shaped output that automated checks miss, **the user catches it; the agent course-corrects.** This is the system working as designed — the human is structurally part of the discipline loop, not external observer. **11+ instances at codification** across v0.3.14 → v0.3.18 (per Retro #007 + Retro #006 accumulated). Catalog: 7 shapes / 13 patterns → **7 shapes / 14 patterns**. Observability class: 1 member (`[role-boundary]`) → **2 members** — now structurally validated, matching scope-discipline at v0.3.10 + architecture-discipline at v0.3.17 trajectories. Counter ticks to #36; Retro #008 fires after #40 (4 of 5 remaining).

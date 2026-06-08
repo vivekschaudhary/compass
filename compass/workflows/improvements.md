@@ -16,7 +16,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #006** (v0.3.9 → v0.3.13): [retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md](retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md) — **fired ON TIME at #30** (2nd consecutive on-time retro; hard line worked again). 5 improvements in 1 day. Surfaces 3 codification-ready candidates: `[user-as-load-bearing-oversight]` (3+ instances) · `[L-layered-progressive-rollout]` (2 instances) · `[surface-shapes-output]` (2 instances). `[hard-line-declaration]` empirically validated 3rd time (cadence-class commitments). Release-class taxonomy stable at 7 classes (capability-extension introduced v0.3.13).
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 
-**Next retro fires after improvement #40.** (Retro #007 fired at #35 ON TIME 2026-06-07. **v0.3.19 = #36 (4 of 5 needed before Retro #008).** Hard line still in effect — if Retro #008 slips, it's a 2nd retro-cadence regression since `[hard-line-declaration]` codification; treat as recurring soft-spec failure and deepen mechanism per Retro #006 + #007 recommendations (e.g., make counter + retro-due flag visible in dashboard Actions tab).)
+**Next retro fires after improvement #40.** (Retro #007 fired at #35 ON TIME 2026-06-07. **v0.3.20 = #37 (3 of 5 needed before Retro #008).** Hard line still in effect — if Retro #008 slips, it's a 2nd retro-cadence regression since `[hard-line-declaration]` codification; treat as recurring soft-spec failure and deepen mechanism per Retro #006 + #007 recommendations (e.g., make counter + retro-due flag visible in dashboard Actions tab).)
 
 ## Template
 
@@ -1618,3 +1618,47 @@ QUEUED entry's "Trigger to actually build this" listed 4 conditions. **Trigger #
 - **Discipline-implication adherence in next 5 improvements.** v0.3.19's codification names 5 standard practices. Watch whether they actually land: do future QUEUED entries declare explicit triggers? Do future CHANGELOG entries cite user observations as origin? Does the agent's reflex to "minimize user corrections" actually shift, or does it persist as quiet rationalization? Worth surfacing in Retro #008 explicitly.
 - **Counter at #36. 4 more before Retro #008 (#40).** Hard line still in effect from Retro #007.
 - **Cadence:** v0.3.19 = ~30-min codification release. Pattern: every shape's 2nd-member codification = small focused single-session release. Trajectory: scope-discipline 2nd member shipped v0.3.10 (same shape); architecture-discipline 2nd member shipped v0.3.17 (same shape); observability 2nd member shipped v0.3.19 (this).
+
+---
+
+### 2026-06-07 — `[user-as-load-bearing-oversight]` aspirational refinement: v0.4 orchestrator catches mechanizable cases; user oversight shrinks to architectural-decisions-only residual (v0.3.20)
+
+**Friction (closed-in-codification):** v0.3.19 codified `[user-as-load-bearing-oversight]` descriptively — the user IS load-bearing today. But the codification was aspirationally incomplete: it named the structural reality without naming the goal of **shrinking the user-oversight surface over time**. User caught the gap same-session, minutes after v0.3.19 shipped: *"ideally user as load bearing oversight is what we need to get away from .. maybe add another improvement that we want the orchestrator to make these decisions ... most of them. except the architecture ones"*. **That observation is itself instance #12 of `[user-as-load-bearing-oversight]`** — the pattern is recursively self-validating, even against its own codification. v0.3.20 closes the gap with the explicit architectural-vs-mechanizable decision taxonomy + v0.4 orchestrator accountability declaration.
+
+**Change (declared per `[declare-not-implement]`, not built):**
+
+- **Architectural-vs-mechanizable decision taxonomy added to `[user-as-load-bearing-oversight]` discipline** via this improvement entry + AGENTS.md Patterns Aspiration note. **Stays with user (architectural — ~30% of historical instances; genuine human-judgment territory):**
+  1. Designing new patterns (e.g., v0.3.17 multi-altitude retro architecture observation)
+  2. Refining principle boundaries from new evidence (e.g., v0.3.16 `.codex/prompts/reviewer.md` boundary refinement)
+  3. Setting strategic direction (e.g., v0.4 scope choices; what to ship next when multiple paths are valid)
+  4. Approving HITL gates (foundation approval · brief approval · merge approval)
+  5. Evidence citation the framework can't have (e.g., v0.3.17 PR-redo loop data)
+  6. Naming decisions (rename direction calls · canon-entry naming choices)
+  7. Cross-bet prioritization
+- **Orchestrator catches (mechanizable — ~70% of historical instances; should NOT need user):**
+  1. Framework-vs-project boundary violations (freedom-bootstrap mistake) — refusal check on `framework: compass` config + `compass/framework/canon.md` presence
+  2. Phantom writes / volume mismatches — post-write `ls` verification, sandbox-path consistency check
+  3. Spec-following errors (v0.3.15 rename direction) — workflow-instruction checklist; explicit "do now vs defer" tagging in spec text
+  4. Tool-wrapper boundary classification (`.claude/skills/` vs framework-canonical files) — file-classification manifest
+  5. Watch-for latency (3-release delay on cap-violation) — severity tags (`P0` blocks next release; `P1` blocks Retro N+1; `P2` surfaces in next retro; `P3` ambient) + automated tracking
+  6. Counter visibility (cap-violations · freshness windows · retro-due flags) — automated checks surfaced in dashboard Actions tab
+  7. Retro PROMOTE follow-through tracking — ensure next-improvement addresses the PROMOTE
+- **`AGENTS.md` `[user-as-load-bearing-oversight]` Patterns entry** gains v0.3.20 Aspiration note pointing at the taxonomy + v0.4 orchestrator accountability + forward-link candidate `[orchestrator-as-residual-shrinker]` + anti-pattern `framework-leans-on-user-for-mechanizable-residual`.
+- **No canon.md edit.** Per archive-immutability discipline for canon-entry bodies: canon entries are stable historical codifications; refinements live in improvement entries + Patterns section, not by back-patching the canon entry. v0.3.20 lives in CHANGELOG + improvements.md + AGENTS.md Aspiration note; canon.md `[user-as-load-bearing-oversight]` body unchanged from v0.3.19.
+
+**Forward-link candidate `[orchestrator-as-residual-shrinker]` surfaced:**
+
+- 1 instance at v0.3.20 (declaration).
+- **Codify on 2nd instance** — likely when v0.4 orchestrator design enters scoping and the architectural-vs-mechanizable taxonomy gets applied to a 2nd mechanizable case the orchestrator catches.
+- **Anti-pattern: `framework-leans-on-user-for-mechanizable-residual`** — when framework treats user as load-bearing for cases with stable mechanical signatures (boundary violations · spec mismatches · counter visibility · file-path discipline), framework is structurally lazy. The user is the residual for things the framework CAN'T mechanically catch (architectural judgment); framework owes the user mechanical defense everywhere else.
+
+**Files (3):** `AGENTS.md` (Aspiration note added to existing `[user-as-load-bearing-oversight]` Patterns entry); `CHANGELOG.md` (v0.3.20 entry); `compass/workflows/improvements.md` (this entry + header counter v0.3.19=#36 → v0.3.20=#37).
+
+**Watch for:**
+
+- **`[orchestrator-as-residual-shrinker]` 2nd instance.** Surfaces when v0.4 orchestrator design enters scoping (likely Q3-Q4 timeline given current cadence). When the orchestrator actually catches a mechanizable case the user would have otherwise caught, that's instance #2 → codification candidate.
+- **Taxonomy adherence in next 5 improvements.** Each user correction in #37→#41 cycle: which category? Architectural or mechanizable? If mechanizable, why is the user catching it rather than the framework? Worth surfacing in Retro #008 explicitly — does the taxonomy hold up, or does v0.3.20's mechanizable list need expansion / contraction?
+- **`[declare-not-implement]` 5th instance accrued.** v0.3.20 declares orchestrator responsibility + taxonomy; does NOT build the orchestrator. Pattern empirically validated 5× now (v0.3.5 agent-handoff reviewer-blocks · v0.3.8 adapter layer · v0.3.16 multi-altitude QUEUED · v0.3.17 role/workflow aggregation declared · v0.3.20 orchestrator-as-residual-shrinker declared). Approaching `[hard-line-declaration]` empirical validation count (4×); both are scope-discipline class patterns. Worth tracking comparative empirical validation between them — both classes are durable, scope-discipline shape stable.
+- **`[user-as-load-bearing-oversight]` instance count continues to accrue post-codification.** v0.3.19 codified at 11+; v0.3.20 itself adds instance #12 (user pushback on incomplete codification). Pattern is self-validating; every architectural decision point contributes. Mechanizable-residual reduction via v0.4 orchestrator is the structural path forward — until then, instance count grows. Watch whether v0.4 actually reduces post-orchestrator-ship.
+- **Counter at #37.** 3 more before Retro #008. Hard line still in effect.
+- **Cadence:** v0.3.20 = ~15-min aspirational-refinement release. **First same-day refinement of a same-day codification** (v0.3.19 codified at midday; v0.3.20 refined within the hour). Notable pattern: when codification ships, user has SECOND-PASS reaction; second pass surfaces aspirational gaps the descriptive codification missed. Worth tracking if this recurs — could be a meta-pattern about codification discipline ("declare descriptive + aspirational together to avoid same-day v0.X.N+1 refinement releases").
