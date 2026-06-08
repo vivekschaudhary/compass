@@ -12,23 +12,29 @@ This is the MVP unlock: instead of manually switching between hosts and pasting 
 
 ## Usage
 
-Run from the Compass repo root:
+Run from the Compass repo root (set `ANTHROPIC_API_KEY` first):
 
 ```bash
 # Print the dispatch graph (no API calls):
 python3 -m compass.orchestrator.run setup-product --dry-run
 
-# Run only Step 1 with inline context:
+# Run full workflow — writes artifacts to docs/orchestrator-runs/:
+python3 -m compass.orchestrator.run setup-product \
+  --context "We are building a personal finance app for millennials."
+
+# Run a single step with inline context:
 python3 -m compass.orchestrator.run setup-product --step 1 \
   --context "We are building a personal finance app for millennials."
 
-# Run the full workflow interactively:
-python3 -m compass.orchestrator.run setup-product
+# Stdout only — no file writes:
+python3 -m compass.orchestrator.run setup-product --no-write \
+  --context "..."
 
-# Run /build Step 1 (implement-story):
-python3 -m compass.orchestrator.run build --step 1
+# Run /create-bet-architecture after setup-product completes:
+python3 -m compass.orchestrator.run create-bet-architecture \
+  --context "bet-id: WAF-001, brief approved"
 
-# Use a specific model:
+# Use a faster/cheaper model:
 python3 -m compass.orchestrator.run setup-product --step 1 \
   --model claude-sonnet-4-6 \
   --context "..."
@@ -43,6 +49,7 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
 | `--step N` | Execute only step N (1-indexed) |
 | `--context TEXT` | Inline context for the first agent step (skips interactive prompt) |
 | `--model ID` | Claude model ID (default: `claude-opus-4-8`) |
+| `--no-write` | Print output to stdout only; do not write artifact files |
 
 ## How it works
 
@@ -54,13 +61,14 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
    - **Agent step:** loads `compass/agents/<agent>.md` as system prompt → dispatches to Claude API
 4. Prints the agent's response to stdout
 
-## v0.4-alpha-0 scope and known gaps
+## v0.4-alpha-1 scope and known gaps
 
+- **Artifact write** — step outputs written to `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md`. Use `--no-write` to suppress.
+- **State passing** — each step receives prior step outputs as context (truncated to 3000 chars per step to fit context window). Full multi-step runs produce coherent output chains.
 - **Single-host only** — all steps go to Claude API regardless of agent's `preferred_hosts:`. Multi-host dispatch (Codex for Reviewer, etc.) ships in v0.4-beta.
-- **No artifact writing** — responses print to stdout. File-write automation ships next.
-- **No HITL context passing** — after a HITL approval, the next step starts fresh (no structured state passing from previous step output). Wired in next iteration.
-- **Interactive input only** — `--context` fills Step 1's input; subsequent steps still prompt interactively.
+- **Interactive input only** — `--context` fills Step 1's input; subsequent steps still prompt interactively unless `--step N` is used.
 - **No resume** — if the workflow errors mid-run, restart from `--step N`.
+- **No git commit automation** — artifact files written to disk; user commits. Git automation ships in v0.4-beta.
 
 ## Files
 

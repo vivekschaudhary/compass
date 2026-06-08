@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compass orchestrator CLI — v0.4-alpha-0
+Compass orchestrator CLI — v0.4-alpha-1
 
 Usage:
     python3 -m compass.orchestrator.run <workflow> [options]
@@ -14,11 +14,14 @@ Options:
     --context TEXT       Inline context string for the first agent step
                          (skips the interactive input prompt for that step)
     --model ID           Claude model to use (default: claude-opus-4-8)
+    --no-write           Print output to stdout only; do not write artifact files
 """
 import argparse
+import os
 import sys
 import textwrap
 from pathlib import Path
+from datetime import datetime
 
 
 def _collect_input(step_label: str, inline_context: str = "") -> str:
@@ -49,10 +52,50 @@ def _collect_input(step_label: str, inline_context: str = "") -> str:
     return "\n".join(lines)
 
 
+def _write_artifact(project_dir: Path, workflow: str, step_num: int, agent: str, task: str, content: str) -> Path:
+    """
+    Write step output to docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md.
+    Creates parent dirs as needed. Returns the written path.
+    """
+    run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
+    run_dir.mkdir(parents=True, exist_ok=True)
+    out_file = run_dir / f"step-{step_num:02d}-{agent}-{task}.md"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    header = f"---\nworkflow: {workflow}\nstep: {step_num}\nagent: {agent}\ntask: {task}\ngenerated: {timestamp}\n---\n\n"
+    out_file.write_text(header + content, encoding="utf-8")
+    return out_file
+
+
+def _build_user_message(task: str, user_context: str, prior_outputs: list) -> str:
+    """
+    Build the user message for a step, optionally prepending prior step outputs
+    as context so the agent has the full workflow state.
+    """
+    parts = []
+
+    if prior_outputs:
+        parts.append("## Prior step outputs (workflow context)\n")
+        for entry in prior_outputs:
+            parts.append(f"### Step {entry['step']}: {entry['agent']}.{entry['task']}\n")
+            # Truncate very long prior outputs to avoid token overflow
+            output = entry["output"]
+            if len(output) > 3000:
+                output = output[:3000] + "\n\n[... truncated for context window ...]"
+            parts.append(output)
+            parts.append("")
+        parts.append("---\n")
+
+    parts.append(f"Execute task: **{task}**")
+    if user_context:
+        parts.append(f"\n{user_context}")
+
+    return "\n".join(parts)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="compass run",
-        description="Compass orchestrator v0.4-alpha-0",
+        description="Compass orchestrator v0.4-alpha-1",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Examples:
@@ -63,8 +106,13 @@ def main(argv=None):
               python3 -m compass.orchestrator.run setup-product --step 1 \\
                   --context "We are building a personal finance app for millennials."
 
-              # Run the full workflow interactively:
-              python3 -m compass.orchestrator.run setup-product
+              # Run the full workflow (writes artifacts to docs/orchestrator-runs/):
+              python3 -m compass.orchestrator.run setup-product \\
+                  --context "We are building a personal finance app for millennials."
+
+              # Run without writing files (stdout only):
+              python3 -m compass.orchestrator.run setup-product --no-write \\
+                  --context "..."
         """),
     )
     parser.add_argument("workflow", help="Workflow name (e.g., setup-product)")
@@ -97,6 +145,11 @@ def main(argv=None):
         default="claude-opus-4-8",
         help="Claude model ID (default: claude-opus-4-8)",
     )
+    parser.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Print output to stdout only; do not write artifact files",
+    )
     args = parser.parse_args(argv)
 
     project_dir = Path(args.project_dir).resolve()
@@ -117,7 +170,6 @@ def main(argv=None):
 
     # Fail fast on missing API key (before any prompts)
     if not args.dry_run:
-        import os
         if not os.environ.get("ANTHROPIC_API_KEY"):
             print(
                 "Error: ANTHROPIC_API_KEY is not set.\n"
@@ -157,6 +209,9 @@ def main(argv=None):
 
     # --- execution mode ---
     first_step = True
+    # Accumulate prior step outputs for state passing
+    prior_outputs = []
+
     for step in steps:
         if args.step is not None and step.number != args.step:
             continue
@@ -195,17 +250,15 @@ def main(argv=None):
         print(f"Agent file : {agent_file.relative_to(project_dir)}")
         print(f"Task       : {step.task}")
         print(f"Model      : {args.model}")
+        if prior_outputs:
+            print(f"Context    : {len(prior_outputs)} prior step(s) passed as context")
 
         # Inline context only used for the first agent step
         inline = args.context if first_step else ""
         first_step = False
 
         user_context = _collect_input(step.title, inline)
-        user_message = (
-            f"Execute task: **{step.task}**\n\n{user_context}"
-            if user_context
-            else f"Execute task: **{step.task}**"
-        )
+        user_message = _build_user_message(step.task, user_context, prior_outputs)
 
         print(f"\nDispatching to Claude API …")
         try:
@@ -219,11 +272,28 @@ def main(argv=None):
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 
+        # Print output
         print(f"\n{'=' * 60}")
         print(f"[Step {step.number} output — {step.agent}.{step.task}]")
         print(f"{'=' * 60}\n")
         print(result)
         print()
+
+        # Write artifact to disk (unless --no-write)
+        if not args.no_write:
+            artifact_path = _write_artifact(
+                project_dir, args.workflow, step.number,
+                step.agent, step.task, result,
+            )
+            print(f"[artifact written → {artifact_path.relative_to(project_dir)}]")
+
+        # Accumulate for state passing to subsequent steps
+        prior_outputs.append({
+            "step": step.number,
+            "agent": step.agent,
+            "task": step.task,
+            "output": result,
+        })
 
 
 if __name__ == "__main__":

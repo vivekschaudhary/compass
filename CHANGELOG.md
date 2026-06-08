@@ -43,6 +43,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`AGENTS.md`** — Architect migration status `legacy` → `✅ v0.3.25`; agent count prose updated (3 → 4 migrated at v0.3.14; 6 total now including v0.3.25).
 
+## [0.4.0-alpha-1] — 2026-06-08
+
+> **Orchestrator v0.4-alpha-1 — artifact write + state passing.** Step outputs now write to `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md`. Each subsequent step receives prior step outputs as context — full multi-step runs produce coherent output chains. **Counter #45 — Retro #009 NOW DUE** (5th consecutive on-time retro; fires immediately after this commit).
+
+### Changed
+
+- **`compass/orchestrator/run.py`** upgraded alpha-0 → alpha-1:
+  - `_write_artifact()` — writes step output to `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md` with frontmatter (workflow, step, agent, task, generated timestamp). Creates parent dirs. Controlled by `--no-write` flag.
+  - `_build_user_message()` — prepends prior step outputs as "## Prior step outputs (workflow context)" block before the task instruction. Truncates each prior output to 3000 chars to stay within context window. State accumulates across all steps in a run.
+  - `prior_outputs` list accumulates throughout the run; each completed agent step appends `{step, agent, task, output}`.
+  - Added `--no-write` CLI flag (stdout-only mode).
+  - Updated version string alpha-0 → alpha-1 in docstring.
+- **`compass/orchestrator/README.md`** — updated usage examples (full workflow run + `--no-write`); scope section updated to reflect artifact write + state passing shipped.
+
+### Notes
+
+- Artifact path is `docs/orchestrator-runs/` (not `docs/foundation/` or `docs/bets/`) to avoid polluting canonical artifact locations with orchestrator draft output. User copies/moves the generated content to the canonical path after review. Git commit automation (auto-move + commit) ships in v0.4-beta.
+- State passing truncates prior outputs at 3000 chars each — sufficient for typical PM/Researcher outputs; very long outputs (full architecture docs) may need the context budget raised in v0.4-beta once we measure real usage.
+
 ## [0.4.0-alpha-0] — 2026-06-08
 
 > **Orchestrator v0.4-alpha-0 — MVP unlock: Compass workflows are now executable.** First working end-to-end dispatch: CLI walks a dispatch-graph workflow, loads agent files as system prompts, dispatches to Claude API. Dry-run validates both migrated dispatch graphs (`/setup-product` + `/build`) correctly — 4 steps + 8 steps respectively, agents + HITL gates all parsed. API dispatch path wired and tested (requires `ANTHROPIC_API_KEY`). **Task 3 of today's 3-task arc.** Counter ticks to #42.

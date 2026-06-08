@@ -17,7 +17,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40** (**4th consecutive on-time retro**; hard line empirically validated past saturation). **5 improvements in 1 day** (2nd single-day 5-improvement cycle; Retro #006 was 1st). **2 codifications shipped in-cycle:** `[user-as-load-bearing-oversight]` v0.3.19 + `[agent-file-compression]` v0.3.22. Observability-class grew to 3 members (largest non-enforcement class). **`[agent-file-compression]` is the first Compass-original codified alongside its mechanical defense in the same release** (check-agent-cap.py) — closes the prior 4-release lag pattern. **PROMOTE TO CANON recommended:** `[workflow-as-dispatch-graph]` (2 instances: /setup-product v0.3.14 + /build v0.3.23) — would be 3rd architecture-discipline class member. **DEFER:** `[task-ownership-locality]` (consolidate naming with workflow-as-dispatch-graph at 3rd-instance evaluation). **Watch-for:** `[codify-with-mechanical-defense-same-release]` (1 instance) + `[explicit-dispatch-surfaces-latent-participation]` (1 instance) + 2 consumer-project candidates (`[external-primary-with-cached-pointer]`, `[host-preference-validation]` — each 1 instance from user's Wealth-at-Fingertips work). **100% user-driven origin** across all 5 improvements again — `[user-as-load-bearing-oversight]` continues to validate at every cycle boundary.
 
-**Next retro fires after improvement #45.** (Retro #008 fired at #40 ON TIME 2026-06-08. **v0.3.26 = #44 (4 of 5 before Retro #009).** Hard line continues — 4 consecutive on-time retros now (Retro #005 → #008); `[hard-line-declaration]` empirically validated past saturation. If Retro #009 also fires on time, **consider whether counter-visibility prose in this header can be tightened** (the discipline is muscle memory; the prose may be over-correction). Don't relax YET; one more cycle confirms structural durability.)
+**Next retro fires after improvement #45.** (Retro #008 fired at #40 ON TIME 2026-06-08. **v0.4.0-alpha-1 = #45 — RETRO #009 NOW DUE.** Hard line continues — 4 consecutive on-time retros now (Retro #005 → #008); `[hard-line-declaration]` empirically validated past saturation. If Retro #009 also fires on time, **consider whether counter-visibility prose in this header can be tightened** (the discipline is muscle memory; the prose may be over-correction). Don't relax YET; one more cycle confirms structural durability.)
 
 ## Template
 
@@ -1860,3 +1860,26 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Watch for:**
 - **Counter at #44 — 1 more improvement to Retro #009.** Next task (orchestrator artifact write + state passing) fires the retro.
 - **Orchestrator end-to-end test ready.** With 3 dispatch-graph workflows, the chain setup-product → create-bet-architecture is now fully walkable. Run the new project to validate.
+
+### 2026-06-08 — Orchestrator v0.4-alpha-1: artifact write + state passing shipped — full multi-step runs now produce files on disk (v0.4.0-alpha-1) — **fires Retro #009**
+
+**Friction:** alpha-0 printed step output to stdout only and each step started fresh with no knowledge of prior steps. You couldn't run the full workflow and get usable artifacts — you'd have to copy/paste output manually. State-blind steps also meant the Delivery Manager step had no idea what the PM drafted.
+
+**Change:**
+- `compass/orchestrator/run.py` alpha-0 → alpha-1:
+  - `_write_artifact()`: step output → `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md` with frontmatter. `--no-write` flag suppresses.
+  - `_build_user_message()`: prepends prior step outputs as context block before task instruction; each prior output truncated at 3000 chars.
+  - `prior_outputs` list accumulates throughout run; each agent step appends `{step, agent, task, output}`.
+- `compass/orchestrator/README.md` — updated usage + scope section.
+- `CHANGELOG.md` — v0.4.0-alpha-1 entry.
+- `compass/workflows/improvements.md` — this entry + counter v0.3.26=#44 → v0.4.0-alpha-1=#45 → **RETRO #009 NOW DUE**.
+
+**Files touched (3 modified):** `compass/orchestrator/run.py` · `compass/orchestrator/README.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
+
+**Watch for:**
+
+- **Retro #009 fires NOW** for v0.3.24 → v0.4.0-alpha-1 (5 improvements: #41 #42 #43 #44 #45). Separate commit following this one.
+- **End-to-end test ready.** With artifact write + state passing + 3 dispatch-graph workflows, a full `setup-product` run now produces `docs/orchestrator-runs/setup-product/` with files for each step. User sets up new project repo and runs it.
+- **State passing truncation at 3000 chars** — sufficient for now; measure real usage before raising.
+- **Git commit automation** — user still manually commits artifacts from `docs/orchestrator-runs/`. Auto-move + commit ships v0.4-beta.
+- **Counter resets to #50 horizon** after Retro #009 fires.
