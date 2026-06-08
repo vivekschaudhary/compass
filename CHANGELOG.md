@@ -14,6 +14,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.26] — 2026-06-08
+
+> **`/create-bet-architecture` refactored to dispatch-graph shape — 3rd workflow migrated** (joining `/setup-product` v0.3.14 + `/build` v0.3.23). Embedded 11-step methodology prose → thin 3-step dispatch contract (architect.draft-bet-architecture · HITL · delivery-manager.update-status). Orchestrator can now walk the Product → Architecture chain end-to-end. **Counter #44 (4 of 5 before Retro #009).**
+
+### Changed
+
+- **`compass/workflows/create-bet-architecture.md`** refactored 61 → ~120 lines (embedded methodology → dispatch graph). Standard frontmatter (name, status, owner, version: 0.3.26). Framework grounding (well-architected · evolutionary-architecture · 4 Compass-originals). Architectural shape declaration (thin dispatch graph per `[workflow-as-dispatch-graph]`). Preconditions (3 workflow-level gates: brief approved · foundation docs present · not already approved). Dispatch graph: Step 1 `architect.draft-bet-architecture` → Step 2 HITL → Step 3 `delivery-manager.update-status`. Workflow-level verification checklist (9 items). Output summary contract. Notes: ADR-not-gate · Enterprise Architect handling in dispatch-graph shape · 3 named anti-patterns (silent-stack-introduction · exploration-shaped-architecture · strawman-alternatives).
+- **`AGENTS.md`** — workflow-migration count updated: 2 → 3 dispatch-graph workflows; `/create-bet-architecture` (v0.3.26, 3rd) added.
+
+### Notes
+
+- **Enterprise Architect** is explicitly named in the legacy workflow as "always engages." In the dispatch-graph shape, cross-system implications live in architecture.md section 7 (Architect task owns it). Enterprise Architect agent migration is deferred (non-MVP per `compass/framework/mvp.md`); for now, the HITL reviewer performs the cross-system check or a separate `/ops` task handles it.
+- **`[explicit-dispatch-surfaces-latent-participation]` did NOT fire this migration** — no new agent participation surfaced. Delivery Manager was already explicit in `/setup-product`'s shape; Enterprise Architect is captured via a workflow Note (not a new dispatch step). Pattern remains at 1 instance.
+- Dry-run verified: `python3 -m compass.orchestrator.run create-bet-architecture --dry-run` produces 3 steps correctly (architect.draft-bet-architecture · HITL · delivery-manager.update-status).
+
 ## [0.3.25] — 2026-06-08
 
 > **Architect agent migrated** from `compass/roles/architect.md` → `compass/agents/architect.md`. 6th migrated agent (joins pm, researcher, engineer, reviewer, delivery-manager). Unlocks `/create-bet-architecture` for dispatch-graph refactor (Task 2). Two tasks defined: `draft-bet-architecture` (full 6-step process with foundational-stack deviation gate) + `assess-pr-compliance` (PR compliance vs approved bet architecture). **Counter #43 (3 of 5 before Retro #009).**

@@ -17,7 +17,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40** (**4th consecutive on-time retro**; hard line empirically validated past saturation). **5 improvements in 1 day** (2nd single-day 5-improvement cycle; Retro #006 was 1st). **2 codifications shipped in-cycle:** `[user-as-load-bearing-oversight]` v0.3.19 + `[agent-file-compression]` v0.3.22. Observability-class grew to 3 members (largest non-enforcement class). **`[agent-file-compression]` is the first Compass-original codified alongside its mechanical defense in the same release** (check-agent-cap.py) — closes the prior 4-release lag pattern. **PROMOTE TO CANON recommended:** `[workflow-as-dispatch-graph]` (2 instances: /setup-product v0.3.14 + /build v0.3.23) — would be 3rd architecture-discipline class member. **DEFER:** `[task-ownership-locality]` (consolidate naming with workflow-as-dispatch-graph at 3rd-instance evaluation). **Watch-for:** `[codify-with-mechanical-defense-same-release]` (1 instance) + `[explicit-dispatch-surfaces-latent-participation]` (1 instance) + 2 consumer-project candidates (`[external-primary-with-cached-pointer]`, `[host-preference-validation]` — each 1 instance from user's Wealth-at-Fingertips work). **100% user-driven origin** across all 5 improvements again — `[user-as-load-bearing-oversight]` continues to validate at every cycle boundary.
 
-**Next retro fires after improvement #45.** (Retro #008 fired at #40 ON TIME 2026-06-08. **v0.3.25 = #43 (3 of 5 before Retro #009).** Hard line continues — 4 consecutive on-time retros now (Retro #005 → #008); `[hard-line-declaration]` empirically validated past saturation. If Retro #009 also fires on time, **consider whether counter-visibility prose in this header can be tightened** (the discipline is muscle memory; the prose may be over-correction). Don't relax YET; one more cycle confirms structural durability.)
+**Next retro fires after improvement #45.** (Retro #008 fired at #40 ON TIME 2026-06-08. **v0.3.26 = #44 (4 of 5 before Retro #009).** Hard line continues — 4 consecutive on-time retros now (Retro #005 → #008); `[hard-line-declaration]` empirically validated past saturation. If Retro #009 also fires on time, **consider whether counter-visibility prose in this header can be tightened** (the discipline is muscle memory; the prose may be over-correction). Don't relax YET; one more cycle confirms structural durability.)
 
 ## Template
 
@@ -1840,3 +1840,23 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **`/create-bet-architecture` dispatch-graph refactor** — Task 2 (next). Architect agent file is now the source of truth; the workflow can become a thin dispatch contract.
 - **`[explicit-dispatch-surfaces-latent-participation]`** — watch whether refactoring `/create-bet-architecture` surfaces any agents whose participation was previously implicit (Enterprise Architect is explicitly named in the legacy workflow as "always engages"). Does it get its own dispatch step or remain a note?
 - **Counter at #43 — 2 more improvements to Retro #009.**
+
+### 2026-06-08 — `/create-bet-architecture` refactored to dispatch-graph shape (v0.3.26) — 3rd workflow migrated; orchestrator can now walk Product → Architecture chain
+
+**Friction:** `/create-bet-architecture` was 61 lines of embedded methodology with no frontmatter, no agent dispatch labels, no HITL step declaration — not parseable by the orchestrator. With architect.md migrated (v0.3.25), the methodology IP moved into the agent file, making the workflow ready for dispatch-graph refactor.
+
+**Change:**
+- `compass/workflows/create-bet-architecture.md` refactored to standard dispatch-graph shape (version: 0.3.26): 3-step dispatch graph (architect.draft-bet-architecture · HITL · delivery-manager.update-status) · 3 workflow-level preconditions · 9-item verification checklist · Notes covering ADR-not-gate + Enterprise Architect handling + 3 named anti-patterns.
+- `AGENTS.md` — workflow count 2 → 3 dispatch-graph workflows.
+- `CHANGELOG.md` — v0.3.26 entry.
+- `compass/workflows/improvements.md` — this entry + counter v0.3.25=#43 → v0.3.26=#44 (4 of 5 before Retro #009).
+
+**Verification:** `python3 -m compass.orchestrator.run create-bet-architecture --dry-run` — 3 steps parsed correctly.
+
+**`[explicit-dispatch-surfaces-latent-participation]` did NOT fire** — no new implicit agent participation surfaced. Still at 1 instance.
+
+**Files touched (3 modified):** `compass/workflows/create-bet-architecture.md` · `AGENTS.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Counter at #44 — 1 more improvement to Retro #009.** Next task (orchestrator artifact write + state passing) fires the retro.
+- **Orchestrator end-to-end test ready.** With 3 dispatch-graph workflows, the chain setup-product → create-bet-architecture is now fully walkable. Run the new project to validate.
