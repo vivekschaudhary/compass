@@ -3,7 +3,7 @@
 Compass orchestrator CLI — v0.4-alpha-0
 
 Usage:
-    python -m compass.orchestrator.run <workflow> [options]
+    python3 -m compass.orchestrator.run <workflow> [options]
 
     compass run <workflow> [options]          # if installed via pip
 
@@ -57,14 +57,14 @@ def main(argv=None):
         epilog=textwrap.dedent("""\
             Examples:
               # Print the dispatch graph for setup-product (no API calls):
-              python -m compass.orchestrator.run setup-product --dry-run
+              python3 -m compass.orchestrator.run setup-product --dry-run
 
               # Run only Step 1 with inline context:
-              python -m compass.orchestrator.run setup-product --step 1 \\
+              python3 -m compass.orchestrator.run setup-product --step 1 \\
                   --context "We are building a personal finance app for millennials."
 
               # Run the full workflow interactively:
-              python -m compass.orchestrator.run setup-product
+              python3 -m compass.orchestrator.run setup-product
         """),
     )
     parser.add_argument("workflow", help="Workflow name (e.g., setup-product)")

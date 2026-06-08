@@ -16,20 +16,20 @@ Run from the Compass repo root:
 
 ```bash
 # Print the dispatch graph (no API calls):
-python -m compass.orchestrator.run setup-product --dry-run
+python3 -m compass.orchestrator.run setup-product --dry-run
 
 # Run only Step 1 with inline context:
-python -m compass.orchestrator.run setup-product --step 1 \
+python3 -m compass.orchestrator.run setup-product --step 1 \
   --context "We are building a personal finance app for millennials."
 
 # Run the full workflow interactively:
-python -m compass.orchestrator.run setup-product
+python3 -m compass.orchestrator.run setup-product
 
 # Run /build Step 1 (implement-story):
-python -m compass.orchestrator.run build --step 1
+python3 -m compass.orchestrator.run build --step 1
 
 # Use a specific model:
-python -m compass.orchestrator.run setup-product --step 1 \
+python3 -m compass.orchestrator.run setup-product --step 1 \
   --model claude-sonnet-4-6 \
   --context "..."
 ```
