@@ -93,6 +93,7 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 | BUILD-05 | Security review skipped (touches auth/PII/payments/secrets/external input/sessions) | Critical | No (non-suppressible) | any bet touching above |
 | BUILD-06 | Architecture drift undetected (Architect compliance check absent on PR) | High | Yes (DRI) | feature, architectural-initiative |
 | BUILD-07 | Performance budget exceeded (budget defined in arch doc, exceeded in CI) | High | Yes (DRI) | as above |
+| BUILD-08 | Unvetted external dependency (package in manifest/lockfile with no matching Architect approval — absent from `compass/config.yaml` `dependency_policy.approved_packages` and not a grandfathered pre-existing dep) | High | Yes (DRI — requires the Architect's recorded 6-category empirical approval as the rationale, not a bare suppression) | all |
 
 ### Phase 4: Production Ready (new — currently silent in Compass)
 

@@ -29,6 +29,8 @@ Drafts bet-level technical strategy. Architect leads; Enterprise/Solution Archit
      > "This bet needs `<tool / service / framework>`, which isn't in the foundational stack. Run `/setup-foundation-architecture` in amend mode to add it (with an ADR / Amendments entry citing this bet as the trigger). Then resume `/create-bet-architecture <bet-id>`."
 
      Log the deviation as a DRI Issue on the bet (severity High, owner Enterprise/Solution Architect). Do not draft bet architecture that quietly adds tooling — foundational scope decisions live at foundational level by design. Bet architecture is constrained to operate **within** the foundational stack.
+
+   **Scope note — this gate vs. the build-time package gate.** This deviation gate covers *major* dependencies (tools/services/frameworks/data stores/runtimes) at architecture time and routes them to a foundational amend + ADR. It is **complemented at build time** by the `[external-package-gate]` (`compass/workflows/build.md` Phase 2, `compass/roles/architect.md` → "External-package empirical approval"), which covers **every** external package the Engineer reaches for — including small utilities below the "major dependency" threshold — via the Architect's 6-category empirical evaluation + the `compass/config.yaml` `dependency_policy.approved_packages` ledger. Together they close the full surface: nothing — major or minor — enters the dependency tree without Architect approval.
 8. **Joint draft of `docs/bets/<bet-id>/architecture.md`** using `compass/templates/architecture.md`:
    - Decision (clear, unambiguous statement)
    - Context (technical situation, constraints)

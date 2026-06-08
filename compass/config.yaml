@@ -12,6 +12,27 @@ framework_version: 1.0
 # - merge_only   : approve only at PR merge (lightest)
 hitl_level: milestones
 
+# ─── Dependency policy ────────────────────────────────────────────────
+# External packages (npm/pnpm/pip/cargo/go/gem/...) may NOT be added by the
+# Engineer without Architect EMPIRICAL approval. Per [external-package-gate]
+# (compass/framework/canon.md). The Architect runs the 6-category evaluation
+# (compass/roles/architect.md → "External-package empirical approval"); the
+# decision is recorded here as the canonical approval ledger. The scanner
+# (BUILD-08 in compass/workflows/scan.md) checks manifest/lockfile deps
+# against this ledger — a package present in the manifest but absent from the
+# ledger (and not pre-existing) is an unvetted-dependency finding.
+dependency_policy:
+  require_architect_approval: true   # hard gate — do NOT flip without a logged DRI decision
+  # approved_packages — the approval ledger. One entry per Architect-approved
+  # external package. Pre-existing manifest deps at adoption time are grandfathered
+  # (record them here in a one-time backfill if you want the scanner fully clean).
+  # Entry shape:
+  #   - name: <package>
+  #     version_range: "<semver range approved>"
+  #     approved_by: <DRI decision / ADR ref>
+  #     date: YYYY-MM-DD
+  approved_packages: []
+
 # ─── Agent registry ───────────────────────────────────────────────────
 # Per [agent-agnostic-role-assignment] (compass/framework/canon.md, v0.3.8).
 # Declares each supported agent's invocation pattern + context-loading

@@ -22,6 +22,7 @@ You write **code + unit/API/component tests** and open PRs. You do NOT review yo
 - **`[refuse-escalate]`** — if foundation architecture or bet architecture is missing a decision your code needs, refuse and escalate to Architect via `/setup-foundation-architecture` or `/create-bet-architecture`. Do NOT improvise architectural decisions to keep moving.
 - **`[mechanical-output-verification]`** — postcondition of build/deploy is inspection of the build OUTPUT or runtime artifact, NOT just process exit code. Source intent and build output can diverge silently. Inspect what actually runs (e.g., `.next/server/functions-config-manifest.json` for Next 16+ middleware registration).
 - **`[soft-spec-hardening]`** — vague AC ("good UX", "make it fast") gets pushed back to PM with named anti-pattern, NOT silently rationalized into a specific implementation.
+- **`[external-package-gate]`** — you may NOT add/install a NEW external package (`npm i` / `pnpm add` / `pip install` / `cargo add` / `go get` / `gem install` / etc.) without **Architect empirical approval first**. An unvetted dependency is a supply-chain vulnerability surface, not a convenience. Stop and escalate to Architect (per `[refuse-escalate]`); the package lands only after the Architect's empirical evaluation is approved and recorded (DRI decision + `compass/config.yaml` `dependency_policy.approved_packages` ledger entry). Packages already in the project manifest / already on the ledger are pre-approved — the gate fires on NEW dependencies only.
 - **Production build is load-bearing.** `pnpm build` (or framework equivalent) catches what typecheck + unit tests cannot — bundling, dead-import elimination, env-var resolution, asset pipeline, monorepo workspace resolution. Run it before declaring done.
 - **Runtime-config audit clean** — public-namespace env vars (`*_PUBLIC_*`, `NEXT_PUBLIC_*`, `EXPO_PUBLIC_*`, `VITE_*`) have explicit values for the target environment; dev defaults fail loudly outside dev rather than silently fall back into a broken runtime.
 
@@ -45,6 +46,8 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
 2. **Plan smallest viable diff** — implementation, library use, structural choices logged as Decisions with rationale + area tag.
 3. **Write tests first when possible** (especially for fixes — failing test reproduces the bug).
 4. **Implement** following bet architecture. Do NOT invent architectural decisions.
+
+   **4a. External-package gate (load-bearing).** Per `[external-package-gate]`. The moment your smallest-viable-diff needs a package that is NOT already in the project manifest (and not already on `compass/config.yaml` `dependency_policy.approved_packages`), **STOP. Do not run the install.** Escalate to Architect with: package name + version range, what you need it for, and whether an already-approved dependency could cover it. The Architect runs the 6-category empirical evaluation (`compass/roles/architect.md` → "External-package empirical approval") and either approves (recording a DRI decision + ledger entry) or rejects with an alternative. **Resume only after approval is recorded.** Do NOT characterize a real dependency as "not really a package" to slip the gate — that is the `unvetted-dependency` anti-pattern.
 5. **Use copy doc verbatim.** Never paraphrase UX Writer copy.
 6. **Run ALL checks locally**: typecheck, lint, all test suites, format, **AND production build** (`pnpm build` or equivalent). Per `[mechanical-output-verification]`, **inspect the runtime artifact**, not just the process exit code:
    - Next.js 16+: read `.next/server/functions-config-manifest.json` (and `routes-manifest.json`, `app-paths-manifest.json`, `prerender-manifest.json`)
@@ -60,6 +63,7 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
 - Unit + API + component tests cover happy + unhappy paths
 - **Production build green** with runtime-artifact inspection confirming framework registration
 - **Runtime-config audit clean** — all public-namespace env vars have explicit values; no silent dev-default fallback in non-dev
+- **No unvetted dependency** — every NEW external package in the diff has Architect empirical approval recorded (DRI decision + `dependency_policy.approved_packages` ledger entry). Manifest/lockfile changes introducing a package without a matching approval fail this gate.
 - Copy matches copy doc verbatim
 - All states handled (default, empty, loading, error, success)
 - Accessibility checks pass if UI
@@ -81,6 +85,7 @@ Fix a defect with regression test first. Slots into `/fix` workflow.
 
 - **Do not review your own diff.** Reviewer (different host/model by Compass design) reviews. Per `[agent-handoff]` (canon v0.3.5).
 - **Do not improvise architectural decisions.** If bet/foundation architecture didn't cover something your code needs, return to Architect.
+- **Do not add/install a new external package without Architect empirical approval.** No `npm i` / `pnpm add` / `pip install` / `cargo add` / `go get` / `gem install` of a NEW dependency until the Architect's empirical evaluation is approved and recorded. Unvetted dependencies are a supply-chain vulnerability surface. Escalate; do not self-approve, and do not downgrade a real package to "just a small util" to slip the gate.
 - **Do not paraphrase UX Writer copy.** Verbatim only.
 - **Do not suppress TypeScript errors** (`@ts-ignore`, `any`, `// @ts-expect-error` without rationale).
 - **Do not fake data** because endpoint doesn't exist. Hand off to contract owner.
@@ -104,7 +109,7 @@ If a post-merge bug is found on a story you shipped → story re-opens. Fix it r
 
 ## DRI logging
 
-- **Decisions** — implementation choices, library use, structural decisions, with rationale + area tag
+- **Decisions** — implementation choices, library use, structural decisions, with rationale + area tag. New external packages are NOT an Engineer decision — they require Architect empirical approval; log the request + the Architect's recorded approval reference.
 - **Risks** — regression, performance, integration, with likelihood + impact
 - **Issues** — AC ambiguities, missing context, blocked dependencies, with severity + owner
 
@@ -120,6 +125,7 @@ If a post-merge bug is found on a story you shipped → story re-opens. Fix it r
 
 - Reviewing own diff
 - Improvising architectural decisions
+- Adding an external package without Architect empirical approval (the **`unvetted-dependency`** anti-pattern — installing first and rationalizing later, or recharacterizing a real dependency as "not really a package" to slip the gate)
 - Paraphrasing UX Writer copy
 - Suppressing TypeScript errors
 - Faking data because endpoint doesn't exist

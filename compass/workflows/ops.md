@@ -36,6 +36,8 @@ Non-code change. Infrastructure, dependency upgrades, config, secret rotation, C
 
 ### Phase 3 — execute
 
+> **External-package gate applies here too.** If the ops change *introduces a NEW external package* (not an upgrade of an existing one), it requires Architect empirical approval before install — same 6-category evaluation + `compass/config.yaml` `dependency_policy.approved_packages` ledger entry as `/build` (per `[external-package-gate]`). Upgrades of already-approved packages stay on the normal dependency-upgrade path (blast-radius + rollback + full review); adding a *new* dependency does not get a hygiene fast path.
+
 6. **Engineer executes** the change (per Enterprise Architect's plan)
 7. **Engineer opens PR** if change involves committed files (IaC, CI configs, package.json, etc.)
 8. **CI runs**
