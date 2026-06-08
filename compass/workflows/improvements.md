@@ -18,7 +18,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40**
 - **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-bet-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
 
-**Next retro fires after improvement #50.** (Retro #009 fired at #45 ON TIME 2026-06-08 — 5th consecutive. **v0.4.0-alpha-1 = #45 (counter resets to #50 horizon).** `[discipline-as-muscle-memory]` watch-for active: header prose tightened from 3 sentences to 1 for next 5 improvements — testing whether cadence holds without explicit counter-visibility pressure.)
+**Next retro fires after improvement #50.** (v0.3.27 = #46 (4 of 5 before Retro #010).)
 
 ## Template
 
@@ -1884,3 +1884,23 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **State passing truncation at 3000 chars** — sufficient for now; measure real usage before raising.
 - **Git commit automation** — user still manually commits artifacts from `docs/orchestrator-runs/`. Auto-move + commit ships v0.4-beta.
 - **Counter resets to #50 horizon** after Retro #009 fires.
+
+---
+
+### 2026-06-08 — `/create-brief` refactored to dispatch-graph shape (v0.3.27) — 4th workflow migrated; pm.md `draft-brief` task made real — Task 1 of today's 3-task arc
+
+**Friction:** `/create-brief` workflow embedded 83 lines of methodology prose (gate check → PM → Researcher → source gather → bet ID → draft → mirror → HITL → Delivery Manager). Not walkable by orchestrator. PM agent had a stub `draft-brief` task: *"Task migration pending; follow compass/workflows/create-brief.md"* — circular reference: the workflow pointed at the agent, the agent pointed at the workflow.
+
+**Change:**
+- `compass/agents/pm.md` — `draft-brief` stub replaced with real gate/work/postcondition (mode detection: stub+portfolio_stub:true → promote; URL/text → fresh; bet-id without stub → refuse). Size: 7991 chars, 9 headroom — PASS (strict 8000-char cap; chatgpt in preferred_hosts).
+- `compass/workflows/create-brief.md` — 83-line embedded methodology → thin 4-step dispatch graph: Step 1 `researcher.cite-evidence-6-category-9-moat` → Step 2 `pm.draft-brief` → Step 3 HITL → Step 4 `delivery-manager.update-status`. Standard frontmatter (version: 0.3.27). Framework grounding (working-backwards · lean-mvp · jtbd · shape-up + 5 Compass-originals). 3 workflow-level preconditions. 9-item verification checklist. 4 named anti-patterns.
+- `AGENTS.md` — workflow-migration count: 3 → 4 dispatch-graph workflows; `/create-brief` (v0.3.27, 4th) added.
+- `CHANGELOG.md` — v0.3.27 entry.
+- `compass/workflows/improvements.md` — this entry + counter v0.4.0-alpha-1=#45 → v0.3.27=#46.
+
+**Files touched (5):** `compass/agents/pm.md` · `compass/workflows/create-brief.md` · `AGENTS.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Dry-run verify:** `python3 -m compass.orchestrator.run create-brief --dry-run` should produce 4 steps (researcher.cite-evidence-6-category-9-moat · pm.draft-brief · HITL · delivery-manager.update-status).
+- **pm.md cap margin at 9 chars** — effectively at cap. Any future `draft-brief` expansion must compress elsewhere first. Task 2 (Designer + UX Writer migration) does NOT touch pm.md.
+- **Researcher `cite-evidence-6-category-9-moat` task** — researcher.md already has this task name; verify it matches the workflow's dispatch reference exactly before running orchestrator.

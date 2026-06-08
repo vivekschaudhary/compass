@@ -14,6 +14,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.27] — 2026-06-08
+
+> **`/create-brief` refactored to dispatch-graph shape — 4th workflow migrated** (joining `/setup-product` v0.3.14 + `/build` v0.3.23 + `/create-bet-architecture` v0.3.26). Embedded 83-line methodology → thin 4-step dispatch contract (researcher.cite-evidence-6-category-9-moat · pm.draft-brief · HITL · delivery-manager.update-status). **Counter #46 (1 of 5 before Retro #010).**
+
+### Changed
+
+- **`compass/workflows/create-brief.md`** refactored to dispatch-graph shape (v0.3.27). Standard frontmatter (name, status, owner, version: 0.3.27). Framework grounding (working-backwards · lean-mvp · jtbd · shape-up + 5 Compass-originals). Two modes declared: fresh (URL/text) + promote-stub (portfolio stub). 3 workflow-level preconditions (foundation approved · source present · brief not already drafted). Dispatch graph: Step 1 `researcher.cite-evidence-6-category-9-moat` → Step 2 `pm.draft-brief` → Step 3 HITL → Step 4 `delivery-manager.update-status`. 9-item verification checklist. Output summary contract. Notes: promote-stub mode semantics + 4 named anti-patterns.
+- **`AGENTS.md`** — workflow-migration count updated: 3 → 4 dispatch-graph workflows; `/create-brief` (v0.3.27, 4th) added.
+
 ## [0.3.26] — 2026-06-08
 
 > **`/create-bet-architecture` refactored to dispatch-graph shape — 3rd workflow migrated** (joining `/setup-product` v0.3.14 + `/build` v0.3.23). Embedded 11-step methodology prose → thin 3-step dispatch contract (architect.draft-bet-architecture · HITL · delivery-manager.update-status). Orchestrator can now walk the Product → Architecture chain end-to-end. **Counter #44 (4 of 5 before Retro #009).**

@@ -45,14 +45,16 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 **Postcondition:** all sections populated · Defensibility/Moat 9 rows have verdict + rationale + primary moat(s) named · Access & Data Posture 3 fields each have value OR `n/a — <reason>` · Researcher 6-category findings consumed (cited or `n/a — <reason>`) · frontmatter correct · ≥1 PM DRI Decision · mirror completed OR skip-as-DRI-Decision · HITL halt announced · not self-approved.
 
-### `draft-brief` — bet-level brief from source / portfolio stub promotion
-Slots into `/create-brief`. Task migration pending; follow `compass/workflows/create-brief.md` + `compass/templates/brief.md`. Same discipline (cite-or-mark-na · refuse-escalate · no log-and-walk-away · HITL halt at `proposed`).
+### `draft-brief` — bet brief (fresh or promote-stub)
+**Gate:** foundation docs `approved`. Source OR stub bet-id present. Researcher findings present.
+**Work:** mode detection (stub bet-id + `portfolio_stub: true` → promote; URL/text → fresh; bet-id without stub → refuse) → gather source → draft `docs/bets/<bet-id>/brief.md` (problem · user · hypothesis · metrics · guardrails · scope · architecture-required · DRI log) → promote-stub: keep frontmatter, clear `portfolio_stub: false`, update portfolio.md → seed DRI ≥1 Decision → mirror if MCP (else DRI Decision) → HITL halt.
+**Postcondition:** `status: proposed` · all sections filled · `[cite-or-mark-na]` · ≥1 DRI Decision · HITL halt announced · not self-approved.
 
-### `decompose-bet-to-story` — ONE approved bet → ONE shippable story (not whole backlog)
-Slots into `/create-story`. Task migration pending; follow `compass/workflows/create-story.md`.
+### `decompose-bet-to-story` — ONE approved bet → ONE story
+Follow `compass/workflows/create-story.md`. One story at a time; never decompose whole backlog upfront.
 
 ### `arbitrate-dispute` — Engineer-vs-Reviewer dispute resolution
-When Engineer disputes a Reviewer finding (PR `## Dispute` section), read both sides + artifact + arbitrate. Execute the decision; don't make engineering choices. Post resolution comment with rationale.
+Read both sides + artifact → arbitrate. Execute decision; don't make engineering choices. Post rationale.
 
 ## Refusal rules
 
@@ -69,7 +71,7 @@ After every task: **TL;DR** (3 lines max — what shipped · current state · wh
 
 ## Logging patterns mid-task (v0.3.17)
 
-Per `[fractal-retro]` (canon v0.3.17): append patterns worth retroing later to **`docs/role-activity/pm.md`** per `compass/templates/role-activity-log.md`. **PM triggers:** source-material gap recurrences (auth posture / data sensitivity / regulatory regime missing across ≥2 briefs); approver-edit patterns (HITL consistently edits same section); dispute clusters (recurring brief-level ambiguity → missed `[soft-spec-hardening]`); moat-eval patterns (same primary moat OR same gap). Append-only · specific · cite evidence · instance count. Don't log artifacts, per-bet DRI entries, or PR comments. Role retro: `/retro --altitude=role --role=pm`.
+Per `[fractal-retro]` (canon v0.3.17): append to `docs/role-activity/pm.md`. **Triggers:** auth posture / data sensitivity / regulatory regime missing across ≥2 briefs · HITL edits same section repeatedly · dispute clusters (recurring brief ambiguity) · moat-eval gaps. Append-only · cite evidence · instance count.
 
 ## Anti-patterns
 

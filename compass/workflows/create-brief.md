@@ -1,83 +1,93 @@
+---
+name: create-brief
+status: active
+owner: pm
+auto_invokes: []
+invoked_by: [create-bet-portfolio, manual]
+version: 0.3.27
+---
+
 # Workflow: /create-brief
 
-Creates a new bet — feature, OKR, tech debt, continuous improvement, or architectural initiative. PM-led, Researcher always engaged.
+## Framework grounding
 
-Two modes:
+- **Strategy / discovery foundations:** [working-backwards] · [lean-mvp] · [jtbd]
+- **Bet-based commitment:** [shape-up] (brief as the shaped bet before commitment)
+- **Compass-originals operationalized:** [agent-as-surface-independent-unit] (v0.3.14) · [workflow-as-dispatch-graph] (v0.3.24) · [cite-or-mark-na] · [refuse-escalate] · [soft-spec-hardening]
+- **Verifies adherence to:** Principle #14 · Principle #15 (cite-or-mark-na) · Principle #16
 
-- **Create fresh** (steady state): `/create-brief <source>` or `/create-brief <free text>` — drafts a new bet from scratch.
-- **Promote stub** (bootstrap): `/create-brief <bet-id>` where `docs/bets/<bet-id>/brief.md` exists with `portfolio_stub: true` — fills in the full content for a stub created by `/create-bet-portfolio`.
+## Purpose
 
-## Trigger
+Creates a **bet-level brief** (`docs/bets/<bet-id>/brief.md`) — the shaped bet before architecture or engineering begins. Two modes: **fresh** (new bet from source material) and **promote-stub** (fill content for a portfolio stub from `/create-bet-portfolio`).
 
-`/create-brief <source-link>` (Confluence, GDrive, Notion, ticket URL)
-OR
-`/create-brief <free text description>`
-OR
-`/create-brief <source-link> <free text>` (both — combine source with additional context)
-OR
-`/create-brief <bet-id>` (promote-stub mode — only if a portfolio stub exists for this ID)
+## Architectural shape (v0.3.27)
 
-## Mode detection
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodology lives in agent task files.
 
-| Argument shape | File at `docs/bets/<arg>/brief.md` | Mode |
-|---|---|---|
-| Looks like a bet ID (e.g., `PROJ-42`) | exists with `portfolio_stub: true` | **Promote stub** |
-| Looks like a bet ID | exists with `portfolio_stub: false` (or absent) | **Refuse** — brief already fully drafted; use `/create-story` or `/create-bet-architecture` next |
-| Looks like a bet ID | does not exist | **Refuse** — no stub to promote, and `/create-brief` for fresh bets needs source material, not an ID |
-| URL / free text | n/a | **Create fresh** |
+## Preconditions (workflow-level GATE)
 
-## Process
+- **Foundation approved** — `docs/foundation/product.md` AND `docs/foundation/architecture.md` both `status: approved`. **On failure:** *"Foundation not approved. Run `/setup-product` and `/setup-foundation-architecture` first."*
+- **Source or stub present** — user provides ≥1 source (link, free text, or existing stub bet-id with `portfolio_stub: true`). **On failure:** *"Provide a source link, description, or stub bet-id to begin."*
+- **Brief not already drafted** — if `docs/bets/<bet-id>/brief.md` exists with `portfolio_stub: false`, refuse: *"Brief already drafted. Use `/create-story <bet-id>` or `/create-bet-architecture <bet-id>` next."*
 
-1. **Verify gate:** `docs/foundation/product.md` and `docs/foundation/architecture.md` both exist with `status: approved`. If not, refuse.
-2. **Load PM role context** (`compass/roles/pm.md`)
-3. **Engage Researcher** (always — `compass/roles/researcher.md`)
-4. **Gather source material:**
-   - If source link: read via MCP (Confluence / GDrive / Notion / Linear / Jira)
-   - If free text: use as primary source
-   - Multiple sources allowed
-5. **Researcher gathers context** in parallel:
-   - Existing tickets via MCP
-   - Sentry data, analytics
-   - Support pain input (load Support role context briefly)
-   - Asks PM clarifying questions for any gaps (Researcher always asks questions — that's its job)
-6. **Generate bet ID** (Jira-style — create the epic in Jira, get the ID, e.g. PROJ-42)
-7. **Draft brief** at `docs/bets/<bet-id>/brief.md` using `compass/templates/brief.md`:
-   - Frontmatter: id, type (feature/okr/tech-debt/etc.), parent (optional — link to OKR or foundation bet), status: `proposed`, created date, author, source links
-   - Problem, user, why-this-matters
-   - Hypothesis (the bet)
-   - Primary metric (name, baseline, target, source)
-   - Guardrail metrics (what shouldn't degrade)
-   - Measurement window (default 30 days, configurable)
-   - Check-in cadence (weekly / biweekly / monthly)
-   - Scope: in vs. out
-   - Architecture required flag (`true | false | auto`)
-   - DRI Log section
-8. **Mirror to Jira/Trello/Confluence** as an epic
-9. **HITL gate** — human reviews and marks `status: approved`
-10. **Delivery Manager updates `docs/status.md`**
+## Roles invoked (agents dispatched)
 
-## Output
+- `compass/agents/researcher.md` — cited evidence for this bet (User pain · Competitive · Moat)
+- `compass/agents/pm.md` — drafts brief; runs mode detection; seeds DRI; HITL halt
+- `compass/agents/delivery-manager.md` — status update after approval
 
-- `docs/bets/<bet-id>/brief.md` with `status: proposed` → `approved`
-- Mirrored to ticketing/docs system
-- `docs/status.md` updated
+## Dispatch graph
 
-## Promote-stub mode (specifics)
+### Step 1. `researcher.cite-evidence-6-category-9-moat` (Researcher agent owns)
 
-When mode = "Promote stub":
+**Dispatches:** Researcher agent
+**Task definition:** `compass/agents/researcher.md` → Task `cite-evidence-6-category-9-moat`
+**Input:** source material (link / free text / stub context) · bet-id (if known) · `docs/foundation/product.md` for context
+**What it covers:** identify open questions for this bet → gather cited evidence (User pain · Competitive · Moat MANDATORY; Technical · Quantitative · Trends if relevant or `n/a`) → for foundational bets evaluate all 9 moat types → synthesize → output findings to `docs/bets/<bet-id>/research.md` or appended to brief stub → seed DRI ≥1 Decision AND ≥1 Risk.
+**Output:** cited research findings ready for PM to draft from
 
-1. Read the existing stub at `docs/bets/<bet-id>/brief.md` — keep its frontmatter (`id`, `parent`, `type`, `depends_on`, `parallel_with`, hypothesis traced to product bet), discard placeholder body.
-2. Read `docs/foundation/portfolio.md` to load the bet's role in the wedge (which loop step it enables, what depends on it).
-3. Skip the source-material gather step (the stub already has its trace-back). PM may still ask user for additional context for the full draft.
-4. Engage Researcher as normal — but specifically to flesh out: user-pain evidence for *this* bet, competitive context, and any moat implications.
-5. Fill the full brief content (problem, user, why-this-matters, scope, guardrails, etc.) as usual.
-6. **Clear the flag:** set `portfolio_stub: false` in frontmatter.
-7. Update `docs/foundation/portfolio.md` Promotion log table (Bet ID, promoted-on date, status after).
-8. HITL approves the full brief separately from portfolio approval.
+### Step 2. `pm.draft-brief` (PM agent owns)
+
+**Dispatches:** PM agent
+**Task definition:** `compass/agents/pm.md` → Task `draft-brief`
+**Input:** Researcher findings from Step 1 · source material · bet-id · mode (fresh vs promote-stub)
+**What it covers:** mode detection → gather source → draft `docs/bets/<bet-id>/brief.md` (problem · user · hypothesis · metrics · guardrails · scope · architecture-required · DRI log) → promote-stub: keep frontmatter, clear `portfolio_stub: false`, update portfolio.md → seed DRI → mirror to Jira/Confluence if MCP → HITL halt.
+**Output:** `docs/bets/<bet-id>/brief.md` with `status: proposed`
+
+### Step 3. **HITL gate** (human)
+
+**Dispatches:** HUMAN (not an agent)
+**What it covers:** human reviews `docs/bets/<bet-id>/brief.md` against Verification checklist. Pass → flip `status: proposed` → `status: approved` + commit. Fail → reject and re-dispatch PM. **Principle #16:** PM must NOT self-approve.
+
+### Step 4. `delivery-manager.update-status` (Delivery Manager agent owns)
+
+**Dispatches:** Delivery Manager agent
+**Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`
+**What it covers:** confirm brief approved · update bet tracking · surface next recommended workflow (`/create-bet-architecture <bet-id>` if `architecture_required: true/auto`, else `/create-story <bet-id>`).
+**Output:** bet status current in delivery tracking
+
+## Workflow-level verification (final GATE)
+
+- [ ] `docs/bets/<bet-id>/brief.md` exists with `status: approved`
+- [ ] All sections populated (problem · user · why-this-matters · hypothesis · primary metric · guardrails · measurement window · scope · architecture-required)
+- [ ] Every claim cited OR `n/a — <reason>` (Principle #15)
+- [ ] Hypothesis is falsifiable (metric + threshold + window)
+- [ ] Researcher findings consumed (User pain + Competitive + Moat cited or `n/a`)
+- [ ] ≥1 DRI Decision logged
+- [ ] If promote-stub: `portfolio_stub: false` set + portfolio.md Promotion log updated
+- [ ] Mirror completed OR skip logged as DRI Decision
+- [ ] Principle #16 satisfied: not self-approved
+
+## Output summary contract
+
+**TL;DR** (3 bullets) · **Files created/modified** · **Next recommended command** (`/create-bet-architecture <bet-id>` or `/create-story <bet-id>`) · **Open questions/risks**.
 
 ## Notes
 
-- PM decomposes into stories **one at a time** via `/create-story <bet-id>` after this brief is approved
-- If brief has `architecture_required: true` or `auto` → Architect engages next via `/create-bet-architecture <bet-id>`
-- Researcher findings live in the brief itself or `docs/bets/<bet-id>/research.md` if substantial
-- For new projects: run `/create-bet-portfolio` first to draft the MVP wedge as stub briefs; then promote each via `/create-brief <bet-id>` as you're ready to fully scope it
+**Promote-stub mode:** when `/create-bet-portfolio` ran first, it creates stubs with `portfolio_stub: true`. Promoting fills the full brief content while preserving the bet's portfolio context (parent trace, wedge position, hypothesis lineage). Do NOT re-derive the hypothesis — keep it from the stub.
+
+**Anti-patterns:**
+- `brief-without-real-user` — hypothesis that doesn't name who benefits and why
+- `vanity-metric` — primary metric that doesn't measure user value (pageviews, signups without activation)
+- `solution-shaped-problem` — brief that describes the feature instead of the problem
+- `skipped-researcher` — brief drafted without any cited evidence (violates Principle #15)
