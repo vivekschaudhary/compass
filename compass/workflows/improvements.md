@@ -15,7 +15,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 - **Retro #006** (v0.3.9 → v0.3.13): [retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md](retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md) — **fired ON TIME at #30** (2nd consecutive on-time retro; hard line worked again). 5 improvements in 1 day. Surfaces 3 codification-ready candidates: `[user-as-load-bearing-oversight]` (3+ instances) · `[L-layered-progressive-rollout]` (2 instances) · `[surface-shapes-output]` (2 instances). `[hard-line-declaration]` empirically validated 3rd time (cadence-class commitments). Release-class taxonomy stable at 7 classes (capability-extension introduced v0.3.13).
 
-**Next retro fires after improvement #35.** (Retro #006 fired at #30 ON TIME 2026-06-02. **v0.3.16 = #33 (2 of 5 needed before Retro #007).** Hard line still in effect — if Retro #007 slips, it's a 2nd retro-cadence regression; treat as recurring soft-spec failure and deepen `[hard-line-declaration]` mechanism (e.g., make counter visible in dashboard Actions tab).)
+**Next retro fires after improvement #35.** (Retro #006 fired at #30 ON TIME 2026-06-02. **v0.3.17 = #34 (1 of 5 needed before Retro #007).** Hard line still in effect — if Retro #007 slips, it's a 2nd retro-cadence regression; treat as recurring soft-spec failure and deepen `[hard-line-declaration]` mechanism (e.g., make counter visible in dashboard Actions tab).)
 
 ## Template
 
@@ -1485,11 +1485,11 @@ The user observed the real-world pattern: "create the bets across all and then h
 
 ---
 
-### QUEUED — 2026-06-06 — Multi-altitude retros (fractal pattern across role / workflow / bet / project / org / framework)
+### 2026-06-07 — `[fractal-retro]` codified (1st recursive workflow in Compass); multi-altitude retros shipped — schema + project altitude + per-role/per-workflow log schemas (v0.3.17)
 
-> **STATUS: queued, not shipped.** This entry is a **design carryover**, not a shipped improvement. **Counter does NOT tick** for queued entries. Surfaced via a design conversation in the v0.3.16 session; will move to a shipped-entry shape (with stamped version, files-touched, watch-for) when the trigger conditions below fire and it actually gets built.
+> **STATUS: shipped.** This entry was QUEUED in the v0.3.16 tail; trigger #2 fired within minutes ("Claude had to redo PRs average of 5 times.. in atleast 4 times"); pulled the build forward. Counter ticks #33 → #34 (1 of 5 needed before Retro #007). Original QUEUED design unchanged from what shipped; this entry captures the trigger-fired audit trail + files actually touched.
 
-**Friction (latent, not yet acute):** Retros today are **single-altitude** — only `compass/workflows/improvements.md` (framework altitude) has retros wired. `compass/workflows/retro.md` line 65 already declared a project-altitude variant (*"Same workflow shape, different `parent_log`. Project retros would use `docs/improvements.md` and write to `docs/retros/`. Currently only framework retros are wired; project-retro variant can generalize when a project asks for it"*) but never built it. **The deeper architectural gap** surfaced in the v0.3.16 session: the user's framing — *"Retros like the plan are at every role or workflow based. Should we keep retros at roles/workflows and then consolidate to project and org, follow the same workflow?"* — is the cleanest unification. Retros should be **fractal**: same workflow shape applied at every altitude, with bottom-up consolidation via the `parent_log:` field that already exists in the retro template. Today the bottom-up signal is invisible — patterns visible at role/workflow level never bubble up; patterns visible at project level never reach the framework. The user's original ask was cross-program (org-altitude) consolidation; the design generalizes to all 6 altitudes.
+**Friction (trigger fired):** Retros pre-v0.3.17 were **single-altitude** — only `compass/workflows/improvements.md` (framework altitude) had retros wired. `compass/workflows/retro.md` line 65 declared a project-altitude variant but never built it. The deeper architectural gap surfaced in the v0.3.16 session via the user's framing: *"Retros like the plan are at every role or workflow based. Should we keep retros at roles/workflows and then consolidate to project and org, follow the same workflow?"* — the cleanest unification: retros should be **fractal**, same workflow shape applied at every altitude with bottom-up consolidation. We QUEUED the design with 4 explicit build triggers. **Trigger #2 fired within minutes of the commit**: user reported *"They [improvements] surfaced as I work. Claude had to redo PRs average of 5 times.. in atleast 4 times."* That's 10+ improvements surfacing as work happens + PR-redo loop at 5x in ≥4 instances — exactly the patterns role-altitude (Engineer + Reviewer) and workflow-altitude (`/build`) retros catch before manual flagging. The framework retro every-5 cadence averages across cycles too coarse to filter that signal. Pulled the build forward.
 
 **Design (locked):**
 
@@ -1518,38 +1518,42 @@ Existing `parent_log:` field stays; its semantic generalizes from a 2-value enum
 
 **Aggregation discipline.** A higher-altitude retro reads all child retros + child raw entries within the named scope, synthesizes the pattern catalog at THAT altitude, archives. Each retro is immutable (`status: archive`); patterns that recur across altitudes get promoted UP at the next-altitude retro, not by re-editing.
 
-**Files this would touch (when built):**
+**Files touched (14 framework-canonical):**
 
-- `compass/templates/retro.md` — add `altitude` + `consolidates_from` frontmatter
-- `compass/workflows/retro.md` — generalize from 2 altitudes to 6; document dispatch + aggregation contract
-- `compass/framework/canon.md` — register the new pattern (working name: `[fractal-retro]` or `[same-shape-at-altitude]`); name the anti-pattern it closes (working name: `[retro-as-single-altitude-loses-the-bottom-up-signal]`)
-- `compass/templates/role-activity-log.md` (NEW)
-- `compass/templates/workflow-run-log.md` (NEW)
-- Each migrated agent in `compass/agents/*.md` — add "Logging patterns mid-task" section
-- `compass/scripts/aggregate-retros.py` (NEW) — for org-altitude rollup across configured project paths
-- `AGENTS.md` — update Patterns section; add Principle line on bottom-up aggregation
-- `CHANGELOG.md` + `compass/workflows/improvements.md` — release entry + shipped-entry append at build time
+New (5):
+- `compass/templates/role-activity-log.md` — per-role activity log schema
+- `compass/templates/workflow-run-log.md` — per-workflow run log schema
+- `compass/templates/retro-project.md` — concrete project-altitude retro template
+- `compass/templates/project-improvements.md` — project shipped-improvements log template
+- (`compass/scripts/aggregate-retros.py` — org-altitude aggregator — NOT shipped per `[declare-not-implement]`; declared for when 2nd project starts)
 
-**Trigger to actually build this:**
+Edited (9):
+- `compass/templates/retro.md` — added `altitude:` + `consolidates_from:` frontmatter; clarified `parent_log:` semantics for N-altitude
+- `compass/workflows/retro.md` — generalized from 2 altitudes to 6; documented dispatch (default by context; `--altitude=<x>` arg) + aggregation contract + per-altitude refusal cases
+- `compass/framework/canon.md` — registered `[fractal-retro]` as 2nd architecture-discipline class member (2 instances: existing framework retros reframed + project altitude end-to-end shipped this release); named anti-pattern `single-altitude-retro-loses-bottom-up-signal`
+- `compass/agents/engineer.md` + `compass/agents/reviewer.md` — added "Logging patterns mid-task" sections (priority — closest to PR-redo loop trigger)
+- `compass/agents/pm.md` + `compass/agents/researcher.md` + `compass/agents/delivery-manager.md` — same section pattern, role-specific examples
+- `AGENTS.md` — Patterns section gained `[fractal-retro]` entry; catalog totals updated (7 shapes / 13 patterns); "When you're unsure" line added on where to log mid-task patterns
+- `CHANGELOG.md` v0.3.17 entry
+- `compass/workflows/improvements.md` (this entry — MOVED from QUEUED to shipped) + header counter v0.3.16=#33 → v0.3.17=#34
 
-Build when ANY of these fire:
-1. A second project starts using Compass and the user wants cross-project pattern visibility (the original ask).
-2. An agent (Reviewer, Engineer, Delivery Manager) surfaces a pattern mid-task that doesn't have a natural log to land in — proves the role/workflow log gap is acute.
-3. The next Retro #007 (after improvement #35) surfaces a recurring drift signal across multiple migrations that role/workflow retros would have caught earlier — proves the bottom-up signal is missing in practice.
-4. v0.4 orchestrator design enters scoping — multi-altitude retros are a natural fit alongside the orchestrator + Finance pillar.
+**Trigger fired (audit trail):**
 
-**Scope at build time (recommended minimum):** ship the schema generalization + ONE new altitude end-to-end (project altitude is the obvious first — it's already declared at line 65). Other altitudes (role, workflow, bet, org) get schema support but stay declared-not-implemented per `[declare-not-implement]` until each is needed. Aggregator script ships only when org-altitude is actually used.
+QUEUED entry's "Trigger to actually build this" listed 4 conditions. **Trigger #2 fired**: *"An agent surfaces a pattern mid-task that doesn't have a natural log to land in — proves the role/workflow log gap is acute."* Evidence cited in user's message: 10+ improvements surfacing as work happens + PR-redo loop at 5x in ≥4 instances. The PR-redo data is concrete — role-altitude Engineer + Reviewer retros + workflow-altitude `/build` retro would have caught this pattern at instance 2 or 3, not let it accumulate to 5+. **The trigger firing in-session validates `[declare-not-implement]` 4th time**: declare with explicit triggers; build when fired; don't pre-build speculatively.
 
-**What this would validate structurally:**
+**What this validated structurally:**
 
-- **First recursive workflow in Compass.** Bets are fractal (foundation → OKR → feature → story); metrics are fractal top-down; plans are single-altitude rollup. Retros would become the first WORKFLOW that's fractal.
-- **`parent_log:` field generalizes** without frontmatter rename — existing retros stay valid.
-- **`[user-as-load-bearing-oversight]` accrues another instance** — this entire design came from the user's *"Retros like the plan are at every role or workflow based"* observation in a session that was otherwise focused on the Reviewer migration. Pattern continues to compound; canon promotion case for Retro #007 grows stronger.
+- **First recursive workflow in Compass shipped.** Bets are fractal (foundation → OKR → feature → story); metrics are fractal top-down; plans are single-altitude rollup. **Retros are now the first WORKFLOW that's fractal** — `compass/workflows/retro.md` is altitude-agnostic, with the altitude becoming a frontmatter property of each retro instance rather than a separate workflow.
+- **`parent_log:` field generalized without rename** — existing framework retros #001–#006 stay valid; their frontmatter may not have explicit `altitude: framework` (they predate v0.3.17, immutable per archive-immutability discipline).
+- **Architecture-discipline class structurally validated** — v0.3.14 introduced with `[agent-as-surface-independent-unit]`; v0.3.17 grows to 2 members with `[fractal-retro]`. No longer a one-off shape. Catalog: 7 shapes / 13 patterns; architecture-discipline = 2 members (matches scope-discipline's count).
+- **`[declare-not-implement]` 4th instance.** Pattern empirically validated 4× across releases (v0.3.5 agent-handoff template reviewer-blocks; v0.3.8 same-day adapter-layer correction; v0.3.16 multi-altitude QUEUED state; v0.3.17 role/workflow/bet aggregation logic + org-altitude aggregator both DECLARED, not built). The v0.3.16→v0.3.17 QUEUED→SHIPPED transition is the cleanest possible cycle for the pattern — declare with explicit triggers; build when a trigger fires; cite the trigger in the shipped entry.
+- **`[user-as-load-bearing-oversight]` accrued ≥4 fresh instances in this session.** (a) Original retro architecture observation. (b) Pull-forward decision when trigger fired. (c) PR-redo loop data citation. (d) Course-correct on `.codex/prompts/reviewer.md` boundary in v0.3.16. Canon promotion case for Retro #007 is overwhelming.
 
-**Watch for (between now and build):**
+**Watch for:**
 
-- **Whether the original cross-program ask resurfaces** — if user starts running Compass against a second project and wants consolidated retros, that's trigger #1 firing. Build the project altitude + aggregator script as minimum.
-- **Whether agents start writing patterns into DRI logs that don't belong there** — if a Reviewer-spotted pattern about Engineer behavior keeps landing in a bet's DRI log because there's nowhere better to put it, that's trigger #2 firing.
-- **`[declare-not-implement]` 3rd instance.** Declaring multi-altitude retros now and deferring the build is itself an instance of the pattern (v0.3.5 + v0.3.8 same-day correction were the original two instances per canon v0.3.9). When this design eventually ships, the entry will note this third instance and likely surface `[declare-not-implement]` for canon strengthening (already codified, but instances compound).
-- **Existing framework retro stays the canonical "framework altitude" retro.** Don't touch it during the build — backwards-compat is the regression-safe gate.
-- **Counter stays at #33.** Queued entries don't tick. When this builds, the shipped-entry that replaces this carryover will tick the counter.
+- **Role/workflow log accumulation.** v0.3.17 ships the schemas + agent-side logging discipline. Watch whether agents actually start appending to `docs/role-activity/<role>.md` and `docs/workflow-runs/<workflow>.md` as they encounter patterns. If logs stay empty, the discipline isn't sticking — surface as next improvement (likely a workflow-side prompt or a HITL gate that asks "should this be logged?").
+- **Whether role/workflow retro aggregation gets built or skipped.** v0.3.17 declares the aggregation logic; ships only the schemas. If ≥5 entries accumulate in a role log and nobody runs `/retro --altitude=role --role=engineer` to synthesize, that's evidence the aggregation needs more nudging — possibly a cron, or possibly the retro workflow auto-detecting threshold and proposing.
+- **Org-altitude aggregator trigger.** Original ask. Fires when a 2nd project starts using Compass. Build `compass/scripts/aggregate-retros.py` then.
+- **`[fractal-retro]` 3rd instance candidate.** Currently 2 instances (existing framework retros reframed + project altitude shipped end-to-end). 3rd instance = whichever leaf-altitude retro (role / workflow / bet) actually fires first with real data and produces a useful archived retro. Watch for that.
+- **Custom GPT char limit on PM/Researcher/Delivery-Manager.** All three got new "Logging patterns mid-task" sections (~30 lines each). delivery-manager.md was already ~11KB pre-v0.3.17 (per v0.3.15 watch-for, exceeds ~8000-char Custom GPT cap); v0.3.17 makes that worse. When ChatGPT-host usage of those agents surfaces, the cap-violation needs addressing — likely move host-capability table + extended task definitions to REFERENCED.
+- **Counter at #34. Hard line still in effect** — Retro #007 fires after #35. 1 more improvement needed. Likely candidates: trim delivery-manager.md to fit Custom GPT cap (v0.3.15 watch-for, now compounded by v0.3.17); refactor /status or /build to dispatch-graph shape; next agent migration (Architect or Security Reviewer).

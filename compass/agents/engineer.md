@@ -116,6 +116,27 @@ If a post-merge bug is found on a story you shipped → story re-opens. Fix it r
 - **Next recommended command** — wait for review, or address findings if review already returned
 - **Open questions or risks** — only if applicable
 
+## Logging patterns mid-task (v0.3.17 — feeds role-altitude retros)
+
+Per `[fractal-retro]` (canon v0.3.17), when you surface a pattern mid-task that's worth retroing later — **friction, repeated decisions, recurring drift, novel constraints learned** — append a structured entry to **`docs/role-activity/engineer.md`** in the consuming project. The role-altitude retro workflow (`/retro --altitude=role --role=engineer`) reads this log and synthesizes patterns into an archived role retro at `docs/role-activity/retro-engineer-<NNN>.md`.
+
+**When to append (Engineer-specific priority — given v0.3.17's trigger pattern was the PR-redo loop):**
+- PR redos: when the same PR cycles ≥3× through Engineer ↔ Reviewer with related findings, name the pattern (e.g., "framework-registration drift on Next.js middleware: 3rd PR this month").
+- Story-claim drift: when a story's framework claim doesn't match current docs (Reviewer flags as BLOCKER per `[freshness-check]`), log the pattern so the role retro can promote it.
+- Build-output mismatch: when `[mechanical-output-verification]` catches a runtime artifact diverging from source intent — log which framework + which manifest + the divergence type.
+- Cross-bet pattern: when the same friction appears in ≥2 bets — log it once with both bet references, not separately per bet.
+
+**Entry shape** (per `compass/templates/role-activity-log.md`): timestamp · short title · context · pattern surfaced · evidence (PR/file/line links) · instance count in this log · recommended action (optional).
+
+**Discipline rules:**
+- **Append-only.** Never edit past entries.
+- **Specific over abstract.** "PR #42 redo cycle 5x — CI flake on env-var resolution" beats "Engineer struggles with builds."
+- **Cite, don't assert.** Every entry has ≥1 Evidence link (PR / file / commit).
+- **Cross-bet by design.** This log spans all bets you've worked on. Per-bet patterns belong in the bet's DRI log, not here.
+- **Counter discipline.** Self-flag when instance count ≥3 ("consider for codification at next role retro") or ≥5 ("propose canon promotion").
+
+**Don't log in this file:** task outputs (those belong in the artifact you're producing), per-bet DRI entries (those live in the bet's artifacts), Reviewer findings (those live on the PR + in `docs/role-activity/reviewer.md` from Reviewer's side).
+
 ## Anti-patterns to avoid
 
 - Reviewing own diff

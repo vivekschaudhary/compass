@@ -14,10 +14,11 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 
 - **Every initiative is a bet.** Foundation product, OKRs, features, architectural initiatives — all measurable bets with a hypothesis, key metric, and an outcome: **won / learning / inconclusive**.
 - **Bets contain stories.** Stories contain implementation, tests, fixes, ops.
-- **Agents own tasks; workflows sequence agents.** 13 agent files in `compass/agents/` (migrating from `compass/roles/`; v0.3.14 ships pm + researcher + engineer, rest follow incrementally). Each agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; the methodology lives in the agent task definitions where it belongs.
+- **Agents own tasks; workflows sequence agents.** 13 agent files in `compass/agents/` (migrating incrementally from `compass/roles/`; **5 of 13 migrated as of v0.3.16**: pm + researcher + engineer (v0.3.14), delivery-manager (v0.3.15, renamed from project-manager), reviewer (v0.3.16). Remaining 8: support, designer, ux-writer, architect, enterprise-architect, security-reviewer, tech-writer, scanner — complete by v0.4). Each migrated agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; the methodology lives in the agent task definitions where it belongs.
 - **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter (e.g., `pm.md` runs on ChatGPT or Claude; `engineer.md` prefers CLI hosts with filesystem access). Paste any agent file into the host's system-prompt slot → it works. **Cross-host orchestration today is human-dispatched** (open the right host for the active step); **v0.4 ships the orchestrator** that walks dispatch graphs and dispatches agents per step automatically. **Default Reviewer ≠ Implementer** for review independence — Compass empirically validates Claude implements, Codex reviews; the cross-model split is preserved structurally via agent `preferred_hosts:`. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; removed in v0.4.
 - **Discipline holds always.** Full review on every PR, no shortcuts under pressure.
 - **Decisions, Risks, Issues** logged at every stage (DRI logs).
+- **Retros are fractal** (`[fractal-retro]`, canon v0.3.17). Same `/retro` workflow shape applied at every altitude — role · workflow · bet · project · org · framework — with bottom-up consolidation. Patterns visible at the role/workflow level (e.g., recurring PR-redo loops) bubble up to project retros, then to org retros, then promote to canon. Agents log patterns mid-task to `docs/role-activity/<role>.md` + `docs/workflow-runs/<workflow>.md` so leaf-altitude retros have source data.
 - **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — and produces *findings, not failures*. Each finding has severity (Critical / High / Medium / Low) + confidence + location + reason + fix. Measurement is automatic (no manual self-assessment). Suppressions are explicit, justified, logged in DRI. Owners decide; the scanner informs.
 
 ## The flow
@@ -64,6 +65,10 @@ You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/me
 /scan <bet>                     → Snyk-style continuous quality scanner — 6 SDLC phases
 /metrics                        → Outcomes (won/learning/inconclusive) + open-findings posture
 /plan                           → Living time-bound schedule (run manually or via cron)
+/retro                          → Periodic batch retro at any altitude
+                                  (role / workflow / bet / project / org / framework
+                                  per [fractal-retro] v0.3.17 — same workflow shape
+                                  applied recursively; bottom-up consolidation)
 /dashboard             [auto]   → Single-file HTML view of all living artifacts
                                   (refreshed by /scan, /metrics, /plan, /status)
 /measure <bet>         [cron]   → Cron-driven bet outcome resolution

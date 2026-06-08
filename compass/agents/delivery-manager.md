@@ -232,6 +232,21 @@ After completing any task, report in this exact shape:
 - **Open questions or risks** — only if applicable
 - **(For `compile-sprint-comms` only)** — HITL gate announced: *"Sprint comms drafted at `<path>`. Review and publish to `<channel>` when ready."*
 
+## Logging patterns mid-task (v0.3.17 — feeds role-altitude retros)
+
+Per `[fractal-retro]` (canon v0.3.17), when you surface a pattern across status / plan / dashboard / sprint-comms / token-rollup output that's worth retroing later — **padding-status temptation recurrences, plan-staleness clusters, dashboard-regen failures, token-cost concentration shifts** — append a structured entry to **`docs/role-activity/delivery-manager.md`** in the consuming project. The role-altitude retro workflow (`/retro --altitude=role --role=delivery-manager`) reads this log and synthesizes patterns into an archived role retro.
+
+**When to append (Delivery Manager-specific):**
+- `[no-padded-status]` temptation: when you catch yourself reaching for "on track" without evidence (or notice that prior status entries did), log it — the refusal-rule is working but the temptation is recurring, which itself is data.
+- Plan staleness pattern: when plan freshness recurs as a Health-section flag (`last_refreshed > 3 days during active development`) across multiple status updates, log it — cron cadence is mis-set OR `/plan` runs are being skipped.
+- Cross-bet bottleneck: when the same phase (e.g., HITL approval on briefs) consistently appears as the longest-waiting bottleneck across multiple status snapshots, log the pattern.
+- Token-rollup cost surprise: when per-workflow or per-role cost concentrates differently than expected (e.g., Researcher consistently more expensive than Engineer in a project), log the data point — surfaces in next sprint comms / next project retro.
+- Sprint-comms publish friction: when the HITL gate on sprint-comms publish consistently sees the same kind of edits or delays, log the pattern.
+
+**Entry shape** per `compass/templates/role-activity-log.md`; same discipline as Engineer/Reviewer (append-only, specific, cite evidence, instance count, cross-bet by design).
+
+**Don't log in this file:** the status doc itself (artifact); per-bet DRI entries (live in the bet); per-sprint comms (live in `docs/sprints/`).
+
 ## Anti-patterns to avoid
 
 - Padding with positive-sounding non-information ("team is aligned", "good progress this week", "no issues to report")

@@ -1,65 +1,104 @@
 # Workflow: /retro
 
-Periodic retro of framework (or project) improvements. Fires every 5 improvements logged in `compass/workflows/improvements.md` (framework) or `docs/improvements.md` (project). Produces an archived retro at `compass/workflows/retros/<date>-retro-<NNN>-<period>.md`.
+Periodic retro at a chosen **altitude**. Same workflow shape applied at every altitude per `[fractal-retro]` (canon v0.3.17). Produces an archived retro file at the altitude's archive path; **reports patterns, does not prescribe**.
 
-**Why this exists.** Per AGENTS.md principle #14, soft-spec rationalization is the dominant failure mode of agent-driven workflows. Hardening fixes the loophole the agent found *this time*; retros catch loopholes that recurred across multiple improvements and should have been hardened earlier. The retro is the **convention-discovery lag closer** — it shortens the time between "pattern visible in 3 improvements" and "pattern formally codified in AGENTS.md."
+**Why this exists.** Per AGENTS.md principle #14, soft-spec rationalization is the dominant failure mode of agent-driven workflows. Hardening fixes the loophole the agent found *this time*; retros catch loopholes that recurred across multiple source entries and should have been hardened earlier. The retro is the **convention-discovery lag closer** — it shortens the time between "pattern visible in 3 source entries" and "pattern formally codified in AGENTS.md / canon.md / agent files."
+
+Single-altitude retros (framework-only, pre-v0.3.17) lose the **bottom-up signal**: patterns visible at role / workflow / bet altitudes never bubbled up because they had nowhere to surface. Per `[fractal-retro]`, retros now fire at the altitude where the source data lives, then higher altitudes consolidate child retros for cross-altitude pattern promotion.
 
 The retro **reports**, it doesn't **prescribe**. Patterns surfaced feed future improvements via normal triggers (real-world friction, dogfood evidence, user direction). The retro is not a planning workflow.
 
+## Altitudes
+
+| Altitude | What it retros on | Source log | Archive path | Default cadence |
+|---|---|---|---|---|
+| `framework` | Compass framework evolution | `compass/workflows/improvements.md` | `compass/workflows/retros/<date>-retro-<NNN>-<period>.md` | Every 5 improvements |
+| `project` | Cross-bet patterns within a consuming project | `docs/improvements.md` | `docs/retros/<NNN>-<period>.md` | Every 5 improvements (project's own) |
+| `bet` | Bet outcome + DRI log + scope drift | `docs/bets/<bet-id>/` (DRI logs + outcome) | `docs/bets/<bet-id>/retro.md` | At bet outcome transition (won / learning / inconclusive) |
+| `role` | Per-role / per-agent activity patterns | `docs/role-activity/<role>.md` | `docs/retros/role-<role>-<NNN>.md` | Every N activity entries (default ≥5) |
+| `workflow` | Per-workflow execution patterns | `docs/workflow-runs/<workflow>.md` | `docs/retros/workflow-<workflow>-<NNN>.md` | Every N runs (default ≥5) |
+| `org` | Patterns across multiple projects | aggregator output (multiple `docs/improvements.md` files) | `<org-hub>/retros/org-<NNN>.md` | Quarterly (cron) or manual |
+
+**The framework altitude is unchanged from pre-v0.3.17 behavior.** Existing Retros #001–#006 in `compass/workflows/retros/` are altitude=framework retros; they continue to work identically. Their frontmatter may not have explicit `altitude: framework` — that's fine; they predate v0.3.17 and are immutable.
+
 ## Trigger
 
-- **Auto-fires** when `compass/workflows/improvements.md` accumulates 5 new dated entries since the last retro. (Manual responsibility of the next Architect / PM reading the log — there's no cron yet; in practice, fire it during a normal Compass session when you notice the count.)
-- **Manual:** `/retro` to fire on demand. Useful when the framework has had a major release (e.g., a new workflow shipped) and you want a focused retro of the patches around it.
+- **Default by invocation context.**
+  - Invoked in a Compass framework clone (the `compass/` directory itself is present at repo root with `framework: compass` in `compass/config.yaml`) → **framework** altitude.
+  - Invoked in a consuming project (Compass installed via `cp -r compass/ ...`; `docs/improvements.md` exists) → **project** altitude.
+- **Explicit override via arg.** `/retro --altitude=<x>` to force a specific altitude. For per-target altitudes (role / workflow / bet), name the target:
+  - `/retro --altitude=role --role=engineer`
+  - `/retro --altitude=workflow --workflow=build`
+  - `/retro --altitude=bet PROJ-42`
+- **Auto-fires** when the source log accumulates N new dated entries since the last retro at THAT altitude (framework: 5; project: 5; role/workflow: ≥5; bet: at outcome transition). No cron yet — fires manually when the next agent reading the log notices the count.
 
 ## State detection
 
+For each altitude, the workflow first checks state:
+
 | State | Action |
 |---|---|
-| Fewer than 5 entries since last retro (or no improvements log) | **Refuse.** Tell user: "<N> improvements since last retro; <5 - N> more needed to fire automatically. Override with `/retro --force` if you want a partial-batch retro." |
-| 5+ entries since last retro | **Run retro** for the next 5 entries (oldest first). If more than 5 accumulated, run sequential retros (one per 5-batch). |
-| Backfill mode (`/retro --backfill`) | Generate retros retroactively for all historical 5-batches that don't yet have a retro. Useful when adopting `/retro` on an existing improvements log. |
+| Source log missing for the named altitude | **Refuse.** "Source log `<path>` missing — cannot retro this altitude. Bootstrap via `<altitude-specific bootstrap command>` first." |
+| Fewer entries than cadence threshold since last retro | **Refuse.** "<N> entries since last retro at altitude=<x>; <threshold - N> more needed to fire automatically. Override with `/retro --force` if you want a partial-batch retro." |
+| Threshold met | **Run retro** for the next batch (oldest-first). If more accumulated, run sequential retros (one per batch). |
+| `--backfill` mode | Generate retros retroactively for all historical batches that don't yet have a retro. Useful when adopting a new altitude on an existing log. |
 
 ## Process
 
-1. **Verify gate:** `compass/workflows/improvements.md` exists with ≥5 entries (or in backfill mode, has any entries).
-2. **Identify next batch:** read the improvements log; find the first 5 entries that don't have a retro covering them. (Retros are sequential and disjoint — improvement 1-5 in retro #001, 6-10 in #002, etc.)
-3. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md`) for project retros, OR framework-Architect persona for framework retros (Compass on Compass). (Delivery Manager migrated + renamed from Project Manager in v0.3.15; legacy role file retained during v0.3.x grace period.)
-4. **Read all 5 improvements** fully — both the entries in `improvements.md` AND the underlying CHANGELOG entries for each version.
-5. **Synthesize across the batch** using the retro template (`compass/templates/retro.md`):
-   - **Common patterns (positive)** — what's working that shows up multiple times
-   - **Recurring anti-patterns (negative)** — soft-spec rationalization surfaces that recurred
-   - **Convention candidates** — shapes stable enough to promote to AGENTS.md cross-cutting principles (rule of thumb: ≥3 instances and the shape is mature)
-   - **Drift signals** — workflows being repeatedly patched; big-bundle releases needing immediate follow-ups; framework tech debt
-   - **Trigger-origin analysis** — where did improvements come from; concentration risk
-   - **Watch-for list** for the next 5 — hypotheses to track explicitly
-   - **Meta-observations** — framework surface area growth, hardening ratio, convention discovery lag observed
-6. **Write archive** at `compass/workflows/retros/<YYYY-MM-DD>-retro-<NNN>-<period>.md` (e.g., `2026-05-26-retro-001-v0.1.8-to-v0.1.12.md`). Status: `archive`. **Never edited after publication.**
-7. **Update `compass/workflows/improvements.md` header** with: "Retros every 5 entries. Last retro: [<#NNN>](retros/...). Next retro fires after improvement #<M+5>."
-8. **If any convention candidates are recommended for promotion this batch**, surface them as a follow-up suggestion in the chat output. Don't auto-promote — that's a separate decision (and would itself be a new improvement requiring its own entry).
-9. **No HITL gate.** Retros report on what already happened; no decisions to approve.
+1. **Verify gate:** source log exists at the altitude-specific path; threshold met (or `--force`).
+2. **Identify batch:** read the source log; find the next batch of entries not yet covered by a retro at this altitude. Retros are sequential and disjoint within an altitude.
+3. **Identify child retros to consolidate** (project + org altitudes only): list paths under `docs/retros/role-*.md`, `docs/retros/workflow-*.md`, `docs/bets/*/retro.md` within the project scope. These become the retro's `consolidates_from:` frontmatter.
+4. **Load the appropriate persona's context:**
+   - framework altitude → framework-Architect persona (Compass-on-Compass)
+   - project altitude → Delivery Manager agent (`compass/agents/delivery-manager.md`)
+   - bet altitude → PM agent (`compass/agents/pm.md`) — bet outcome is PM's domain
+   - role altitude → THE agent being retro'd (Engineer retroing Engineer, etc.)
+   - workflow altitude → the workflow's `owner:` agent (from the workflow's frontmatter)
+   - org altitude → user-chosen orchestrator persona (typically framework-Architect or a designated PM)
+5. **Read source data fully** — the batch entries AND any child retros listed in step 3.
+6. **Synthesize across the batch** using `compass/templates/retro.md` (base shape; works at any altitude) OR an altitude-specialized template if one exists (e.g., `compass/templates/retro-project.md` for project altitude). Sections per the template: Common patterns · Recurring anti-patterns · Convention candidates · Drift signals · Trigger-origin analysis · Watch-for list · Meta-observations. **Higher-altitude retros also include "Promotion candidates to <parent altitude>"** — patterns this retro thinks should bubble up.
+7. **Write archive** at the altitude-specific path. Status: `archive`. **Never edited after publication.**
+8. **Update source-log header** with: link to this retro + counter for the next retro at this altitude.
+9. **If any convention candidates are recommended for promotion this batch**, surface them as a follow-up suggestion in the chat output. **Don't auto-promote** — that's a separate decision (would itself be a new improvement requiring its own entry at the appropriate altitude).
+10. **No HITL gate** at any altitude. Retros report on what already happened; no decisions to approve.
 
-## Verification (mandatory)
+## Aggregation contract
 
-- [ ] Retro archive exists at `compass/workflows/retros/<YYYY-MM-DD>-retro-<NNN>-<period>.md`
-- [ ] Frontmatter populated: `period_start`, `period_end`, `improvement_count: 5`, `created`, `author`, `parent_log`
-- [ ] All 6 retro sections present (Improvements / Common patterns / Recurring anti-patterns / Convention candidates / Drift signals / Watch-for list); empty sections explicitly noted "none observed"
-- [ ] Improvements log header updated with retro link + next-fire counter
+Higher-altitude retros consume lower-altitude retros + source logs:
+
+- **Project retro reads:** project's `docs/improvements.md` (primary) + project's existing role retros (`docs/retros/role-*.md`) + workflow retros (`docs/retros/workflow-*.md`) + bet retros (`docs/bets/*/retro.md`). Lists consumed files in `consolidates_from:` frontmatter.
+- **Org retro reads:** N project paths' `docs/improvements.md` + their `docs/retros/` archives. Aggregator script (`compass/scripts/aggregate-retros.py`, deferred to when needed per `[declare-not-implement]`) walks the configured paths.
+- **Bet retro reads:** the bet's own DRI log + the outcome transition decision. Single source; no child retros.
+- **Role + workflow retros are leaf altitudes** — they read raw logs (`docs/role-activity/<role>.md` / `docs/workflow-runs/<workflow>.md`); they do NOT consolidate other retros. They produce the bottom-up signal that bubbles to project altitude.
+
+**Cross-altitude promotion discipline.** A pattern at role altitude that recurs ≥2× in a role retro → flag in project retro's "Common patterns / Recurring anti-patterns" cross-altitude column → if it ALSO appears in another project, flag in org retro's "Promotion candidates to framework altitude" → eventually codified as a framework-altitude Compass-original in canon.md. **Three-altitude rise = canon promotion candidate.**
+
+## Verification (mandatory — gate retro completion)
+
+- [ ] Retro archive exists at the altitude-specific path (e.g., `compass/workflows/retros/<...>.md` for framework; `docs/retros/<...>.md` for project)
+- [ ] Frontmatter populated: `altitude`, `period_start`, `period_end`, `improvement_count`, `created`, `author`, `parent_log`, `consolidates_from` (empty list for leaf altitudes; populated for project/org)
+- [ ] All required sections present (Source entries in scope, Common patterns, Recurring anti-patterns, Convention candidates, Drift signals, Watch-for list); empty sections explicitly noted "none observed"
+- [ ] Source log header updated with retro link + next-fire counter
 - [ ] Status: `archive`
+- [ ] **Cross-altitude promotion candidates surfaced** (project + org altitudes) — patterns this retro thinks should bubble up to parent altitude have a named section
 
 ## Output
 
-- `compass/workflows/retros/<YYYY-MM-DD>-retro-<NNN>-<period>.md` — archived retro
-- `compass/workflows/improvements.md` header updated with retro link + next-fire counter
-- Chat summary: top 1-3 patterns + any convention candidates ready for promotion
+- Archived retro at the altitude-specific archive path
+- Source log header updated with retro link + next-fire counter
+- Chat summary: top 1–3 patterns + any convention candidates ready for promotion + cross-altitude promotion candidates (for project + org)
 
 ## Refusal cases
 
-- Fewer than 5 entries since last retro (without `--force`)
-- `compass/workflows/improvements.md` missing entirely
+- Source log missing for the named altitude
+- Fewer entries than cadence threshold since last retro (without `--force`)
+- For per-target altitudes (`--altitude=role`, `--altitude=workflow`, `--altitude=bet`): target arg missing or names a target with no source log
 
 ## Notes
 
-- **Reports, doesn't prescribe.** Retros surface patterns but never create new improvements directly. If a retro identifies a convention to codify (e.g., "N-category enforcement is ready"), that codification happens as a normal improvement in a future patch — with its own entry, its own ADR-style rationale, its own gate.
-- **Sequential and disjoint.** Retro #001 covers improvements 1-5; #002 covers 6-10; never overlap. Backfill mode handles historical gaps.
+- **Reports, doesn't prescribe.** Retros surface patterns but never create new improvements directly. If a retro identifies a convention to codify, that codification happens as a normal improvement in a future patch — with its own entry, its own rationale, its own gate.
+- **Sequential and disjoint within an altitude.** Retro #001 at altitude=role covers role-activity entries 1–5; retro #002 covers 6–10; never overlap. Backfill mode handles historical gaps.
 - **Archive immutability.** Retros are never edited after publication. If later analysis contradicts a retro's conclusion, the contradiction lands in a future retro — not by rewriting history. This preserves the "what we knew at the time" honesty that makes retros useful as institutional memory.
-- **Framework retros vs project retros.** Same workflow shape, different `parent_log`. Compass-on-Compass retros use `compass/workflows/improvements.md`. Project retros (a team retroing their own bets / sprints) would use `docs/improvements.md` and write to `docs/retros/`. Currently only framework retros are wired; project-retro variant can generalize when a project asks for it.
+- **Fractal pattern** (`[fractal-retro]`, canon v0.3.17). Same shape at every altitude; different `parent_log`; different cadence trigger; different archive path. The workflow file (this file) is altitude-agnostic; the per-altitude details are config (in the table above) + template choice + persona load.
+- **The bottom-up signal is the load-bearing addition over pre-v0.3.17.** Pre-v0.3.17, only framework retros existed; patterns visible at role/workflow/bet altitudes had nowhere to surface. Per-altitude logs (`docs/role-activity/<role>.md` + `docs/workflow-runs/<workflow>.md` + per-bet DRI logs) capture the data; per-altitude retros synthesize; higher altitudes consolidate via `consolidates_from:` frontmatter.
+- **What v0.3.17 ships vs declares.** Schema generalization + project altitude end-to-end + per-role/per-workflow log schemas are SHIPPED. Role/workflow/bet aggregation logic + org-altitude aggregator are DECLARED, not yet built — per `[declare-not-implement]`. They become next improvements when their data accumulates enough to warrant aggregation.

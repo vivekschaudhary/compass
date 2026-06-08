@@ -2,22 +2,50 @@
 id: RETRO-<NNN>
 type: retro
 status: archive                    # immutable once written; never edited after publication
-period_start: <first improvement version, e.g., v0.1.8>
-period_end: <last improvement version, e.g., v0.1.12>
-improvement_count: 5
+altitude: <role | workflow | bet | project | org | framework>   # NEW in v0.3.17 — which altitude this retro fires at; per [fractal-retro] (canon.md)
+period_start: <first improvement version or first source-entry date, e.g., v0.1.8 OR 2026-06-01>
+period_end: <last improvement version or last source-entry date, e.g., v0.1.12 OR 2026-06-06>
+improvement_count: 5               # source-entry count (improvements / log entries / runs / outcomes — meaning varies by altitude)
 created: YYYY-MM-DD
-author: <agent — typically Delivery Manager for project retros, framework Architect for framework retros>
-parent_log: compass/workflows/improvements.md   # OR docs/improvements.md for project-level retros
+author: <agent — typically Delivery Manager for project retros, framework Architect for framework retros, the agent itself for role/workflow retros>
+# parent_log: where THIS retro reads its source data from. Altitude-specific:
+#   - framework altitude → compass/workflows/improvements.md
+#   - project altitude   → docs/improvements.md
+#   - bet altitude       → docs/bets/<bet-id>/ (DRI logs + outcome)
+#   - role altitude      → docs/role-activity/<role>.md
+#   - workflow altitude  → docs/workflow-runs/<workflow>.md
+#   - org altitude       → multiple paths via compass/scripts/aggregate-retros.py (v0.4+)
+parent_log: <altitude-specific path per comment above>
+# consolidates_from: NEW in v0.3.17. For higher-altitude retros that aggregate
+# child-altitude retros. List the paths to child retros consumed at THIS retro.
+# Lower-altitude retros (role, workflow) typically leave empty — they read raw
+# logs, not other retros. Higher-altitude retros (project, org) list every child
+# retro that fed this synthesis. Example: a project retro might list
+# [docs/retros/role-engineer-001.md, docs/retros/workflow-build-002.md].
+consolidates_from: []
 ---
 
-# Retro #<NNN> — improvements <N> to <M>
+# Retro #<NNN> — <altitude> — source entries <N> to <M>
 
-> 5-improvement batch retro per AGENTS.md principle #14 (the soft-spec-rationalization defense via periodic pattern review). **Status: archive.** Patterns surfaced here feed future improvements via normal triggers; this artifact reports, it does not prescribe.
+> Batch retro at the **`<altitude>`** altitude per AGENTS.md principle #14 (the soft-spec-rationalization defense via periodic pattern review) + `[fractal-retro]` (canon.md v0.3.17 — same workflow shape at every altitude). **Status: archive.** Patterns surfaced here feed future improvements via normal triggers; this artifact reports, it does not prescribe.
+>
+> **Altitude reading guide:**
+> - **framework / project / org** retros aggregate from a shipped-improvements log (`compass/workflows/improvements.md` / `docs/improvements.md` / multi-project aggregator output)
+> - **bet** retros aggregate from per-bet DRI logs + outcome
+> - **role** retros aggregate from `docs/role-activity/<role>.md` entries written by the agent mid-task
+> - **workflow** retros aggregate from `docs/workflow-runs/<workflow>.md` entries written each time the workflow runs
+> - **higher-altitude retros** also list child retros in `consolidates_from:` frontmatter and synthesize across them (cross-altitude pattern promotion)
 
-## Improvements in scope
+## Source entries in scope
 
-- **<version>** — <one-line title> — [link to improvements log entry]
-- **<version>** — <one-line title>
+What this retro reads + synthesizes. Naming convention per altitude:
+- framework / project / org → improvements (versioned)
+- bet → DRI entries + outcome transition
+- role → activity-log entries (timestamped)
+- workflow → workflow-run-log entries (run-stamped)
+
+- **<id/version>** — <one-line title> — [link to source entry]
+- **<id/version>** — <one-line title>
 - ...
 
 ## Common patterns (positive)

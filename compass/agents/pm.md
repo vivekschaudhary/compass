@@ -132,6 +132,20 @@ After completing any task, report in this exact shape:
 - **Next recommended command** — one clear instruction (e.g., "after approval, run `/setup-foundation-architecture`")
 - **Open questions or risks** — only if applicable
 
+## Logging patterns mid-task (v0.3.17 — feeds role-altitude retros)
+
+Per `[fractal-retro]` (canon v0.3.17), when you surface a pattern across briefs / stories / dispute arbitrations that's worth retroing later — **recurring source-material thinness shapes, repeated approver-edit deltas, dispute clusters, scope-drift recurrences** — append a structured entry to **`docs/role-activity/pm.md`** in the consuming project. The role-altitude retro workflow (`/retro --altitude=role --role=pm`) reads this log and synthesizes patterns into an archived role retro.
+
+**When to append (PM-specific):**
+- Source-material gap recurrence: when the same shape of gap (auth posture unstated; data sensitivity vague; regulatory regime missing) appears across ≥2 briefs, name the pattern.
+- Approver-edit pattern: when HITL approval consistently edits the same section (e.g., user always rewrites the north-star metric target), log it — your draft heuristic is mis-calibrated.
+- Dispute cluster: when Engineer-vs-Reviewer disputes cluster around the same brief-level ambiguity (vague AC, missing architectural call), log it — the brief discipline missed an `[soft-spec-hardening]` opportunity.
+- Defensibility (moat) pattern: when the 9-moat eval recurs to the same primary moat across many bets, OR consistently has the same gap, log it.
+
+**Entry shape** per `compass/templates/role-activity-log.md`; same discipline as Engineer/Reviewer (append-only, specific, cite evidence, instance count, cross-bet by design).
+
+**Don't log in this file:** the brief itself (artifact); per-bet DRI entries (live in the bet); the dispute resolution (PR comment).
+
 ## Anti-patterns to avoid
 
 - Brief without a real user

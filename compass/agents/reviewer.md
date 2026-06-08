@@ -189,6 +189,28 @@ If no findings: `## Code Review` \n `No findings.`
 - Final block is `### Recommendation` with one of three terminal verdicts
 - The top checklist has 5 ✓/✗ items in the order shown (Architecture match → E2E coverage)
 
+## Logging patterns mid-task (v0.3.17 — feeds role-altitude retros)
+
+Per `[fractal-retro]` (canon v0.3.17), when you surface a pattern across reviews that's worth retroing later — **recurring BLOCKER shapes, dispute patterns, freshness-window staleness clusters, story-claim-trust failures repeating across bets** — append a structured entry to **`docs/role-activity/reviewer.md`** in the consuming project. The role-altitude retro workflow (`/retro --altitude=role --role=reviewer`) reads this log and synthesizes patterns into an archived role retro at `docs/role-activity/retro-reviewer-<NNN>.md`.
+
+**When to append (Reviewer-specific priority — Reviewer is the counterpart to Engineer's PR-redo loop signal that triggered v0.3.17):**
+- Recurring BLOCKER shape: when you raise the same BLOCKER class (framework-registration / story-claim-trust / contract-drift / copy-mismatch / etc.) on ≥2 PRs in a short window, name the pattern (e.g., "story-claim-trust: 3rd PR this month relying on outdated Next.js 16 middleware claim").
+- Disputes resolved against you: when PM arbitrates an Engineer dispute and rules against your finding, log the pattern — could be over-cautious BLOCKER calibration, could be drift in shared understanding of the architecture, could be your finding genuinely wrong.
+- Disputes you held + won: also worth logging — these are evidence the discipline is working; useful for the next role retro's "Common patterns (positive)" section.
+- Cross-Engineer pattern: if multiple Engineer instances (Claude × N sessions, or future Engineer-on-different-host) show the same blind spot, log it.
+- `[freshness-check]` triggers cluster: if Step 12a refused 3 reviews in a window because the same external source moved, log the pattern — it's a signal that the freshness window or external source is wrong, not the docs.
+
+**Entry shape** (per `compass/templates/role-activity-log.md`): timestamp · short title · context · pattern surfaced · evidence (PR/file/line links) · instance count in this log · recommended action (optional).
+
+**Discipline rules:**
+- **Append-only.** Never edit past entries.
+- **Specific over abstract.** "PR #42 BLOCKER #3: Next.js 16 middleware API renamed in 16.0-rc — story-claim drift" beats "Engineer keeps citing stale framework claims."
+- **Cite, don't assert.** Every entry has ≥1 Evidence link.
+- **Cross-bet by design.** This log spans all bets you've reviewed. Per-PR findings belong on the PR + in the per-build workflow run log (`docs/workflow-runs/build.md`); patterns ACROSS PRs belong here.
+- **Counter discipline.** Self-flag when instance count ≥3 ("consider for codification at next role retro") or ≥5 ("propose canon promotion").
+
+**Don't log in this file:** the structured review comment (that goes on the PR), per-PR findings (those live on the PR + in `docs/workflow-runs/build.md`), per-bet DRI entries (those live in the bet's artifacts).
+
 ## Anti-patterns to avoid
 
 - **`polished-but-broken`** (formalized in `[mechanical-output-verification]` v0.3.6) — tests pass + build succeeds + narrative coherent + principles cited + behavior wrong. The diff structurally checks out at every surface level while the actual runtime behavior diverges from intent. Mechanical inspection of the build output closes the gap (per Step 0). Two concrete failure modes under this anti-pattern:

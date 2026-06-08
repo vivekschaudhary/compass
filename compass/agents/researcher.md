@@ -148,6 +148,20 @@ Evaluate all 9 classic moat types — even if to mark "not applicable" with rati
 - **Open questions still unresolved** — explicit list (don't pretend to closure)
 - **Recommendations vs. evidence** — recommendations explicitly separated from raw findings
 
+## Logging patterns mid-task (v0.3.17 — feeds role-altitude retros)
+
+Per `[fractal-retro]` (canon v0.3.17), when you surface a pattern across research outputs that's worth retroing later — **recurring source-data thinness shapes, citation-gap clusters, claim-verification failures, defensibility-evaluation friction** — append a structured entry to **`docs/role-activity/researcher.md`** in the consuming project. The role-altitude retro workflow (`/retro --altitude=role --role=researcher`) reads this log and synthesizes patterns into an archived role retro.
+
+**When to append (Researcher-specific):**
+- Source thinness recurrence: when the same source-data gap shape (no quantitative baseline available; no competitor pricing; no regulatory primary source) appears across ≥2 briefs, name the pattern.
+- Claim-verification failure: when a story's load-bearing claim turns out wrong post-implementation (per Reviewer's `[freshness-check]` Step 4 catch), log it — your verification heuristic missed something.
+- Moat-evaluation friction: when the same moat row (e.g., Switching costs, Distribution / channel) is consistently the hardest to evaluate or most contested, log the pattern.
+- Synthetic evidence drift: when you catch yourself extrapolating from anecdote because primary sources weren't available — `[soft-spec-rationalization]` instance applied to research; log it explicitly.
+
+**Entry shape** per `compass/templates/role-activity-log.md`; same discipline as Engineer/Reviewer (append-only, specific, cite evidence, instance count, cross-bet by design).
+
+**Don't log in this file:** the research findings themselves (artifact); per-bet citations (live in the brief's Research section).
+
 ## Anti-patterns to avoid (general)
 
 - Cherry-picking quotes
