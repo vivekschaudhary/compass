@@ -1,164 +1,264 @@
-# Workflow: /build
+---
+name: build
+status: active
+owner: engineer
+auto_invokes: []
+invoked_by: []
+version: 0.3.23
+---
 
-Engineer implements an approved story. Codex reviews. Architect compliance enforced on every PR (no shortcuts — prevents tech debt). Story may have multiple PRs.
+# Workflow: /build
 
 <!-- Role-boundary markers per [role-boundary] (canon.md, v0.3.4). The reference parser
      compass/scripts/token-usage.py reads these to attribute Claude Code session tokens
-     to roles. PM-owned. Add markers when introducing new role transitions; remove only
-     when restructuring phases. -->
+     to roles. Delivery-Manager-owned (renamed from PM in v0.3.15). Add markers when
+     introducing new role transitions; remove only when restructuring phases. -->
 
+## Framework grounding
+
+What this workflow operationalizes. Full entries in `compass/framework/canon.md`.
+
+- **Compass-originals operationalized:** `[agent-as-surface-independent-unit]` (v0.3.14 — agent files own task content) · `[mechanical-output-verification]` (v0.3.6 — Engineer's runtime-artifact inspection in `implement-story`; Reviewer's framework-registration check in `review-pr` Step 0) · `[freshness-check]` (v0.3.3 → v0.3.11 — Phase 5 reviewer.md freshness gate; review-time freshness on NEW load-bearing claims) · `[agent-handoff]` (v0.3.5 — Engineer → Reviewer via `agent-handoff.yml` template, automated when consuming repo installs it) · `[role-boundary]` (v0.3.4 — Engineer writes code/unit/component tests; Reviewer writes E2E; PM arbitrates disputes; no overlap) · `[refuse-escalate]` (Engineer refuses to improvise architectural decisions) · `[soft-spec-hardening]` (vague AC pushes back to PM)
+- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization — `polished-but-broken` failure mode hardened via mechanical-output-verification) · Principle #16 (refuse + escalate to upstream) · Cross-host independence — Engineer (Claude) implements; Reviewer (Codex, deliberately different model per `preferred_hosts: [codex, gemini]`) reviews
+
+## Purpose
+
+Engineer implements **ONE approved story end-to-end** — code + tests + PR → Reviewer reviews → human approves merge. Architect compliance enforced on every PR (no shortcuts — prevents tech debt). Story may produce multiple PRs (implementation, defect fixes, additional tests); each PR gets full review treatment.
+
+## Architectural shape (v0.3.23 dispatch-graph refactor)
+
+This workflow is a **thin dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14). The heavy gate/work/postcondition content lives in the agent task definitions in `compass/agents/`. This file declares:
+
+1. **Workflow-level preconditions** (story-readiness gates)
+2. **Dispatch graph** — ordered sequence of `<agent>.<task>` invocations + HITL gates + the review/response loop
+3. **Workflow-level verification** — cross-agent invariants the dispatch graph must satisfy
+4. **Workflow-level patterns** that span multiple agents (Scanner at phase boundaries; Story → multiple PRs; Post-merge bugs)
+
+The per-step gate/work/postcondition detail is NOT in this file. Read the named task in the named agent file for that.
+
+**v0.3.23 is the 2nd workflow refactored to dispatch-graph shape** (joining `/setup-product` v0.3.14). 12 of the 14 workflows still embed full methodology bodies (v0.3.0-alpha shape); they refactor as their owning agents migrate.
 
 ## Trigger
 
 `/build <story-id>`
 
-## Process
+## Preconditions (workflow-level GATE — checked once at start)
 
-### Phase 1 — readiness check
+- **Story is `ready`:** AC present (required) · design link present (required if UI work) · tech notes present · dependencies + priority noted.
+- **Brief is `status: approved`.** If `proposed` or `superseded`, refuse with: *"Brief <bet-id> is not approved (status: <current>). Approve via PM workflow first."*
+- **If `architecture_required: true` on the bet, bet architecture is `status: approved`.** If missing or unapproved, refuse with: *"Bet architecture missing or unapproved. Run `/create-bet-architecture` first."*
+- **Foundation architecture exists.** If missing, refuse with: *"`docs/foundation/architecture.md` missing. Run `/setup-foundation-architecture` first."*
+- **If any precondition fails → refuse and flag to HITL. Do not proceed.**
 
-1. **Verify story is `ready`:**
-   - AC present (required)
-   - Design link present (required if UI work)
-   - Tech notes present
-   - Bet brief is `approved`, architecture (if required) is `approved`
-2. **If missing → refuse and flag to HITL.** Do not proceed.
+## Roles invoked (agents dispatched)
 
-### Phase 2 — implement
+- `compass/agents/engineer.md` — implementation + PR open + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
+- `compass/agents/reviewer.md` — E2E tests + code review (migrated v0.3.16; `preferred_hosts: [codex, gemini]` deliberately excludes claude per cross-host integrity; tasks: `write-e2e-tests`, `review-pr`)
+- `compass/agents/pm.md` — arbitrate Engineer-vs-Reviewer disputes (ad-hoc; fires only when Engineer adds `## Dispute` to PR; task: `arbitrate-dispute`)
+- `compass/roles/security-reviewer.md` (LEGACY — Codex; migration pending) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions
+- `compass/roles/tech-writer.md` (LEGACY — migration pending) — post-merge changelog accumulation (Phase 7)
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=engineer | workflow=build | step=3 -->
+## Dispatch graph
 
-3. **Load Engineer role context** (`compass/roles/engineer.md`)
-4. **Engineer reads** in order: AGENTS.md, brief, bet architecture, story, copy doc, foundation architecture, existing code
-5. **Engineer plans** smallest viable diff
-6. **Engineer implements:**
-   - Code in appropriate boundary
-   - Unit + API + component tests (co-located with code)
-   - Copy verbatim from copy doc
-   - All states (default, empty, loading, error, success)
-   - Accessibility checks if UI
-7. **Engineer runs local checks:** typecheck, lint, all test suites, format, **AND production build** (e.g., `pnpm build`, `npm run build`, or the framework-equivalent production target). Fix anything before opening PR. **The production build is load-bearing** — it catches issues that typecheck + unit tests genuinely can't see: bundling errors, dead-import elimination breaking runtime, env-var requirements, asset pipeline issues, monorepo workspace resolution. Opening a PR without a green production build is the failure mode that ships broken builds to staging.
+The workflow walks this sequence. The runtime mechanism is one of:
 
-   **Runtime-config audit (load-bearing).** In addition to the build itself, verify:
-   - All public-namespace env vars (`*_PUBLIC_*` / `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` / `VITE_*` / etc.) have **explicit values** for the target deploy environment (`.env.production`, `.env.local` for native, or framework-equivalent).
-   - Runtime-config defaults that "just work" in dev (e.g., `localhost`, dev-only feature flags, mock-mode toggles) **fail loudly at module load** when running outside dev — not silently fall back. A `localhost` default that ships and breaks on a real device / deployed function / mobile app is the failure mode this check exists to catch. If a default would only work in dev, throw with a clear error rather than letting the app boot into a broken state.
+- **Today (no orchestrator):** human dispatcher — opens the right agent's host (e.g., Claude Code for Engineer; Codex CLI for Reviewer per its `preferred_hosts: [codex, gemini]`), pastes the workflow command, agent runs its task, halts at the next handoff, human transitions to the next agent's host. If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml`), the Engineer → Reviewer handoff is automated on CI-green per `[agent-handoff]` (canon v0.3.5).
+- **v0.4 (orchestrator):** orchestrator walks the graph, dispatches each step to its assigned agent on its assigned host automatically; cross-host loops (Step 3 ↔ Step 4) handled natively.
 
-   **Build-artifact inspection (load-bearing).** Per `[mechanical-output-verification]` (canon.md, v0.3.6). A green build is necessary but not sufficient. **Build SUCCESS ≠ build OUTPUT correct** — the build process can complete cleanly while the runtime configuration silently drops what the source declared. **Inspect the build OUTPUT, not just the process exit code.** Framework-specific anchors:
-   - **Next.js 16:** read **`.next/server/functions-config-manifest.json`** — confirm the `/_middleware` entry exists with `runtime: "nodejs"` + matchers; that\'s where Next 16 registers middleware/proxy. Missing entry = middleware silently dropped at build time despite the source declaring it. **Pre-v16 (Next 13–15):** the legacy artifact was `.next/server/middleware-manifest.json`; on Next 16 that file is **empty by design** — checking the legacy file alone gives false negatives. Same OUTPUT vs PROCESS check for `routes-manifest.json` (route definitions), `app-paths-manifest.json` / `pages-manifest.json` (page/route inclusion), and `prerender-manifest.json` (ISR / SSG correctness).
-   - **Vercel Functions:** check `.vercel/output/functions/` — confirm declared functions exist in the output directory; missing = function won't deploy.
-   - **Expo:** after `expo prebuild` or `eas build`, confirm the generated native config (Info.plist, AndroidManifest.xml, entitlements) matches `app.config.ts` declarations; bundled assets match the expected manifest.
-   - **General principle:** when the framework's runtime configuration is data-driven (manifests, bundle indexes, config JSON written by the build), reading source code ≠ reading the runtime config. **Inspect the runtime config.** Source intent and build output can diverge silently; the build output is what actually runs.
+Either way, the GRAPH is the same.
 
-   **Named anti-pattern: `polished-but-broken`.** Tests pass, build succeeds, narrative is coherent, principles are cited — and the actual built behavior is wrong. The agent rationalizes ("the build succeeded, surely the manifest is right; the tests cover this; the principle is named in the comment") and ships a fundamentally broken artifact. **Mechanical inspection of the build output is the hardening** — per Principle #14, the soft spec being rationalized is now subtler ("the build succeeded" / "the tests pass") and the fix is reading the actual artifact, not trusting the surrounding signals. First observed: aura-app CB-1.4 dashboard proxy (2026-06-01) — manifest check revealed the gap between source intent and runtime config. A parallel cycle on a Next 16 stack independently surfaced the same pattern and identified that on Next 16 the load-bearing manifest moved from `middleware-manifest.json` to `functions-config-manifest.json` — the subsequent anchor correction in this entry comes from that finding.
+### Step 1. `engineer.implement-story` (Engineer agent owns) — covers Phase 2 + Phase 4
 
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=7 -->
+<!-- COMPASS_ROLE_BOUNDARY: enter | role=engineer | workflow=build | step=1 -->
 
-### Phase 3 — Codex writes E2E
+**Dispatches:** Engineer agent
+**Task definition:** `compass/agents/engineer.md` → Task `implement-story`
+**What it covers:** read context in order (AGENTS.md → brief → bet architecture → story → copy doc → foundation architecture → existing code) → plan smallest viable diff → write tests first when possible → implement following bet architecture (no improvising) → copy verbatim from copy doc → run ALL local checks (typecheck, lint, all test suites, format, **production build**) → **runtime-artifact inspection** per `[mechanical-output-verification]` (Next 16 functions-config-manifest.json / Vercel functions output / Expo prebuild config) → **runtime-config audit** (public-namespace env vars resolved; no silent dev-default fallback) → open PR via GitHub MCP with full template + ADR refs → story status flips `in-build` → `in-review`.
+**Stop point:** halts after PR open. Does NOT review own diff. Waits for Reviewer.
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=8 -->
+<!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=1 -->
 
-8. **Load Reviewer agent** (`compass/agents/reviewer.md`) — Codex (migrated v0.3.16; legacy role file at `compass/roles/reviewer.md` retained during v0.3.x grace period but the agent file wins)
-9. **Codex writes E2E tests** for AC user flows (top-level `e2e/` folder)
-10. **Codex commits with `test:` prefix**
+### Step 2. `reviewer.write-e2e-tests` (Reviewer agent owns) — covers Phase 3
 
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=reviewer | workflow=build | step=10 -->
+<!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=2 -->
 
-### Phase 4 — open PR
+**Dispatches:** Reviewer agent (Codex by Compass default — `preferred_hosts: [codex, gemini]`)
+**Task definition:** `compass/agents/reviewer.md` → Task `write-e2e-tests`
+**What it covers:** write E2E tests covering AC user flows in top-level `e2e/` folder → maintain E2E framework (Playwright/Cypress/etc.) → author CI/CD pipeline configs for test orchestration → commit with `test:` prefix.
+**Sequencing note:** can run in parallel with Step 1's later phases OR after Step 1 completes; preferred = after Step 1 so Reviewer sees the implementation surface before writing E2E. Engineer does not review Reviewer's test code (Reviewer is the test owner per `[role-boundary]`).
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=engineer | workflow=build | step=11 -->
+<!-- COMPASS_ROLE_BOUNDARY: exit | role=reviewer | workflow=build | step=2 -->
 
-11. **Engineer opens PR** via GitHub MCP using `.github/PULL_REQUEST_TEMPLATE.md`
-    - Links: brief, architecture, story, copy doc
-    - Description: what changed, test plan, AC mapping
-    - Auto-labels: `area:*`, `type:*` (feature / tech-debt / continuous-improvement / etc.)
-    - Draft or ready — both supported (Codex reviews drafts too)
-12. **Story status → `in-build` → `in-review`**
+### Step 3. `reviewer.review-pr` (Reviewer agent owns) — covers Phase 5 review side
 
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=12 -->
+<!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=3 -->
 
-### Phase 5 — review
+**Dispatches:** Reviewer agent
+**Task definition:** `compass/agents/reviewer.md` → Task `review-pr`
+**Task-internal gate (load-bearing):** Reviewer's task has a `Freshness window` precondition — `today - last_verified > freshness_window_days` on `compass/agents/reviewer.md` → **refuse before review begins** per `[freshness-check]` (canon v0.3.3 → v0.3.11). The workflow inherits this gate; no separate check needed at workflow level. _Note: freshness markers were relocated from `compass/roles/reviewer.md` → `compass/agents/reviewer.md` in v0.3.16 alongside the Reviewer migration._
+**What it covers:** wait for CI green (refuse if failing) → **Step 0 framework-registration check** (conditional, when PR touches framework-discovered surfaces — per `[mechanical-output-verification]`) → read diff file-by-file → bet-architecture compliance → **review-time freshness on NEW load-bearing claims** per `[freshness-check]` scope-tightening (v0.3.11) → categorize findings (BLOCKER / ISSUE / NIT) → cite, don't assert → post structured PR comment in the documented format.
+**Auto-engagement (parallel):** Security Reviewer (Codex; legacy role file `compass/roles/security-reviewer.md` until migration) auto-engages if diff touches auth/PII/payments/secrets/external input/sessions. Two reviews, two PR comments. `review-pr` does NOT absorb Security Reviewer's role.
+**Stop point:** halts after PR comment posted. Awaits Engineer's response.
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=12a -->
+<!-- COMPASS_ROLE_BOUNDARY: exit | role=reviewer | workflow=build | step=3 -->
 
-12a. **Freshness-check precondition (load-bearing).** Before Codex review begins, verify `compass/agents/reviewer.md` is current. Per `[freshness-check]` (canon.md) — read the file's frontmatter:
+### Step 4. `engineer.respond-to-review` (Engineer agent owns) — covers Phase 5 response side
 
-   - **If missing `last_verified`:** treat as infinitely stale. **Refuse with:** "compass/agents/reviewer.md is missing freshness markers. Backfill `last_verified`, `freshness_window_days`, and `external_source` after verifying the Codex review format is current."
-   - **If `today - last_verified > freshness_window_days`:** **refuse with:** "compass/agents/reviewer.md last verified <last_verified> (>{freshness_window_days} days). The Codex review format may have drifted. Verify against `<external_source>`; update both the 'Output summary contract' section and `last_verified` once confirmed current. Re-invoke `/build` after."
-   - **Else:** proceed.
+<!-- COMPASS_ROLE_BOUNDARY: enter | role=engineer | workflow=build | step=4 -->
 
-   This is the pull-bridge round-1 defense against external-tool drift (per `[freshness-check]` v0.3.3 → v0.3.4 detection → v0.4 push). Without this gate, Codex format changes silently break the review parsing — exactly the friction that prompted the pattern. _Note: freshness markers were relocated from `compass/roles/reviewer.md` → `compass/agents/reviewer.md` in v0.3.16 alongside the Reviewer migration. Single source of truth on the agent file._
+**Dispatches:** Engineer agent
+**Task definition:** `compass/agents/engineer.md` → Task `respond-to-review`
+**What it covers:** read each finding (Severity / Confidence / Location / Reason / Fix) → address all BLOCKERs and most ISSUEs → push fixes as commits with conventional-commit prefixes (`fix:`, `refactor:`, `test:`) → auto re-request review.
+**Dispute branch:** if Engineer believes a finding is wrong, adds `## Dispute` section to PR with reasoning → halts the Step 3 ↔ Step 4 loop → dispatches Step 5 (PM arbitration).
+**Stop point:** halts after fixes pushed. Re-dispatches to Step 3 (review loop) OR Step 5 (dispute arbitration).
 
-13. **CI runs.** Codex review begins ONLY after CI is green. **If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml` template, `[agent-handoff]` v0.3.5), the reviewer fires automatically on CI-green — Engineer does not need to invoke it manually. Otherwise the reviewer is invoked manually** (open terminal, run `codex` against the reviewer prompt referencing the PR number — see `compass/agents/reviewer.md` task `review-pr`). Both paths terminate at the same place (structured findings posted as a PR comment); automation removes the tool-switch + manual prompt paste only.
-14. **Codex reviews** — posts structured findings on PR (BLOCKER / ISSUE / NIT)
-15. **Architect compliance check** is part of Codex review (bet architecture as reference)
-16. **Security Reviewer (Codex)** auto-engages if diff touches auth/PII/payments/secrets/external input/sessions
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=reviewer | workflow=build | step=16 -->
+<!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=4 -->
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=engineer | workflow=build | step=17 -->
+### Step 5. `pm.arbitrate-dispute` (PM agent owns) — fires ad-hoc when Engineer disputes
 
-17. **Engineer addresses findings:**
-    - All BLOCKERs and most ISSUEs
-    - Disputes → `## Dispute` section in PR, PM arbitrates
-    - Pushes fixes as commits → auto re-request review
-18. **Loop until no blockers and no unresolved disputes**
+**Dispatches:** PM agent (ad-hoc; ONLY when Step 4 raises `## Dispute`)
+**Task definition:** `compass/agents/pm.md` → Task `arbitrate-dispute`
+**What it covers:** read both sides + the artifact in question + arbitrate. PM executes the decision; PM does NOT make engineering choices. Post resolution comment on the PR with rationale.
+**Stop point:** halts after resolution comment posted. Engineer addresses per arbitration; re-enters Step 3 loop OR proceeds to Step 6 HITL gate per arbitration outcome.
 
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=18 -->
+### Step 6. **HITL gate — human approves merge** (human)
 
-### Phase 6 — merge
+**Dispatches:** HUMAN (not an agent)
+**What it covers:** human reviews the PR + reviewer comments + arbitration resolutions (if any). Approves merge in GitHub UI.
+**Per Principle #16:** Engineer must NOT self-merge; Reviewer must NOT auto-merge. HITL is a hard stop.
 
-19. **HITL gate** — human approves merge
-20. **Merge mechanically blocked unless:**
-    - CI green
-    - Zero Codex BLOCKERs
-    - Zero security CRITICALs
-    - Zero unresolved disputes
-    - Human approval recorded
-21. **Squash merge** to main (per config)
-22. **CI/CD pipeline triggered** automatically (per `compass/config.yaml` ci_cd settings)
+### Step 7. **Mechanical merge constraints** (CI + branch protection)
 
-### Phase 7 — post-merge
+**Dispatches:** CI / branch protection rules (not an agent)
+**Merge blocked unless ALL of:**
 
-23. **Story status → `merged`** (still under brief's tracking)
+- CI green
+- Zero Reviewer BLOCKERs unresolved
+- Zero Security Reviewer CRITICALs unresolved
+- Zero unresolved disputes
+- Human approval recorded (Step 6)
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=tech-writer | workflow=build | step=24 -->
+Squash merge to main (per `compass/config.yaml` merge strategy). CI/CD pipeline triggered automatically per `compass/config.yaml` `ci_cd:` settings.
 
-24. **Tech Writer engages** — updates `docs/changelog.md` accumulator entry for this brief
-25. **If deploy succeeds:** story status → `shipped`
-26. **If deploy fails:** story status → `deploy-failed`, alert via configured channel
-27. **Brief stays `in-build`** until ALL stories of the brief have shipped
-28. **When all stories ship:** brief status → `shipped`, Tech Writer finalizes consolidated changelog entry for the brief
+### Step 8. Post-merge — tech-writer engagement + story status finalization
 
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=tech-writer | workflow=build | step=28 -->
+**Dispatches:** Tech Writer (LEGACY — `compass/roles/tech-writer.md` until migration; load the legacy role file for task details)
+
+<!-- COMPASS_ROLE_BOUNDARY: enter | role=tech-writer | workflow=build | step=8 -->
+
+**What it covers:** Tech Writer updates `docs/changelog.md` accumulator entry for this brief. Story status: `merged` (deploy pending). If deploy succeeds → `shipped`; if deploy fails → `deploy-failed`, alert via configured channel. Brief stays `in-build` until ALL stories of the brief have shipped. When all stories ship → brief `shipped`, Tech Writer finalizes consolidated changelog entry for the brief.
+
+<!-- COMPASS_ROLE_BOUNDARY: exit | role=tech-writer | workflow=build | step=8 -->
+
+## Workflow-level patterns (span multiple agents)
+
+### Story → multiple PRs
+
+A story may produce multiple PRs (implementation, additional tests, defect fixes). **Each PR gets the SAME full dispatch graph treatment** — Steps 1 → 8. No shortcuts on subsequent PRs. Per `[role-boundary]` + Reviewer's "no shortcut under pressure" refusal rule.
+
+### Post-merge bugs
+
+If a bug is found post-merge on this story → reopen the story, fix it right. Do NOT create a separate "fix" story for the same defect (that fragments the DRI log + breaks `/build`'s story-as-unit assumption).
 
 ### Scanner at phase boundaries
 
 Invoke `/scan <bet-id>` at each phase boundary so the bet enters the next phase with a fresh findings snapshot:
 
-- **Build → Production Ready:** triggered when all stories of the brief ship (step 28). Surfaces runbook / SLO / monitoring / rollback / on-call / backup / cost / compliance gaps before the bet is treated as production-bound.
-- **Production Ready → GTM:** triggered when the Production Ready findings are resolved or suppressed. Surfaces user-docs / API-docs / sales / support / pricing / launch-comms / customer-comms / legal gaps.
+- **Build → Production Ready:** triggered when all stories of the brief ship (Step 8 final). Surfaces runbook / SLO / monitoring / rollback / on-call / backup / cost / compliance gaps before the bet is treated as production-bound.
+- **Production Ready → GTM:** triggered when Production Ready findings are resolved or suppressed. Surfaces user-docs / API-docs / sales / support / pricing / launch-comms / customer-comms / legal gaps.
 - **GTM → Operate:** triggered when GTM findings are clear. Surfaces measurement-cron / SLO-met / incident-rate / adoption / cost-actuals / defect-rate / outcome-resolved gaps.
 
-If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase, any open Critical finding blocks the transition (matching the scanner's strict-mode block semantics). The point is to catch missing production-readiness work *before* the bet is treated as shipped, not after an incident reveals it.
+If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase, any open Critical finding blocks the transition (matching scanner's strict-mode block semantics). Catches missing production-readiness work *before* the bet is treated as shipped, not after an incident.
 
-## Story → multiple PRs
+## Workflow-level verification (final GATE — workflow cannot complete until all checked)
 
-A story may produce multiple PRs (implementation, tests, defect fixes). Each PR gets the SAME full review treatment. No shortcuts on subsequent PRs.
+Mirrors per-task postconditions + cross-agent invariants.
 
-## Post-merge bugs
+- [ ] (Step 1 — engineer.implement-story) Code implements story's AC; unit + API + component tests cover happy + unhappy paths; production build green with runtime-artifact inspection confirming framework registration; runtime-config audit clean; copy matches copy doc verbatim; PR open with full template + ADR refs
+- [ ] (Step 2 — reviewer.write-e2e-tests) E2E tests in `e2e/`; AC user flows covered; CI configs version-controlled
+- [ ] (Step 3 — reviewer.review-pr) PR comment posted in documented format; every finding has File · Rule violated · Issue · Fix; BLOCKERs are real BLOCKERs (not softened to ISSUE); Step 0 framework-registration check completed if PR touches framework-discovered surfaces
+- [ ] (Step 3 — security-reviewer if applicable) Second PR comment posted if diff touched auth/PII/payments/secrets/external input/sessions
+- [ ] (Step 4 — engineer.respond-to-review) All BLOCKERs addressed; ISSUEs addressed or explicitly deferred with rationale; commits use conventional-commit prefixes
+- [ ] (Step 5 — pm.arbitrate-dispute if applicable) Resolution comment posted on PR if any `## Dispute` raised; PM did NOT make engineering choices, only arbitrated
+- [ ] (Step 6 — HITL) Human approved merge; not self-approved by Engineer or Reviewer
+- [ ] (Step 7 — mechanical) CI green · zero BLOCKERs · zero CRITICALs · zero disputes · human approval recorded — all 5 conditions met before merge
+- [ ] (Step 8 — tech-writer) `docs/changelog.md` accumulator entry updated; story status reflects post-merge state (`merged` / `shipped` / `deploy-failed`)
 
-If bug found post-merge on this story → reopen story, fix it right. Don't create a separate "fix" story for the same defect.
+Workflow is NOT complete until every item is checked.
+
+## Output summary contract (mandatory to user)
+
+After completion (or refusal), report in this exact shape:
+
+- **TL;DR** — 3 lines max: story → PR → merge status (e.g., "story SPR-42 → PR #1234 → merged + deployed")
+- **Files created/modified** — table with path + change type
+- **Runtime-artifact verification** — what build-output files were inspected; what they confirmed (e.g., "functions-config-manifest.json shows /_middleware registered")
+- **Reviewer findings summary** — BLOCKERs count + ISSUEs count + disputes count
+- **Next recommended command** — `/build <next-story-id>` if more stories in brief; `/scan <bet-id>` if all stories shipped (Build → Production Ready boundary)
+- **Open questions or risks** — only if applicable
+- **Per-step agent dispatch** — which agent ran on which host (informs Finance / Time tracking when v0.4 orchestrator ships)
 
 ## DRI logging
 
-Engineer logs:
+**Engineer logs:**
 - **Decisions:** implementation choices, library use — rationale + area tag
 - **Risks:** regression, performance, integration — likelihood + impact
 - **Issues:** AC ambiguities, missing context — severity + owner
 
-Codex logs:
+**Reviewer logs:**
 - **Decisions:** review interpretation
 - **Risks:** uncovered gaps
 - **Issues:** repeated drift patterns
 
+**PM (only if dispute arbitrated):**
+- **Decisions:** arbitration outcome + rationale
+
+**Mid-task pattern logging** per `[fractal-retro]` (canon v0.3.17):
+- Engineer → `docs/role-activity/engineer.md` (PR redos, story-claim drift, build-output mismatch, cross-bet pattern)
+- Reviewer → `docs/role-activity/reviewer.md` (dispute clusters, freshness misses, framework-registration false-negatives)
+- Per-workflow patterns → `docs/workflow-runs/build.md` (cross-agent friction observed during this `/build` run)
+
 ## Discipline always
 
-No shortcuts under pressure. Full Codex review + Architect compliance + Security review (if applicable) on every PR including drafts and hotfixes.
+No shortcuts under pressure. Full Reviewer review + Architect compliance + Security review (if applicable) on every PR including drafts and hotfixes. The cross-host integrity (Engineer ≠ Reviewer model) is structurally enforced via Reviewer's `preferred_hosts: [codex, gemini]` (claude deliberately excluded). Do NOT run Reviewer on Claude Code against code Claude Code wrote.
+
+## Notes
+
+### What changed in v0.3.23
+
+- **Heavy step content moved out of this file** into `compass/agents/engineer.md` (tasks `implement-story` + `respond-to-review` NEW), `compass/agents/reviewer.md` (tasks `write-e2e-tests` + `review-pr`), `compass/agents/pm.md` (task `arbitrate-dispute`). This file became a thin **dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14).
+- **No behavior change.** Every gate/work/postcondition that existed in v0.3.0-alpha shape is preserved, now inside the agent task definitions. Verification items unchanged. Refusal cases unchanged. HITL gates unchanged. Mechanical merge constraints unchanged.
+- **NEW task `engineer.respond-to-review`** added so the Phase 5 review-response loop has an explicit dispatch surface (previously inline guidance in engineer.md's "Addressing reviewer findings" section).
+- **PM agent now participates in `/build`** (frontmatter `participates_in_workflows:` updated) — explicit recognition of the existing `arbitrate-dispute` task that fires in `/build` disputes.
+- **Cross-host orchestration enabled.** Same workflow file works whether Engineer runs on Claude Code and Reviewer runs on Codex CLI (today, with human dispatcher) or whether v0.4 orchestrator dispatches across hosts (later). The graph is the contract.
+- **Second workflow refactored to dispatch-graph shape** (joining `/setup-product` v0.3.14). `[workflow-as-dispatch-graph]` now at 2 instances → codification-ready candidate. `[task-ownership-locality]` now at 2 instances → codification-ready candidate. Both surface in v0.3.23 release notes; codification decision deferred to Retro #008.
+
+### Anti-patterns
+
+- **Reading the workflow file alone and trying to execute it.** This file does NOT contain the step-by-step work — that lives in agent task definitions. Always load the named agent file for each step.
+- **Engineer reviewing own diff.** Closed inside `engineer.implement-story` Postconditions ("Stop. Wait for Reviewer.") + `engineer.md` Refusal rules.
+- **Reviewer writing production code.** Closed inside `reviewer.md` Refusal rules — E2E tests + test framework + CI configs are the only writing surfaces.
+- **PM making engineering choices during dispute arbitration.** Closed inside `pm.arbitrate-dispute` Task description ("PM executes the decision; PM does NOT make engineering choices").
+- **`polished-but-broken` failure mode** (tests pass + build green + narrative coherent + behavior wrong). Closed inside Engineer's `implement-story` mechanical-output-verification step + Reviewer's `review-pr` Step 0 framework-registration check.
+- **Shortcutting review under pressure.** Closed inside Engineer + Reviewer Refusal rules — no P0 carve-out.
+
+### Edge cases
+
+- **Story produces multiple PRs** — each PR gets full dispatch graph treatment (Steps 1 → 8). Handled at workflow-level pattern section above.
+- **Post-merge bug on shipped story** — reopen the story; do NOT create a separate "fix" story for the same defect. Handled at workflow-level pattern section above.
+- **`.github/workflows/ai-review.yml` installed** — Engineer → Reviewer handoff automated on CI-green per `[agent-handoff]` (canon v0.3.5). Either path (automated OR manual `codex` invocation) terminates at the same place (PR comment); automation removes the tool-switch only.
+- **Security-Reviewer auto-engages** in parallel with Reviewer when diff touches sensitive surfaces. Two reviews + two PR comments; both must clear (zero BLOCKERs + zero CRITICALs) before Step 7 mechanical merge constraints pass.
+- **Single-host run (everything on Claude Code)** — works but VIOLATES cross-host integrity per Reviewer's `preferred_hosts: [codex, gemini]`. Engineer can run on Claude Code; Reviewer task must dispatch to Codex CLI (or Gemini CLI) for a fresh model perspective. Do NOT run Reviewer-on-Claude against Claude-written code.
+- **Tech Writer / Security Reviewer not migrated** — workflow references `compass/roles/tech-writer.md` + `compass/roles/security-reviewer.md` during v0.3.x grace period; dispatch graph reference moves to `compass/agents/tech-writer.md` + `compass/agents/security-reviewer.md` when those agents migrate. Dispatch graph **shape** stable.
+
+### Migration (v0.3.0-alpha → v0.3.23)
+
+- **v0.3.0-alpha:** gate/work/postcondition step content lived in this workflow file (7 phases, 164 lines, methodology embedded).
+- **v0.3.23:** content moved to `compass/agents/engineer.md` + `compass/agents/reviewer.md` + `compass/agents/pm.md` as task definitions. This file became a dispatch graph. **No behavior change.** Per Principle #16, every refusal case + verification gate preserved.
+- **Why:** `[agent-as-surface-independent-unit]` — agents are self-sufficient surface-independent units; tasks live in agents; workflows sequence tasks. Enables cross-host orchestration (Engineer on Claude Code + Reviewer on Codex CLI today; full orchestrator dispatch in v0.4).
+- **What still works the same:** workflow-level preconditions, verification checklist, HITL gates, mechanical merge constraints, output summary contract, story → multiple PRs, post-merge bugs, Scanner at phase boundaries, COMPASS_ROLE_BOUNDARY markers (relocated from per-phase markers to per-dispatch-step markers — same token-attribution semantics).
+- **Companion workflow refactor expected:** `/fix` is the natural next workflow to refactor since its primary agent (Engineer) is migrated + has `fix-bug` task. `[workflow-as-dispatch-graph]` at 2 instances after v0.3.23 → 3rd instance with `/fix` refactor would trigger codification per Compass 3-instance rule.
+
+---
+
+_Workflow refactored 2026-06-08 (v0.3.23) per `[agent-as-surface-independent-unit]` (canon v0.3.14). 2nd workflow refactored to thin dispatch graph shape (joining `/setup-product` v0.3.14); 12 of 14 workflows still embed full methodology bodies (refactor as their owning agents migrate)._

@@ -3,8 +3,8 @@ name: pm
 preferred_hosts: [chatgpt, claude, codex, gemini]
 required_tools: [text_input, web_search, github_write_artifact]
 optional_tools: [mcp_confluence, mcp_jira, mcp_gdrive, mcp_notion, mcp_linear]
-participates_in_workflows: [setup-product, create-bet-portfolio, create-brief, create-story]
-version: 0.3.21
+participates_in_workflows: [setup-product, create-bet-portfolio, create-brief, create-story, build]
+version: 0.3.23
 ---
 
 # Agent: PM (Product Manager)

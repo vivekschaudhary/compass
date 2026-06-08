@@ -71,6 +71,36 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
 - Downstream: Reviewer (Codex by Compass default) via PR — automated handoff if `.github/workflows/ai-review.yml` is installed per `[agent-handoff]` v0.3.5
 - Dispute path: PM arbitrates Engineer-vs-Reviewer disputes via PR `## Dispute` section
 
+### Task: `respond-to-review`
+
+Address Reviewer's findings on a PR. Slots into `/build` Phase 5 response loop (Step 4 of the v0.3.23 dispatch graph).
+
+**Preconditions (gate before starting):**
+- Reviewer comment posted on the PR per `reviewer.review-pr` Postconditions (top checklist + findings in BLOCKER / ISSUE / NIT format)
+- CI status visible (green means current state is mergeable pending review-loop closure; red means address CI failures alongside review fixes)
+
+**Work:**
+
+1. **Read each finding.** Severity (BLOCKER / ISSUE / NIT) + confidence + location + reason + fix.
+2. **Address all BLOCKERs and most ISSUEs.** NITs are optional unless many cluster (suggests Engineer pattern worth fixing).
+3. **For each addressed finding:** make the smallest change that closes it; preserve the rest of the diff.
+4. **If you believe a finding is wrong:** add `## Dispute` section to the PR with reasoning citing the specific architecture/principle/AC line that justifies your choice. **PM arbitrates** via `pm.arbitrate-dispute` (canon `/build` dispatch graph Step 5). Do NOT silently ignore the finding; do NOT capitulate without arbitration if you genuinely believe Reviewer is wrong.
+5. **Push fixes** as commits with conventional-commit prefixes (`fix:`, `refactor:`, `test:`).
+6. **Auto re-request review** on the PR (GitHub MCP / `gh` CLI).
+7. **Re-enter the review loop:** Reviewer re-dispatches per `/build` Step 3 → Step 4 cycle. Loop continues until no BLOCKERs and no unresolved disputes.
+
+**Postconditions (gate before claiming task complete):**
+- All BLOCKERs addressed (fixed OR disputed with `## Dispute` rationale)
+- ISSUEs addressed OR explicitly deferred with rationale in PR conversation
+- Commits use conventional-commit prefixes
+- Re-review re-requested OR `## Dispute` section opened
+- If disputed: PM arbitration outcome reflected in subsequent commits
+
+**Handoffs:**
+- Upstream: `reviewer.review-pr` (Reviewer comment posted on PR)
+- Downstream (loop): re-dispatches `reviewer.review-pr` for re-review
+- Downstream (dispute branch): `pm.arbitrate-dispute` if `## Dispute` opened
+
 ### Task: `fix-bug`
 
 Fix a defect with regression test first. Slots into `/fix` workflow.
@@ -87,14 +117,6 @@ Fix a defect with regression test first. Slots into `/fix` workflow.
 - **Do not shortcut review under pressure.** Discipline holds always — no P0 carve-out.
 - **Do not skip `--no-verify`** unless user explicitly asks. Fix hook failures at root.
 - **Do not force-push** to `main` / `master`. Ever.
-
-## Addressing reviewer findings
-
-1. **Read each finding.** Severity (Blocker / Issue / Nit) + confidence + location + reason + fix.
-2. **Address all BLOCKERs and most ISSUEs.**
-3. **If you believe a finding is wrong**, add `## Dispute` section to the PR with reasoning. **PM arbitrates.** Not auto-resolved.
-4. **Push fixes** as commits with conventional-commit prefixes (`fix:`, `refactor:`, `test:`).
-5. **Auto re-request review.**
 
 ## Story → multiple PRs
 

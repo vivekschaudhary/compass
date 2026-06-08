@@ -16,7 +16,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #006** (v0.3.9 → v0.3.13): [retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md](retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md) — **fired ON TIME at #30** (2nd consecutive on-time retro; hard line worked again). 5 improvements in 1 day. Surfaces 3 codification-ready candidates: `[user-as-load-bearing-oversight]` (3+ instances) · `[L-layered-progressive-rollout]` (2 instances) · `[surface-shapes-output]` (2 instances). `[hard-line-declaration]` empirically validated 3rd time (cadence-class commitments). Release-class taxonomy stable at 7 classes (capability-extension introduced v0.3.13).
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 
-**Next retro fires after improvement #40.** (Retro #007 fired at #35 ON TIME 2026-06-07. **v0.3.22 = #39 (1 of 5 needed before Retro #008).** Hard line still in effect — if Retro #008 slips, it's a 2nd retro-cadence regression since `[hard-line-declaration]` codification; treat as recurring soft-spec failure and deepen mechanism per Retro #006 + #007 recommendations (e.g., make counter + retro-due flag visible in dashboard Actions tab).)
+**Next retro fires after improvement #40.** (Retro #007 fired at #35 ON TIME 2026-06-07. **v0.3.23 = #40 — Retro #008 NOW DUE.** Hard line continues into Retro #009 horizon (#45). If Retro #008 fires on time today (2026-06-08), that's 4 consecutive on-time retros — pattern stabilized; consider whether `[hard-line-declaration]` cadence-enforcement is now structurally durable enough to relax counter-visibility prose. If Retro #008 slips, it's a 2nd retro-cadence regression since `[hard-line-declaration]` codification; treat as recurring soft-spec failure and deepen mechanism per Retro #006 + #007 recommendations.)
 
 ## Template
 
@@ -1724,3 +1724,52 @@ QUEUED entry's "Trigger to actually build this" listed 4 conditions. **Trigger #
 - **Counter at #39.** 1 more improvement before Retro #008 fires at #40. Today's Task 3 (`/build` workflow dispatch-graph refactor) will fire it.
 - **Candidates queued, NOT codified** — `[external-primary-with-cached-pointer]` (1 instance) + `[host-preference-validation]` (1 instance), both surfaced this session from user's consumer-project work. Persisted to `~/.claude/projects/-Volumes-VivekSSD-apps-compass/memory/queued_codification_candidates_2026-06-08.md`. Don't change framework defaults yet; wait for 2nd instance per `[declare-not-implement]`.
 - **Cadence:** v0.3.22 = ~45-min single-session codification + script + catalog + AGENTS.md + CHANGELOG + this entry. Same release class as v0.3.7 (check-freshness.py round 2) but with the codification + script paired in one release instead of 4 releases apart.
+
+---
+
+### 2026-06-08 — `/build` refactored to thin dispatch-graph shape (v0.3.23) — Task 3 of today's 3-task arc; 2nd workflow migrated; fires Retro #008
+
+**Friction (closed structural):** Of 14 workflows, only 1 (`/setup-product`) had migrated to dispatch-graph shape per `[agent-as-surface-independent-unit]` (canon v0.3.14). The other 13 still embedded full methodology — agents (Engineer + Reviewer + PM + Delivery Manager) had migrated, but workflows didn't dispatch through them, they inlined the work. **Retro #007 named "workflow-refactor cadence: 12+ workflows still in v0.3.0-alpha shape" as a drift signal.** `/build` is the most-used workflow (core implement-and-review loop) + has both primary agents (Engineer + Reviewer) migrated; refactoring it unlocks the dispatch-graph shape for the highest-leverage workflow first.
+
+**Change:**
+
+- **`compass/workflows/build.md` refactored** from 164 lines / 7 phases of embedded methodology → 256 lines of thin dispatch graph. Structure mirrors `/setup-product` (v0.3.14 reference): frontmatter · Framework grounding · Purpose · Architectural shape · Trigger · Preconditions (workflow-level GATE) · Roles invoked · **Dispatch graph (Step 1 → Step 8 naming `<agent>.<task>` references)** · Workflow-level patterns (Story → multiple PRs, Post-merge bugs, Scanner at phase boundaries) · Workflow-level verification (final GATE) · Output summary contract · DRI logging · Discipline always · Notes (what changed, anti-patterns, edge cases, migration).
+
+- **Dispatch graph (8 steps):**
+  - Step 1: `engineer.implement-story` (covers old Phases 2 + 4)
+  - Step 2: `reviewer.write-e2e-tests` (Phase 3)
+  - Step 3: `reviewer.review-pr` (Phase 5 review side; includes freshness-check task-internal gate)
+  - Step 4: `engineer.respond-to-review` **NEW TASK** (Phase 5 response side)
+  - Step 5: `pm.arbitrate-dispute` (ad-hoc; fires only on `## Dispute`)
+  - Step 6: HITL gate — human approves merge
+  - Step 7: Mechanical merge constraints (CI + branch protection)
+  - Step 8: Post-merge — tech-writer (LEGACY role file `compass/roles/tech-writer.md` until migration)
+
+- **NEW task `engineer.respond-to-review`** added to `compass/agents/engineer.md` (~40 lines: Preconditions + Work 7 steps + Postconditions + Handoffs). Previously inline guidance in engineer.md's "Addressing reviewer findings" section; promoted to a proper task so the dispatch graph has an explicit reference for Step 4. The inline section was removed (now redundant). Engineer.md grew 11,436 → 13,108 chars (WARN status per `check-agent-cap.py` — `preferred_hosts: [claude, codex, gemini]` excludes chatgpt, so cap doesn't strictly apply; flagged for trim if a future migration adds chatgpt).
+
+- **PM agent's `participates_in_workflows:` updated** — added `build` to the list reflecting the existing `arbitrate-dispute` task that fires in `/build` disputes. Previously implicit (inline workflow guidance); now explicit per the dispatch-graph refactor. pm.md grew 7,983 → 7,990 chars (still under cap with 10 chars headroom). Frontmatter version bumped 0.3.21 → 0.3.23. This is an instance of the dispatch-graph shape SURFACING latent dependencies that the embedded-methodology shape kept hidden.
+
+- **`AGENTS.md`** — workflow-migration prose updated: "2 of 14 workflows now in dispatch-graph shape: `/setup-product` (v0.3.14, 1st) + `/build` (v0.3.23, 2nd); 12 remaining migrate as the agents they dispatch finish migration."
+
+**No behavior change verified** by content sanity: same workflow trigger (`/build <story-id>`); same readiness check; same review loop (Engineer ↔ Reviewer until no blockers/disputes); same dispute branch (PM arbitrates); same HITL gate at merge; same mechanical merge constraints (CI green · zero BLOCKERs · zero CRITICALs · zero disputes · human approval); same post-merge tech-writer engagement; same Scanner at phase boundaries; same Story → multiple PRs; same Post-merge bug handling. The refactor is pure structural redistribution; workflow contract with users is unchanged.
+
+**Two codification candidates unlocked at 2 instances each** (per Compass 3-instance rule, codification waits for 3rd instance; both surface in Retro #008 evidence weighing):
+
+- **`[workflow-as-dispatch-graph]`** — 2 instances (`/setup-product` v0.3.14 + `/build` v0.3.23). 3rd-instance candidate: `/fix` (Engineer's `fix-bug` task already declared; natural next refactor).
+- **`[task-ownership-locality]`** — 2 instances (`/setup-product` = 4 tasks across pm + researcher + delivery-manager; `/build` = 5 tasks across engineer + reviewer + pm including the new `engineer.respond-to-review`). 3rd-instance candidate: any subsequent workflow refactor.
+
+Retro #008 may PROMOTE either to canon at 2 instances if it judges the structural shape clean enough; otherwise wait for 3rd instance per `[declare-not-implement]`.
+
+**Files touched (6):** `compass/workflows/build.md` (164 → 256 lines refactor); `compass/agents/engineer.md` (NEW task + removed redundant inline section; 11,436 → 13,108 chars WARN); `compass/agents/pm.md` (frontmatter update + version bump; 7,983 → 7,990 chars OK); `AGENTS.md` (workflow-migration prose); `CHANGELOG.md` (v0.3.23 entry); `compass/workflows/improvements.md` (this entry + header counter v0.3.22=#39 → v0.3.23=#40 — RETRO #008 NOW DUE).
+
+**Cadence achievement: 5 improvements in 1 day (2026-06-08).** v0.3.19 → v0.3.23 cycle (5 entries: #36 #37 #38 #39 #40) all shipped between morning and now. Comparable to v0.3.14 → v0.3.18 cycle (5 improvements in 3 days; Retro #007 cycle) — 3x faster cadence. Retro #008 evaluates: is this cadence sustainable or unusual one-off? Does the cadence pattern itself surface friction worth retroing (e.g., insufficient verification time per release)?
+
+**Watch for:**
+
+- **Retro #008 fires NOW** for v0.3.19 → v0.3.23 (5 improvements). Separate commit following this one.
+- **`[workflow-as-dispatch-graph]` + `[task-ownership-locality]` at 2 instances each** — Retro #008 either PROMOTEs (early codification on clean structural shape) or LEAVEs AS CANDIDATE (wait for 3rd instance per discipline). Decision belongs to Retro #008.
+- **`/fix` workflow** is the natural next dispatch-graph refactor (Engineer agent migrated, `fix-bug` task already declared). Would be 3rd instance of `[workflow-as-dispatch-graph]` if needed for codification.
+- **engineer.md cap WARN at 13,108** — adding `respond-to-review` task pushed it further over OpenAI cap. Cap doesn't strictly apply (chatgpt excluded from preferred_hosts); but if engineer.md ever migrates to support chatgpt, trim per `[agent-file-compression]` (canon v0.3.22) BEFORE flipping preferred_hosts. `check-agent-cap.py` will hard-fail automatically on that flip.
+- **PM's `participates_in_workflows:` surfacing latent dependencies** — this is itself a 1-instance observation: when a workflow refactor makes dispatch explicit, frontmatter on dispatched agents needs to follow. Future workflow refactors should check: does this dispatch surface a previously-implicit agent that now needs `participates_in_workflows:` updated? Pattern candidate: `[explicit-dispatch-surfaces-latent-participation]` — 1 instance now; wait for 2nd before naming formally.
+- **Counter at #40 → Retro #008 firing.** After Retro #008 ships, counter horizon resets to #45 (next retro fires after 5 more improvements).
+- **Cadence:** v0.3.23 = ~60-min single-session workflow refactor. Faster than v0.3.14 (`/setup-product` refactor took multi-session: PM + Researcher + Engineer all migrated alongside the workflow). v0.3.23 only added one new task to one already-migrated agent — the pattern is now mechanical.
