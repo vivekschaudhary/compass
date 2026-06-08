@@ -14,6 +14,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.24] — 2026-06-08
+
+> **`[workflow-as-dispatch-graph]` codified as 16th Compass-original — 3rd architecture-discipline class member.** Executes Retro #008's explicit PROMOTE TO CANON recommendation (2 instances: `/setup-product` v0.3.14 + `/build` v0.3.23). Architecture-discipline class grows to 3 members (joining `[agent-as-surface-independent-unit]` v0.3.14 + `[fractal-retro]` v0.3.17); now tied with observability as largest non-enforcement class. **Core insight:** agents own methodology (gate/work/postcondition per task); workflows own sequence (dispatch graph). Together they form the composition model that the v0.4 orchestrator requires — a dispatch graph is directly machine-walkable; embedded-methodology workflows cannot be executed by machine. **Also ships `compass/framework/mvp.md`** — MVP scope locked: orchestrator-first + vertical slice through Product/Build/GTM/Support agent pack + "start sending" checklist. **Counter ticks to #41 (1 of 5 before Retro #009).**
+
+### Added
+
+- **`compass/framework/mvp.md`** (new foundation doc) — MVP scope for "start sending" by end of June 2026. Orchestrator v0.4-alpha scope (single-host; all → Claude API; CLI entry `compass run <workflow>`; HITL gate handler; git automation). Full agent pack status table (Product/Build/GTM/Support with migration status). Connecting workflows priority. Vertical slice build order (Slice 1: Product vertical → Slice 2: Build vertical → Slice 3: GTM+Support). "Start sending" checklist (4 conditions that make MVP shippable). Open questions resolved: Automation splits from Reviewer; GTM = Launch Engineer composite; Security Reviewer + Delivery Manager deferred to v0.4-beta; Tech Writer out; multi-host deferred to beta.
+- **`compass/framework/canon.md`** — `### workflow-as-dispatch-graph` added as 16th Compass-original. Covers: thin dispatch contract definition; workflow-level vs task-level content split (the mental test); `embedded-methodology` anti-pattern (2 sources of truth per task, machine execution blocked); orchestrator-prerequisite argument; distinction from `[agent-as-surface-independent-unit]` (complementary constraints); `[explicit-dispatch-surfaces-latent-participation]` watch-for candidate (1 instance); migration path for 12 remaining embedded-methodology workflows.
+
+### Changed
+
+- **`AGENTS.md`** — catalog totals updated 7 shapes / 15 → 16 patterns; architecture-discipline class 2 → 3 members. Added `[workflow-as-dispatch-graph]` pattern entry with full dispatch-graph shape, anti-pattern, orchestrator implications, and migration path.
+
+### Notes
+
+- Retro #008 PROMOTE recommendation executed within 24 hours of the retro firing — closes the watch-for latency drift signal Retro #007 named (3-release lag on `[agent-file-compression]` before v0.3.22). Pattern: codify Retro PROMOTE recommendations in the NEXT immediate release after the retro fires.
+- `compass/framework/mvp.md` carries no version bump because it's a strategic artifact (foundation doc), not a framework improvement. It informs build order but doesn't change framework behavior.
+
 ## [0.3.23] — 2026-06-08
 
 > **`/build` refactored to thin dispatch-graph shape — 2nd workflow migrated** (joining `/setup-product` v0.3.14). 7 phases / 164 lines of embedded methodology → thin dispatch graph naming `<agent>.<task>` references per `[agent-as-surface-independent-unit]` (canon v0.3.14). **No behavior change** — every gate, postcondition, refusal case, HITL gate, mechanical merge constraint preserved (now living in agent task definitions). **NEW task `engineer.respond-to-review`** added so the Phase 5 review-response loop has explicit dispatch surface. **PM agent now participates in `/build`** (explicit `arbitrate-dispute` dispatch on disputes). **Two codification candidates unlocked at 2 instances each:** `[workflow-as-dispatch-graph]` + `[task-ownership-locality]` — both join the active candidate queue; codification decision deferred to Retro #008 evidence weighing. **Task 3 of today's 3-task arc** (Task 1 = v0.3.21 trim; Task 2 = v0.3.22 codification + check script). **Counter ticks to #40 — Retro #008 auto-fires** for the v0.3.19 → v0.3.23 cycle (5 improvements).
