@@ -206,6 +206,74 @@ For semantic verification (did the Codex CLI surface ACTUALLY change?), an LLM i
 
 ---
 
+## `check-agent-cap.py` — `[agent-file-compression]` mechanical defense (v0.3.22)
+
+Walks `compass/agents/*.md`; checks each file against the OpenAI Custom GPT Instructions ~8000-char cap; reports overages; exits non-zero when any **chatgpt-targeted** agent exceeds the cap.
+
+Per the `[agent-file-compression]` Compass-original pattern in `compass/framework/canon.md` (v0.3.22). Ships with v0.3.22's codification as the mechanical defense Retro #007 named for the drift signal "Custom GPT cap compounding without structural defense."
+
+### What it produces
+
+- **Per-file table** — every agent file with size + overage/headroom + chatgpt-target flag
+- **FAIL group** — chatgpt-targeted agents exceeding the cap (these silently truncate on paste into the OpenAI Custom GPT Instructions field)
+- **WARN group** — non-chatgpt agents exceeding the cap (cap doesn't strictly apply for them; flagged for future awareness if migration adds chatgpt support)
+- **OK group** — agents within cap (chatgpt-targeted) or with cap N/A (non-chatgpt)
+- Markdown report at stdout + (optionally) a file via `--out`
+
+### Usage
+
+```bash
+# Walk compass/agents/ in current dir; default cap 8000
+python compass/scripts/check-agent-cap.py
+
+# Override cap
+python compass/scripts/check-agent-cap.py --cap 10000
+
+# Override repo root (for CI running from a different cwd)
+python compass/scripts/check-agent-cap.py --root /path/to/compass
+
+# Write report to file
+python compass/scripts/check-agent-cap.py --out report.md
+
+# Suppress stdout (still writes --out + still returns exit code) — for CI gating
+python compass/scripts/check-agent-cap.py --quiet --out cap-report.md
+```
+
+### Exit codes
+
+- `0` — every chatgpt-targeted agent fits the cap (non-chatgpt WARNs are OK)
+- `1` — at least one chatgpt-targeted agent exceeds the cap (CI gating signal)
+- `2` — usage error (e.g., bad `--root` path; agents directory missing)
+
+### Host-aware enforcement
+
+The OpenAI Custom GPT Instructions cap is OpenAI-specific. Agents whose `preferred_hosts:` excludes `chatgpt` can technically exceed the cap and still function. The script enforces strictly only on chatgpt-targeted agents; non-chatgpt overages are surfaced as WARN (visibility, not failure).
+
+This matches the `[user-as-load-bearing-oversight]` aspirational refinement (canon v0.3.20): mechanical checks should catch the cases they CAN reason about, and report — not fail — the ones they shouldn't unilaterally decide.
+
+### Accuracy honesty
+
+- **Character count is UTF-8 byte length.** OpenAI's actual cap is measured against the Custom GPT Instructions field's storage limit; the script approximates it as 8000 bytes. Real cap may be slightly different — adjust `--cap` if your testing shows OpenAI's threshold is different at the time of measurement.
+- **No content-aware analysis.** The script knows when a file is too big; it doesn't suggest cuts (that's LLM work). For compression strategy, see the `[agent-file-compression]` entry in `compass/framework/canon.md` + reference example at `compass/agents/delivery-manager.md` (v0.3.18 trim: 21,714 → 7,960).
+- **`preferred_hosts:` parsing is line-regex-based.** Multi-line YAML lists or `&anchor` references in frontmatter would parse as no hosts (treated as non-chatgpt → WARN, not FAIL). Compass-style frontmatter is single-line so this isn't a real issue today.
+
+### Automated execution
+
+Recommended: add to `.github/workflows/freshness-check.yml` alongside `check-freshness.py`, OR ship as its own `.github/workflows/agent-cap-check.yml` that runs on every PR touching `compass/agents/`. Either way, surfaces cap violations within the PR review loop so they never compound across multiple releases (as they did v0.3.15 → v0.3.18, per Retro #007).
+
+For local pre-commit, wire into `.git/hooks/pre-commit` (CI gating remains the source of truth; local hooks are optional convenience).
+
+### When to use this
+
+- **Automatic (preferred):** CI runs on every PR touching `compass/agents/`. Failure blocks merge until trim lands.
+- **Manual pre-edit:** before adding content to an agent file, run the script to see current headroom — gives you the budget you're editing into.
+- **Manual post-edit:** after trim work (like v0.3.21's pm.md + researcher.md compression), run to verify the trim closed the overage.
+- **Pre-release:** before a Compass version bump, run as a release-gate check.
+
+Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md` for the visibility-tasks ownership pattern.
+
+---
+
 ## Future scripts + templates
 
 Reference implementations may join this directory as Compass evolves. Candidates:
@@ -216,5 +284,6 @@ Reference implementations may join this directory as Compass evolves. Candidates
 - **Cross-agent codex parser** — `token-usage-codex.py` for attributing Codex CLI session tokens (parallel to `token-usage.py` for Claude Code; same protocol, different log format)
 - **Semantic freshness extension** — LLM-driven content-level check for files flagged by `check-freshness.py` (round 2.5 — narrows the false-positive rate when external sources change cosmetically without affecting Compass)
 - **Consumer version sync** (v0.4+) — Compass framework updates auto-propagate to consuming repos as PRs. Pull-bridge round 3.
+- **`sync-from-gdrive.py`** — for the `[external-primary-with-cached-pointer]` candidate pattern (1 instance observed in consumer work, 2026-06-08): given `primary: gdrive://<file-id>` in artifact frontmatter, refresh the inlined cache from the Doc + bump `last_synced:`. Codify pattern + ship script when 2nd instance appears.
 
 Add scripts here when problems are structurally hard to solve with markdown docs alone. **Keep them single-file and minimal-dependency** — same discipline as `token-usage.py` (stdlib-only Python) and `agent-handoff.yml` (vanilla GitHub Actions).
