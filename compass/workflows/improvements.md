@@ -18,7 +18,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40**
 - **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-bet-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
 
-**Next retro fires after improvement #50.** (v0.3.28 = #47 (3 of 5 before Retro #010).)
+**Next retro fires after improvement #50.** (v0.4.0-alpha-2 = #48 (2 of 5 before Retro #010).)
 
 ## Template
 
@@ -1924,3 +1924,28 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **`/create-story` needs dispatch-graph refactor** — it still embeds 60+ lines of methodology. Now that Designer + UX Writer have agent files, the `/create-story` workflow can be migrated to dispatch-graph shape (5th migration). Step 6 becomes `designer.draft-design-spec` + `ux-writer.write-copy` (parallel dispatch — first workflow with a parallel step).
 - **Parallel dispatch support in orchestrator** — current `run.py` executes steps sequentially. Designer + UX Writer in `/create-story` Step 6 run in parallel (per the legacy workflow: "Both run in parallel"). Orchestrator will need parallel step handling before `/create-story` is fully walkable.
 - **Product pack now complete** per `compass/framework/mvp.md`: PM + Researcher + Designer + UX Writer all in `compass/agents/`. Build pack still needs Automation (new) + Reviewer (already migrated v0.3.16) + Engineer (already migrated v0.3.14).
+
+---
+
+### 2026-06-08 — Orchestrator v0.4-alpha-2: multi-host dispatch shipped — Reviewer routes to Codex (OpenAI), not Claude — P0 drift from Retro #009 closed — Task 3 of today's 3-task arc
+
+**Friction:** alpha-1 hardcoded `from .hosts.claude import dispatch` — ALL steps (including Reviewer) dispatched to Claude API. Reviewer's `preferred_hosts: [codex, gemini]` explicitly excludes Claude for cross-model independence. Same-model author+reviewer = blind-spot overlap. This was flagged as P0 drift in Retro #009: *"if a consumer uses `compass run build` without `--step` today, Claude reviews its own code."*
+
+**Change:**
+- `compass/orchestrator/hosts/router.py` (NEW): `select_host(preferred_hosts)` → first host with credentials. `dispatch_to_host(host, ...)` → routes to correct adapter. Credential map: claude → `ANTHROPIC_API_KEY`; codex/chatgpt/openai → `OPENAI_API_KEY`; gemini → `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+- `compass/orchestrator/hosts/openai.py` (NEW): OpenAI API adapter for codex/chatgpt targets. Agent file → system prompt. Default model: gpt-4o.
+- `compass/orchestrator/hosts/gemini_api.py` (NEW): Gemini API adapter for gemini targets. Agent file → system_instruction. Default model: gemini-2.0-flash.
+- `compass/orchestrator/run.py` alpha-1 → alpha-2: `_read_preferred_hosts()` parses agent frontmatter YAML. Per-step: read preferred_hosts → `select_host()` → if None, print warning + skip (no crash). Dispatch via `dispatch_to_host()`. Dry-run now shows host routing. `prior_outputs` includes `host` field.
+- `compass/orchestrator/README.md` — updated to v0.4-alpha-2; host routing table; multi-host setup instructions.
+- `CHANGELOG.md` — v0.4.0-alpha-2 entry.
+- `compass/workflows/improvements.md` — this entry + counter v0.3.28=#47 → v0.4.0-alpha-2=#48.
+
+**Verified:**
+- `ANTHROPIC_API_KEY=test OPENAI_API_KEY=test python3 -m compass.orchestrator.run build --dry-run` → Step 1 (engineer) → claude; Step 2+3 (reviewer) → codex; Step 4 (engineer) → claude; Step 5 (pm) → chatgpt. Cross-model independence enforced by frontmatter, not config.
+
+**Files touched (7):** `compass/orchestrator/hosts/router.py` (new) · `compass/orchestrator/hosts/openai.py` (new) · `compass/orchestrator/hosts/gemini_api.py` (new) · `compass/orchestrator/run.py` · `compass/orchestrator/README.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **Real multi-host test** — dry-run verified; first live test needs real `OPENAI_API_KEY` + a build workflow step. Until that runs, the OpenAI adapter is structurally correct but field-unproven.
+- **PM dispatches to chatgpt (OpenAI API) before Claude** — PM's `preferred_hosts: [chatgpt, claude, ...]` means if `OPENAI_API_KEY` is set, PM goes to OpenAI API, NOT Claude. This is per-spec (ChatGPT preferred for PM), but may surprise users who expect PM → Claude. If needed, reorder PM's `preferred_hosts:` to `[claude, chatgpt, ...]`.
+- **`[host-preference-validation]` codification candidate** (queued memory 2026-06-08) — 1 instance still. This improvement adds a 2nd evidence point: host preference is now programmatically enforced by the orchestrator. If a 2nd misrouting case surfaces, codify.

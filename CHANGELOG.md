@@ -14,6 +14,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.4.0-alpha-2] — 2026-06-08
+
+> **Orchestrator multi-host dispatch — P0 drift from Retro #009 closed.** Reviewer steps (`preferred_hosts: [codex, gemini]`) now route to OpenAI API (codex) or Gemini API — NOT Claude. Engineer → Claude, Reviewer → Codex: cross-model independence restored structurally. **Counter #48 (4 of 5 before Retro #010 — 2 more before retro fires).**
+
+### Added
+
+- **`compass/orchestrator/hosts/router.py`** — host selection + dispatch routing. `select_host(preferred_hosts)` returns first host with credentials available. `dispatch_to_host(host, ...)` routes to the correct adapter. Credential checks: `claude` → `ANTHROPIC_API_KEY`; `codex`/`chatgpt`/`openai` → `OPENAI_API_KEY`; `gemini` → `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+- **`compass/orchestrator/hosts/openai.py`** — OpenAI API adapter. Used for agents with `codex`/`chatgpt`/`openai` in `preferred_hosts:`. Loads agent `.md` as system prompt. Default model: `gpt-4o`. Raises `ImportError` with install hint if `openai` package missing.
+- **`compass/orchestrator/hosts/gemini_api.py`** — Google Gemini API adapter. Used for agents with `gemini` in `preferred_hosts:`. Loads agent `.md` as `system_instruction`. Default model: `gemini-2.0-flash`. Raises `ImportError` with install hint if `google-generativeai` package missing.
+
+### Changed
+
+- **`compass/orchestrator/run.py`** alpha-1 → alpha-2:
+  - `_read_preferred_hosts(agent_file)` — parses `preferred_hosts:` from agent file YAML frontmatter.
+  - Each agent step: reads preferred_hosts → calls `select_host()` → if None, prints warning + skips step (no crash).
+  - Dispatch via `dispatch_to_host(host, ...)` — not hardcoded Claude.
+  - Dry-run now shows `→ <selected host> (preferred: [...])` or `→ NO HOST AVAILABLE`.
+  - `prior_outputs` accumulation now includes `host` field (which host produced the output).
+  - `--model` now applies to whichever host is selected (was Claude-only).
+- **`compass/orchestrator/README.md`** — updated to v0.4-alpha-2; host routing example table; multi-host setup instructions.
+
 ## [0.3.28] — 2026-06-08
 
 > **Designer + UX Writer agents migrated — 8th + 9th migrated agents; completes the Product pack** (`compass/roles/` → `compass/agents/`). Both under 4500 chars with real task definitions, refusal rules, and host-capability degradation. **Counter #47 (2 of 5 before Retro #010).**

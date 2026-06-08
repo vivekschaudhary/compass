@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compass orchestrator CLI — v0.4-alpha-1
+Compass orchestrator CLI — v0.4-alpha-2
 
 Usage:
     python3 -m compass.orchestrator.run <workflow> [options]
@@ -13,15 +13,35 @@ Options:
     --step N             Execute only step N (1-indexed)
     --context TEXT       Inline context string for the first agent step
                          (skips the interactive input prompt for that step)
-    --model ID           Claude model to use (default: claude-opus-4-8)
+    --model ID           Model ID override — applied to whichever host is selected
+                         (e.g., claude-opus-4-8, gpt-4o, gemini-2.0-flash)
     --no-write           Print output to stdout only; do not write artifact files
 """
 import argparse
 import os
+import re
 import sys
 import textwrap
 from pathlib import Path
 from datetime import datetime
+
+
+def _read_preferred_hosts(agent_file: Path) -> list:
+    """
+    Parse preferred_hosts from agent file YAML frontmatter.
+
+    Expects format: preferred_hosts: [host1, host2, ...]
+    Falls back to ["claude"] if frontmatter is absent or field not found.
+    """
+    text = agent_file.read_text(encoding="utf-8")
+    fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+    if not fm_match:
+        return ["claude"]
+    fm_text = fm_match.group(1)
+    ph_match = re.search(r'^preferred_hosts:\s*\[([^\]]+)\]', fm_text, re.MULTILINE)
+    if not ph_match:
+        return ["claude"]
+    return [h.strip() for h in ph_match.group(1).split(",")]
 
 
 def _collect_input(step_label: str, inline_context: str = "") -> str:
@@ -77,7 +97,6 @@ def _build_user_message(task: str, user_context: str, prior_outputs: list) -> st
         parts.append("## Prior step outputs (workflow context)\n")
         for entry in prior_outputs:
             parts.append(f"### Step {entry['step']}: {entry['agent']}.{entry['task']}\n")
-            # Truncate very long prior outputs to avoid token overflow
             output = entry["output"]
             if len(output) > 3000:
                 output = output[:3000] + "\n\n[... truncated for context window ...]"
@@ -95,7 +114,7 @@ def _build_user_message(task: str, user_context: str, prior_outputs: list) -> st
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="compass run",
-        description="Compass orchestrator v0.4-alpha-1",
+        description="Compass orchestrator v0.4-alpha-2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Examples:
@@ -113,6 +132,11 @@ def main(argv=None):
               # Run without writing files (stdout only):
               python3 -m compass.orchestrator.run setup-product --no-write \\
                   --context "..."
+
+              # Multi-host: Reviewer step dispatches to OpenAI (if OPENAI_API_KEY set):
+              export ANTHROPIC_API_KEY=sk-ant-...
+              export OPENAI_API_KEY=sk-...
+              python3 -m compass.orchestrator.run build --step 5
         """),
     )
     parser.add_argument("workflow", help="Workflow name (e.g., setup-product)")
@@ -142,8 +166,8 @@ def main(argv=None):
     )
     parser.add_argument(
         "--model",
-        default="claude-opus-4-8",
-        help="Claude model ID (default: claude-opus-4-8)",
+        default=None,
+        help="Model ID override for whichever host is selected (default: per-host default)",
     )
     parser.add_argument(
         "--no-write",
@@ -166,17 +190,7 @@ def main(argv=None):
 
     from .graph import load_workflow
     from .hitl import handle_hitl_gate
-    from .hosts.claude import dispatch
-
-    # Fail fast on missing API key (before any prompts)
-    if not args.dry_run:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            print(
-                "Error: ANTHROPIC_API_KEY is not set.\n"
-                "  export ANTHROPIC_API_KEY=sk-ant-...",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    from .hosts.router import select_host, dispatch_to_host
 
     steps = load_workflow(workflow_file)
 
@@ -189,27 +203,39 @@ def main(argv=None):
         )
         sys.exit(1)
 
-    # --- dry-run: just print the graph ---
+    # --- dry-run: print graph with host info ---
     if args.dry_run:
         print(f"\nDispatch graph: {args.workflow}")
         print(f"{'─' * 50}")
         for s in steps:
             if s.is_hitl:
                 marker = "[HITL]"
-                label = s.title
+                label = "human gate"
             elif s.agent and s.task:
                 marker = f"[{s.agent}.{s.task}]"
-                label = f"→ {compass_dir / 'agents' / s.agent_file}" if s.agent_file else ""
+                # Try to show preferred_hosts from agent file
+                agent_file = None
+                for subdir in ("agents", "roles"):
+                    candidate = compass_dir / subdir / (s.agent_file or f"{s.agent}.md")
+                    if candidate.exists():
+                        agent_file = candidate
+                        break
+                if agent_file:
+                    ph = _read_preferred_hosts(agent_file)
+                    selected = select_host(ph)
+                    host_label = f"→ {selected or 'NO HOST AVAILABLE'} (preferred: {ph})"
+                else:
+                    host_label = f"→ {compass_dir / 'agents' / (s.agent_file or '')}"
+                label = host_label
             else:
                 marker = "[workflow]"
                 label = s.title
-            print(f"  Step {s.number:2d}  {marker:35s}  {label}")
+            print(f"  Step {s.number:2d}  {marker:40s}  {label}")
         print()
         return
 
     # --- execution mode ---
     first_step = True
-    # Accumulate prior step outputs for state passing
     prior_outputs = []
 
     for step in steps:
@@ -234,35 +260,51 @@ def main(argv=None):
         # Resolve agent file: prefer compass/agents/, fall back to compass/roles/
         agent_file = None
         for subdir in ("agents", "roles"):
-            candidate = compass_dir / subdir / step.agent_file
+            candidate = compass_dir / subdir / (step.agent_file or f"{step.agent}.md")
             if candidate.exists():
                 agent_file = candidate
                 break
 
         if agent_file is None:
             print(
-                f"Warning: agent file '{step.agent_file}' not found "
+                f"Warning: agent file for '{step.agent}' not found "
                 f"in compass/agents/ or compass/roles/. Skipping step.",
+                file=sys.stderr,
+            )
+            continue
+
+        # Read preferred_hosts and select best available host
+        preferred_hosts = _read_preferred_hosts(agent_file)
+        host = select_host(preferred_hosts)
+
+        if host is None:
+            print(
+                f"Warning: no host available for step {step.number} "
+                f"({step.agent}.{step.task}).\n"
+                f"  Agent preferred_hosts: {preferred_hosts}\n"
+                f"  Set one of: ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY",
                 file=sys.stderr,
             )
             continue
 
         print(f"Agent file : {agent_file.relative_to(project_dir)}")
         print(f"Task       : {step.task}")
-        print(f"Model      : {args.model}")
+        print(f"Host       : {host} (preferred_hosts: {preferred_hosts})")
+        if args.model:
+            print(f"Model      : {args.model} (override)")
         if prior_outputs:
             print(f"Context    : {len(prior_outputs)} prior step(s) passed as context")
 
-        # Inline context only used for the first agent step
         inline = args.context if first_step else ""
         first_step = False
 
         user_context = _collect_input(step.title, inline)
         user_message = _build_user_message(step.task, user_context, prior_outputs)
 
-        print(f"\nDispatching to Claude API …")
+        print(f"\nDispatching to {host} …")
         try:
-            result = dispatch(
+            result = dispatch_to_host(
+                host,
                 str(agent_file),
                 step.task,
                 user_message,
@@ -272,14 +314,12 @@ def main(argv=None):
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 
-        # Print output
         print(f"\n{'=' * 60}")
-        print(f"[Step {step.number} output — {step.agent}.{step.task}]")
+        print(f"[Step {step.number} output — {step.agent}.{step.task} via {host}]")
         print(f"{'=' * 60}\n")
         print(result)
         print()
 
-        # Write artifact to disk (unless --no-write)
         if not args.no_write:
             artifact_path = _write_artifact(
                 project_dir, args.workflow, step.number,
@@ -287,11 +327,11 @@ def main(argv=None):
             )
             print(f"[artifact written → {artifact_path.relative_to(project_dir)}]")
 
-        # Accumulate for state passing to subsequent steps
         prior_outputs.append({
             "step": step.number,
             "agent": step.agent,
             "task": step.task,
+            "host": host,
             "output": result,
         })
 

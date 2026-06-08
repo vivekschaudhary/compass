@@ -1,24 +1,29 @@
-# Compass Orchestrator — v0.4-alpha-0
+# Compass Orchestrator — v0.4-alpha-2
 
-Walks Compass dispatch-graph workflows and dispatches each step to the named agent's host via API. Currently single-host: all steps dispatch to **Claude API** (`claude-opus-4-8`).
+Walks Compass dispatch-graph workflows and dispatches each step to the named agent's host via API. **v0.4-alpha-2 ships multi-host dispatch:** each step reads the agent's `preferred_hosts:` frontmatter and routes to the best available host (Claude API, OpenAI API, or Gemini API).
 
-This is the MVP unlock: instead of manually switching between hosts and pasting agent files, the orchestrator reads the workflow dispatch graph, loads the agent file as a system prompt, and runs each step end-to-end.
+This closes the P0 drift from Retro #009: Reviewer steps (`preferred_hosts: [codex, gemini]`) no longer dispatch to Claude — they route to OpenAI API (Codex) or Gemini API, preserving cross-model independence.
 
 ## Requirements
 
 - Python 3.9+
-- `anthropic` SDK: `pip install anthropic`
-- `ANTHROPIC_API_KEY` environment variable set
+- **Claude API** (for agents with `claude` in preferred_hosts): `pip3 install anthropic` + `ANTHROPIC_API_KEY`
+- **OpenAI API** (for agents with `codex`/`chatgpt`/`openai` in preferred_hosts): `pip3 install openai` + `OPENAI_API_KEY`
+- **Gemini API** (for agents with `gemini` in preferred_hosts): `pip3 install google-generativeai` + `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+
+At minimum, set `ANTHROPIC_API_KEY` to run PM + Researcher + Engineer + Architect steps. Set `OPENAI_API_KEY` additionally to enable Reviewer steps (cross-model independence).
 
 ## Usage
 
-Run from the Compass repo root (set `ANTHROPIC_API_KEY` first):
+Run from the Compass repo root:
 
 ```bash
-# Print the dispatch graph (no API calls):
+# Print dispatch graph with host routing (no API calls):
 python3 -m compass.orchestrator.run setup-product --dry-run
 
-# Run full workflow — writes artifacts to docs/orchestrator-runs/:
+# Run full workflow — each step routes to its preferred host:
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...    # optional — enables Reviewer steps
 python3 -m compass.orchestrator.run setup-product \
   --context "We are building a personal finance app for millennials."
 
@@ -30,13 +35,13 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
 python3 -m compass.orchestrator.run setup-product --no-write \
   --context "..."
 
-# Run /create-bet-architecture after setup-product completes:
-python3 -m compass.orchestrator.run create-bet-architecture \
-  --context "bet-id: WAF-001, brief approved"
+# Full /build run — Engineer → Claude, Reviewer → OpenAI (codex):
+python3 -m compass.orchestrator.run build \
+  --context "story-id: PROJ-43"
 
-# Use a faster/cheaper model:
+# Use a specific model override (applied to whichever host is selected):
 python3 -m compass.orchestrator.run setup-product --step 1 \
-  --model claude-sonnet-4-6 \
+  --model claude-haiku-4-5-20251001 \
   --context "..."
 ```
 
@@ -45,10 +50,10 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
 | Flag | Description |
 |---|---|
 | `--project-dir PATH` | Root of the project repo (default: current directory) |
-| `--dry-run` | Print the dispatch graph without executing |
+| `--dry-run` | Print dispatch graph with host routing (no API calls) |
 | `--step N` | Execute only step N (1-indexed) |
 | `--context TEXT` | Inline context for the first agent step (skips interactive prompt) |
-| `--model ID` | Claude model ID (default: `claude-opus-4-8`) |
+| `--model ID` | Model override applied to whichever host is selected |
 | `--no-write` | Print output to stdout only; do not write artifact files |
 
 ## How it works
@@ -58,36 +63,56 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
 3. For each step:
    - **HITL gate:** pauses, prompts user for approval (y/n)
    - **Workflow-level step** (merge constraints, etc.): prints a "handle manually" note
-   - **Agent step:** loads `compass/agents/<agent>.md` as system prompt → dispatches to Claude API
-4. Prints the agent's response to stdout
+   - **Agent step:**
+     1. Reads `preferred_hosts:` from agent file frontmatter
+     2. Selects first host with API credentials available
+     3. Loads agent `.md` as system prompt → dispatches to selected host's API
+     4. Prints and optionally writes output to `docs/orchestrator-runs/`
+4. Passes prior step outputs as context to each subsequent step
 
-## v0.4-alpha-1 scope and known gaps
+## Host routing example — /build workflow
 
-- **Artifact write** — step outputs written to `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md`. Use `--no-write` to suppress.
-- **State passing** — each step receives prior step outputs as context (truncated to 3000 chars per step to fit context window). Full multi-step runs produce coherent output chains.
-- **Single-host only** — all steps go to Claude API regardless of agent's `preferred_hosts:`. Multi-host dispatch (Codex for Reviewer, etc.) ships in v0.4-beta.
-- **Interactive input only** — `--context` fills Step 1's input; subsequent steps still prompt interactively unless `--step N` is used.
+With `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` set:
+
+| Step | Agent | preferred_hosts | Dispatches to |
+|---|---|---|---|
+| 1 | `engineer.implement-story` | `[claude, codex, gemini]` | Claude API |
+| 2 | `reviewer.write-e2e-tests` | `[codex, gemini]` | OpenAI API (codex) |
+| 3 | `reviewer.review-pr` | `[codex, gemini]` | OpenAI API (codex) |
+| 4 | `engineer.respond-to-review` | `[claude, codex, gemini]` | Claude API |
+| 5 | `pm.arbitrate-dispute` | `[chatgpt, claude, ...]` | OpenAI API (chatgpt) |
+
+Engineer and Reviewer dispatch to different models — cross-model independence restored.
+
+## v0.4-alpha-2 scope and known gaps
+
+- **Multi-host dispatch** — routes per agent `preferred_hosts:` to Claude API, OpenAI API, or Gemini API.
+- **Artifact write** — step outputs written to `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md`.
+- **State passing** — each step receives prior step outputs as context (truncated to 3000 chars per step).
+- **Interactive input only** — `--context` fills Step 1's input; subsequent steps prompt interactively.
 - **No resume** — if the workflow errors mid-run, restart from `--step N`.
-- **No git commit automation** — artifact files written to disk; user commits. Git automation ships in v0.4-beta.
+- **No git commit automation** — artifact files written to disk; user commits. Ships v0.4-beta.
 
 ## Files
 
 ```
 compass/orchestrator/
   __init__.py        # package marker
-  graph.py           # dispatch graph parser (reads workflow .md files)
-  hitl.py            # HITL gate handler (pause + y/n prompt)
-  run.py             # CLI entry point
+  graph.py           # dispatch graph parser
+  hitl.py            # HITL gate handler
+  run.py             # CLI entry point (v0.4-alpha-2)
   hosts/
     __init__.py
     claude.py        # Claude API adapter (anthropic SDK)
+    openai.py        # OpenAI API adapter (for codex/chatgpt targets)
+    gemini_api.py    # Gemini API adapter (google-generativeai SDK)
+    router.py        # Host selection + dispatch routing
   README.md          # this file
 ```
 
 ## Forward: v0.4-beta
 
-- Multi-host dispatch per agent's `preferred_hosts:` (Claude API + Codex CLI + Gemini)
 - Artifact write automation (step output → `docs/` file commit)
-- Structured state passing between steps (previous step output → next step context)
 - `compass/config.yaml` integration (hitl_level, connectors)
 - `pip install compass` entry point → `compass run <workflow>`
+- HITL context passing (approval text fed to next step as context)
