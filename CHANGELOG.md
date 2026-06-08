@@ -14,6 +14,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.25] — 2026-06-08
+
+> **Architect agent migrated** from `compass/roles/architect.md` → `compass/agents/architect.md`. 6th migrated agent (joins pm, researcher, engineer, reviewer, delivery-manager). Unlocks `/create-bet-architecture` for dispatch-graph refactor (Task 2). Two tasks defined: `draft-bet-architecture` (full 6-step process with foundational-stack deviation gate) + `assess-pr-compliance` (PR compliance vs approved bet architecture). **Counter #43 (3 of 5 before Retro #009).**
+
+### Added
+
+- **`compass/agents/architect.md`** (v0.3.25, 7779 chars, 221 headroom under 8000 cap) — standard agent frontmatter (`preferred_hosts: [claude, codex, gemini]`; CLI-class requiring filesystem read access; chatgpt excluded); Identity; 5 Core principles inlined (refuse-escalate · cite-or-mark-na · soft-spec-hardening · ADR-not-gate · status-starts-proposed); 2 task definitions; Refusal rules (6); Output summary contract; Logging patterns mid-task; Anti-patterns; Host capability degradation.
+  - **`draft-bet-architecture` task** — 6-step Work: state check (architecture_required: false → exit with DRI); load context; foundational-stack deviation gate (STOP + escalate to `/setup-foundation-architecture` amend if YES); draft 12-section architecture.md; set status proposed; HITL halt. Postcondition: all 12 sections populated · foundational-stack assertion explicit · ≥1 real alternative · Consequences has positive+negative+reversibility · deviation gate cleared or escalated · HITL halt announced.
+  - **`assess-pr-compliance` task** — reads approved architecture.md + PR diff; flags foundational-stack violations, data model deviations, API contract breaks; returns COMPLIANT / DEVIATION-REQUIRES-AMEND with file+line references.
+
+### Changed
+
+- **`AGENTS.md`** — Architect migration status `legacy` → `✅ v0.3.25`; agent count prose updated (3 → 4 migrated at v0.3.14; 6 total now including v0.3.25).
+
 ## [0.4.0-alpha-0] — 2026-06-08
 
 > **Orchestrator v0.4-alpha-0 — MVP unlock: Compass workflows are now executable.** First working end-to-end dispatch: CLI walks a dispatch-graph workflow, loads agent files as system prompts, dispatches to Claude API. Dry-run validates both migrated dispatch graphs (`/setup-product` + `/build`) correctly — 4 steps + 8 steps respectively, agents + HITL gates all parsed. API dispatch path wired and tested (requires `ANTHROPIC_API_KEY`). **Task 3 of today's 3-task arc.** Counter ticks to #42.
