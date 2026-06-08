@@ -14,6 +14,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.18] — 2026-06-07
+
+> **Artifact-pruning release: `compass/agents/delivery-manager.md` trimmed to fit OpenAI's ~8000-char Custom GPT Instructions cap.** 21,714 → 7,960 chars (63% reduction). All load-bearing content preserved: Identity, 6 inlined Core principles, all 5 tasks with Gate + Work + Postcondition, Refusal rules, Output summary contract, Logging patterns mid-task, Anti-patterns, Host capability degradation. Strategy per the v0.3.15 + v0.3.17 watch-fors: tighten prose throughout, drop duplicate "Triggered by" lines (handoffs implicit from workflow dispatch), compress framework-knowledge to inline references where each principle is named, compress host-cap table to bullet list. **Counter ticks to #35 → Retro #007 now due** (1 of 1 needed before auto-fire). **No behavior change** — same agent identity, same tasks, same gates, same postconditions; the file just fits Custom GPT Instructions paste now.
+
+### Changed
+
+- **`compass/agents/delivery-manager.md`** trimmed from 21,714 → 7,960 chars to fit OpenAI Custom GPT Instructions ~8000-char cap. Strategy:
+  - Combined 3 separate opening notes (Naming note · Host preference note · v0.4 capability-expansion heads-up) into one compressed "Notes" paragraph.
+  - Core principles kept inlined but each principle compressed to one line.
+  - Each task's body restructured: `Gate` (preconditions) + `Work` (compressed step sequence) + `Postcondition` (load-bearing); dropped the verbose "Inputs" enumeration (implicit from Work steps) and "Handoffs" (implicit from workflow dispatch); dropped trailing "Triggered by" lines.
+  - Framework knowledge section folded into Host capability degradation tail (single line listing referenced patterns).
+  - Anti-patterns compressed from bullet list to one inline-separated line.
+  - Host capability degradation table compressed from 3-column markdown table to bullet list.
+  - Frontmatter `version:` bumped 0.3.15 → 0.3.18 stamping the trim.
+- **No behavior change.** Same identity, same 5 tasks, same gates + postconditions, same refusal rules, same anti-patterns. The compression preserves load-bearing content per `[agent-as-surface-independent-unit]` (canon v0.3.14) hybrid-inlining principle: discipline principles + task gates + refusal rules INLINED; deep framework references compressed to one-line pattern names with `compass/framework/canon.md` as the fetch source.
+
+### Notes
+
+- **Counter ticks to #35.** **Retro #007 is now due** — auto-fires on next framework session per `[fractal-retro]` (canon v0.3.17) cadence (every 5 entries; previous Retro #006 fired at #30). Retro #007 covers improvements #31–#35 (v0.3.14 → v0.3.18).
+- **`[hard-line-declaration]` validated again.** Retro #007 fires ON TIME at #35; hard line from Retro #006 (which itself was on time) held. **Third consecutive on-time retro** — the cadence-discipline mechanism is now empirically validated past the codification threshold with high signal-to-noise.
+- **`[user-as-load-bearing-oversight]` instance count accruing into Retro #007 territory.** Pre-Retro-#007 instance count: 5+ from v0.3.15-v0.3.17 sessions (rename direction, tool-wrapper boundary, retro architecture observation, pull-forward decision, PR-redo loop data citation). Canon promotion case overwhelming; Retro #007 will surface this explicitly.
+- **Two future-watch items closed by this release:** (a) v0.3.15 watch-for "Custom GPT char limit for delivery-manager.md — exceeds the cap" CLOSED. (b) v0.3.17 watch-for "Custom GPT char limit on PM/Researcher/Delivery-Manager — delivery-manager.md was already ~11KB pre-v0.3.17, v0.3.17 makes that worse" PARTIALLY closed (delivery-manager addressed; pm.md + researcher.md still over cap and could compound on next agent migration). Next compression targets: pm.md (current size unknown — measure before next release); researcher.md (current size unknown — measure).
+- **Cadence:** v0.3.18 = ~30-minute artifact-pruning release. Same release class as v0.3.11 (reviewer.md pruned per Retro #005 artifact analysis). 7 release classes stable (Compass-original codification · capability-extension · architectural-direction · artifact-pruning · infrastructure · framework-on-framework · documentation).
+
 ## [0.3.17] — 2026-06-07
 
 > **First recursive workflow in Compass: `[fractal-retro]` codified (2nd architecture-discipline class member) — same retro workflow shape applied at every altitude (role · workflow · bet · project · org · framework), with bottom-up consolidation via `consolidates_from:` frontmatter.** Schema generalization + project altitude end-to-end + per-role and per-workflow log schemas all ship; agents can start logging patterns mid-task immediately. Role / workflow / bet aggregation logic + org-altitude aggregator script DECLARED per `[declare-not-implement]`, built when data accumulates. **Trigger that pulled the build forward from the v0.3.16 QUEUED entry:** PR-redo loop signal (user observed Claude redoing PRs ~5x in ≥4 instances + 10+ improvements surfacing as work happens) — exactly the friction role-altitude Engineer + Reviewer retros + workflow-altitude `/build` retros catch before manual flagging is required. Counter ticks to #34.

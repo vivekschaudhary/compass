@@ -15,7 +15,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #005** (v0.3.6 → v0.3.8 + same-day correction): [retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md](retros/2026-06-02-retro-005-v0.3.6-to-v0.3.8.md) — **fired ON TIME at #25** (hard line from Retro #004 worked). Smaller 3-improvement cycle. Surfaces `[declare-not-implement]` + `[hard-line-declaration]` as codification-ready (2 instances each); `[framework-on-framework]` at threshold (3 instances). Includes first in-cycle artifact analysis section: `compass/roles/reviewer.md` rated 7/10 (pruning candidate) + CB-1.5 story rated 9/10 (correct framework application in the wild).
 - **Retro #006** (v0.3.9 → v0.3.13): [retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md](retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md) — **fired ON TIME at #30** (2nd consecutive on-time retro; hard line worked again). 5 improvements in 1 day. Surfaces 3 codification-ready candidates: `[user-as-load-bearing-oversight]` (3+ instances) · `[L-layered-progressive-rollout]` (2 instances) · `[surface-shapes-output]` (2 instances). `[hard-line-declaration]` empirically validated 3rd time (cadence-class commitments). Release-class taxonomy stable at 7 classes (capability-extension introduced v0.3.13).
 
-**Next retro fires after improvement #35.** (Retro #006 fired at #30 ON TIME 2026-06-02. **v0.3.17 = #34 (1 of 5 needed before Retro #007).** Hard line still in effect — if Retro #007 slips, it's a 2nd retro-cadence regression; treat as recurring soft-spec failure and deepen `[hard-line-declaration]` mechanism (e.g., make counter visible in dashboard Actions tab).)
+**Next retro fires after improvement #35 → NOW DUE.** (Retro #006 fired at #30 ON TIME 2026-06-02. **v0.3.18 = #35 — Retro #007 due**; auto-fires on next framework session per `[fractal-retro]` cadence; covers improvements #31–#35 / v0.3.14 → v0.3.18. Hard line from Retro #006 held — third consecutive on-time retro.)
 
 ## Template
 
@@ -1557,3 +1557,35 @@ QUEUED entry's "Trigger to actually build this" listed 4 conditions. **Trigger #
 - **`[fractal-retro]` 3rd instance candidate.** Currently 2 instances (existing framework retros reframed + project altitude shipped end-to-end). 3rd instance = whichever leaf-altitude retro (role / workflow / bet) actually fires first with real data and produces a useful archived retro. Watch for that.
 - **Custom GPT char limit on PM/Researcher/Delivery-Manager.** All three got new "Logging patterns mid-task" sections (~30 lines each). delivery-manager.md was already ~11KB pre-v0.3.17 (per v0.3.15 watch-for, exceeds ~8000-char Custom GPT cap); v0.3.17 makes that worse. When ChatGPT-host usage of those agents surfaces, the cap-violation needs addressing — likely move host-capability table + extended task definitions to REFERENCED.
 - **Counter at #34. Hard line still in effect** — Retro #007 fires after #35. 1 more improvement needed. Likely candidates: trim delivery-manager.md to fit Custom GPT cap (v0.3.15 watch-for, now compounded by v0.3.17); refactor /status or /build to dispatch-graph shape; next agent migration (Architect or Security Reviewer).
+
+---
+
+### 2026-06-07 — `compass/agents/delivery-manager.md` trimmed to fit OpenAI Custom GPT Instructions ~8000-char cap (v0.3.18) — artifact-pruning release; counter ticks #35 → Retro #007 NOW DUE
+
+**Friction (closed acute):** `compass/agents/delivery-manager.md` was 21,714 chars (2.7× the OpenAI Custom GPT Instructions ~8000-char cap). Flagged in v0.3.15 watch-for ("Custom GPT char limit for delivery-manager.md — exceeds the cap"); compounded by v0.3.17 ("All three got new Logging patterns mid-task sections; delivery-manager.md was already ~11KB pre-v0.3.17, v0.3.17 makes that worse"). When ChatGPT-host usage of Delivery Manager surfaces (per `preferred_hosts: [claude, codex, gemini, chatgpt]`), the cap-violation breaks the Custom GPT Instructions paste. v0.3.18 closes the friction.
+
+**Change:** trimmed `compass/agents/delivery-manager.md` from 21,714 → 7,960 chars (63% reduction). All load-bearing content preserved per `[agent-as-surface-independent-unit]` (canon v0.3.14) hybrid-inlining principle. Strategy:
+
+- **Opening notes consolidated.** Pre-v0.3.15 Project Manager naming note + Host fidelity note + v0.4 capability-expansion heads-up combined into one compressed "Notes" paragraph (~600 chars → ~200).
+- **Identity tightened** (~520 → ~280 chars; same content, less prose).
+- **Core principles kept INLINED but each compressed to one line** (~720 → ~620). Discipline principles must hold without external file load — preserved verbatim in shape, terse in prose.
+- **Tasks I own (the biggest cut)** restructured: `Gate` (preconditions, load-bearing) + `Work` (compressed step sequence) + `Postcondition` (load-bearing) per task. Dropped verbose "Inputs" enumerations (implicit from Work steps) and "Handoffs" (implicit from workflow dispatch). Dropped trailing "Triggered by" lines (info lives in workflow files). 5 tasks: ~10,000 chars → ~3,200.
+- **Refusal rules kept INLINED** (~700 chars → ~550, same shape).
+- **Output summary contract kept INLINED** (~700 → ~470, same content).
+- **Logging patterns mid-task compressed to a single paragraph** (~1,800 → ~600 chars) — points at `compass/templates/role-activity-log.md` for the entry shape; lists the role-specific log-when triggers in one compressed list.
+- **Framework knowledge section folded into Host capability degradation tail** (one line listing referenced patterns; ~1,200 → 0 standalone, ~150 in the tail).
+- **Anti-patterns compressed** from bullet list to one inline-separated line (~700 → ~350).
+- **Host capability degradation compressed** from 3-column markdown table to bullet list (~750 → ~600).
+- Frontmatter `version:` bumped 0.3.15 → 0.3.18 stamping the trim.
+
+**No behavior change.** Same agent identity, same 5 tasks, same gates + postconditions, same refusal rules, same anti-patterns. Same `preferred_hosts:`, same tools. Pasted as Custom GPT Instructions: now works (fits the cap with 40 chars of headroom).
+
+**Files touched:** `compass/agents/delivery-manager.md` (trim — 21,714 → 7,960 chars); `CHANGELOG.md` v0.3.18 entry; `compass/workflows/improvements.md` (this entry + header counter v0.3.17=#34 → v0.3.18=#35 + retro-due flag).
+
+**Watch for:**
+
+- **Retro #007 NOW DUE — auto-fires on next framework session.** Hard line from Retro #006 held; **third consecutive on-time retro** validates `[hard-line-declaration]` past the codification threshold with high signal-to-noise. Retro #007 covers improvements #31–#35 (v0.3.14 → v0.3.18). Expected codification candidates Retro #007 will surface: `[user-as-load-bearing-oversight]` (5+ instances pre-Retro promotion case overwhelming); `[tool-wrappers-own-their-cadence]` (1 instance + v0.3.16 refinement); `[no-padded-status]` (1 instance, surfaced v0.3.15); `[freshness-markers-follow-source-of-truth]` (1 instance, surfaced v0.3.16); `[different-model-reviewer-as-agent-frontmatter]` (1 instance, likely subsumed by `[agent-as-surface-independent-unit]`); `[task-ownership-locality]` + `[workflow-as-dispatch-graph]` (1 instance each from v0.3.14, awaiting 2nd).
+- **`pm.md` and `researcher.md` cap status unknown.** v0.3.17 added ~30-line "Logging patterns mid-task" sections to both. Pre-v0.3.17 sizes weren't measured; v0.3.18 only addressed delivery-manager. If ChatGPT-host usage of PM or Researcher surfaces and either exceeds the cap, apply the same trim pattern. Measure both before next Custom GPT-host bet.
+- **The slim version stays the source-of-truth.** `compass/agents/delivery-manager.md` IS the file (slim). No "extended" version exists in the repo. If a host can fetch `compass/framework/canon.md`, the referenced pattern descriptions there fill in deep context — the framework knowledge section deliberately points at canon, not at a separate extended-agent file. This keeps single-source-of-truth discipline and avoids the dual-file drift surface a `delivery-manager-extended.md` would create.
+- **Compression pattern as candidate.** v0.3.18 is the **first agent-file compression release**. If reviewer.md / engineer.md / pm.md / researcher.md need similar treatment, this v0.3.18 trim becomes a reference example. Worth tracking as a candidate `[agent-file-compression]` or similar pattern — but only codify if 2nd instance accrues (i.e., another agent needs trimming and the same strategy applies).
+- **Counter at #35. Retro #007 NOW DUE.** Hard line: if Retro #007 doesn't fire on next framework session, that's a 2nd retro-cadence regression — deepen `[hard-line-declaration]` mechanism (e.g., make counter + retro-due flag visible in dashboard Actions tab).
