@@ -18,7 +18,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40**
 - **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-bet-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
 
-**Next retro fires after improvement #50.** (v0.3.27 = #46 (4 of 5 before Retro #010).)
+**Next retro fires after improvement #50.** (v0.3.28 = #47 (3 of 5 before Retro #010).)
 
 ## Template
 
@@ -1904,3 +1904,23 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **Dry-run verify:** `python3 -m compass.orchestrator.run create-brief --dry-run` should produce 4 steps (researcher.cite-evidence-6-category-9-moat · pm.draft-brief · HITL · delivery-manager.update-status).
 - **pm.md cap margin at 9 chars** — effectively at cap. Any future `draft-brief` expansion must compress elsewhere first. Task 2 (Designer + UX Writer migration) does NOT touch pm.md.
 - **Researcher `cite-evidence-6-category-9-moat` task** — researcher.md already has this task name; verify it matches the workflow's dispatch reference exactly before running orchestrator.
+
+---
+
+### 2026-06-08 — Designer + UX Writer agents migrated (v0.3.28) — 8th + 9th migrated agents; completes the Product pack — Task 2 of today's 3-task arc
+
+**Friction:** Designer and UX Writer were the last two Product-pack agents still in `compass/roles/` with no agent files. `/create-story` Step 6 engages both but they had no `agent.task` dispatch references — orchestrator had no path to dispatch them. Product pack incomplete per `compass/framework/mvp.md`.
+
+**Change:**
+- `compass/agents/designer.md` (NEW, v0.3.28, 4474 chars): preferred_hosts chatgpt + claude + codex + gemini. Task `draft-design-spec`: Gate (story ready + approved brief + design system ref) → Work (flow mapping · all states · interaction spec · a11y · copy-need flagging · Figma link via MCP · DRI seed · HITL) → Postcondition (all screens have all states · copy needs flagged · a11y documented · Standard Experience Checklist items identified for PM · not self-approved).
+- `compass/agents/ux-writer.md` (NEW, v0.3.28, 4498 chars): preferred_hosts chatgpt + claude + codex + gemini. Task `write-copy`: Gate (design spec present · voice guidelines loaded) → Work (placeholder inventory · copy fill · error type discrimination · empty state next-action · char limit coordination · DRI seed · HITL) → Postcondition (all placeholders filled · type-discriminated error copy · terminology consistent · not self-approved).
+- `AGENTS.md` — Designer + UX Writer: legacy → ✅ v0.3.28; agent count updated.
+- `CHANGELOG.md` — v0.3.28 entry.
+- `compass/workflows/improvements.md` — this entry + counter v0.3.27=#46 → v0.3.28=#47.
+
+**Files touched (5):** `compass/agents/designer.md` (new) · `compass/agents/ux-writer.md` (new) · `AGENTS.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
+
+**Watch for:**
+- **`/create-story` needs dispatch-graph refactor** — it still embeds 60+ lines of methodology. Now that Designer + UX Writer have agent files, the `/create-story` workflow can be migrated to dispatch-graph shape (5th migration). Step 6 becomes `designer.draft-design-spec` + `ux-writer.write-copy` (parallel dispatch — first workflow with a parallel step).
+- **Parallel dispatch support in orchestrator** — current `run.py` executes steps sequentially. Designer + UX Writer in `/create-story` Step 6 run in parallel (per the legacy workflow: "Both run in parallel"). Orchestrator will need parallel step handling before `/create-story` is fully walkable.
+- **Product pack now complete** per `compass/framework/mvp.md`: PM + Researcher + Designer + UX Writer all in `compass/agents/`. Build pack still needs Automation (new) + Reviewer (already migrated v0.3.16) + Engineer (already migrated v0.3.14).

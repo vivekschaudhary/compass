@@ -14,6 +14,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.28] — 2026-06-08
+
+> **Designer + UX Writer agents migrated — 8th + 9th migrated agents; completes the Product pack** (`compass/roles/` → `compass/agents/`). Both under 4500 chars with real task definitions, refusal rules, and host-capability degradation. **Counter #47 (2 of 5 before Retro #010).**
+
+### Added
+
+- **`compass/agents/designer.md`** (NEW, v0.3.28, 4474 chars): `preferred_hosts: [chatgpt, claude, codex, gemini]`. Task `draft-design-spec`: Gate (story ready + approved brief + design system) → Work (flows · states · interactions · a11y · copy-need flagging · Figma link · DRI seed) → Postcondition (all states per screen · copy needs flagged · a11y documented · not self-approved). 5 refusal rules. Standard Experience Checklist bridge principle inlined.
+- **`compass/agents/ux-writer.md`** (NEW, v0.3.28, 4498 chars): `preferred_hosts: [chatgpt, claude, codex, gemini]`. Task `write-copy`: Gate (design spec present · voice guidelines loaded) → Work (placeholder inventory · copy fill · error type discrimination · empty state next-action · char limit coordination · DRI seed) → Postcondition (all placeholders filled · error copy type-discriminated · terminology consistent · not self-approved). 5 refusal rules. Verbatim discipline principle inlined.
+
+### Changed
+
+- **`AGENTS.md`** — Designer + UX Writer: legacy → ✅ v0.3.28. Agent count updated: v0.3.28 adds designer + ux-writer.
+
 ## [0.3.27] — 2026-06-08
 
 > **`/create-brief` refactored to dispatch-graph shape — 4th workflow migrated** (joining `/setup-product` v0.3.14 + `/build` v0.3.23 + `/create-bet-architecture` v0.3.26). Embedded 83-line methodology → thin 4-step dispatch contract (researcher.cite-evidence-6-category-9-moat · pm.draft-brief · HITL · delivery-manager.update-status). **Counter #46 (1 of 5 before Retro #010).**
