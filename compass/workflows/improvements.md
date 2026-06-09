@@ -2045,3 +2045,27 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Watch for:**
 - **HITL feedback loop** — does the reviewer actually write useful feedback? If feedback fields are consistently empty, the prompt may be adding friction without signal. Watch on first consumer run.
 - **--from-step with missing artifacts** — if a prior step's artifact is missing, the orchestrator prints a warning and continues with a context gap. First consumer run will surface whether this is acceptable or needs a harder failure.
+
+---
+
+### 2026-06-09 — Consumer retro signals (CB-3.3 crypto app) — 4 anti-patterns logged; 2 new; 2 need /build checklist promotion
+
+**Source:** First structured consumer retro output from CB-3.3 crypto app. 4 anti-patterns with maturity tiers. Added to Retro #012 as consumer project signals section.
+
+**Anti-patterns and their framework status:**
+
+| Anti-pattern | Maturity | Gap |
+|---|---|---|
+| `[rsc-prop-serialization]` | High | In `engineer.md`; NOT yet in `/build` pre-merge checklist |
+| `[server-action-file-export-purity]` | High | In `engineer.md`; NOT yet in `/build` pre-merge checklist |
+| `[empty-numeric-input-zero-trap]` | High — new | Not in framework — needs Engineer `implement-story` standard-experience checklist |
+| `[cross-artifact-sweep-on-contract-shift]` | Very high — 5+ instances across CB-2.2/2.5/3.1/3.2/3.3 | Not in framework — highest priority; needs `/build` Phase 4 gate + `engineer.md` postcondition |
+
+**Change (LOGGED — implementation in #59 + #60):**
+- `[rsc-prop-serialization]` + `[server-action-file-export-purity]`: bundle into `/build` dispatch-graph refactor (#59) — pre-merge checklist items
+- `[cross-artifact-sweep-on-contract-shift]`: priority promote — `engineer.md` postcondition + `/build` Phase 4 gate (also part of #59)
+- `[empty-numeric-input-zero-trap]`: Engineer `implement-story` standard-experience checklist (#60)
+
+**Files touched (2):**
+- `compass/workflows/retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md` — consumer signals section added; `includes_artifact_analysis: true`
+- `compass/workflows/improvements.md` — this entry. Counter: v0.4.0-alpha-3=#58 → consumer-retro-signals=#59 (1 of 5 before Retro #013).
