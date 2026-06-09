@@ -14,6 +14,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.4.0-alpha-4] — 2026-06-09
+
+> **Pipeline mode: cross-workflow chaining.** Orchestrator can now walk PM → Architect → Reviewer → Support in a single command. **Counter #62 (4 of 5 before Retro #013).**
+
+### Added
+
+- `--pipeline W1,W2,…` flag to `compass/orchestrator/run.py` — runs multiple workflows in sequence with automated context passing between them. Full PM → Architect → Build chain:
+  ```bash
+  python3 -m compass.orchestrator.run \
+    --pipeline create-brief,create-bet-architecture,build \
+    --context "Crypto portfolio tracker."
+  ```
+- `_run_workflow()` internal function extracted from `main()` — single-workflow execution returns `(prior_outputs, artifact_paths)` so callers can chain runs.
+- `_cross_workflow_context()` — compact handoff summary (artifact paths + last step output preview, ≤800 chars) injected as first-step context of the next workflow.
+- Cross-workflow step tagging — `prior_outputs` carry `workflow` key so context headers label as `[create-brief — Step 2: pm.draft-brief]`.
+- Pipeline dry-run — `--pipeline W1,W2 --dry-run` prints the full dispatch graph for each workflow in sequence without executing.
+- HITL gates still fire per-workflow; pipeline halts at any rejection and prints `--from-step` command for that specific workflow.
+
 ## [0.4.0-alpha-3] — 2026-06-09
 
 ### Added

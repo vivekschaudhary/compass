@@ -2110,3 +2110,44 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - `AGENTS.md` — catalog: 7 shapes / 17 → 18 patterns; enforcement (4) → (5)
 - `CHANGELOG.md` — v0.3.36 entry
 - `compass/workflows/improvements.md` — this entry. Counter: v0.3.35=#60 → v0.3.36=#61 (3 of 5 before Retro #013).
+
+---
+
+### 2026-06-09 — Orchestrator pipeline mode: cross-workflow chaining PM → Architect → Reviewer → Support (v0.4.0-alpha-4)
+
+**Friction:** Orchestrator v0.4-alpha-3 could only run one workflow at a time. PM brief lived in `/create-brief`, Architect design in `/create-bet-architecture`, and Engineer+Reviewer in `/build`. To chain PM → Architect → Reviewer → Support, the operator had to restart the orchestrator 3× with no automated context passing between runs. Workflow host routing (PM → Claude/OpenAI/Gemini, Architect → Claude, Reviewer → Codex) was already correct via `preferred_hosts:`; what was missing was the pipeline runner.
+
+**Change (IMPLEMENTED — v0.4.0-alpha-4):**
+
+`compass/orchestrator/run.py` refactored:
+- **`_run_workflow()`** extracted as a reusable function — runs a single workflow dispatch graph; returns `(prior_outputs, artifact_paths)` so callers can chain runs.
+- **`--pipeline W1,W2,…` flag** added — accepts a comma-separated list of workflows, runs them in sequence, carries outputs from each into the next.
+- **`_cross_workflow_context()`** — generates a compact handoff summary (artifact paths + last step output preview) injected as the first-step context of the next workflow.
+- **`initial_prior_outputs`** arg — each workflow in the pipeline receives ALL prior step outputs as context (not just within-workflow steps). Reviewer in `/build` sees PM brief + Architect design automatically.
+- **Cross-workflow step tagging** — each step in `prior_outputs` carries its `workflow` key so context headers are labelled `[create-brief — Step 2: pm.draft-brief]` rather than just `[Step 2]`.
+
+**Usage:**
+```bash
+# Full PM → Architect → Build pipeline
+python3 -m compass.orchestrator.run \
+  --pipeline create-brief,create-bet-architecture,build \
+  --context "Crypto portfolio tracker for retail investors."
+
+# Dry-run to see dispatch graph for full chain
+python3 -m compass.orchestrator.run \
+  --pipeline create-brief,create-bet-architecture,build \
+  --dry-run
+```
+
+Each workflow's HITL gates still fire in sequence. The pipeline halts at any rejection and prints the `--from-step` command for that specific workflow.
+
+**What this still does NOT do:**
+- Run shell commands (git, tests, `gh pr create`) — Engineer still needs Claude Code interactive for file writes
+- Replace `agent-handoff.yml` GitHub Actions path for post-PR Reviewer dispatch
+- Chain workflows that do not yet have dispatch-graph shape
+
+**Files touched (2):**
+- `compass/orchestrator/run.py` — v0.4-alpha-3 → v0.4-alpha-4; `_run_workflow()` extracted + `--pipeline` mode
+- `compass/workflows/improvements.md` — this entry. Counter: v0.3.36=#61 → v0.4.0-alpha-4=#62 (4 of 5 before Retro #013).
+
+**Retro #013 horizon:** fires at #63.

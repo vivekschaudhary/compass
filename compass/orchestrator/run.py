@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """
-Compass orchestrator CLI — v0.4-alpha-3
+Compass orchestrator CLI — v0.4-alpha-4
 
 Usage:
     python3 -m compass.orchestrator.run <workflow> [options]
+    python3 -m compass.orchestrator.run --pipeline w1,w2,w3 [options]
 
     compass run <workflow> [options]          # if installed via pip
 
 Options:
     --project-dir PATH   Root of the project repo (default: current directory)
     --dry-run            Print the dispatch graph without executing
-    --step N             Execute only step N (1-indexed)
+    --pipeline W1,W2,…   Run multiple workflows in sequence, passing context
+                         from each to the next (e.g. create-brief,
+                         create-bet-architecture,build)
+    --step N             Execute only step N in the single workflow (ignored
+                         when --pipeline is set)
     --from-step N        Resume from step N, loading steps 1..N-1 from prior
-                         artifact files (use after a HITL rejection to re-run
-                         from the rejected step without re-running earlier steps)
-    --context TEXT       Inline context string for the first agent step
-                         (skips the interactive input prompt for that step)
-    --model ID           Model ID override — applied to whichever host is selected
+                         artifact files (use after a HITL rejection)
+    --context TEXT       Inline context string for the first step of the first
+                         workflow (skips the interactive input prompt)
+    --model ID           Model ID override applied to whichever host is selected
                          (e.g., claude-opus-4-8, gpt-4o, gemini-2.0-flash)
     --no-write           Print output to stdout only; do not write artifact files
 """
@@ -29,13 +33,12 @@ from pathlib import Path
 from datetime import datetime
 
 
-def _read_preferred_hosts(agent_file: Path) -> list:
-    """
-    Parse preferred_hosts from agent file YAML frontmatter.
+# ─────────────────────────────────────────────────────────────────────────────
+# Utility helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
-    Expects format: preferred_hosts: [host1, host2, ...]
-    Falls back to ["claude"] if frontmatter is absent or field not found.
-    """
+def _read_preferred_hosts(agent_file: Path) -> list:
+    """Parse preferred_hosts from agent file YAML frontmatter."""
     text = agent_file.read_text(encoding="utf-8")
     fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
     if not fm_match:
@@ -48,16 +51,10 @@ def _read_preferred_hosts(agent_file: Path) -> list:
 
 
 def _collect_input(step_label: str, inline_context: str = "") -> str:
-    """
-    Return user context for a step.
-
-    If inline_context is provided, echo it and return without prompting.
-    Otherwise prompt interactively (end input with a line containing only '.').
-    """
+    """Return user context for a step, either inline or via interactive prompt."""
     if inline_context:
         print(f"[context] {inline_context[:120]}{'...' if len(inline_context) > 120 else ''}")
         return inline_context
-
     print(
         f"\nEnter context / input for this step.\n"
         f"End with a line containing only '.':\n"
@@ -75,31 +72,34 @@ def _collect_input(step_label: str, inline_context: str = "") -> str:
     return "\n".join(lines)
 
 
-def _write_artifact(project_dir: Path, workflow: str, step_num: int, agent: str, task: str, content: str) -> Path:
-    """
-    Write step output to docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md.
-    Creates parent dirs as needed. Returns the written path.
-    """
+def _write_artifact(
+    project_dir: Path, workflow: str, step_num: int,
+    agent: str, task: str, content: str,
+) -> Path:
+    """Write step output to docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md."""
     run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
     run_dir.mkdir(parents=True, exist_ok=True)
     out_file = run_dir / f"step-{step_num:02d}-{agent}-{task}.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    header = f"---\nworkflow: {workflow}\nstep: {step_num}\nagent: {agent}\ntask: {task}\ngenerated: {timestamp}\n---\n\n"
+    header = (
+        f"---\nworkflow: {workflow}\nstep: {step_num}\nagent: {agent}\n"
+        f"task: {task}\ngenerated: {timestamp}\n---\n\n"
+    )
     out_file.write_text(header + content, encoding="utf-8")
     return out_file
 
 
-def _write_rejection_note(project_dir: Path, workflow: str, step_num: int, feedback: str) -> Path:
-    """
-    Write a HITL rejection note alongside the step artifact.
-    Gives reviewers a record of what was rejected and why.
-    """
+def _write_rejection_note(
+    project_dir: Path, workflow: str, step_num: int, feedback: str,
+) -> Path:
+    """Write a HITL rejection note alongside the step artifact."""
     run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
     run_dir.mkdir(parents=True, exist_ok=True)
     note_file = run_dir / f"step-{step_num:02d}-hitl-rejected.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     content = (
-        f"---\nworkflow: {workflow}\nstep: {step_num}\nstatus: rejected\ntimestamp: {timestamp}\n---\n\n"
+        f"---\nworkflow: {workflow}\nstep: {step_num}\nstatus: rejected\n"
+        f"timestamp: {timestamp}\n---\n\n"
         f"# HITL Rejection — Step {step_num}\n\n"
         f"**Timestamp:** {timestamp}\n\n"
     )
@@ -116,29 +116,19 @@ def _write_rejection_note(project_dir: Path, workflow: str, step_num: int, feedb
 
 
 def _load_prior_outputs_from_disk(
-    project_dir: Path, workflow: str, steps: list, up_to_step: int
+    project_dir: Path, workflow: str, steps: list, up_to_step: int,
 ) -> list:
-    """
-    Load step outputs from artifact files for steps < up_to_step.
-
-    Used by --from-step N to reconstruct workflow context from prior run artifacts
-    without re-dispatching those steps.
-    """
+    """Load step outputs from artifact files for steps < up_to_step."""
     run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
     prior_outputs = []
-
     for step in steps:
         if step.number >= up_to_step:
             break
         if step.is_hitl or not step.agent or not step.task:
             continue
-
-        # Glob for the artifact file (step number + agent + task)
-        pattern = f"step-{step.number:02d}-{step.agent}-{step.task}.md"
-        artifact = run_dir / pattern
+        artifact = run_dir / f"step-{step.number:02d}-{step.agent}-{step.task}.md"
         if artifact.exists():
             raw = artifact.read_text(encoding="utf-8")
-            # Strip YAML frontmatter before the content
             content = re.sub(r'^---\n.*?\n---\n\n?', '', raw, flags=re.DOTALL, count=1)
             prior_outputs.append({
                 "step": step.number,
@@ -147,136 +137,99 @@ def _load_prior_outputs_from_disk(
                 "host": "disk",
                 "output": content,
             })
-            print(f"  [loaded from disk] step {step.number}: {step.agent}.{step.task} ({artifact.name})")
+            print(f"  [loaded from disk] step {step.number}: {step.agent}.{step.task}")
         else:
             print(
                 f"  [warning] artifact not found for step {step.number} "
                 f"({step.agent}.{step.task}) — context gap",
                 file=sys.stderr,
             )
-
     return prior_outputs
 
 
 def _build_user_message(task: str, user_context: str, prior_outputs: list) -> str:
-    """
-    Build the user message for a step, optionally prepending prior step outputs
-    as context so the agent has the full workflow state.
-    """
+    """Build the user message for a step, prepending prior step outputs as context."""
     parts = []
-
     if prior_outputs:
         parts.append("## Prior step outputs (workflow context)\n")
         for entry in prior_outputs:
-            parts.append(f"### Step {entry['step']}: {entry['agent']}.{entry['task']}\n")
+            label = f"[{entry.get('workflow', '')} — " if entry.get('workflow') else "["
+            parts.append(
+                f"### {label}Step {entry['step']}: {entry['agent']}.{entry['task']}]\n"
+            )
             output = entry["output"]
             if len(output) > 3000:
                 output = output[:3000] + "\n\n[... truncated for context window ...]"
             parts.append(output)
             parts.append("")
         parts.append("---\n")
-
     parts.append(f"Execute task: **{task}**")
     if user_context:
         parts.append(f"\n{user_context}")
-
     return "\n".join(parts)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        prog="compass run",
-        description="Compass orchestrator v0.4-alpha-3",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=textwrap.dedent("""\
-            Examples:
-              # Print the dispatch graph for setup-product (no API calls):
-              python3 -m compass.orchestrator.run setup-product --dry-run
-
-              # Run only Step 1 with inline context:
-              python3 -m compass.orchestrator.run setup-product --step 1 \\
-                  --context "We are building a personal finance app for millennials."
-
-              # Run the full workflow (writes artifacts to docs/orchestrator-runs/):
-              python3 -m compass.orchestrator.run setup-product \\
-                  --context "We are building a personal finance app for millennials."
-
-              # After a HITL rejection on step 3, resume from step 3 (loads steps 1-2 from disk):
-              python3 -m compass.orchestrator.run setup-product --from-step 3
-
-              # Run without writing files (stdout only):
-              python3 -m compass.orchestrator.run setup-product --no-write \\
-                  --context "..."
-
-              # Multi-host: Reviewer step dispatches to OpenAI (if OPENAI_API_KEY set):
-              export ANTHROPIC_API_KEY=sk-ant-...
-              export OPENAI_API_KEY=sk-...
-              python3 -m compass.orchestrator.run build --step 5
-        """),
-    )
-    parser.add_argument("workflow", help="Workflow name (e.g., setup-product)")
-    parser.add_argument(
-        "--project-dir",
-        default=".",
-        metavar="PATH",
-        help="Root of the project repo (default: current directory)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print the dispatch graph without executing any steps",
-    )
-    parser.add_argument(
-        "--step",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Execute only step N (1-indexed)",
-    )
-    parser.add_argument(
-        "--from-step",
-        type=int,
-        default=None,
-        metavar="N",
-        dest="from_step",
-        help="Resume from step N, loading steps 1..N-1 from prior artifact files",
-    )
-    parser.add_argument(
-        "--context",
-        default="",
-        metavar="TEXT",
-        help="Inline context for the first agent step (skips interactive prompt)",
-    )
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Model ID override for whichever host is selected (default: per-host default)",
-    )
-    parser.add_argument(
-        "--no-write",
-        action="store_true",
-        help="Print output to stdout only; do not write artifact files",
-    )
-    args = parser.parse_args(argv)
-
-    project_dir = Path(args.project_dir).resolve()
-    compass_dir = project_dir / "compass"
-    workflow_file = compass_dir / "workflows" / f"{args.workflow}.md"
-
-    if not workflow_file.exists():
-        print(
-            f"Error: workflow file not found: {workflow_file}\n"
-            f"  Make sure --project-dir points to a Compass repo root.",
-            file=sys.stderr,
+def _cross_workflow_context(workflow_name: str, prior_outputs: list, artifact_paths: list) -> str:
+    """
+    Build a context summary to pass from the end of one workflow into the
+    first step of the next. Keeps it compact — just enough for the next
+    agent to know what was produced and where to find the artifacts.
+    """
+    lines = [f"## Completed workflow: {workflow_name}\n"]
+    if artifact_paths:
+        lines.append("**Artifacts written:**")
+        for p in artifact_paths:
+            lines.append(f"  - {p}")
+        lines.append("")
+    if prior_outputs:
+        last = prior_outputs[-1]
+        lines.append(
+            f"**Last step:** {last['agent']}.{last['task']} "
+            f"(host: {last.get('host', 'unknown')})"
         )
-        sys.exit(1)
+        summary = last["output"].strip()[:800]
+        if len(last["output"].strip()) > 800:
+            summary += "\n[... see artifact for full output ...]"
+        lines.append(f"\n**Output summary:**\n{summary}")
+    return "\n".join(lines)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Core workflow runner — returns (prior_outputs, artifact_paths)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_workflow(
+    workflow_name: str,
+    project_dir: Path,
+    compass_dir: Path,
+    context: str = "",
+    model: str = None,
+    no_write: bool = False,
+    only_step: int = None,
+    from_step: int = None,
+    initial_prior_outputs: list = None,
+    dry_run: bool = False,
+) -> tuple:
+    """
+    Execute a single workflow dispatch graph.
+
+    Returns (prior_outputs, artifact_paths):
+      prior_outputs  — list of step output dicts (step, agent, task, host, output)
+      artifact_paths — list of relative path strings for written artifacts
+    """
     from .graph import load_workflow
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host
 
-    steps = load_workflow(workflow_file)
+    workflow_file = compass_dir / "workflows" / f"{workflow_name}.md"
+    if not workflow_file.exists():
+        print(
+            f"Error: workflow file not found: {workflow_file}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
+    steps = load_workflow(workflow_file)
     if not steps:
         print(
             f"Warning: no dispatch steps found in {workflow_file}.\n"
@@ -286,17 +239,15 @@ def main(argv=None):
         )
         sys.exit(1)
 
-    # --- dry-run: print graph with host info ---
-    if args.dry_run:
-        print(f"\nDispatch graph: {args.workflow}")
+    # ── dry-run ──────────────────────────────────────────────────────────────
+    if dry_run:
+        print(f"\nDispatch graph: {workflow_name}")
         print(f"{'─' * 50}")
         for s in steps:
             if s.is_hitl:
-                marker = "[HITL]"
-                label = "human gate"
+                marker, label = "[HITL]", "human gate"
             elif s.agent and s.task:
                 marker = f"[{s.agent}.{s.task}]"
-                # Try to show preferred_hosts from agent file
                 agent_file = None
                 for subdir in ("agents", "roles"):
                     candidate = compass_dir / subdir / (s.agent_file or f"{s.agent}.md")
@@ -306,45 +257,43 @@ def main(argv=None):
                 if agent_file:
                     ph = _read_preferred_hosts(agent_file)
                     selected = select_host(ph)
-                    host_label = f"→ {selected or 'NO HOST AVAILABLE'} (preferred: {ph})"
+                    label = f"→ {selected or 'NO HOST AVAILABLE'} (preferred: {ph})"
                 else:
-                    host_label = f"→ {compass_dir / 'agents' / (s.agent_file or '')}"
-                label = host_label
+                    label = f"→ agent file not found"
             else:
-                marker = "[workflow]"
-                label = s.title
-            print(f"  Step {s.number:2d}  {marker:40s}  {label}")
+                marker, label = "[workflow]", s.title
+            print(f"  Step {s.number:2d}  {marker:45s}  {label}")
         print()
-        return
+        return [], []
 
-    # --- execution mode ---
-    first_step = True
-    prior_outputs = []
+    # ── execution ─────────────────────────────────────────────────────────────
+    prior_outputs = list(initial_prior_outputs or [])
+    artifact_paths = []
 
-    # --from-step N: load prior step outputs from disk, skip steps < N
-    if args.from_step is not None:
-        print(f"\nResuming from step {args.from_step} — loading prior step outputs from disk …")
-        prior_outputs = _load_prior_outputs_from_disk(
-            project_dir, args.workflow, steps, args.from_step
+    # --from-step: load prior steps from disk
+    if from_step is not None:
+        print(f"\nResuming from step {from_step} — loading prior outputs from disk …")
+        disk_outputs = _load_prior_outputs_from_disk(
+            project_dir, workflow_name, steps, from_step
         )
-        print(f"  {len(prior_outputs)} prior step(s) loaded.\n")
+        prior_outputs = list(initial_prior_outputs or []) + disk_outputs
+        print(f"  {len(disk_outputs)} prior step(s) loaded.\n")
 
-    # Track last artifact written so HITL gates can surface it
     last_artifact_path = None
     last_agent_output = ""
+    first_step = True
 
     for step in steps:
-        # --step N: only this step
-        if args.step is not None and step.number != args.step:
+        if only_step is not None and step.number != only_step:
             continue
-        # --from-step N: skip steps before N
-        if args.from_step is not None and step.number < args.from_step:
+        if from_step is not None and step.number < from_step:
             continue
 
         print(f"\n{'─' * 60}")
-        print(f"Step {step.number}: {step.title}")
+        print(f"[{workflow_name}] Step {step.number}: {step.title}")
         print(f"{'─' * 60}")
 
+        # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:
             result = handle_hitl_gate(
                 step.number,
@@ -353,25 +302,26 @@ def main(argv=None):
                 last_output=last_agent_output,
             )
             if not result["approved"]:
-                if not args.no_write and result["feedback"] is not None:
+                if not no_write:
                     note_path = _write_rejection_note(
-                        project_dir, args.workflow, step.number, result["feedback"]
+                        project_dir, workflow_name, step.number, result["feedback"]
                     )
-                    print(f"[rejection note written → {note_path.relative_to(project_dir)}]")
+                    print(f"[rejection note → {note_path.relative_to(project_dir)}]")
                 print(
-                    f"\nWorkflow halted at HITL gate (step {step.number}).\n"
-                    f"To rerun from this step after making changes:\n"
-                    f"  python3 -m compass.orchestrator.run {args.workflow} "
-                    f"--from-step {step.number - 1 if step.number > 1 else 1}"
+                    f"\nWorkflow '{workflow_name}' halted at HITL gate (step {step.number}).\n"
+                    f"To rerun from this step:\n"
+                    f"  python3 -m compass.orchestrator.run {workflow_name} "
+                    f"--from-step {max(1, step.number - 1)}"
                 )
                 sys.exit(0)
             continue
 
+        # ── workflow-level steps (no agent) ──────────────────────────────────
         if not step.agent or not step.task:
             print(f"  [workflow-level step — no agent dispatch; handle manually]")
             continue
 
-        # Resolve agent file: prefer compass/agents/, fall back to compass/roles/
+        # ── resolve agent file ───────────────────────────────────────────────
         agent_file = None
         for subdir in ("agents", "roles"):
             candidate = compass_dir / subdir / (step.agent_file or f"{step.agent}.md")
@@ -381,13 +331,12 @@ def main(argv=None):
 
         if agent_file is None:
             print(
-                f"Warning: agent file for '{step.agent}' not found "
-                f"in compass/agents/ or compass/roles/. Skipping step.",
+                f"Warning: agent file for '{step.agent}' not found. Skipping.",
                 file=sys.stderr,
             )
             continue
 
-        # Read preferred_hosts and select best available host
+        # ── host selection ───────────────────────────────────────────────────
         preferred_hosts = _read_preferred_hosts(agent_file)
         host = select_host(preferred_hosts)
 
@@ -395,21 +344,22 @@ def main(argv=None):
             print(
                 f"Warning: no host available for step {step.number} "
                 f"({step.agent}.{step.task}).\n"
-                f"  Agent preferred_hosts: {preferred_hosts}\n"
+                f"  preferred_hosts: {preferred_hosts}\n"
                 f"  Set one of: ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY",
                 file=sys.stderr,
             )
             continue
 
-        print(f"Agent file : {agent_file.relative_to(project_dir)}")
+        print(f"Agent      : {agent_file.relative_to(project_dir)}")
         print(f"Task       : {step.task}")
-        print(f"Host       : {host} (preferred_hosts: {preferred_hosts})")
-        if args.model:
-            print(f"Model      : {args.model} (override)")
+        print(f"Host       : {host}  (preferred: {preferred_hosts})")
+        if model:
+            print(f"Model      : {model} (override)")
         if prior_outputs:
-            print(f"Context    : {len(prior_outputs)} prior step(s) passed as context")
+            print(f"Context    : {len(prior_outputs)} prior step(s) passed")
 
-        inline = args.context if (first_step and args.from_step is None) else ""
+        # First step of this workflow uses --context; subsequent steps prompt
+        inline = context if first_step else ""
         first_step = False
 
         user_context = _collect_input(step.title, inline)
@@ -418,41 +368,175 @@ def main(argv=None):
         print(f"\nDispatching to {host} …")
         try:
             result = dispatch_to_host(
-                host,
-                str(agent_file),
-                step.task,
-                user_message,
-                model=args.model,
+                host, str(agent_file), step.task, user_message, model=model,
             )
         except (RuntimeError, ImportError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 
         print(f"\n{'=' * 60}")
-        print(f"[Step {step.number} output — {step.agent}.{step.task} via {host}]")
+        print(f"[{workflow_name} — Step {step.number}: {step.agent}.{step.task} via {host}]")
         print(f"{'=' * 60}\n")
         print(result)
         print()
 
-        if not args.no_write:
+        if not no_write:
             artifact_path = _write_artifact(
-                project_dir, args.workflow, step.number,
+                project_dir, workflow_name, step.number,
                 step.agent, step.task, result,
             )
-            print(f"[artifact written → {artifact_path.relative_to(project_dir)}]")
+            rel = str(artifact_path.relative_to(project_dir))
+            print(f"[artifact → {rel}]")
+            artifact_paths.append(rel)
             last_artifact_path = artifact_path
         else:
             last_artifact_path = None
 
         last_agent_output = result
-
         prior_outputs.append({
             "step": step.number,
             "agent": step.agent,
             "task": step.task,
             "host": host,
+            "workflow": workflow_name,
             "output": result,
         })
+
+    return prior_outputs, artifact_paths
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="compass run",
+        description="Compass orchestrator v0.4-alpha-4",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""\
+            Single workflow:
+              python3 -m compass.orchestrator.run setup-product --dry-run
+              python3 -m compass.orchestrator.run setup-product \\
+                --context "Personal finance app for millennials."
+
+            Pipeline — PM → Architect → Build (cross-workflow handoff):
+              python3 -m compass.orchestrator.run \\
+                --pipeline create-brief,create-bet-architecture,build \\
+                --context "We are building a crypto portfolio tracker."
+
+            Resume after HITL rejection on step 3:
+              python3 -m compass.orchestrator.run setup-product --from-step 3
+
+            Multi-host (Reviewer → Codex when OPENAI_API_KEY set):
+              export ANTHROPIC_API_KEY=sk-ant-...
+              export OPENAI_API_KEY=sk-...
+              python3 -m compass.orchestrator.run build
+        """),
+    )
+    parser.add_argument(
+        "workflow",
+        nargs="?",
+        help="Workflow name (e.g., setup-product). Omit when using --pipeline.",
+    )
+    parser.add_argument("--project-dir", default=".", metavar="PATH")
+    parser.add_argument(
+        "--pipeline",
+        default=None,
+        metavar="W1,W2,…",
+        help="Comma-separated list of workflows to run in sequence",
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--step", type=int, default=None, metavar="N")
+    parser.add_argument(
+        "--from-step", type=int, default=None, metavar="N", dest="from_step",
+    )
+    parser.add_argument("--context", default="", metavar="TEXT")
+    parser.add_argument("--model", default=None)
+    parser.add_argument("--no-write", action="store_true")
+    args = parser.parse_args(argv)
+
+    if not args.workflow and not args.pipeline:
+        parser.error("Provide a workflow name or --pipeline W1,W2,…")
+    if args.workflow and args.pipeline:
+        parser.error("Provide either a workflow name or --pipeline, not both.")
+
+    project_dir = Path(args.project_dir).resolve()
+    compass_dir = project_dir / "compass"
+
+    # ── single workflow ───────────────────────────────────────────────────────
+    if args.workflow:
+        _run_workflow(
+            workflow_name=args.workflow,
+            project_dir=project_dir,
+            compass_dir=compass_dir,
+            context=args.context,
+            model=args.model,
+            no_write=args.no_write,
+            only_step=args.step,
+            from_step=args.from_step,
+            dry_run=args.dry_run,
+        )
+        return
+
+    # ── pipeline mode ─────────────────────────────────────────────────────────
+    workflow_names = [w.strip() for w in args.pipeline.split(",") if w.strip()]
+    if not workflow_names:
+        parser.error("--pipeline requires at least one workflow name.")
+
+    if args.dry_run:
+        for wf in workflow_names:
+            _run_workflow(
+                workflow_name=wf,
+                project_dir=project_dir,
+                compass_dir=compass_dir,
+                dry_run=True,
+            )
+        return
+
+    print(f"\n{'═' * 60}")
+    print(f"PIPELINE: {' → '.join(workflow_names)}")
+    print(f"{'═' * 60}")
+
+    accumulated_outputs = []
+    accumulated_paths = []
+    next_context = args.context
+
+    for idx, wf_name in enumerate(workflow_names):
+        print(f"\n{'═' * 60}")
+        print(f"PIPELINE [{idx + 1}/{len(workflow_names)}]: {wf_name}")
+        print(f"{'═' * 60}")
+
+        wf_outputs, wf_paths = _run_workflow(
+            workflow_name=wf_name,
+            project_dir=project_dir,
+            compass_dir=compass_dir,
+            context=next_context,
+            model=args.model,
+            no_write=args.no_write,
+            # --step and --from-step only apply to the first workflow in pipeline
+            only_step=args.step if idx == 0 else None,
+            from_step=args.from_step if idx == 0 else None,
+            initial_prior_outputs=accumulated_outputs,
+        )
+
+        accumulated_outputs.extend(wf_outputs)
+        accumulated_paths.extend(wf_paths)
+
+        # Build cross-workflow context for the next workflow's first step
+        if idx < len(workflow_names) - 1:
+            next_context = _cross_workflow_context(wf_name, wf_outputs, wf_paths)
+            print(f"\n[pipeline] '{wf_name}' complete — handing off to '{workflow_names[idx + 1]}'")
+            if wf_paths:
+                print(f"[pipeline] artifacts: {', '.join(wf_paths)}")
+
+    print(f"\n{'═' * 60}")
+    print(f"PIPELINE COMPLETE: {' → '.join(workflow_names)}")
+    print(f"Total steps dispatched: {len(accumulated_outputs)}")
+    print(f"Artifacts written: {len(accumulated_paths)}")
+    for p in accumulated_paths:
+        print(f"  {p}")
+    print(f"{'═' * 60}\n")
 
 
 if __name__ == "__main__":
