@@ -2069,3 +2069,30 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Files touched (2):**
 - `compass/workflows/retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md` — consumer signals section added; `includes_artifact_analysis: true`
 - `compass/workflows/improvements.md` — this entry. Counter: v0.4.0-alpha-3=#58 → consumer-retro-signals=#59 (1 of 5 before Retro #013).
+
+---
+
+### 2026-06-09 — Consumer retro anti-patterns promoted to engineer.md + /build checklist (v0.3.35)
+
+**Source:** CB-3.3 consumer retro signals (improvement #59). 4 anti-patterns promoted to framework.
+
+**Changes (IMPLEMENTED — v0.3.35):**
+
+**`engineer.md`:**
+- Core principles: `[cross-artifact-sweep-on-contract-shift]` added — when any contract changes, sweep all referencing artifacts before PR opens; 5+ consumer instances cited
+- implement-story work step 6: `[empty-numeric-input-zero-trap]` check added — numeric inputs must handle empty vs zero as distinct states
+- implement-story work step 7 (new): pre-PR contract-shift sweep step — grep for all references to changed contract, fix all consumers, log DRI Decision
+- implement-story postconditions: 2 new items — contract-shift sweep complete + numeric zero-trap checked
+- Anti-patterns: `[cross-artifact-sweep-on-contract-shift]` + `[empty-numeric-input-zero-trap]` named
+
+**`build.md`:**
+- Workflow-level verification checklist: 3 new items — `[rsc-prop-serialization]` check + `[server-action-file-export-purity]` check + `[cross-artifact-sweep-on-contract-shift]` sweep (all "confirmed or DRI Risk logged" shape)
+
+**Files touched (3):**
+- `compass/agents/engineer.md` — v0.3.29 → v0.3.35; core principles + implement-story work + postconditions + anti-patterns
+- `compass/workflows/build.md` — v0.3.23 → v0.3.35; verification checklist +3 items
+- `compass/workflows/improvements.md` — this entry. Counter: consumer-retro-signals=#59 → v0.3.35=#60 (2 of 5 before Retro #013).
+
+**Watch for:**
+- `[cross-artifact-sweep-on-contract-shift]` is now in engineer.md but not yet in canon.md — 5+ instances qualify for codification. Log as improvement #61 if the next session confirms we want to write the canon entry.
+- `[empty-numeric-input-zero-trap]` — specific to HTML numeric inputs; watch whether it appears in non-HTML contexts (native mobile number inputs have the same trap). Could generalize.

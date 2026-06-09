@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: []
-version: 0.3.23
+version: 0.3.35
 ---
 
 # Workflow: /build
@@ -175,6 +175,9 @@ If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase,
 Mirrors per-task postconditions + cross-agent invariants.
 
 - [ ] (Step 1 — engineer.implement-story) Code implements story's AC; unit + API + component tests cover happy + unhappy paths; production build green with runtime-artifact inspection confirming framework registration; runtime-config audit clean; copy matches copy doc verbatim; PR open with full template + ADR refs
+- [ ] (Step 1 — pre-PR) **`[rsc-prop-serialization]`** checked if story touches RSC boundary: Server→Client props are JSON-serializable or Server Actions — no functions, class instances, Promises; confirmed or DRI Risk logged
+- [ ] (Step 1 — pre-PR) **`[server-action-file-export-purity]`** checked if story adds/touches `"use server"` files: all exports are `async` functions — no non-async exports; confirmed or DRI Risk logged
+- [ ] (Step 1 — pre-PR) **`[cross-artifact-sweep-on-contract-shift]`** complete if story changed any contract: DRI Decision logged confirming all referencing artifacts swept (components · API clients · tests · config · docs · env vars); no stale references remain
 - [ ] (Step 2 — reviewer.write-e2e-tests) E2E tests in `e2e/`; AC user flows covered; CI configs version-controlled
 - [ ] (Step 3 — reviewer.review-pr) PR comment posted in documented format; every finding has File · Rule violated · Issue · Fix; BLOCKERs are real BLOCKERs (not softened to ISSUE); Step 0 framework-registration check completed if PR touches framework-discovered surfaces
 - [ ] (Step 3 — security-reviewer if applicable) Second PR comment posted if diff touched auth/PII/payments/secrets/external input/sessions

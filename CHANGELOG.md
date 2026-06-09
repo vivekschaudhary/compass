@@ -24,6 +24,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `--from-step N` flag: resume from step N, loading steps 1..N-1 from prior artifact files on disk; enables rerun after HITL rejection without re-dispatching earlier steps
   - Rejection note includes exact `--from-step` command to rerun
 
+## [0.3.35] — 2026-06-09
+
+### Added
+
+- `[cross-artifact-sweep-on-contract-shift]` promoted to `engineer.md` core principles + new pre-PR sweep step (implement-story step 7) + postcondition. 5+ consumer instances (CB-2.2/2.5/3.1/3.2/3.3 ×2). When any contract changes, sweep all referencing artifacts before PR opens and log DRI Decision.
+- `[empty-numeric-input-zero-trap]` added to `engineer.md` — numeric inputs must treat empty vs zero as explicitly distinct states; `<input type="number">` delivers `0` when empty.
+- `/build` workflow-level verification checklist: 3 new pre-merge items — `[rsc-prop-serialization]` + `[server-action-file-export-purity]` + `[cross-artifact-sweep-on-contract-shift]`, each "confirmed or DRI Risk logged."
+
 ## [0.3.34] — 2026-06-09
 
 ### Added
