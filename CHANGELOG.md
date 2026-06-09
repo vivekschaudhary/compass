@@ -14,6 +14,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.32] — 2026-06-09
+
+> **Scanner agent migrated** — `compass/roles/scanner.md` → `compass/agents/scanner.md`. Auto-invoked by `/build`; needed for full MVP workflow coverage. **Counter #55 — fires Retro #011.**
+
+### Added
+
+- **`compass/agents/scanner.md`** (NEW, v0.3.32, 5423 chars): `preferred_hosts: [claude, codex, gemini]`. 2 tasks: `scan-bet` (full quality scan: phase detection → check catalog → findings with confidence → suppression preservation → scan-report.md + DRI Issues) · `scan-phase` (single-phase aggregate scan). 5 refusal rules. Key principles: findings-not-failures · suppressions-not-overrides · never-self-assess · preserve-suppressions-across-runs.
+
+### Changed
+
+- **`AGENTS.md`** — Scanner: legacy → ✅ v0.3.32.
+
 ## [0.3.31] — 2026-06-09
 
 > **Support agent migrated** — `compass/roles/support.md` → `compass/agents/support.md`. 3 tasks: `triage-bug` · `triage-incident` · `supply-user-pain`. Needed for `/fix` + `/triage` MVP workflows. **Counter #54 (4 of 5 before Retro #011).**

@@ -74,7 +74,7 @@ v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surfac
 | Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md` (+ `.codex/prompts/security-reviewer.md`) | legacy |
 | Tech Writer                                | `compass/roles/tech-writer.md`                                   | legacy           |
 | Delivery Manager (was Project Manager)     | `compass/agents/delivery-manager.md`                             | ✅ v0.3.15       |
-| Scanner (read-only; produces findings)     | `compass/roles/scanner.md`                                       | legacy           |
+| Scanner (read-only; produces findings)     | `compass/agents/scanner.md`                                      | ✅ v0.3.32       |
 
 When playing an agent, **read its full file from the source-of-truth path above**. For migrated agents (✅), the file is self-sufficient and includes its own task definitions. For legacy roles, load the role file + read the workflow file for task steps (v0.3.0-alpha-shape workflows still embed step bodies).
 
