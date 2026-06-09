@@ -2096,3 +2096,17 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Watch for:**
 - `[cross-artifact-sweep-on-contract-shift]` is now in engineer.md but not yet in canon.md — 5+ instances qualify for codification. Log as improvement #61 if the next session confirms we want to write the canon entry.
 - `[empty-numeric-input-zero-trap]` — specific to HTML numeric inputs; watch whether it appears in non-HTML contexts (native mobile number inputs have the same trap). Could generalize.
+
+---
+
+### 2026-06-09 — `[cross-artifact-sweep-on-contract-shift]` codified — 18th Compass-original; 5th enforcement-class member (v0.3.36)
+
+**Friction:** Pattern was in `engineer.md` anti-patterns + principle as of v0.3.35 but not in `canon.md`. 5+ instances across consumer projects qualifies for full codification (threshold for Compass-originals is 3; this one waited for more instances due to its cross-artifact scope). Enforcement class grows to 5, now the largest class.
+
+**Change (IMPLEMENTED — v0.3.36):** `[cross-artifact-sweep-on-contract-shift]` canon entry written. Covers: what counts as a contract, sweep targets, DRI Decision requirement, 5 instances cited (CB-2.2/2.5/3.1/3.2/3.3 ×2), distinction from `[mechanical-output-verification]`, forward-link candidates. AGENTS.md catalog: 17 → 18 patterns; enforcement (4) → (5).
+
+**Files touched (3):**
+- `compass/framework/canon.md` — new `[cross-artifact-sweep-on-contract-shift]` entry
+- `AGENTS.md` — catalog: 7 shapes / 17 → 18 patterns; enforcement (4) → (5)
+- `CHANGELOG.md` — v0.3.36 entry
+- `compass/workflows/improvements.md` — this entry. Counter: v0.3.35=#60 → v0.3.36=#61 (3 of 5 before Retro #013).

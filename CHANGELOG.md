@@ -24,6 +24,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `--from-step N` flag: resume from step N, loading steps 1..N-1 from prior artifact files on disk; enables rerun after HITL rejection without re-dispatching earlier steps
   - Rejection note includes exact `--from-step` command to rerun
 
+## [0.3.36] — 2026-06-09
+
+### Added
+
+- `[cross-artifact-sweep-on-contract-shift]` canon entry — 18th Compass-original, 5th enforcement-class member. When any contract changes, sweep all referencing artifacts before PR opens; log DRI Decision. 5 instances across CB-2.2/2.5/3.1/3.2/3.3. Applied at implement-story step 7. AGENTS.md: enforcement (4) → (5); catalog 17 → 18 patterns.
+
 ## [0.3.35] — 2026-06-09
 
 ### Added
