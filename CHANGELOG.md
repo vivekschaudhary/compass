@@ -14,6 +14,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.30] — 2026-06-09
+
+> **Principle #17: Minimize friction — consumer-project evidence promoted to AGENTS.md cross-cutting principle.** Friction is now a first-class failure mode with a named anti-pattern (`ceremony-without-constraint`) and a measurable definition. **Counter #53 (3 of 5 before Retro #011).**
+
+### Changed
+
+- **`AGENTS.md`** — Cross-cutting principle #17 added: "Minimize friction." Every agent interaction and workflow step must not increase user decisions/prompts/actions beyond what the task genuinely demands. Measurable definition: human decisions per workflow run from clone to first artifact. Anti-pattern: `ceremony-without-constraint`. Origin cited: consumer project evidence 2026-06-09 (crypto app run, friction caused abandonment).
+
 ## [0.3.29] — 2026-06-09
 
 > **Engineer agent prod-parity discipline — improvement #52.** Three new principles + two named Next.js anti-patterns + postcondition hardening. Direct response to two prod-only failures on CB-3.3 (RSC prop serialization + "use server" export purity) invisible to 541 tests.
