@@ -2006,3 +2006,21 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **2 instances of the same failure class in 24 hours** — RSC contract + use-server contract are both "Next.js App Router runtime contract invisible to local tooling." This is a codification-ready META-pattern: `[framework-runtime-contract-invisible-to-local-tooling]` (or a Next.js-specific appendix). Threshold approaching — if a 3rd instance surfaces, codify.
 - **Where these anti-patterns live** — they are Next.js/Vercel specific, not Compass-universal. Candidate home: `compass/framework/patterns/nextjs-vercel.md` as a platform-specific appendix, OR inlined in Engineer agent as named refusal-triggers for Next.js projects.
 - **The Reviewer didn't catch these either** — e2e tests passed. This is a Reviewer scope limit, not an Engineer limit alone. Both agents need awareness of "local-invisible runtime contracts." Feeds `[reviewer-scope-separation]` (queued codification candidate, post-MVP).
+
+---
+
+### 2026-06-09 — `[discipline-as-muscle-memory]` codified — 17th Compass-original; 3rd scope-discipline class member (v0.3.34)
+
+**Friction:** Retro #011 executed the PROMOTE recommendation from Retro #010 (reduce counter-visibility apparatus for retro cadence after 7 consecutive on-time retros), but the actual canon.md entry hadn't shipped. Pattern described in retros, referenced in improvements, but not formally codified. Drift between "PROMOTE executed" and "canon entry written."
+
+**Change (IMPLEMENTED — v0.3.34):** `[discipline-as-muscle-memory]` canon entry written in `compass/framework/canon.md`. Establishes the discipline lifecycle complementary pair with `[hard-line-declaration]`: establish structural pressure (hard-line) → prove via 5+ consecutive on-time executions → reduce enforcement overhead (muscle-memory). Two anti-patterns named: `premature-scaffold-removal` + `scaffold-that-never-retires`. AGENTS.md catalog updated: 7 shapes / 17 patterns; scope-discipline class: 2 → 3 members.
+
+**Files touched (4):**
+- `compass/framework/canon.md` — new `[discipline-as-muscle-memory]` entry
+- `AGENTS.md` — catalog counter: 16 → 17 patterns; scope-discipline (2) → scope-discipline (3)
+- `CHANGELOG.md` — v0.3.34 entry
+- `compass/workflows/improvements.md` — this entry + counter v0.3.33=#56 → v0.3.34=#57 (2 of 3 before Retro #012).
+
+**Watch for:**
+- `[scaffold-reactivation]` — if a muscle-memory discipline breaks (misses after scaffold removal), the scaffold reactivates. 0 instances so far; candidate when it first happens.
+- `[three-altitude-rise-canon-promotion]` — declared in `[fractal-retro]` v0.3.17; 1 instance; codify after 2nd.

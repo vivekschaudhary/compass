@@ -14,6 +14,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.34] — 2026-06-09
+
+### Added
+
+- `[discipline-as-muscle-memory]` canon entry — 17th Compass-original, 3rd scope-discipline class member. When a discipline commitment fires on-time for 5+ consecutive instances, the enforcement scaffolding from `[hard-line-declaration]` can be reduced; habit is structural. Complementary pair with `[hard-line-declaration]` (v0.3.10): establish → prove → reduce overhead. One instance at codification: 7 consecutive on-time retros (#005–#011). Two anti-patterns named: `premature-scaffold-removal` (reducing before 5 consecutive) + `scaffold-that-never-retires` (keeping full apparatus after habit proven). AGENTS.md catalog updated: 7 shapes / 17 patterns; scope-discipline grows from 2 → 3 members.
+
 ## [0.3.33] — 2026-06-09
 
 > **Automation agent created (new — no legacy role) — completes Build pack per mvp.md.** Owns E2E tests + CI/CD + deploy + release; split from Reviewer (Reviewer → PR code review only). **Counter #56 (1 of 5 before Retro #012).**
