@@ -19,7 +19,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-bet-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
 - **Retro #010** (v0.4.0-alpha-2 → v0.4.0-alpha-2 + field learnings): [retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md](retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md) — **fired ON TIME at #50** (6th consecutive on-time retro). 2 field-signal improvements: friction-as-principle + Engineer prod-parity. First retro with consumer-project evidence (crypto app prod failures). `[discipline-as-muscle-memory]` watch-for validated: cadence held with tightened header prose.
 
-**Next retro fires after improvement #55.** (Retro #010 fired at #50 ON TIME 2026-06-09. Counter resets to #55 horizon.)
+**Next retro fires after improvement #55.** (v0.4.0-alpha-2+field = #51 (1 of 5 before Retro #011).)
 
 ## Template
 
@@ -1984,3 +1984,24 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - Implementation: add a `prod-parity` postcondition to `engineer.implement-story` — not a new test requirement but a code-discipline requirement.
 - The Reviewer's e2e tests verify behavior in CI; they can't catch prod-specific config divergence. This is a structural limit — the fix is defensive code, not more tests.
 - Consider adding a DRI Risk template for env-assumption flagging (e.g., `Risk: assumes STRIPE_KEY is base64-encoded in prod — verify before deploy`).
+
+---
+
+### 2026-06-09 — Two Next.js runtime contract violations in prod — concrete evidence shaping #50; two named anti-patterns surfaced
+
+**Friction:** Two post-merge production-only defects on CB-3.3 (crypto app) in 24 hours. Both invisible to `pnpm dev` + `pnpm build` + 541 passing tests. Both surface only on Vercel runtime. Form: "Next.js silently rejects the contract you wrote."
+
+- **PR #50:** RSC adapter prop serialization — functions can't cross the RSC boundary. `Server→Client` Component props must be JSON-serializable or Server Actions. Next.js accepts the code locally; Vercel runtime rejects it silently.
+- **PR #51:** "use server" file export purity — only async functions allowed in "use server" files. Non-async exports build fine locally; Vercel runtime breaks silently.
+
+**Change (LOGGED — not yet implemented):** This is the concrete implementation spec for improvement #50. The Engineer agent's prod-parity discipline must specifically name "framework runtime contracts that local tooling doesn't enforce" as a first-class risk category. Two anti-patterns named by the agent on the consuming project:
+
+- `[rsc-prop-serialization]` — Server→Client Component props must be JSON-serializable or Server Actions; no functions, no class instances, no non-serializable objects
+- `[server-action-file-export-purity]` — "use server" files must export only `async` functions; any non-async export silently breaks at Vercel runtime
+
+**Files touched (0):** Logged only. Implementation deferred — these shape how #50 is written, not a separate change.
+
+**Watch for:**
+- **2 instances of the same failure class in 24 hours** — RSC contract + use-server contract are both "Next.js App Router runtime contract invisible to local tooling." This is a codification-ready META-pattern: `[framework-runtime-contract-invisible-to-local-tooling]` (or a Next.js-specific appendix). Threshold approaching — if a 3rd instance surfaces, codify.
+- **Where these anti-patterns live** — they are Next.js/Vercel specific, not Compass-universal. Candidate home: `compass/framework/patterns/nextjs-vercel.md` as a platform-specific appendix, OR inlined in Engineer agent as named refusal-triggers for Next.js projects.
+- **The Reviewer didn't catch these either** — e2e tests passed. This is a Reviewer scope limit, not an Engineer limit alone. Both agents need awareness of "local-invisible runtime contracts." Feeds `[reviewer-scope-separation]` (queued codification candidate, post-MVP).
