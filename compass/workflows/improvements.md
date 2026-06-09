@@ -17,8 +17,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40**
 - **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-bet-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
+- **Retro #010** (v0.4.0-alpha-2 → v0.4.0-alpha-2 + field learnings): [retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md](retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md) — **fired ON TIME at #50** (6th consecutive on-time retro). 2 field-signal improvements: friction-as-principle + Engineer prod-parity. First retro with consumer-project evidence (crypto app prod failures). `[discipline-as-muscle-memory]` watch-for validated: cadence held with tightened header prose.
 
-**Next retro fires after improvement #50.** (v0.4.0-alpha-2 = #48 (2 of 5 before Retro #010).)
+**Next retro fires after improvement #55.** (Retro #010 fired at #50 ON TIME 2026-06-09. Counter resets to #55 horizon.)
 
 ## Template
 
@@ -1949,3 +1950,37 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 - **Real multi-host test** — dry-run verified; first live test needs real `OPENAI_API_KEY` + a build workflow step. Until that runs, the OpenAI adapter is structurally correct but field-unproven.
 - **PM dispatches to chatgpt (OpenAI API) before Claude** — PM's `preferred_hosts: [chatgpt, claude, ...]` means if `OPENAI_API_KEY` is set, PM goes to OpenAI API, NOT Claude. This is per-spec (ChatGPT preferred for PM), but may surprise users who expect PM → Claude. If needed, reorder PM's `preferred_hosts:` to `[claude, chatgpt, ...]`.
 - **`[host-preference-validation]` codification candidate** (queued memory 2026-06-08) — 1 instance still. This improvement adds a 2nd evidence point: host preference is now programmatically enforced by the orchestrator. If a 2nd misrouting case surfaces, codify.
+
+---
+
+### 2026-06-09 — "Minimize friction" added as explicit Compass principle — field signal from crypto app consumer run
+
+**Friction:** User ran Compass on a real consumer project (crypto app) and friction emerged as the single highest-impact barrier — not missing features, not wrong output, but workflow friction causing abandonment before completion. Friction was implicit in several patterns (`[no-padded-status]`, `[soft-spec-hardening]`, various anti-patterns) but never stated as a first-class obligation.
+
+**Change (LOGGED — not yet implemented):** Add "minimize friction" as an explicit named principle in AGENTS.md. Every agent and workflow change must not increase the steps, prompts, or decisions required of the user beyond what the task demands. Friction is a first-class failure mode, not a secondary concern.
+
+**Files touched (0):** Logged only. Implementation deferred.
+
+**Watch for:**
+- When implementing: principle placement matters — should sit near `[user-as-load-bearing-oversight]` (observability-class); both concern the user experience of operating Compass.
+- Candidate for `[friction-as-slo]` codification if a second concrete instance of friction-driven abandonment is observed in consumer testing.
+- Friction measurement is hard without a metric. Candidate metric: number of human decisions/prompts per workflow run. Establish baseline before adding a gate.
+
+---
+
+### 2026-06-09 — Engineer agent prod-parity discipline — runtime failures in prod despite passing e2e tests
+
+**Friction:** User ran a Compass-built crypto app and hit runtime failures in prod that didn't surface in e2e or automation tests. Tests passed; prod failed. The Reviewer already writes e2e + automation tests — the gap is not test coverage but **runtime environment divergence**: the code makes assumptions about env vars, API response shapes, config, and infra state that hold in staging but break in prod.
+
+**Change (LOGGED — not yet implemented):** Strengthen the Engineer agent with prod-parity discipline:
+1. **Failure-mode-first** — write error paths before happy paths; every external call has an explicit failure handler
+2. **Env-assumption flagging** — any assumption about env vars, secrets, config shape, or API response structure must be explicitly stated as a DRI Risk with `env: prod` tag
+3. **Defensive patterns** — null checks, type guards, graceful degradation mandatory on any data from external sources (APIs, databases, env vars)
+4. **No implicit prod assumptions** — code that behaves differently between local/staging/prod must be flagged at write time, not discovered at deploy time
+
+**Files touched (0):** Logged only. Implementation deferred. **Fires Retro #010.**
+
+**Watch for:**
+- Implementation: add a `prod-parity` postcondition to `engineer.implement-story` — not a new test requirement but a code-discipline requirement.
+- The Reviewer's e2e tests verify behavior in CI; they can't catch prod-specific config divergence. This is a structural limit — the fix is defensive code, not more tests.
+- Consider adding a DRI Risk template for env-assumption flagging (e.g., `Risk: assumes STRIPE_KEY is base64-encoded in prod — verify before deploy`).
