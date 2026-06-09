@@ -32,7 +32,7 @@ Canonical PR template content. Copied to .github/PULL_REQUEST_TEMPLATE.md
 - [ ] Unit tests added/updated
 - [ ] API tests added/updated
 - [ ] Component tests added/updated (frontend)
-- [ ] E2E tests added/updated (Codex)
+- [ ] E2E tests added/updated (Automation)
 - [ ] All tests pass locally
 - [ ] Accessibility checks pass (if UI)
 - [ ] Manual verification: <what was checked>

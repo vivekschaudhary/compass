@@ -1,4 +1,4 @@
-> **Status:** Early. Used by the author on real projects. Public for transparency, not actively soliciting users. Feedback welcome via Discussions; no support promises.
+> **Status:** Early alpha. Used by the author on real projects. Orchestrator v0.4-alpha-2 ships — clone + set `ANTHROPIC_API_KEY` + run `compass run setup-product`. Feedback welcome via Discussions; no support promises.
 
 # Compass
 
@@ -14,8 +14,8 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 
 - **Every initiative is a bet.** Foundation product, OKRs, features, architectural initiatives — all measurable bets with a hypothesis, key metric, and an outcome: **won / learning / inconclusive**.
 - **Bets contain stories.** Stories contain implementation, tests, fixes, ops.
-- **Agents own tasks; workflows sequence agents.** 13 agent files in `compass/agents/` (migrating incrementally from `compass/roles/`; **5 of 13 migrated as of v0.3.16**: pm + researcher + engineer (v0.3.14), delivery-manager (v0.3.15, renamed from project-manager), reviewer (v0.3.16). Remaining 8: support, designer, ux-writer, architect, enterprise-architect, security-reviewer, tech-writer, scanner — complete by v0.4). Each migrated agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; the methodology lives in the agent task definitions where it belongs.
-- **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter (e.g., `pm.md` runs on ChatGPT or Claude; `engineer.md` prefers CLI hosts with filesystem access). Paste any agent file into the host's system-prompt slot → it works. **Cross-host orchestration today is human-dispatched** (open the right host for the active step); **v0.4 ships the orchestrator** that walks dispatch graphs and dispatches agents per step automatically. **Default Reviewer ≠ Implementer** for review independence — Compass empirically validates Claude implements, Codex reviews; the cross-model split is preserved structurally via agent `preferred_hosts:`. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; removed in v0.4.
+- **Agents own tasks; workflows sequence agents.** 14 agent files in `compass/agents/` (**11 of 14 migrated**: pm · researcher · engineer · delivery-manager · reviewer · architect · designer · ux-writer · support · scanner · automation. Remaining 3 deferred: enterprise-architect · security-reviewer · tech-writer). Each agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; methodology lives in the agent task definitions.
+- **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter. Paste any agent file into the host's system-prompt slot → it works on ChatGPT, Claude, Codex, or Gemini. **The orchestrator (v0.4-alpha-2) walks dispatch graphs and dispatches each step to its preferred host automatically** — Engineer → Claude API, Reviewer → OpenAI API (Codex), preserving cross-model independence structurally. Run manually with `python3 -m compass.orchestrator.run <workflow>` or use any host interactively. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; per-agent `preferred_hosts:` is the source-of-truth.
 - **Discipline holds always.** Full review on every PR, no shortcuts under pressure.
 - **Decisions, Risks, Issues** logged at every stage (DRI logs).
 - **Retros are fractal** (`[fractal-retro]`, canon v0.3.17). Same `/retro` workflow shape applied at every altitude — role · workflow · bet · project · org · framework — with bottom-up consolidation. Patterns visible at the role/workflow level (e.g., recurring PR-redo loops) bubble up to project retros, then to org retros, then promote to canon. Agents log patterns mid-task to `docs/role-activity/<role>.md` + `docs/workflow-runs/<workflow>.md` so leaf-altitude retros have source data.
@@ -76,7 +76,37 @@ You invoke `/status`, `/scan`, `/metrics` on demand. `/plan`, `/dashboard`, `/me
 
 > **Phase transitions:** flip the artifact's `status:` field directly (`proposed` → `approved` → `in-build` → `shipped` → etc.). No canonical "advance" command — that's what status fields are for.
 
-## Get started
+## Get started (orchestrator — recommended)
+
+```bash
+git clone https://github.com/vivekschaudhary/compass
+cd your-project-repo
+# Copy the framework into your repo
+cp -r path/to/compass/compass ./
+cp path/to/compass/AGENTS.md ./
+
+# Install the anthropic SDK
+pip3 install anthropic --break-system-packages
+
+# Run your first workflow
+export ANTHROPIC_API_KEY=sk-ant-...
+python3 -m compass.orchestrator.run setup-product --dry-run   # see the steps
+python3 -m compass.orchestrator.run setup-product \
+  --context "We are building <your product description>."
+```
+
+For cross-model review (Engineer → Claude, Reviewer → OpenAI):
+
+```bash
+export OPENAI_API_KEY=sk-...
+python3 -m compass.orchestrator.run build --context "story-id: PROJ-43"
+```
+
+See `compass/orchestrator/README.md` for full options.
+
+## Get started (manual — any host)
+
+Read `SETUP.md`.
 
 ## Heads-up: AI tool memory persists across folder deletion
 

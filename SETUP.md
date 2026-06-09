@@ -201,8 +201,10 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 ├── SETUP.md                     ← this file
 │
 ├── compass/                     ← ★ THE FRAMEWORK (vendor-neutral)
-│   ├── roles/                   #   12 role definitions
-│   ├── workflows/               #   13 workflows (one per command)
+│   ├── agents/                  #   11 agent files migrated (14 total — 3 deferred in roles/)
+│   ├── roles/                   #   3 legacy roles pending migration (enterprise-architect · security-reviewer · tech-writer)
+│   ├── workflows/               #   15+ workflows (one per command; 4 as dispatch graphs)
+│   ├── orchestrator/            #   v0.4-alpha-2 multi-host orchestrator (python3 -m compass.orchestrator.run)
 │   ├── templates/               #   10 artifact templates
 │   └── config.yaml              #   team decisions
 │
@@ -227,59 +229,52 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 
 ## Picking which agent plays which role
 
-Per `[agent-agnostic-role-assignment]` (v0.3.8 — `compass/framework/canon.md`), Compass ships an agent registry + sensible defaults. To override:
-
-1. Open `compass/config.yaml`.
-2. Look at the `agents:` registry — supported agents include `claude`, `codex`, `openai` (ChatGPT/GPT API), `gemini`, `deepseek`, `codestral`, `apple` (marked unsupported), and `custom`. Each declares its invocation pattern (`cli` / `api` / `manual`) + context-loading convention + auth env var.
-3. Edit the `tool_assignments:` block to assign any registry agent to any role.
+As of v0.3.14, **each agent file declares its own `preferred_hosts:` in its frontmatter** — that is the source-of-truth for routing. The v0.4-alpha-2 orchestrator reads `preferred_hosts:` and dispatches each workflow step to the appropriate host automatically.
 
 ```yaml
-# Example: ChatGPT for PM-side roles, Claude for tech roles, Codex stays for review
-tool_assignments:
-  pm:                  openai     # ChatGPT for PM
-  researcher:          openai     # ChatGPT for research
-  designer:            gemini     # Gemini for design decisions
-  engineer:            claude     # Claude for engineering
-  reviewer:            codex      # MUST differ from engineer (independent model)
-  security_reviewer:   codex
-  ...
+# Inside compass/agents/engineer.md frontmatter
+preferred_hosts: [claude, codex, gemini]   # Claude first
+
+# Inside compass/agents/reviewer.md frontmatter
+preferred_hosts: [codex, gemini]           # NOT claude — enforces cross-model independence
 ```
 
-**Reviewer constraint:** `reviewer` and `security_reviewer` must use a **different model** than the implementer. Same-model reviewer + same-model author share aesthetic priors and miss what an independent-model reviewer catches (empirically validated during aura-app CB-1.4; see AGENTS.md "Tool division of labor").
+**To use the orchestrator** (recommended):
 
-**Defaults work out of the box.** If you change nothing, Compass uses Claude implements + Codex reviews — matching the empirically-validated split.
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...        # optional: enables Codex/Reviewer routing
+python3 -m compass.orchestrator.run build --context "story-id: PROJ-43"
+```
 
-**Non-default agents may require manual setup** depending on their type:
+The orchestrator selects the first host in `preferred_hosts:` that has credentials set. Dry-run with `--dry-run` to see which host each step routes to.
 
-- **CLI-based agents** (`claude`, `codex`, `gemini`): need a per-tool prompt directory (`.codex/prompts/<role>.md`, `.gemini/prompts/<role>.md`). Until v0.3.9 ships `compass/scripts/setup-agent.py` to generate these, copy the pattern from existing `.codex/prompts/reviewer.md` (it's a thin wrapper pointing at `compass/agents/<agent>.md` for migrated agents, or `compass/roles/<role>.md` for legacy ones during the v0.3.x grace period).
+**To use manually** (interactive, any host):
 
-- **API-based agents** (`openai`, `deepseek`, `codestral`): use an upstream adapter library — **LiteLLM recommended** (handles 100+ providers, unified API, Python + JS). Alternatives: **Vercel AI SDK** (TypeScript-first), **OpenRouter** (hosted proxy), **LangChain LLM providers**. Compass passes `compass/roles/<role>.md` as the system prompt; the adapter routes to the right provider given a model string (e.g., LiteLLM uses `openai/gpt-5`, `deepseek/deepseek-chat`, `mistral/codestral-latest`). Auth via standard env vars (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`).
+Paste any `compass/agents/<agent>.md` file into your LLM host's system-prompt slot. Agent files are self-sufficient — identity + principles + tasks + refusal rules + handoffs are all inlined.
 
-- **Apple Intelligence** (`apple`): flagged `unsupported: true` in the registry — system-level features only, no open API for arbitrary role-playing. Use `custom` if you need a non-standard Apple-side workflow.
+**Reviewer constraint:** `reviewer` and `security_reviewer` must use a **different model** than the implementer. `reviewer.md` declares `preferred_hosts: [codex, gemini]` (NOT claude) — enforcing cross-model independence at the file level, not config. Same-model reviewer + same-model author share aesthetic priors and miss what an independent-model reviewer catches.
 
-- **Custom**: declare your own invocation pattern in the registry. Use for self-hosted models, custom CLI wrappers, internal APIs.
-
-See `compass/config.yaml` registry `note:` for each agent's specific integration path.
+**Legacy:** `compass/config.yaml tool_assignments:` is deprecated since v0.3.14. Per-agent `preferred_hosts:` is the source-of-truth. Existing `tool_assignments:` entries are ignored by the orchestrator but harmless to leave.
 
 ## Adding more AI tools later
 
 The framework lives in `compass/`. To add Cursor, Cline, Windsurf, etc.:
 
-1. Add the tool to the `agents:` registry in `compass/config.yaml` with its invocation + context-loading details
-2. Create the tool's expected config folder (`.cursor/rules/`, `.clinerules`, etc.)
-3. Write thin wrappers that reference `compass/roles/<role>.md` and `compass/workflows/<workflow>.md`
-4. Assign roles to the new agent via `tool_assignments`
-5. `compass/` files don't change. Only the wrapper folder + a registry entry are added.
+1. Create the tool's expected config folder (`.cursor/rules/`, `.clinerules`, etc.)
+2. Write thin wrappers that paste `compass/agents/<agent>.md` (migrated) or `compass/roles/<role>.md` (legacy) as the system prompt, referencing `compass/workflows/<workflow>.md` for dispatch.
+3. Add the tool's credential env var to the orchestrator's host map (`compass/orchestrator/hosts/router.py`) if you want automated dispatch.
+4. `compass/agents/` and `compass/workflows/` files don't change. Only the wrapper folder is added.
 
 For tools with flatter customization (Copilot, Cline's single-file rules), concatenate the relevant role files instead of referencing.
 
 ## Customizing
 
-- **Roles:** edit `compass/roles/<role>.md`. All tools pick up the change.
+- **Agents:** edit `compass/agents/<agent>.md` (migrated agents) or `compass/roles/<role>.md` (3 legacy). All tools pick up the change.
 - **Workflows:** edit `compass/workflows/<workflow>.md`. Skills reference, don't duplicate.
 - **HITL strictness:** edit `compass/config.yaml` `hitl_level`.
 - **Connectors:** edit `.mcp.json` and `compass/config.yaml` `connectors`.
-- **New role:** add `compass/roles/<new>.md`, register in `AGENTS.md` and `compass/config.yaml`.
+- **New agent:** add `compass/agents/<new>.md` with `preferred_hosts:` frontmatter, register in `AGENTS.md`.
 - **New workflow:** add `compass/workflows/<new>.md` + a thin `.claude/skills/<new>/SKILL.md`.
 
 ## Starting fresh at the same folder path
@@ -321,15 +316,16 @@ After approving the product foundation, run `/setup-foundation-architecture`, th
 
 If anything feels broken, look at the workflow file that's running — workflows are plain markdown you can edit.
 
-## The principles, in 10 lines
+## The principles, in 11 lines
 
 1. Every initiative is a measurable bet (won / learning / inconclusive)
-2. Roles, not job titles — 12 product roles loaded as context
+2. Agents, not job titles — 14 self-sufficient agent files (11 migrated)
 3. Bets contain stories contain implementations
-4. Two tools, separated jobs: Claude implements, Codex reviews
+4. Cross-model independence: Claude implements, Codex/Gemini reviews — enforced via `preferred_hosts:` per agent
 5. Decisions, Risks, Issues logged at every stage
 6. HITL milestones — humans approve at meaningful gates
 7. Discipline holds always — no shortcuts under pressure
 8. Traceability end-to-end — everything links back to its source
 9. No silent skips — declined engagements get logged with rationale
-10. The framework is markdown — edit it freely as your team learns
+10. Minimize friction — every step avoids adding user decisions beyond task demands
+11. The framework is markdown — edit it freely as your team learns
