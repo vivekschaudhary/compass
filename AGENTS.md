@@ -8,7 +8,7 @@ Read by every AI tool working in this repo (Claude Code, OpenAI Codex CLI, Curso
 
 The framework lives in `compass/`:
 
-- `compass/agents/` — **self-sufficient, surface-independent agent files** (v0.3.14+). Each declares identity + inlined principles + tools + task definitions + refusal rules + handoffs + `preferred_hosts:`. Paste into any LLM host's system-prompt slot → it works. v0.3.14 ships 3 agents (pm, researcher, engineer); v0.3.25 adds architect; v0.3.28 adds designer + ux-writer; other 7 migrate incrementally from `compass/roles/`.
+- `compass/agents/` — **self-sufficient, surface-independent agent files** (v0.3.14+). Each declares identity + inlined principles + tools + task definitions + refusal rules + handoffs + `preferred_hosts:`. Paste into any LLM host's system-prompt slot → it works. v0.3.14 ships 3 agents (pm, researcher, engineer); v0.3.25 adds architect; v0.3.28 adds designer + ux-writer; v0.3.31 adds support; v0.3.32 adds scanner; v0.3.33 adds automation (new — no legacy role); other 4 migrate incrementally from `compass/roles/`.
 - `compass/roles/` — legacy role definitions (13 files; superseded for pm + researcher + engineer; remaining 10 still load-bearing for unmigrated workflows). Kept during v0.3.x grace period; removed in v0.4 once all agents migrate.
 - `compass/workflows/` — phase flows. v0.3.14+ workflows are **thin dispatch graphs** sequencing `<agent>.<task>` references; pre-v0.3.14 workflows still embed full methodology bodies (refactor as their owning agents migrate). **4 of 14 workflows now in dispatch-graph shape:** `/setup-product` (v0.3.14, 1st) + `/build` (v0.3.23, 2nd) + `/create-bet-architecture` (v0.3.26, 3rd) + `/create-brief` (v0.3.27, 4th); 10 remaining migrate as the agents they dispatch finish migration.
 - `compass/templates/` — artifact templates
@@ -56,7 +56,7 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent
 
 **Legacy v0.3.8 mechanism (deprecated; grace-period support through v0.3.x).** Pre-v0.3.14, role-to-agent assignment lived in `compass/config.yaml` `tool_assignments:`. That block is now **documentation-only** (audit confirmed: zero programmatic reads; 10 files hardcoded the Claude+Codex split in prose). It remains as a legacy override mechanism during v0.3.x — if a project edits `tool_assignments.pm: openai`, that signals intent but doesn't route anything. Per-agent `preferred_hosts:` (in the agent file itself) is the new source-of-truth. `tool_assignments:` removed in v0.4 alongside `compass/roles/*` once all agents migrate. See `compass/framework/canon.md` → `[agent-as-surface-independent-unit]` for the full migration rationale.
 
-## The 13 agents / roles
+## The 14 agents / roles
 
 v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surface-independent). Files marked **(legacy)** still load from `compass/roles/<role>.md` until their agent migrates (incrementally; complete by v0.4).
 
@@ -70,7 +70,8 @@ v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surfac
 | UX Writer                                  | `compass/agents/ux-writer.md`                                    | ✅ v0.3.28       |
 | Architect (per-bet)                        | `compass/agents/architect.md`                                    | ✅ v0.3.25       |
 | Enterprise/Solution Architect              | `compass/roles/enterprise-architect.md`                          | legacy           |
-| Reviewer (Codex; writes E2E + automation)  | `compass/agents/reviewer.md` (+ `.codex/prompts/reviewer.md`)    | ✅ v0.3.16       |
+| Automation (E2E + CI/CD + deploy + release) | `compass/agents/automation.md`                                  | ✅ v0.3.33 (new) |
+| Reviewer (PR code review)                  | `compass/agents/reviewer.md` (+ `.codex/prompts/reviewer.md`)    | ✅ v0.3.16       |
 | Security Reviewer (Codex)                  | `compass/roles/security-reviewer.md` (+ `.codex/prompts/security-reviewer.md`) | legacy |
 | Tech Writer                                | `compass/roles/tech-writer.md`                                   | legacy           |
 | Delivery Manager (was Project Manager)     | `compass/agents/delivery-manager.md`                             | ✅ v0.3.15       |

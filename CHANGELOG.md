@@ -14,6 +14,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.33] — 2026-06-09
+
+> **Automation agent created (new — no legacy role) — completes Build pack per mvp.md.** Owns E2E tests + CI/CD + deploy + release; split from Reviewer (Reviewer → PR code review only). **Counter #56 (1 of 5 before Retro #012).**
+
+### Added
+
+- **`compass/agents/automation.md`** (NEW, v0.3.33, 6473 chars): `preferred_hosts: [claude, codex, gemini]`. 3 tasks: `write-e2e-tests` (AC-mapped E2E + failure-path tests, prod-equivalent runtime required, 6-category Standard Experience coverage) · `configure-ci` (pipeline lint → typecheck → tests → build → E2E → deploy preview → prod; mechanical output verification) · `release` (staging → HITL → prod tag → error rate monitor). Key principles inlined: `[failure-mode-first]` · framework runtime contracts in E2E (tests must run against prod-equivalent, not localhost) · `[mechanical-output-verification]` on pipeline outputs.
+- **`AGENTS.md`** — Automation added to table (✅ v0.3.33, new); agent count 13 → 14; Reviewer description updated to "PR code review" (E2E moves to Automation).
+
 ## [0.3.32] — 2026-06-09
 
 > **Scanner agent migrated** — `compass/roles/scanner.md` → `compass/agents/scanner.md`. Auto-invoked by `/build`; needed for full MVP workflow coverage. **Counter #55 — fires Retro #011.**

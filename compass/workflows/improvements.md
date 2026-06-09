@@ -20,7 +20,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #010** (v0.4.0-alpha-2 → v0.4.0-alpha-2 + field learnings): [retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md](retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md) — **fired ON TIME at #50** (6th consecutive on-time retro). 2 field-signal improvements: friction-as-principle + Engineer prod-parity. First retro with consumer-project evidence (crypto app prod failures). `[discipline-as-muscle-memory]` watch-for validated: cadence held with tightened header prose.
 - **Retro #011** (v0.3.29 → v0.3.32): [retros/2026-06-09-retro-011-v0.3.29-to-v0.3.32.md](retros/2026-06-09-retro-011-v0.3.29-to-v0.3.32.md) — **fired ON TIME at #55** (7th consecutive on-time retro). 4 improvements in 1 session: Engineer prod-parity discipline + Principle #17 friction + Support migration + Scanner migration. `[discipline-as-muscle-memory]` PROMOTE executed this cycle. Counter resets to #60.
 
-**Next retro fires after improvement #60.** (Retro #011 fired at #55 ON TIME 2026-06-09. Counter resets to #60 horizon.)
+**Next retro fires after improvement #60.** (v0.3.33 = #56 (1 of 5 before Retro #012).)
 
 ## Template
 
