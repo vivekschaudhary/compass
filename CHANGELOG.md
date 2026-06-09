@@ -14,6 +14,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.4.0-alpha-3] — 2026-06-09
+
+### Added
+
+- Orchestrator HITL context passing (`compass/orchestrator/hitl.py` + `run.py`):
+  - HITL gate now shows reviewing artifact path + 600-char output preview so reviewer doesn't have to scroll
+  - Rejection feedback captured interactively and written to `docs/orchestrator-runs/<workflow>/step-N-hitl-rejected.md`
+  - `--from-step N` flag: resume from step N, loading steps 1..N-1 from prior artifact files on disk; enables rerun after HITL rejection without re-dispatching earlier steps
+  - Rejection note includes exact `--from-step` command to rerun
+
 ## [0.3.34] — 2026-06-09
 
 ### Added

@@ -2024,3 +2024,23 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Watch for:**
 - `[scaffold-reactivation]` — if a muscle-memory discipline breaks (misses after scaffold removal), the scaffold reactivates. 0 instances so far; candidate when it first happens.
 - `[three-altitude-rise-canon-promotion]` — declared in `[fractal-retro]` v0.3.17; 1 instance; codify after 2nd.
+
+---
+
+### 2026-06-09 — Orchestrator HITL context passing — gate shows artifact + preview; rejection note written; --from-step resume (v0.4.0-alpha-3)
+
+**Friction:** HITL gates in agent files declare hard stops, but the orchestrator's `handle_hitl_gate()` just printed "Review the output above before proceeding" + y/n. No artifact reference, no preview (user had to scroll), no feedback capture on rejection, no way to resume from a specific step after rejection without re-running everything.
+
+**Change (IMPLEMENTED — v0.4.0-alpha-3):**
+- `hitl.py`: gate now accepts `last_artifact` + `last_output`; shows artifact path + 600-char preview inline; prompts for rejection feedback (optional, ends with '.')
+- `run.py`: passes last artifact path + last agent output to HITL gate; writes rejection note to `docs/orchestrator-runs/<workflow>/step-N-hitl-rejected.md` on rejection (includes reviewer feedback + `--from-step` rerun command); adds `--from-step N` flag that loads steps 1..N-1 from disk artifacts into `prior_outputs` and runs from step N onward
+
+**Files touched (3):**
+- `compass/orchestrator/hitl.py` — context-aware gate + feedback capture
+- `compass/orchestrator/run.py` — `--from-step` + HITL wiring + rejection note writer
+- `CHANGELOG.md` — v0.4.0-alpha-3 entry
+- `compass/workflows/improvements.md` — this entry + counter v0.3.34=#57 → v0.4.0-alpha-3=#58 (3 of 3 before Retro #012 → **RETRO #012 NOW DUE**).
+
+**Watch for:**
+- **HITL feedback loop** — does the reviewer actually write useful feedback? If feedback fields are consistently empty, the prompt may be adding friction without signal. Watch on first consumer run.
+- **--from-step with missing artifacts** — if a prior step's artifact is missing, the orchestrator prints a warning and continues with a context gap. First consumer run will surface whether this is acceptable or needs a harder failure.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compass orchestrator CLI — v0.4-alpha-2
+Compass orchestrator CLI — v0.4-alpha-3
 
 Usage:
     python3 -m compass.orchestrator.run <workflow> [options]
@@ -11,6 +11,9 @@ Options:
     --project-dir PATH   Root of the project repo (default: current directory)
     --dry-run            Print the dispatch graph without executing
     --step N             Execute only step N (1-indexed)
+    --from-step N        Resume from step N, loading steps 1..N-1 from prior
+                         artifact files (use after a HITL rejection to re-run
+                         from the rejected step without re-running earlier steps)
     --context TEXT       Inline context string for the first agent step
                          (skips the interactive input prompt for that step)
     --model ID           Model ID override — applied to whichever host is selected
@@ -86,6 +89,75 @@ def _write_artifact(project_dir: Path, workflow: str, step_num: int, agent: str,
     return out_file
 
 
+def _write_rejection_note(project_dir: Path, workflow: str, step_num: int, feedback: str) -> Path:
+    """
+    Write a HITL rejection note alongside the step artifact.
+    Gives reviewers a record of what was rejected and why.
+    """
+    run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
+    run_dir.mkdir(parents=True, exist_ok=True)
+    note_file = run_dir / f"step-{step_num:02d}-hitl-rejected.md"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    content = (
+        f"---\nworkflow: {workflow}\nstep: {step_num}\nstatus: rejected\ntimestamp: {timestamp}\n---\n\n"
+        f"# HITL Rejection — Step {step_num}\n\n"
+        f"**Timestamp:** {timestamp}\n\n"
+    )
+    if feedback:
+        content += f"## Reviewer feedback\n\n{feedback}\n\n"
+    content += (
+        f"## To rerun from this step\n\n"
+        f"```bash\n"
+        f"python3 -m compass.orchestrator.run {workflow} --from-step {step_num}\n"
+        f"```\n"
+    )
+    note_file.write_text(content, encoding="utf-8")
+    return note_file
+
+
+def _load_prior_outputs_from_disk(
+    project_dir: Path, workflow: str, steps: list, up_to_step: int
+) -> list:
+    """
+    Load step outputs from artifact files for steps < up_to_step.
+
+    Used by --from-step N to reconstruct workflow context from prior run artifacts
+    without re-dispatching those steps.
+    """
+    run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
+    prior_outputs = []
+
+    for step in steps:
+        if step.number >= up_to_step:
+            break
+        if step.is_hitl or not step.agent or not step.task:
+            continue
+
+        # Glob for the artifact file (step number + agent + task)
+        pattern = f"step-{step.number:02d}-{step.agent}-{step.task}.md"
+        artifact = run_dir / pattern
+        if artifact.exists():
+            raw = artifact.read_text(encoding="utf-8")
+            # Strip YAML frontmatter before the content
+            content = re.sub(r'^---\n.*?\n---\n\n?', '', raw, flags=re.DOTALL, count=1)
+            prior_outputs.append({
+                "step": step.number,
+                "agent": step.agent,
+                "task": step.task,
+                "host": "disk",
+                "output": content,
+            })
+            print(f"  [loaded from disk] step {step.number}: {step.agent}.{step.task} ({artifact.name})")
+        else:
+            print(
+                f"  [warning] artifact not found for step {step.number} "
+                f"({step.agent}.{step.task}) — context gap",
+                file=sys.stderr,
+            )
+
+    return prior_outputs
+
+
 def _build_user_message(task: str, user_context: str, prior_outputs: list) -> str:
     """
     Build the user message for a step, optionally prepending prior step outputs
@@ -114,7 +186,7 @@ def _build_user_message(task: str, user_context: str, prior_outputs: list) -> st
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="compass run",
-        description="Compass orchestrator v0.4-alpha-2",
+        description="Compass orchestrator v0.4-alpha-3",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Examples:
@@ -128,6 +200,9 @@ def main(argv=None):
               # Run the full workflow (writes artifacts to docs/orchestrator-runs/):
               python3 -m compass.orchestrator.run setup-product \\
                   --context "We are building a personal finance app for millennials."
+
+              # After a HITL rejection on step 3, resume from step 3 (loads steps 1-2 from disk):
+              python3 -m compass.orchestrator.run setup-product --from-step 3
 
               # Run without writing files (stdout only):
               python3 -m compass.orchestrator.run setup-product --no-write \\
@@ -157,6 +232,14 @@ def main(argv=None):
         default=None,
         metavar="N",
         help="Execute only step N (1-indexed)",
+    )
+    parser.add_argument(
+        "--from-step",
+        type=int,
+        default=None,
+        metavar="N",
+        dest="from_step",
+        help="Resume from step N, loading steps 1..N-1 from prior artifact files",
     )
     parser.add_argument(
         "--context",
@@ -238,8 +321,24 @@ def main(argv=None):
     first_step = True
     prior_outputs = []
 
+    # --from-step N: load prior step outputs from disk, skip steps < N
+    if args.from_step is not None:
+        print(f"\nResuming from step {args.from_step} — loading prior step outputs from disk …")
+        prior_outputs = _load_prior_outputs_from_disk(
+            project_dir, args.workflow, steps, args.from_step
+        )
+        print(f"  {len(prior_outputs)} prior step(s) loaded.\n")
+
+    # Track last artifact written so HITL gates can surface it
+    last_artifact_path = None
+    last_agent_output = ""
+
     for step in steps:
+        # --step N: only this step
         if args.step is not None and step.number != args.step:
+            continue
+        # --from-step N: skip steps before N
+        if args.from_step is not None and step.number < args.from_step:
             continue
 
         print(f"\n{'─' * 60}")
@@ -247,9 +346,24 @@ def main(argv=None):
         print(f"{'─' * 60}")
 
         if step.is_hitl:
-            approved = handle_hitl_gate(step.number, step.title)
-            if not approved:
-                print("Workflow halted at HITL gate.")
+            result = handle_hitl_gate(
+                step.number,
+                step.title,
+                last_artifact=last_artifact_path,
+                last_output=last_agent_output,
+            )
+            if not result["approved"]:
+                if not args.no_write and result["feedback"] is not None:
+                    note_path = _write_rejection_note(
+                        project_dir, args.workflow, step.number, result["feedback"]
+                    )
+                    print(f"[rejection note written → {note_path.relative_to(project_dir)}]")
+                print(
+                    f"\nWorkflow halted at HITL gate (step {step.number}).\n"
+                    f"To rerun from this step after making changes:\n"
+                    f"  python3 -m compass.orchestrator.run {args.workflow} "
+                    f"--from-step {step.number - 1 if step.number > 1 else 1}"
+                )
                 sys.exit(0)
             continue
 
@@ -295,7 +409,7 @@ def main(argv=None):
         if prior_outputs:
             print(f"Context    : {len(prior_outputs)} prior step(s) passed as context")
 
-        inline = args.context if first_step else ""
+        inline = args.context if (first_step and args.from_step is None) else ""
         first_step = False
 
         user_context = _collect_input(step.title, inline)
@@ -326,6 +440,11 @@ def main(argv=None):
                 step.agent, step.task, result,
             )
             print(f"[artifact written → {artifact_path.relative_to(project_dir)}]")
+            last_artifact_path = artifact_path
+        else:
+            last_artifact_path = None
+
+        last_agent_output = result
 
         prior_outputs.append({
             "step": step.number,
