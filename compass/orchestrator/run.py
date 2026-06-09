@@ -350,7 +350,11 @@ def _run_workflow(
             )
             continue
 
-        print(f"Agent      : {agent_file.relative_to(project_dir)}")
+        try:
+            agent_label = agent_file.relative_to(project_dir)
+        except ValueError:
+            agent_label = agent_file
+        print(f"Agent      : {agent_label}")
         print(f"Task       : {step.task}")
         print(f"Host       : {host}  (preferred: {preferred_hosts})")
         if model:
@@ -441,6 +445,17 @@ def main(argv=None):
     )
     parser.add_argument("--project-dir", default=".", metavar="PATH")
     parser.add_argument(
+        "--compass-dir",
+        default=None,
+        metavar="PATH",
+        dest="compass_dir",
+        help=(
+            "Path to the Compass framework directory (the folder containing "
+            "agents/, workflows/, framework/). Defaults to <project-dir>/compass. "
+            "Override this when Compass lives in a separate repo from your project."
+        ),
+    )
+    parser.add_argument(
         "--pipeline",
         default=None,
         metavar="W1,W2,…",
@@ -462,7 +477,11 @@ def main(argv=None):
         parser.error("Provide either a workflow name or --pipeline, not both.")
 
     project_dir = Path(args.project_dir).resolve()
-    compass_dir = project_dir / "compass"
+    compass_dir = (
+        Path(args.compass_dir).resolve()
+        if args.compass_dir
+        else project_dir / "compass"
+    )
 
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
