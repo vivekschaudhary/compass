@@ -169,6 +169,53 @@ def _build_user_message(task: str, user_context: str, prior_outputs: list) -> st
     return "\n".join(parts)
 
 
+def _load_bet_context(project_dir: Path, bet_id: str) -> str:
+    """
+    Load all existing artifacts for a bet as structured context.
+
+    Reads (in order, if they exist):
+      docs/bets/<ID>/brief.md
+      docs/bets/<ID>/architecture.md
+      docs/bets/<ID>/stories/*/story.md   (summaries — first 400 chars each)
+      PROJECT.md
+
+    Returns a context string ready to prepend to the first agent step.
+    """
+    bet_dir = project_dir / "docs" / "bets" / bet_id
+    if not bet_dir.exists():
+        # Bet dir doesn't exist yet — that's fine for create-brief
+        return f"## Bet context\n\nBet ID: {bet_id}\n(No existing artifacts — new bet)\n"
+
+    parts = [f"## Bet context — {bet_id}\n"]
+
+    for artifact_name in ("brief.md", "architecture.md"):
+        artifact = bet_dir / artifact_name
+        if artifact.exists():
+            content = artifact.read_text(encoding="utf-8")
+            parts.append(f"### {artifact_name}\n\n{content}\n")
+
+    # Story summaries (first 400 chars each — enough for status/context)
+    stories_dir = bet_dir / "stories"
+    if stories_dir.exists():
+        story_files = sorted(stories_dir.glob("*/story.md"))
+        if story_files:
+            parts.append("### Stories (summaries)\n")
+            for sf in story_files:
+                raw = sf.read_text(encoding="utf-8")
+                slug = sf.parent.name
+                summary = raw.strip()[:400]
+                if len(raw.strip()) > 400:
+                    summary += "\n[... truncated ...]"
+                parts.append(f"**{slug}:**\n{summary}\n")
+
+    # Project-level context
+    project_md = project_dir / "PROJECT.md"
+    if project_md.exists():
+        parts.append(f"### PROJECT.md\n\n{project_md.read_text(encoding='utf-8')}\n")
+
+    return "\n".join(parts)
+
+
 def _cross_workflow_context(workflow_name: str, prior_outputs: list, artifact_paths: list) -> str:
     """
     Build a context summary to pass from the end of one workflow into the
@@ -203,6 +250,7 @@ def _run_workflow(
     project_dir: Path,
     compass_dir: Path,
     context: str = "",
+    bet_id: str = None,
     model: str = None,
     no_write: bool = False,
     only_step: int = None,
@@ -278,6 +326,13 @@ def _run_workflow(
         )
         prior_outputs = list(initial_prior_outputs or []) + disk_outputs
         print(f"  {len(disk_outputs)} prior step(s) loaded.\n")
+
+    # --bet: load existing bet artifacts as initial context
+    if bet_id:
+        bet_context = _load_bet_context(project_dir, bet_id)
+        # Prepend to any inline --context the user passed
+        context = bet_context + ("\n\n" + context if context else "")
+        print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
 
     last_artifact_path = None
     last_agent_output = ""
@@ -467,6 +522,16 @@ def main(argv=None):
         "--from-step", type=int, default=None, metavar="N", dest="from_step",
     )
     parser.add_argument("--context", default="", metavar="TEXT")
+    parser.add_argument(
+        "--bet",
+        default=None,
+        metavar="ID",
+        help=(
+            "Bet ID to work on (e.g., CB-4). Automatically loads "
+            "docs/bets/<ID>/brief.md, architecture.md, and story summaries "
+            "as context for the first agent step."
+        ),
+    )
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
     args = parser.parse_args(argv)
@@ -490,6 +555,7 @@ def main(argv=None):
             project_dir=project_dir,
             compass_dir=compass_dir,
             context=args.context,
+            bet_id=args.bet,
             model=args.model,
             no_write=args.no_write,
             only_step=args.step,
@@ -531,6 +597,7 @@ def main(argv=None):
             project_dir=project_dir,
             compass_dir=compass_dir,
             context=next_context,
+            bet_id=args.bet if idx == 0 else None,
             model=args.model,
             no_write=args.no_write,
             # --step and --from-step only apply to the first workflow in pipeline
