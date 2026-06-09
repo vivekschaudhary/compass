@@ -268,6 +268,7 @@ def _run_workflow(
     from .graph import load_workflow
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host
+    from .logger import log_step
 
     workflow_file = compass_dir / "workflows" / f"{workflow_name}.md"
     if not workflow_file.exists():
@@ -315,6 +316,10 @@ def _run_workflow(
         return [], []
 
     # ── execution ─────────────────────────────────────────────────────────────
+    from datetime import datetime as _dt
+    _ts = _dt.now().strftime("%Y%m%dT%H%M%S")
+    run_id = f"{workflow_name}--{bet_id or 'no-bet'}--{_ts}"
+
     prior_outputs = list(initial_prior_outputs or [])
     artifact_paths = []
 
@@ -452,6 +457,22 @@ def _run_workflow(
             last_artifact_path = None
 
         last_agent_output = result
+
+        # Log structured record to runs.jsonl
+        log_step(
+            project_dir=project_dir,
+            run_id=run_id,
+            workflow=workflow_name,
+            bet_id=bet_id,
+            step=step.number,
+            agent=step.agent,
+            task=step.task,
+            host=host,
+            model=model,
+            output=result,
+            artifact_path=str(last_artifact_path.relative_to(project_dir)) if last_artifact_path else None,
+        )
+
         prior_outputs.append({
             "step": step.number,
             "agent": step.agent,
@@ -534,7 +555,27 @@ def main(argv=None):
     )
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument(
+        "--log",
+        action="store_true",
+        help="Print the run log table (docs/orchestrator-runs/runs.jsonl) and exit.",
+    )
+    parser.add_argument(
+        "--dri",
+        action="store_true",
+        help="Print all DRI decisions extracted from logged runs and exit.",
+    )
     args = parser.parse_args(argv)
+
+    # ── log / dri report modes (no workflow needed) ──────────────────────────
+    if args.log or args.dri:
+        from .logger import print_run_table, dri_decisions_report
+        project_dir = Path(args.project_dir).resolve()
+        if args.log:
+            print_run_table(project_dir)
+        if args.dri:
+            dri_decisions_report(project_dir)
+        return
 
     if not args.workflow and not args.pipeline:
         parser.error("Provide a workflow name or --pipeline W1,W2,…")
