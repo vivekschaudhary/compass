@@ -14,6 +14,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.29] — 2026-06-09
+
+> **Engineer agent prod-parity discipline — improvement #52.** Three new principles + two named Next.js anti-patterns + postcondition hardening. Direct response to two prod-only failures on CB-3.3 (RSC prop serialization + "use server" export purity) invisible to 541 tests.
+
+### Changed
+
+- **`compass/agents/engineer.md`** (v0.3.14 → v0.3.29, 13108 → 15336 chars):
+  - **New core principle `[failure-mode-first]`** — every external call has an explicit error path before done; silent swallows are defects.
+  - **New core principle: framework runtime contracts** — names the class of bugs invisible to local tooling. Two confirmed Next.js/Vercel instances: `[rsc-prop-serialization]` (Server→Client props must be JSON or Server Actions) + `[server-action-file-export-purity]` ("use server" files export async functions only). Engineer must verify or flag as DRI Risk before shipping.
+  - **Two new postconditions** — all external calls have explicit error handlers; framework runtime contracts verified (or DRI Risk logged).
+  - **Three new anti-patterns** — `[rsc-prop-serialization]` · `[server-action-file-export-purity]` · silent error swallow.
+  - **New DRI logging trigger** — framework runtime contract hits logged with instance counter; at 3 instances propose canon anti-pattern.
+
 ## [0.4.0-alpha-2] — 2026-06-08
 
 > **Orchestrator multi-host dispatch — P0 drift from Retro #009 closed.** Reviewer steps (`preferred_hosts: [codex, gemini]`) now route to OpenAI API (codex) or Gemini API — NOT Claude. Engineer → Claude, Reviewer → Codex: cross-model independence restored structurally. **Counter #48 (4 of 5 before Retro #010 — 2 more before retro fires).**
