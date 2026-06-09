@@ -14,6 +14,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.3.31] — 2026-06-09
+
+> **Support agent migrated** — `compass/roles/support.md` → `compass/agents/support.md`. 3 tasks: `triage-bug` · `triage-incident` · `supply-user-pain`. Needed for `/fix` + `/triage` MVP workflows. **Counter #54 (4 of 5 before Retro #011).**
+
+### Added
+
+- **`compass/agents/support.md`** (NEW, v0.3.31, 5881 chars): `preferred_hosts: [chatgpt, claude, codex, gemini]`. 3 tasks with full gate/work/postcondition: `triage-bug` (reproduce → classify P0-P3 → L1/escalate → triage note), `triage-incident` (acknowledge → blast radius → HITL stop-the-bleed → HITL comms → postmortem), `supply-user-pain` (user pain signal for brief creation with citations). 6 refusal rules. Key principles: severity by impact not frustration · stop-the-bleed is human-driven · comms require HITL approval.
+
+### Changed
+
+- **`AGENTS.md`** — Support: legacy → ✅ v0.3.31.
+
 ## [0.3.30] — 2026-06-09
 
 > **Principle #17: Minimize friction — consumer-project evidence promoted to AGENTS.md cross-cutting principle.** Friction is now a first-class failure mode with a named anti-pattern (`ceremony-without-constraint`) and a measurable definition. **Counter #53 (3 of 5 before Retro #011).**

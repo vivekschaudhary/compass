@@ -65,7 +65,7 @@ v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surfac
 | Product Manager (merged PM + PO)           | `compass/agents/pm.md`                                           | ✅ v0.3.14       |
 | Researcher                                 | `compass/agents/researcher.md`                                   | ✅ v0.3.14       |
 | Engineer (writes unit/API/component tests) | `compass/agents/engineer.md`                                     | ✅ v0.3.14       |
-| Support                                    | `compass/roles/support.md`                                       | legacy           |
+| Support                                    | `compass/agents/support.md`                                      | ✅ v0.3.31       |
 | Designer                                   | `compass/agents/designer.md`                                     | ✅ v0.3.28       |
 | UX Writer                                  | `compass/agents/ux-writer.md`                                    | ✅ v0.3.28       |
 | Architect (per-bet)                        | `compass/agents/architect.md`                                    | ✅ v0.3.25       |
