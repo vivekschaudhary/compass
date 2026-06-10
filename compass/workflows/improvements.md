@@ -20,8 +20,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #010** (v0.4.0-alpha-2 → v0.4.0-alpha-2 + field learnings): [retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md](retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md) — **fired ON TIME at #50** (6th consecutive on-time retro). 2 field-signal improvements: friction-as-principle + Engineer prod-parity. First retro with consumer-project evidence (crypto app prod failures). `[discipline-as-muscle-memory]` watch-for validated: cadence held with tightened header prose.
 - **Retro #011** (v0.3.29 → v0.3.32): [retros/2026-06-09-retro-011-v0.3.29-to-v0.3.32.md](retros/2026-06-09-retro-011-v0.3.29-to-v0.3.32.md) — **fired ON TIME at #55** (7th consecutive on-time retro). 4 improvements in 1 session: Engineer prod-parity discipline + Principle #17 friction + Support migration + Scanner migration. `[discipline-as-muscle-memory]` PROMOTE executed this cycle. Counter resets to #60.
 - **Retro #012** (v0.3.33 → v0.4.0-alpha-3): [retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md](retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md) — **fired ON TIME at #58** (8th consecutive on-time retro; counter tracking note: fired at +3 not +5 per [discipline-as-muscle-memory] drift; horizon corrected to #63). 3 improvements: Automation migration + [discipline-as-muscle-memory] canon + HITL context passing. Watch-fors: orchestrator test coverage gap + HITL feedback ceremony risk + pre-push-grep-discipline 2nd instance.
+- **Retro #013** (v0.3.36 → v0.4.0-alpha-5): [retros/2026-06-09-retro-013-v0.3.36-to-v0.4.0-alpha-5.md](retros/2026-06-09-retro-013-v0.3.36-to-v0.4.0-alpha-5.md) — **fired ON TIME at #63** (9th consecutive on-time retro). 5 improvements: consumer retro signals (CB-3.3) + anti-pattern promotion + `[cross-artifact-sweep-on-contract-shift]` canon + orchestrator pipeline mode + consumer-ready orchestrator (live CB-4 validation). First batch 100% consumer-driven. `[consumer-as-primary-signal]` at 2nd instance (threshold is 3). Watch-fors: consumer migration guide + `--full-project` flag + `agent-handoff.yml` verification + runs.jsonl analysis tooling.
 
-**Next retro fires after improvement #63.** (v0.4.0-alpha-3 = #58; next = #59.)
+**Next retro fires after improvement #68.** (v0.4.0-alpha-5 = #63; next = #64.)
 
 ## Template
 
@@ -2151,3 +2152,50 @@ Each workflow's HITL gates still fire in sequence. The pipeline halts at any rej
 - `compass/workflows/improvements.md` — this entry. Counter: v0.3.36=#61 → v0.4.0-alpha-4=#62 (4 of 5 before Retro #013).
 
 **Retro #013 horizon:** fires at #63.
+
+---
+
+### 2026-06-09 — Consumer-ready orchestrator: --compass-dir, --bet, step logger — live-validated against crypto-app CB-4 (v0.4.0-alpha-5)
+
+**Friction:** Three gaps surfaced the moment we tried to run the orchestrator against the real consumer project (crypto-app):
+
+1. `compass_dir` was hardcoded as `project_dir / "compass"` — the framework had to live *inside* the consumer project. Consumer projects shouldn't maintain a copy of the framework.
+2. No way to tell the orchestrator WHICH bet to work on — `--context "$(cat brief.md)"` is fragile and doesn't load architecture, stories, or PROJECT.md automatically.
+3. Agent output was raw markdown with no structured extraction — no way to query DRI decisions, gate results, or file lineage across runs.
+
+All three surfaced within a single live test session (CB-4 create-bet-architecture against crypto-app).
+
+**Change (IMPLEMENTED — v0.4.0-alpha-5):**
+
+**`--compass-dir PATH`** — decouples framework location from consumer project. `compass_dir` now defaults to `project_dir / "compass"` but is overridable. The consumer project only needs `docs/` + `PROJECT.md`; framework lives in its own repo. Live-validated:
+```bash
+python3 -m compass.orchestrator.run \
+  --project-dir /Volumes/VivekSSD/apps/crypto-app \
+  --compass-dir /Volumes/VivekSSD/apps/compass/compass \
+  create-bet-architecture --bet CB-4
+```
+
+**`--bet ID`** — auto-loads `docs/bets/<ID>/brief.md` + `architecture.md` (if exists) + story summaries + `PROJECT.md` as structured `## Bet context — <ID>` block prepended to Step 1's user message. Architect received CB-4's full brief automatically; ran the gate correctly (found `architecture_required: false`, produced DRI Decision, exited without drafting a redundant architecture.md).
+
+**`compass/orchestrator/logger.py`** (new module) — parses every agent step output for structured sections and appends a record to `docs/orchestrator-runs/runs.jsonl`:
+- Fields: `run_id`, `ts`, `workflow`, `bet_id`, `step`, `agent`, `task`, `host`, `model`, `gate_result`, `tldr`, `dri_decisions` (list), `files_created`, `files_modified`, `next_command`, `risks`, `output_chars`, `artifact_path`
+- **`--log`** flag: prints tabular summary of all logged steps
+- **`--dri`** flag: prints all DRI decisions extracted across all runs
+- Parse logic extracts: `## State check` → gate_result; `## DRI Decision logged` → decision blocks; `## Output summary` → TL;DR, files, next command, risks
+
+**Live run result (first real end-to-end consumer dispatch):**
+- Architect gate fired correctly (`architecture_required: false` → DRI Decision logged, no architecture.md drafted)
+- HITL gate paused, showed preview, user approved
+- Delivery manager dispatched with prior step context, produced status.md update, correctly named unknowns per `[derive-from-state]`
+- Full pipeline worked first try
+
+**Files touched (3):**
+- `compass/orchestrator/run.py` — v0.4-alpha-4 → v0.4-alpha-5; `--compass-dir` + `--bet` + `--log` + `--dri` flags; `log_step()` call after each dispatch
+- `compass/orchestrator/logger.py` — NEW; parse + append + report
+- `compass/workflows/improvements.md` — this entry. Counter: v0.4.0-alpha-4=#62 → v0.4.0-alpha-5=#63 (**fires Retro #013**).
+
+**Watch for:**
+- `[consumer-as-primary-signal]` — 2nd instance this batch (CB-3.3 defects = 1st, CB-4 live validation = 2nd). At threshold for codification-watch; surface if 3rd instance appears.
+- Delivery manager needs `--full-project` flag (load all bets + foundation) to produce accurate status.md — current `--bet` loads one bet only; everything else is `unknown — named reason`.
+- `runs.jsonl` analysis tooling is terminal-only (`--log`, `--dri`); pandas/SQL query layer would unlock real cross-run analysis. Deferred per `[declare-not-implement]`.
+- Consumer project (crypto-app) is on v0.1 framework (`roles/` not `agents/`); `--compass-dir` workaround works but a formal consumer migration guide is needed.

@@ -14,6 +14,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.4.0-alpha-5] — 2026-06-09
+
+> **Consumer-ready orchestrator — live-validated against crypto-app CB-4. Counter #63 — fires Retro #013 (9th consecutive on-time).**
+
+### Added
+
+- `--compass-dir PATH` flag: decouple framework location from consumer project. Framework lives in its own repo; consumer project only needs `docs/` + `PROJECT.md`. `compass_dir` still defaults to `project_dir/compass` when flag is omitted.
+- `--bet ID` flag: auto-loads `docs/bets/<ID>/brief.md` + `architecture.md` + story summaries + `PROJECT.md` as `## Bet context — <ID>` block for Step 1. Live-validated: Architect received CB-4 brief automatically, ran gate correctly (`architecture_required: false` → DRI Decision, no spurious architecture.md drafted).
+- `compass/orchestrator/logger.py` (new): parses every agent step output for structured sections; appends record to `docs/orchestrator-runs/runs.jsonl`. Fields: `run_id`, `ts`, `workflow`, `bet_id`, `step`, `agent`, `task`, `host`, `model`, `gate_result`, `tldr`, `dri_decisions`, `files_created`, `files_modified`, `next_command`, `risks`, `output_chars`, `artifact_path`.
+- `--log` flag: tabular summary of all logged steps from runs.jsonl.
+- `--dri` flag: all DRI decisions extracted across all runs.
+
 ## [0.4.0-alpha-4] — 2026-06-09
 
 > **Pipeline mode: cross-workflow chaining.** Orchestrator can now walk PM → Architect → Reviewer → Support in a single command. **Counter #62 (4 of 5 before Retro #013).**
