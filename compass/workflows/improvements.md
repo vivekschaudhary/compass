@@ -2252,3 +2252,39 @@ python3 -m compass.orchestrator.run \
 **Files touched (2):** `compass/scripts/reviewer.py` (NEW) + `compass/scripts/agent-handoff.yml` (Option A rewritten). Counter: #64 → #66 (skipping #65 — consumer migration guide not yet written; logged here as gap, not shipped). 2 of 5 before Retro #014.
 
 **Note on counter:** #65 reserved for consumer migration guide (crypto-app v0.1 → current). Not shipping this session — naming the gap explicitly so the counter stays honest.
+
+---
+
+### 2026-06-09 — LLM-agnostic dispatcher: `dispatch.py` replaces `reviewer.py` — LLM from `preferred_hosts`, not hardcoded (#67)
+
+**Friction:** `reviewer.py` (#66) hardcoded `import openai` and called the OpenAI API directly. This violated the `preferred_hosts:` architectural separation the framework is built on — the LLM choice belongs in the agent file's frontmatter, not in a per-role script. User caught it immediately: "reviewer.py or any role.py should be independent of the LLM."
+
+This is a `[soft-spec-rationalization]` instance: #66 fixed the surface symptom (unverified Codex CLI flags) without checking whether the solution shape was consistent with the framework's dispatch architecture.
+
+**Change (IMPLEMENTED):**
+
+- **`compass/scripts/reviewer.py` — DELETED.** Per-role, LLM-coupled script removed entirely.
+- **`compass/scripts/dispatch.py` — NEW.** Generic LLM-agnostic dispatcher:
+  1. Reads `preferred_hosts:` from agent file frontmatter
+  2. Calls `compass/orchestrator/hosts/router.py`'s `select_host()` + `dispatch_to_host()` — same routing already validated end-to-end by the orchestrator
+  3. No LLM named in the script. Reviewer routes to codex/gemini; PM routes to claude/chatgpt — all from frontmatter.
+- **`agent-handoff.yml` Option A rewritten** to use `dispatch.py` + `compass/agents/reviewer.md`. All three API keys passed as env vars; whichever matches the reviewer's `preferred_hosts:` is used.
+
+**Verified:**
+```bash
+python3 compass/scripts/dispatch.py \
+  --agent-file compass/agents/reviewer.md \
+  --task review-pr --input-file /dev/null --output /dev/null
+# → "preferred_hosts: ['codex', 'gemini'] — Set one of: OPENAI_API_KEY, GEMINI_API_KEY"
+# Routing read from frontmatter correctly. No LLM hardcoded.
+```
+
+**Architecture shape enforced going forward:**
+```
+agent-handoff.yml / any CI script
+  └─ dispatch.py          ← LLM-agnostic; any role, any task
+       └─ router.py       ← selects host from preferred_hosts
+            └─ hosts/*.py ← the only place LLM SDKs are imported
+```
+
+**Files touched (3):** `compass/scripts/dispatch.py` (NEW) + `compass/scripts/reviewer.py` (DELETED) + `compass/scripts/agent-handoff.yml` (Option A rewritten). Counter: #66 → #67 (4 of 5 before Retro #014). **Next retro fires at #68.**
