@@ -22,7 +22,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 - **Retro #012** (v0.3.33 → v0.4.0-alpha-3): [retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md](retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md) — **fired ON TIME at #58** (8th consecutive on-time retro; counter tracking note: fired at +3 not +5 per [discipline-as-muscle-memory] drift; horizon corrected to #63). 3 improvements: Automation migration + [discipline-as-muscle-memory] canon + HITL context passing. Watch-fors: orchestrator test coverage gap + HITL feedback ceremony risk + pre-push-grep-discipline 2nd instance.
 - **Retro #013** (v0.3.36 → v0.4.0-alpha-5): [retros/2026-06-09-retro-013-v0.3.36-to-v0.4.0-alpha-5.md](retros/2026-06-09-retro-013-v0.3.36-to-v0.4.0-alpha-5.md) — **fired ON TIME at #63** (9th consecutive on-time retro). 5 improvements: consumer retro signals (CB-3.3) + anti-pattern promotion + `[cross-artifact-sweep-on-contract-shift]` canon + orchestrator pipeline mode + consumer-ready orchestrator (live CB-4 validation). First batch 100% consumer-driven. `[consumer-as-primary-signal]` at 2nd instance (threshold is 3). Watch-fors: consumer migration guide + `--full-project` flag + `agent-handoff.yml` verification + runs.jsonl analysis tooling.
 
-**Next retro fires after improvement #68.** (v0.4.0-alpha-5 = #63; next = #64.)
+- **Retro #014** (post v0.4.0-alpha-5 — improvements #64–#68): [retros/2026-06-09-retro-014-v0.4.0-alpha-5-extensions.md](retros/2026-06-09-retro-014-v0.4.0-alpha-5-extensions.md) — **fired ON TIME at #68** (10th consecutive on-time retro). 4 shipped improvements + 1 held gap (#65): `--full-project` orchestrator context · `reviewer.py` + LLM-agnostic `dispatch.py` · `--context-files` injection. Infrastructure-consolidation batch. Convention candidates: `[context-injection-discipline]` (2 instances) · `[ci-script-llm-discipline]` (1 instance). Watch-fors: `[context-injection-discipline]` 3rd instance · #65 consumer migration guide · artifact routing gap.
+
+**Next retro fires after improvement #73.** (Retro #014 = #68; next = #73.)
 
 ## Template
 
