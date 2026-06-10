@@ -94,20 +94,25 @@ jobs:
       # Each block: install CLI · invoke with reviewer prompt + diff · write review.md.
       # ─────────────────────────────────────────────────────────────────────
 
-      # ── Option A: Codex (OpenAI) ─────────────────────────────────────────
-      - name: Install Codex CLI
-        run: npm install -g @openai/codex
-        # VERIFY: install command + package name per https://github.com/openai/codex
-      - name: Run Codex review
+      # ── Option A: OpenAI API via compass/scripts/reviewer.py (default) ────
+      # Uses the same openai SDK pattern as the orchestrator (hosts/openai.py).
+      # No CLI flags to verify — SDK surface is stable. Replaces the previous
+      # Codex CLI block whose `codex exec` headless flags were unverified placeholders.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install openai SDK
+        run: pip install openai
+      - name: Run reviewer via OpenAI API
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          codex exec \
+          python3 compass/scripts/reviewer.py \
             --prompt-file .codex/prompts/reviewer.md \
-            --input pr.diff \
-            --output review.md
-        # VERIFY: codex CLI flags against current docs. Placeholder names;
-        # actual headless-mode flags may differ. Treat as a starting point.
+            --diff-file pr.diff \
+            --output review.md \
+            --model gpt-4o
 
       # ── Option B: Claude Code headless (Anthropic) ───────────────────────
       # - name: Install Claude Code CLI

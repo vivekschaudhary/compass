@@ -169,6 +169,53 @@ def _build_user_message(task: str, user_context: str, prior_outputs: list) -> st
     return "\n".join(parts)
 
 
+def _load_full_project_context(project_dir: Path) -> str:
+    """
+    Load the full project picture for agents that need portfolio-wide context
+    (e.g. delivery-manager.update-status).
+
+    Reads (in order, if they exist):
+      docs/foundation/product.md
+      docs/foundation/architecture.md
+      docs/foundation/plan.md
+      docs/foundation/portfolio.md
+      docs/status.md
+      docs/bets/*/brief.md   (first 600 chars each — status overview, not full)
+      PROJECT.md
+    """
+    parts = ["## Full project context\n"]
+
+    for fname in ("product.md", "architecture.md", "plan.md", "portfolio.md"):
+        f = project_dir / "docs" / "foundation" / fname
+        if f.exists():
+            parts.append(f"### docs/foundation/{fname}\n\n{f.read_text(encoding='utf-8')}\n")
+
+    status_file = project_dir / "docs" / "status.md"
+    if status_file.exists():
+        parts.append(f"### docs/status.md\n\n{status_file.read_text(encoding='utf-8')}\n")
+
+    bets_dir = project_dir / "docs" / "bets"
+    if bets_dir.exists():
+        bet_dirs = sorted(d for d in bets_dir.iterdir() if d.is_dir())
+        if bet_dirs:
+            parts.append("### Bet portfolio (brief summaries)\n")
+            for bd in bet_dirs:
+                brief = bd / "brief.md"
+                if not brief.exists():
+                    continue
+                raw = brief.read_text(encoding="utf-8")
+                summary = raw.strip()[:600]
+                if len(raw.strip()) > 600:
+                    summary += f"\n[... full brief at docs/bets/{bd.name}/brief.md ...]"
+                parts.append(f"**{bd.name}:**\n{summary}\n")
+
+    project_md = project_dir / "PROJECT.md"
+    if project_md.exists():
+        parts.append(f"### PROJECT.md\n\n{project_md.read_text(encoding='utf-8')}\n")
+
+    return "\n".join(parts)
+
+
 def _load_bet_context(project_dir: Path, bet_id: str) -> str:
     """
     Load all existing artifacts for a bet as structured context.
@@ -251,6 +298,7 @@ def _run_workflow(
     compass_dir: Path,
     context: str = "",
     bet_id: str = None,
+    full_project: bool = False,
     model: str = None,
     no_write: bool = False,
     only_step: int = None,
@@ -332,10 +380,15 @@ def _run_workflow(
         prior_outputs = list(initial_prior_outputs or []) + disk_outputs
         print(f"  {len(disk_outputs)} prior step(s) loaded.\n")
 
+    # --full-project: load portfolio-wide context (foundation + all bets + status)
+    if full_project:
+        fp_context = _load_full_project_context(project_dir)
+        context = fp_context + ("\n\n" + context if context else "")
+        print(f"[full-project] Loaded foundation + portfolio context from {project_dir}/docs/")
+
     # --bet: load existing bet artifacts as initial context
     if bet_id:
         bet_context = _load_bet_context(project_dir, bet_id)
-        # Prepend to any inline --context the user passed
         context = bet_context + ("\n\n" + context if context else "")
         print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
 
@@ -553,6 +606,17 @@ def main(argv=None):
             "as context for the first agent step."
         ),
     )
+    parser.add_argument(
+        "--full-project",
+        action="store_true",
+        dest="full_project",
+        help=(
+            "Load the full project picture as context: docs/foundation/ "
+            "(product, architecture, plan, portfolio), docs/status.md, and "
+            "all bet brief summaries. Use for delivery-manager workflows where "
+            "portfolio-wide state is needed (e.g. update-status, plan)."
+        ),
+    )
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
@@ -597,6 +661,7 @@ def main(argv=None):
             compass_dir=compass_dir,
             context=args.context,
             bet_id=args.bet,
+            full_project=args.full_project,
             model=args.model,
             no_write=args.no_write,
             only_step=args.step,
@@ -639,6 +704,7 @@ def main(argv=None):
             compass_dir=compass_dir,
             context=next_context,
             bet_id=args.bet if idx == 0 else None,
+            full_project=args.full_project,
             model=args.model,
             no_write=args.no_write,
             # --step and --from-step only apply to the first workflow in pipeline
