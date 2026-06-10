@@ -2199,3 +2199,56 @@ python3 -m compass.orchestrator.run \
 - Delivery manager needs `--full-project` flag (load all bets + foundation) to produce accurate status.md — current `--bet` loads one bet only; everything else is `unknown — named reason`.
 - `runs.jsonl` analysis tooling is terminal-only (`--log`, `--dri`); pandas/SQL query layer would unlock real cross-run analysis. Deferred per `[declare-not-implement]`.
 - Consumer project (crypto-app) is on v0.1 framework (`roles/` not `agents/`); `--compass-dir` workaround works but a formal consumer migration guide is needed.
+
+---
+
+### 2026-06-09 — `--full-project` flag: portfolio-wide context for delivery manager (#64)
+
+**Friction:** Delivery manager's `update-status` received only CB-4's context via `--bet CB-4`. Everything else (other bets, foundation docs, plan, existing status.md) was `unknown — named reason`. Correct discipline, but operationally useless for a real status update.
+
+**Change (IMPLEMENTED):** `--full-project` flag added to `compass/orchestrator/run.py`. When set, loads before `--bet` context:
+- `docs/foundation/product.md`, `architecture.md`, `plan.md`, `portfolio.md`
+- `docs/status.md` (prior status for delta awareness)
+- All bet brief summaries (first 600 chars each — enough for status/phase, not full content)
+- `PROJECT.md`
+
+**Usage:**
+```bash
+python3 -m compass.orchestrator.run \
+  --project-dir /Volumes/VivekSSD/apps/crypto-app \
+  --compass-dir /Volumes/VivekSSD/apps/compass/compass \
+  --full-project \
+  --bet CB-4 \
+  create-bet-architecture
+```
+
+`--full-project` and `--bet` compose: project-wide context loads first, then bet-specific detail layers on top. Delivery manager in Step 3 now sees all bets + foundation + prior status before producing the update.
+
+**Files touched (1):** `compass/orchestrator/run.py` — `_load_full_project_context()` + `--full-project` flag. Counter: v0.4.0-alpha-5=#63 → #64 (1 of 5 before Retro #014).
+
+---
+
+### 2026-06-09 — `agent-handoff.yml` verified: Codex CLI replaced by `reviewer.py` + OpenAI SDK (#66)
+
+**Friction:** `compass/scripts/agent-handoff.yml` Option A (Codex) used `codex exec --prompt-file ... --input pr.diff --output review.md` — explicitly marked PLACEHOLDER/VERIFY in the file. The Codex CLI headless-mode flags drift with each release and were never verified against actual CLI behavior. Any consumer copying this template would get a broken GitHub Actions workflow.
+
+**Change (IMPLEMENTED):**
+- `compass/scripts/reviewer.py` (NEW) — standalone Python script that calls the OpenAI API using the same `openai` SDK pattern already validated in `compass/orchestrator/hosts/openai.py`. Args: `--prompt-file`, `--diff-file`, `--output`, `--model`. Zero new dependencies.
+- `agent-handoff.yml` Option A rewritten: installs Python 3.11 + `pip install openai`, then calls `python3 compass/scripts/reviewer.py`. No unverified CLI flags.
+
+**Before:**
+```yaml
+- name: Run Codex review
+  run: codex exec --prompt-file .codex/prompts/reviewer.md --input pr.diff --output review.md
+  # VERIFY: flags are placeholders
+```
+
+**After:**
+```yaml
+- name: Run reviewer via OpenAI API
+  run: python3 compass/scripts/reviewer.py --prompt-file .codex/prompts/reviewer.md --diff-file pr.diff --output review.md --model gpt-4o
+```
+
+**Files touched (2):** `compass/scripts/reviewer.py` (NEW) + `compass/scripts/agent-handoff.yml` (Option A rewritten). Counter: #64 → #66 (skipping #65 — consumer migration guide not yet written; logged here as gap, not shipped). 2 of 5 before Retro #014.
+
+**Note on counter:** #65 reserved for consumer migration guide (crypto-app v0.1 → current). Not shipping this session — naming the gap explicitly so the counter stays honest.
