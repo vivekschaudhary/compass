@@ -94,25 +94,28 @@ jobs:
       # Each block: install CLI · invoke with reviewer prompt + diff · write review.md.
       # ─────────────────────────────────────────────────────────────────────
 
-      # ── Option A: OpenAI API via compass/scripts/reviewer.py (default) ────
-      # Uses the same openai SDK pattern as the orchestrator (hosts/openai.py).
-      # No CLI flags to verify — SDK surface is stable. Replaces the previous
-      # Codex CLI block whose `codex exec` headless flags were unverified placeholders.
+      # ── Option A: Compass dispatcher (default) ───────────────────────────
+      # LLM is determined by preferred_hosts: in compass/agents/reviewer.md —
+      # not hardcoded here. dispatch.py reads the frontmatter, calls router.py,
+      # and dispatches to whichever host has a valid API key (codex → gemini order).
+      # Set whichever key matches your reviewer's preferred_hosts.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install openai SDK
-        run: pip install openai
-      - name: Run reviewer via OpenAI API
+      - name: Install SDK dependencies
+        run: pip install openai anthropic google-generativeai
+      - name: Run reviewer via Compass dispatcher
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}       # for codex / chatgpt
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # for claude
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}       # for gemini
         run: |
-          python3 compass/scripts/reviewer.py \
-            --prompt-file .codex/prompts/reviewer.md \
-            --diff-file pr.diff \
-            --output review.md \
-            --model gpt-4o
+          python3 compass/scripts/dispatch.py \
+            --agent-file compass/agents/reviewer.md \
+            --task review-pr \
+            --input-file pr.diff \
+            --output review.md
 
       # ── Option B: Claude Code headless (Anthropic) ───────────────────────
       # - name: Install Claude Code CLI
