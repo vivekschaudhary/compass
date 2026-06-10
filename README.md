@@ -6,6 +6,22 @@
 
 A vendor-neutral product development framework. Compass holds the shape of work from problem → ship → measure → learn, with AI tools playing roles across the lifecycle.
 
+## Why discipline?
+
+AI tools give you speed. Speed without discipline is faster chaos.
+
+The dominant failure mode of AI-assisted development is **soft-spec rationalization** — the agent finds a plausible-sounding path, fills the gaps with assumptions, skips the uncomfortable questions, and produces output that looks complete but isn't. Under deadline pressure, humans accept it. Corners get cut. The same mistakes compound.
+
+Compass is the discipline layer. Not a methodology book — a structural enforcement system:
+
+- **Every phase has a gate.** Gates don't pass on vibes. They have explicit postconditions that must be met before the next step runs.
+- **HITL stops are hard.** Nothing scaffolds, nothing ships, nothing advances without human approval at the defined checkpoint. The agent cannot self-approve.
+- **Refusal rules are in the files.** The agent literally refuses to proceed if conditions aren't met — not because it's prompted to, but because the refusal is defined in its task definition.
+- **Every decision is logged.** DRI (Decision / Risk / Issue) logs create an audit trail across every bet, every phase, every agent. "Why did we do it this way?" has an answer.
+- **No silent skips.** Skipped steps are logged as DRI Decisions with rationale. The framework says no for you when the pressure is on to cut corners.
+
+The goal isn't process for its own sake. The goal is to make the discipline automatic so the team can focus on the work. OKRs give you the goals. Compass gives you the discipline to execute them honestly.
+
 ## What Compass is
 
 A markdown-based framework that any AI tool can read. The framework lives in `compass/`. **Agents are self-sufficient, surface-independent units** (`compass/agents/<agent>.md`) — the same agent file runs on ChatGPT Custom GPT Instructions, Claude Code session, Codex prompt, Gemini system message, or as a CrewAI / LangGraph agent definition. **Host wrappers** (`CLAUDE.md`, future host analogs) are thin runtime-notes, not role authorities. Per `[agent-as-surface-independent-unit]` (canon v0.3.14).
