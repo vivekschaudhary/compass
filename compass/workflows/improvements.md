@@ -2320,3 +2320,25 @@ python3 compass/scripts/dispatch.py \
 **Architecture note:** context injection is the caller's responsibility — the caller knows which bet/workflow applies. The agent file (`reviewer.md`) defines WHAT to check; `--context-files` provides the domain knowledge to check against. This preserves LLM-agnosticism (context is just text; no host-specific logic added).
 
 **Files touched (2):** `compass/scripts/dispatch.py` (v0.1 → v0.2) + `compass/scripts/agent-handoff.yml` (Option A updated). Counter: #67 → #68. **Retro #014 fires now.**
+
+---
+
+### 2026-06-09 — README: OKR overlay + "Why discipline?" — framework thesis made explicit (#69)
+
+**Friction (two related gaps):**
+
+1. **OKR use case missing from README.** Compass maps directly onto OKR planning cycles (O → product.md, KR → OKRs + fitness functions, Initiative → Bet, Check-in → /status, Quarter retro → /retro) but this wasn't documented. Teams evaluating the framework had no way to see the fit without reverse-engineering it.
+
+2. **The core thesis — discipline — wasn't stated.** README described WHAT Compass does (workflows, agents, dispatch graphs) but not WHY it exists. The actual value proposition is structural enforcement of discipline: gates, HITL stops, refusal rules, DRI logs, no-silent-skips. Without this framing, Compass reads as "yet another methodology framework" rather than "the discipline layer that makes AI-assisted development honest."
+
+**Change (IMPLEMENTED):**
+
+- **`## OKR-driven organizations` section added** (after Core ideas): mapping table (OKR concept → Compass equivalent), ceremony mapping (OKR planning → portfolio, check-in → /status, execution → brief/arch/story/build, quarter retro → /retro), traceability note (OKR → PR chain explicit), schema addition guide (`drives_kr:` + `okr_cycle:` frontmatter fields for KR-number tracking), multi-team note (org-altitude retro).
+
+- **`## Why discipline?` section added** (before What Compass is): the framework's core thesis — AI tools give speed; Compass provides the structural discipline to not waste it. Five named mechanisms: gates with postconditions, hard HITL stops, refusal rules in agent files, DRI audit trail, no silent skips. Connects to OKR framing: "OKRs give you the goals; Compass gives you the discipline to execute them honestly."
+
+**Origin:** user stated it directly — "I believe to achieve anything, discipline is important and I want to add the discipline in framework — and Compass gives me the discipline." The thesis was implicit in the framework design (Principle #14, HITL gates, refusal rules) but never stated as the primary value proposition.
+
+**Convention candidate surfaced:** `[discipline-as-primary-value]` — Compass's moat is not the methodology (others have methodology), not multi-model support (others do that), but the structural enforcement of discipline at every gate. Worth codifying when the framing stabilizes across 2+ consumer-facing descriptions. 1 instance.
+
+**Files touched (1):** `README.md` (two new sections). Counter: #68 → #69 (1 of 5 before Retro #015).
