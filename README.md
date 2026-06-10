@@ -21,6 +21,31 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 - **Retros are fractal** (`[fractal-retro]`, canon v0.3.17). Same `/retro` workflow shape applied at every altitude — role · workflow · bet · project · org · framework — with bottom-up consolidation. Patterns visible at the role/workflow level (e.g., recurring PR-redo loops) bubble up to project retros, then to org retros, then promote to canon. Agents log patterns mid-task to `docs/role-activity/<role>.md` + `docs/workflow-runs/<workflow>.md` so leaf-altitude retros have source data.
 - **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — and produces *findings, not failures*. Each finding has severity (Critical / High / Medium / Low) + confidence + location + reason + fix. Measurement is automatic (no manual self-assessment). Suppressions are explicit, justified, logged in DRI. Owners decide; the scanner informs.
 
+## OKR-driven organizations
+
+Compass maps directly onto an OKR planning cycle. The bet IS the initiative; the portfolio IS the quarterly initiative list.
+
+| OKR concept | Compass equivalent |
+|---|---|
+| Objective | `docs/foundation/product.md` → Vision / North-star |
+| Key Result | `product.md` → OKRs section + `architecture.md` → fitness functions |
+| Initiative | Bet (`docs/bets/<bet-id>/brief.md`) |
+| Sprint work | Story set (`docs/bets/<bet-id>/stories/`) |
+| OKR check-in | `/status` → delivery manager → `docs/status.md` |
+| Quarter retro | `/retro --altitude=project` |
+
+**Ceremonies:**
+- **OKR planning** → `/setup-product` (O + KRs at foundation) + `/create-bet-portfolio` (map KRs → bets; dependency graph = sprint sequencing)
+- **Weekly check-in** → `/status` produces the check-in content automatically
+- **Bet execution** → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build`
+- **Quarter retro** → `/retro` at project altitude consolidates all bet outcomes
+
+**Traceability closes the OKR → PR gap.** Each bet hypothesis traces to a specific OKR line in `product.md`. Stories trace to the bet. PRs trace to stories. The chain from OKR → shipped PR is explicit and auditable — no more "which work moved which KR?"
+
+**Schema addition for OKR orgs:** add `drives_kr: [KR-2.1, KR-3.4]` + `okr_cycle: Q3-2026` to `brief.md` frontmatter. `/status` then produces a KR-progress table alongside the bet-status table. (Not in the default template — add when your org tracks KRs by number.)
+
+**Multi-team OKRs:** each team runs its own Compass project. Cross-team KR patterns surface via `/retro --altitude=org` (org-altitude retro — declared, implementation tracked in `compass/workflows/improvements.md`).
+
 ## The flow
 
 17 workflows, grouped by **when you reach for them**. Several Observe workflows are auto-invoked by others — marked `[auto]` and rarely called by hand.
