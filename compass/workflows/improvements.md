@@ -2342,3 +2342,62 @@ python3 compass/scripts/dispatch.py \
 **Convention candidate surfaced:** `[discipline-as-primary-value]` — Compass's moat is not the methodology (others have methodology), not multi-model support (others do that), but the structural enforcement of discipline at every gate. Worth codifying when the framing stabilizes across 2+ consumer-facing descriptions. 1 instance.
 
 **Files touched (1):** `README.md` (two new sections). Counter: #68 → #69 (1 of 5 before Retro #015).
+
+---
+
+### 2026-06-09 — Institutional data layer: HITL journal + org learning engine — DECLARED, not implemented (#70)
+
+**Insight (user-originated):** The data collected from AI runs and HITL decisions is the real institutional memory. If it isn't captured systematically, it can't improve anything. The HITL gate specifically is a labeled dataset of "what humans consider acceptable AI output" — accumulated over time, this becomes an organizational learning engine and a data-driven feedback mechanism for teams.
+
+**The three layers being declared:**
+
+**Layer 1: AI run data** *(partially built — `runs.jsonl`)*
+Every orchestrator step already writes to `docs/orchestrator-runs/runs.jsonl`: workflow, step, agent, host, model, gate_result, tldr, DRI decisions, files touched, output_chars. The raw signal exists. What's missing: aggregate queries that turn it into quality benchmarks. "Claude's brief first-pass approval rate is 68%. After `--context-files`, it rose to 81%." That requires Layer 2 data to complete.
+
+**Layer 2: HITL decision journal** *(declared — `hitl.jsonl`)*
+Currently HITL is a silent status flip. What's not captured: how long the review took, whether it was first-pass or revised, what the rejection reason was, how many rounds before approval. A `hitl.jsonl` written every time a status transitions (proposed → approved / rejected / revised) would capture:
+```json
+{
+  "run_id": "create-brief--CB-5--2026-06-09",
+  "step": "pm.draft-brief",
+  "artifact": "docs/bets/CB-5/brief.md",
+  "decision": "revised",
+  "time_to_review_seconds": 847,
+  "revision_count": 2,
+  "rejection_reason": "hypothesis not falsifiable — KR not named",
+  "approved_by": "vivek",
+  "ts": "2026-06-09T22:00:00Z"
+}
+```
+Over time: which workflow steps consistently need multiple rounds? Which agents produce first-pass approvals? Which gate categories humans actually enforce vs rubber-stamp?
+
+**Layer 3: Organizational feedback engine** *(declared — v0.5 territory)*
+With Layer 1 + Layer 2 accumulated across a team over time:
+- **Agent quality scores** — per workflow, per model, per context configuration. Real data on what improves output.
+- **Individual coaching data** — PM briefs: 72% first-pass. Engineer PRs: 2.3 reviewer rounds average. Not impressions — patterns from 30+ data points.
+- **Team discipline metrics** — Time-to-HITL-decision is the discipline signal. 4 hours = gates being reviewed. 2 minutes = rubber stamp. The metric reveals whether the process is real.
+- **Improvement velocity** — Are first-pass rates rising? Are DRI Risk counts falling as conventions solidify? Compass becomes a learning system.
+
+**The moat this creates:**
+The markdown files can be copied in a month. The accumulated HITL decisions, DRI logs, and run patterns cannot. An org running Compass for 12 months has 12 months of labeled "what good looks like" data, specific to their product domain, their team's judgment, their quality bar. That compounds. That's the institutional memory the user was asking about.
+
+**The ethical constraint (design-time decision):**
+Data is a mirror, not a judge. Consent model:
+- Individual sees their own data always
+- Team sees aggregates; individual breakdown visible only to themselves
+- Managers see patterns via retros (periodic, retrospective) not live dashboards (pressure-creating)
+- The surface is `/retro --altitude=role` — not a scoreboard
+
+**What needs to be built (in order):**
+1. `hitl.jsonl` schema + writer (triggered on status transitions, not on orchestrator steps)
+2. Role-activity logs (`docs/role-activity/<role>.md`) — per-agent pattern log, already declared in retro workflow
+3. Analytics layer — aggregate queries over `runs.jsonl` + `hitl.jsonl`
+4. `/retro --altitude=role` end-to-end (source log exists in declaration; needs data)
+5. Consent + visibility framework — who sees whose data
+
+**Why declare now, not implement:**
+The v0.4 data layer (`runs.jsonl`) was designed with no downstream analytics in mind. Now that the vision is clear, `hitl.jsonl` can be designed with the analytics end-state in mind — so the data is there when the analytics layer ships. Declaring now prevents a future "we should have captured X all along" regret. Per `[declare-not-implement]`: the schema is the declaration; implementation waits for the friction that validates the priority.
+
+**Convention candidate:** `[data-as-institutional-memory]` — the real moat of a Compass-running org is not the methodology files (copyable) but the accumulated HITL decisions, DRI logs, and run patterns that encode the organization's judgment about what good looks like. 1 instance. Surface when 2nd instance appears (likely when first org-altitude retro runs with multi-project data).
+
+**Files touched (0):** declaration only. Counter: #69 → #70 (2 of 5 before Retro #015).
