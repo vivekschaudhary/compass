@@ -99,6 +99,12 @@ jobs:
       # not hardcoded here. dispatch.py reads the frontmatter, calls router.py,
       # and dispatches to whichever host has a valid API key (codex → gemini order).
       # Set whichever key matches your reviewer's preferred_hosts.
+      #
+      # --context-files injects project/bet context so the reviewer understands
+      # WHAT the PR is supposed to accomplish (brief, architecture, PROJECT.md).
+      # Without it, the agent only sees the diff — no architectural intent.
+      # Omit --context-files for pure structural/syntax reviews; include it for
+      # reviews that require understanding the bet's design decisions.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -115,7 +121,12 @@ jobs:
             --agent-file compass/agents/reviewer.md \
             --task review-pr \
             --input-file pr.diff \
-            --output review.md
+            --output review.md \
+            --context-files PROJECT.md \
+                             docs/foundation/product.md \
+                             docs/foundation/architecture.md
+          # To scope to a specific bet, add its artifacts:
+          #   --context-files PROJECT.md docs/bets/CB-4/brief.md docs/bets/CB-4/architecture.md
 
       # ── Option B: Claude Code headless (Anthropic) ───────────────────────
       # - name: Install Claude Code CLI

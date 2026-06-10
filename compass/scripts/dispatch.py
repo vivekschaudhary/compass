@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compass single-agent dispatch — v0.1
+Compass single-agent dispatch — v0.2
 
 LLM-agnostic dispatcher for CI/CD and script contexts.
 The LLM is determined by preferred_hosts: in the agent file frontmatter,
@@ -12,6 +12,7 @@ Usage:
       --task review-pr \\
       --input-file pr.diff \\
       --output review.md \\
+      [--context-files PROJECT.md docs/bets/CB-4/brief.md]  # optional context injection
       [--model gpt-4o]            # optional override
       [--compass-root PATH]       # if compass/ is not at repo root
 
@@ -53,6 +54,11 @@ def main(argv=None):
                         help="Input file whose content becomes the user message (e.g. pr.diff)")
     parser.add_argument("--output", required=True, metavar="PATH",
                         help="Output file for the agent response")
+    parser.add_argument("--context-files", nargs="*", default=[], metavar="PATH",
+                        help="Additional files injected as context before the input file "
+                             "(e.g. PROJECT.md docs/bets/CB-4/brief.md). "
+                             "Each file is prepended as a labeled block so the agent sees "
+                             "project/bet context alongside the primary input.")
     parser.add_argument("--model", default=None, metavar="ID",
                         help="Optional model override (applied to whichever host is selected)")
     parser.add_argument("--compass-root", default=None, metavar="PATH",
@@ -116,7 +122,23 @@ def main(argv=None):
         Path(args.output).write_text("", encoding="utf-8")
         sys.exit(0)
 
-    user_message = f"Execute task: **{args.task}**\n\n{input_content}"
+    # ── assemble context preamble ────────────────────────────────────────────
+    context_preamble = ""
+    if args.context_files:
+        blocks = []
+        for cf_path in args.context_files:
+            cf = Path(cf_path)
+            if not cf.exists():
+                print(f"[dispatch] warning: context file not found, skipping: {cf}", file=sys.stderr)
+                continue
+            content = cf.read_text(encoding="utf-8").strip()
+            if content:
+                blocks.append(f"### {cf}\n\n{content}")
+        if blocks:
+            context_preamble = "## Context\n\n" + "\n\n---\n\n".join(blocks) + "\n\n---\n\n"
+            print(f"[dispatch] context: {len(blocks)} file(s) injected")
+
+    user_message = f"{context_preamble}Execute task: **{args.task}**\n\n{input_content}"
 
     # ── dispatch ─────────────────────────────────────────────────────────────
     print(

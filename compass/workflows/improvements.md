@@ -2288,3 +2288,33 @@ agent-handoff.yml / any CI script
 ```
 
 **Files touched (3):** `compass/scripts/dispatch.py` (NEW) + `compass/scripts/reviewer.py` (DELETED) + `compass/scripts/agent-handoff.yml` (Option A rewritten). Counter: #66 → #67 (4 of 5 before Retro #014). **Next retro fires at #68.**
+
+---
+
+### 2026-06-09 — `--context-files`: agent context injection — decisiveness without codebase access (#68)
+
+**Friction:** `dispatch.py` sent only the agent file (system prompt) + primary input file (e.g. `pr.diff`). The agent had no codebase context — no `PROJECT.md`, no bet brief, no architecture decisions. A reviewer calling `dispatch.py` could see a diff but not what the PR was supposed to accomplish, making its judgments structurally disconnected from the bet's design intent.
+
+Root cause: context-free dispatch is correct for pure structural checks (syntax, linting), but wrong for higher-order reviews (does this align with the architectural decisions? does it satisfy the bet's acceptance criteria?). Without context injection, the agent is forced to guess intent or produce generic findings.
+
+**Change (IMPLEMENTED):**
+
+- **`dispatch.py --context-files`** (new flag, `nargs='*'`): accepts a list of additional files injected as a structured preamble before the primary input. Each file becomes a labeled `### <path>` block under a `## Context` header. Separator (`---`) before the `Execute task:` line ensures the agent sees context vs. input as distinct sections.
+- **`agent-handoff.yml` Option A updated**: added `--context-files PROJECT.md docs/foundation/product.md docs/foundation/architecture.md` to the default reviewer invocation. Comment explains when to include vs. omit (include for bet-aware reviews; omit for pure structural checks). Bet-specific example inline: `docs/bets/CB-4/brief.md`.
+- **Missing context files handled gracefully**: warning printed, file skipped, dispatch continues with remaining context.
+
+**Usage:**
+```bash
+python3 compass/scripts/dispatch.py \
+  --agent-file compass/agents/reviewer.md \
+  --task review-pr \
+  --input-file pr.diff \
+  --output review.md \
+  --context-files PROJECT.md docs/bets/CB-4/brief.md docs/bets/CB-4/architecture.md
+```
+
+**Verified:** context preamble assembles correctly; labeled blocks + separator; missing files skip with warning; `--help` shows flag; routing (`preferred_hosts` read) unchanged.
+
+**Architecture note:** context injection is the caller's responsibility — the caller knows which bet/workflow applies. The agent file (`reviewer.md`) defines WHAT to check; `--context-files` provides the domain knowledge to check against. This preserves LLM-agnosticism (context is just text; no host-specific logic added).
+
+**Files touched (2):** `compass/scripts/dispatch.py` (v0.1 → v0.2) + `compass/scripts/agent-handoff.yml` (Option A updated). Counter: #67 → #68. **Retro #014 fires now.**
