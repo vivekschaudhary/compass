@@ -1,4 +1,4 @@
-> **Status:** Early alpha. Used by the author on real projects. Orchestrator v0.4-alpha-2 ships — clone + set `ANTHROPIC_API_KEY` + run `compass run setup-product`. Feedback welcome via Discussions; no support promises.
+> **Status:** Early alpha. Used by the author on real projects. Orchestrator v0.4-alpha-5 ships — clone + set `ANTHROPIC_API_KEY` + run `python3 -m compass.orchestrator.run setup-product`. Feedback welcome via Discussions; no support promises.
 
 # Compass
 
@@ -15,7 +15,7 @@ The dominant failure mode of AI-assisted development is **soft-spec rationalizat
 Compass is the discipline layer. Not a methodology book — a structural enforcement system:
 
 - **Every phase has a gate.** Gates don't pass on vibes. They have explicit postconditions that must be met before the next step runs.
-- **HITL stops are hard.** Nothing scaffolds, nothing ships, nothing advances without human approval at the defined checkpoint. The agent cannot self-approve.
+- **HITL stops halt the flow.** Orchestrator runs pause for explicit y/n approval at each defined checkpoint; interactive hosts enforce the stop via agent refusal rules. The agent cannot self-approve.
 - **Refusal rules are in the files.** The agent literally refuses to proceed if conditions aren't met — not because it's prompted to, but because the refusal is defined in its task definition.
 - **Every decision is logged.** DRI (Decision / Risk / Issue) logs create an audit trail across every bet, every phase, every agent. "Why did we do it this way?" has an answer.
 - **No silent skips.** Skipped steps are logged as DRI Decisions with rationale. The framework says no for you when the pressure is on to cut corners.
@@ -30,8 +30,8 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 
 - **Every initiative is a bet.** Foundation product, OKRs, features, architectural initiatives — all measurable bets with a hypothesis, key metric, and an outcome: **won / learning / inconclusive**.
 - **Bets contain stories.** Stories contain implementation, tests, fixes, ops.
-- **Agents own tasks; workflows sequence agents.** 14 agent files in `compass/agents/` (**11 of 14 migrated**: pm · researcher · engineer · delivery-manager · reviewer · architect · designer · ux-writer · support · scanner · automation. Remaining 3 deferred: enterprise-architect · security-reviewer · tech-writer). Each agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; methodology lives in the agent task definitions.
-- **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter. Paste any agent file into the host's system-prompt slot → it works on ChatGPT, Claude, Codex, or Gemini. **The orchestrator (v0.4-alpha-2) walks dispatch graphs and dispatches each step to its preferred host automatically** — Engineer → Claude API, Reviewer → OpenAI API (Codex), preserving cross-model independence structurally. Run manually with `python3 -m compass.orchestrator.run <workflow>` or use any host interactively. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; per-agent `preferred_hosts:` is the source-of-truth.
+- **Agents own tasks; workflows sequence agents.** 14 agent files in `compass/agents/` (**all 14 migrated** as of v0.3.36). Each agent file is self-sufficient: identity + inlined principles + tools required + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — they don't embed methodology; methodology lives in the agent task definitions.
+- **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter. Paste any agent file into the host's system-prompt slot → it works on ChatGPT, Claude, Codex, or Gemini. **The orchestrator (v0.4-alpha-5) walks dispatch graphs and dispatches each step to its preferred host automatically** — Engineer → Claude API, Reviewer → OpenAI or Gemini API, preserving cross-model independence structurally. (Caveat: if neither `OPENAI_API_KEY` nor `GEMINI_API_KEY` is set, the reviewer step is currently skipped with a warning — set one or the run has no independent review.) Run manually with `python3 -m compass.orchestrator.run <workflow>` or use any host interactively. Per `[agent-as-surface-independent-unit]` (canon v0.3.14). *Legacy:* `compass/config.yaml.tool_assignments:` deprecated in v0.3.14; per-agent `preferred_hosts:` is the source-of-truth.
 - **Discipline holds always.** Full review on every PR, no shortcuts under pressure.
 - **Decisions, Risks, Issues** logged at every stage (DRI logs).
 - **Retros are fractal** (`[fractal-retro]`, canon v0.3.17). Same `/retro` workflow shape applied at every altitude — role · workflow · bet · project · org · framework — with bottom-up consolidation. Patterns visible at the role/workflow level (e.g., recurring PR-redo loops) bubble up to project retros, then to org retros, then promote to canon. Agents log patterns mid-task to `docs/role-activity/<role>.md` + `docs/workflow-runs/<workflow>.md` so leaf-altitude retros have source data.
@@ -126,8 +126,9 @@ cd your-project-repo
 cp -r path/to/compass/compass ./
 cp path/to/compass/AGENTS.md ./
 
-# Install the anthropic SDK
-pip3 install anthropic --break-system-packages
+# Install the anthropic SDK (in a venv)
+python3 -m venv .venv && .venv/bin/pip install anthropic
+source .venv/bin/activate
 
 # Run your first workflow
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -143,6 +144,8 @@ export OPENAI_API_KEY=sk-...
 python3 -m compass.orchestrator.run build --context "story-id: PROJ-43"
 ```
 
+> **Where output lands:** orchestrator step outputs are written to `docs/orchestrator-runs/<workflow>/step-NN-<agent>-<task>.md`. Promote approved outputs to their canonical paths (`docs/foundation/`, `docs/bets/`) yourself — automatic artifact promotion is on the v0.4 roadmap.
+
 See `compass/orchestrator/README.md` for full options.
 
 ## Get started (manual — any host)
@@ -152,5 +155,3 @@ Read `SETUP.md`.
 ## Heads-up: AI tool memory persists across folder deletion
 
 If you reuse a folder path for a new Compass project (delete + recreate at the same path), AI tools may carry stale context from the prior project. See `SETUP.md` → "Starting fresh at the same folder path" for the cleanup steps.
-
-Read `SETUP.md`.

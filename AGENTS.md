@@ -10,7 +10,7 @@ The framework lives in `compass/`:
 
 - `compass/agents/` — **self-sufficient, surface-independent agent files** (v0.3.14+). Each declares identity + inlined principles + tools + task definitions + refusal rules + handoffs + `preferred_hosts:`. Paste into any LLM host's system-prompt slot → it works. v0.3.14 ships 3 agents (pm, researcher, engineer); v0.3.25 adds architect; v0.3.28 adds designer + ux-writer; v0.3.31 adds support; v0.3.32 adds scanner; v0.3.33 adds automation (new — no legacy role); v0.3.36 adds enterprise-architect + security-reviewer + tech-writer (final 3 — all 14 agents now migrated).
 - `compass/roles/` — legacy role definitions (13 files; all 14 agents now migrated to `compass/agents/` as of v0.3.36). Kept during v0.3.x grace period; removed in v0.4.
-- `compass/workflows/` — phase flows. v0.3.14+ workflows are **thin dispatch graphs** sequencing `<agent>.<task>` references; pre-v0.3.14 workflows still embed full methodology bodies (refactor as their owning agents migrate). **4 of 14 workflows now in dispatch-graph shape:** `/setup-product` (v0.3.14, 1st) + `/build` (v0.3.23, 2nd) + `/create-bet-architecture` (v0.3.26, 3rd) + `/create-brief` (v0.3.27, 4th); 10 remaining migrate as the agents they dispatch finish migration.
+- `compass/workflows/` — phase flows. v0.3.14+ workflows are **thin dispatch graphs** sequencing `<agent>.<task>` references; pre-v0.3.14 workflows still embed full methodology bodies (refactor as their owning agents migrate). **4 of 17 workflows now in dispatch-graph shape** (17 active; `/advance` deprecated): `/setup-product` (v0.3.14, 1st) + `/build` (v0.3.23, 2nd) + `/create-bet-architecture` (v0.3.26, 3rd) + `/create-brief` (v0.3.27, 4th); 13 remaining refactor incrementally — all agents are migrated as of v0.3.36, so workflow refactors are no longer blocked on agent migration.
 - `compass/templates/` — artifact templates
 - `compass/config.yaml` — team decisions. `hitl_level:` + `connectors:` + `scanner.*` still load-bearing; `tool_assignments:` block **deprecated in v0.3.14** (legacy override mechanism; removed in v0.4) — per-agent `preferred_hosts:` in agent file frontmatter is the new source-of-truth.
 
@@ -43,10 +43,10 @@ Artifacts the framework produces live in `docs/`:
 
 | Agent | `preferred_hosts:` (default) | Why |
 | ------------- | ------------- | --- |
-| `engineer`, `architect`, `enterprise-architect`, `scanner` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold work; pure-chat hosts are degraded |
+| `engineer`, `architect`, `enterprise-architect`, `scanner`, `automation`, `tech-writer` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold/changelog-append work; pure-chat hosts are degraded |
 | `reviewer`, `security-reviewer` | `[codex, gemini]` — explicitly EXCLUDES claude | **Independent-model review** — must be a different model than the implementer (see structural rationale below) |
-| `pm`, `researcher`, `ux-writer`, `designer`, `tech-writer`, `delivery-manager` | `[chatgpt, claude, codex, gemini]` | Product / research / UX / visibility work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
-| `support` | `[any]` | Incident triage runs wherever the on-call is |
+| `pm`, `researcher`, `ux-writer`, `designer`, `delivery-manager` | `[chatgpt, claude, codex, gemini]` | Product / research / UX / visibility work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
+| `support` | `[chatgpt, claude, codex, gemini]` | Incident triage runs wherever the on-call is — any host |
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent.
 
@@ -58,7 +58,7 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent
 
 ## The 14 agents / roles
 
-v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surface-independent). Files marked **(legacy)** still load from `compass/roles/<role>.md` until their agent migrates (incrementally; complete by v0.4).
+v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surface-independent). All 14 agents are migrated as of v0.3.36; `compass/roles/` is grace-period only (removed in v0.4).
 
 | Agent / Role                               | Source-of-truth                                                  | Migration status |
 | ------------------------------------------ | ---------------------------------------------------------------- | ---------------- |
@@ -202,6 +202,17 @@ Every bet has an outcome: `won | learning | inconclusive`.
 
 13. **Continuous quality scanning with confidence levels** — Compass runs a **Snyk-style scanner** across six SDLC phases. The scanner produces **findings, not failures**: each finding has severity (Critical / High / Medium / Low) + confidence (High / Medium / Low) + location + reason + fix. Suppressions, not overrides — every suppression logged in DRI with rationale; some Critical findings are non-suppressible (e.g., PII without privacy review, missing legal review on T&C changes). **All measurement is automatic** — derived from artifact existence, content depth, CI data, or MCP corroboration. No manual self-assessment.
 
+    The **six phases** the scanner covers:
+
+    1. **Product** (Discovery) — brief, research, defensibility, HITL approval
+    2. **Architecture** — decision, alternatives, reversibility, cross-system review, test strategy, rollout
+    3. **Build** — AC↔test mapping, layer coverage, E2E, BLOCKERs, security review, architect compliance, perf budget
+    4. **Production Ready** *(new in v0.2 — previously silent in Compass)* — runbook, SLO, monitoring, rollback, on-call, backup, cost, compliance
+    5. **GTM** — user docs, API docs, sales, support, pricing, launch comms, customer comms, legal
+    6. **Operate** — measurement cron, SLO breach, incident rate, adoption, cost actuals, defect rate, outcome resolved
+
+    Phases are NOT strictly sequential — a bet can be "Built" but not yet "Production Ready"; the scanner tracks each phase independently. Check catalog lives in `compass/workflows/scan.md` (single source of truth). Owners decide; the scanner informs.
+
 14. **Soft spec → AI rationalization is a vulnerability surface, not flexibility.** Anywhere an agent has interpretive room, it will exercise judgment that diverges from intent under load. Constraints described as "implied," "obvious," "best practice," "ensure," "consider," or "verify" get rationalized away. **The fix is never "tell the agent to be better."** Every load-bearing constraint requires three structural elements in the workflow file:
 
     1. **Explicit imperative language** — "do NOT" / "must" / "required" — with the failure mode spelled out concretely (not "be careful with X" but "do NOT X; X is a spec violation, not an optimization")
@@ -223,17 +234,6 @@ Every bet has an outcome: `won | learning | inconclusive`.
     **Evidence (dogfood; n=12 instances, CB-2.2 through CB-4.1):** the CB-4.1 instance surfaced three times in one PR review — including an intra-file inconsistency (same file, two different numbers for the same count), proving the discipline applies within a single file, not just across files. **5th enforcement-class Compass-original** (joining `[cite-or-mark-n/a]` · `[refuse-escalate]` · `[soft-spec-hardening]` · `[mechanical-output-verification]`). Gate already in `compass/agents/engineer.md` Step 7 + `compass/workflows/build.md` verification checklist. Canon entry at `compass/framework/canon.md` → `[cross-artifact-sweep-on-contract-shift]`.
 
 18. **Minimize friction.** Every agent interaction and workflow step must not increase the decisions, prompts, or actions required of the user beyond what the task genuinely demands. Friction is a first-class failure mode — not a secondary concern. Measured by: human decisions required per workflow run from clone to first artifact. **Anti-pattern: `ceremony-without-constraint`** — steps, prompts, or questions that exist for process completeness but add no load-bearing gate, no artifact, and no constraint. When a step adds only ceremony, remove it. Origin: consumer project evidence (2026-06-09, crypto app run) — friction caused workflow abandonment before completion. Adjacent to `[user-as-load-bearing-oversight]` (Principle #18 concerns the experience of operating Compass; Principle #16 concerns escalation discipline — they are complementary).
-
-    The **six phases** the scanner covers:
-
-    1. **Product** (Discovery) — brief, research, defensibility, HITL approval
-    2. **Architecture** — decision, alternatives, reversibility, cross-system review, test strategy, rollout
-    3. **Build** — AC↔test mapping, layer coverage, E2E, BLOCKERs, security review, architect compliance, perf budget
-    4. **Production Ready** *(new in v0.2 — previously silent in Compass)* — runbook, SLO, monitoring, rollback, on-call, backup, cost, compliance
-    5. **GTM** — user docs, API docs, sales, support, pricing, launch comms, customer comms, legal
-    6. **Operate** — measurement cron, SLO breach, incident rate, adoption, cost actuals, defect rate, outcome resolved
-
-    Phases are NOT strictly sequential — a bet can be "Built" but not yet "Production Ready"; the scanner tracks each phase independently. Check catalog lives in `compass/workflows/scan.md` (single source of truth). Owners decide; the scanner informs.
 
 ## HITL levels
 

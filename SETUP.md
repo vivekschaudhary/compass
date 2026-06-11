@@ -8,11 +8,13 @@ How to install Compass with Claude Code (implementer) + OpenAI Codex CLI (review
 
 ```bash
 cd /path/to/your-empty-or-existing-repo
-cp -r path/to/compass/compass/    ./
-cp -r path/to/compass/docs/       ./
-cp -r path/to/compass/.claude/    ./
-cp -r path/to/compass/.codex/     ./
-cp -r path/to/compass/.github/    ./
+# No trailing slashes on the source paths — on macOS (BSD cp) a trailing
+# slash copies the directory's CONTENTS into ./ instead of the directory.
+cp -r path/to/compass/compass     ./
+cp -r path/to/compass/docs        ./
+cp -r path/to/compass/.claude     ./
+cp -r path/to/compass/.codex      ./
+cp -r path/to/compass/.github     ./
 cp    path/to/compass/.mcp.json   ./
 cp    path/to/compass/AGENTS.md   ./
 cp    path/to/compass/CLAUDE.md   ./
@@ -201,10 +203,10 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 ├── SETUP.md                     ← this file
 │
 ├── compass/                     ← ★ THE FRAMEWORK (vendor-neutral)
-│   ├── agents/                  #   11 agent files migrated (14 total — 3 deferred in roles/)
-│   ├── roles/                   #   3 legacy roles pending migration (enterprise-architect · security-reviewer · tech-writer)
-│   ├── workflows/               #   15+ workflows (one per command; 4 as dispatch graphs)
-│   ├── orchestrator/            #   v0.4-alpha-2 multi-host orchestrator (python3 -m compass.orchestrator.run)
+│   ├── agents/                  #   14 agent files — all migrated as of v0.3.36
+│   ├── roles/                   #   legacy role files (grace period only; removed in v0.4)
+│   ├── workflows/               #   17 workflows (one per command; 4 as dispatch graphs)
+│   ├── orchestrator/            #   v0.4-alpha multi-host orchestrator (python3 -m compass.orchestrator.run)
 │   ├── templates/               #   10 artifact templates
 │   └── config.yaml              #   team decisions
 │
@@ -223,13 +225,13 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 │   ─── TOOL WRAPPERS (thin; point at compass/) ───
 │
 ├── CLAUDE.md                    ← Claude Code: read AGENTS.md + compass/
-├── .claude/skills/              ← 13 skill stubs, one per command
+├── .claude/skills/              ← 18 skill stubs, one per command
 └── .codex/                      ← Codex CLI: config + reviewer prompts
 ```
 
 ## Picking which agent plays which role
 
-As of v0.3.14, **each agent file declares its own `preferred_hosts:` in its frontmatter** — that is the source-of-truth for routing. The v0.4-alpha-2 orchestrator reads `preferred_hosts:` and dispatches each workflow step to the appropriate host automatically.
+As of v0.3.14, **each agent file declares its own `preferred_hosts:` in its frontmatter** — that is the source-of-truth for routing. The v0.4-alpha orchestrator reads `preferred_hosts:` and dispatches each workflow step to the appropriate host automatically.
 
 ```yaml
 # Inside compass/agents/engineer.md frontmatter
@@ -270,7 +272,7 @@ For tools with flatter customization (Copilot, Cline's single-file rules), conca
 
 ## Customizing
 
-- **Agents:** edit `compass/agents/<agent>.md` (migrated agents) or `compass/roles/<role>.md` (3 legacy). All tools pick up the change.
+- **Agents:** edit `compass/agents/<agent>.md` (all 14 agents live here as of v0.3.36). All tools pick up the change.
 - **Workflows:** edit `compass/workflows/<workflow>.md`. Skills reference, don't duplicate.
 - **HITL strictness:** edit `compass/config.yaml` `hitl_level`.
 - **Connectors:** edit `.mcp.json` and `compass/config.yaml` `connectors`.
@@ -319,7 +321,7 @@ If anything feels broken, look at the workflow file that's running — workflows
 ## The principles, in 11 lines
 
 1. Every initiative is a measurable bet (won / learning / inconclusive)
-2. Agents, not job titles — 14 self-sufficient agent files (11 migrated)
+2. Agents, not job titles — 14 self-sufficient agent files (all migrated)
 3. Bets contain stories contain implementations
 4. Cross-model independence: Claude implements, Codex/Gemini reviews — enforced via `preferred_hosts:` per agent
 5. Decisions, Risks, Issues logged at every stage

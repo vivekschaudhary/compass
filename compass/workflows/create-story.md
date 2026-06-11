@@ -12,7 +12,7 @@ PM decomposes the bet into **one** shippable story at a time. After a story ship
    - `docs/bets/<bet-id>/brief.md` has `status: approved`
    - If brief has `architecture_required: true` → `docs/bets/<bet-id>/architecture.md` has `status: approved`
    - If neither → refuse with reason
-2. **Load PM role context** (`compass/roles/pm.md`)
+2. **Load PM agent context** (`compass/agents/pm.md`, migrated v0.3.14)
 3. **Read** brief, bet architecture (if exists), prior stories under this bet (to know what's done, what's queued)
 4. **PM identifies next shippable slice:**
    - Smallest thing that delivers value

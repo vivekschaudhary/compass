@@ -10,7 +10,7 @@ Non-code change. Infrastructure, dependency upgrades, config, secret rotation, C
 
 ### Phase 1 — classify
 
-1. **Load Enterprise/Solution Architect role context** (`compass/roles/enterprise-architect.md`) — leads
+1. **Load Enterprise/Solution Architect agent context** (`compass/agents/enterprise-architect.md`, migrated v0.3.36 — has the `lead-ops-change` task) — leads
 2. **Determine link:**
    - Bet-related (infra needed for a specific brief / story) → linked
    - Standalone hygiene (dep bump, CI fix, secret rotation, cert renewal) → standalone with `hygiene: true`

@@ -58,13 +58,20 @@ cp -r /path/to/compass-framework/compass/workflows/ /path/to/your-project/compas
 > ```bash
 > cp compass-v0.1-backup/workflows/improvements.md compass/workflows/improvements.md
 > ```
+> Also remove the framework's own retro history if it came along — it's framework-internal, not yours:
+> ```bash
+> rm -rf compass/workflows/retros/
+> ```
 
-### Step 4 — Copy updated templates and scripts
+### Step 4 — Copy updated templates, scripts, and the orchestrator
 
 ```bash
-cp -r /path/to/compass-framework/compass/templates/ /path/to/your-project/compass/templates/
-cp -r /path/to/compass-framework/compass/scripts/   /path/to/your-project/compass/scripts/
+cp -r /path/to/compass-framework/compass/templates/    /path/to/your-project/compass/templates/
+cp -r /path/to/compass-framework/compass/scripts/      /path/to/your-project/compass/scripts/
+cp -r /path/to/compass-framework/compass/orchestrator/ /path/to/your-project/compass/orchestrator/
 ```
+
+The orchestrator copy is what makes Step 8's `python3 -m compass.orchestrator.run` verification work from your project root. Skip it only if you exclusively use Path A's `--compass-dir` invocation.
 
 ### Step 5 — Update AGENTS.md at your project root
 

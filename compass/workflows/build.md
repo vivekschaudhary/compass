@@ -55,8 +55,8 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 - `compass/agents/engineer.md` — implementation + PR open + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
 - `compass/agents/reviewer.md` — E2E tests + code review (migrated v0.3.16; `preferred_hosts: [codex, gemini]` deliberately excludes claude per cross-host integrity; tasks: `write-e2e-tests`, `review-pr`)
 - `compass/agents/pm.md` — arbitrate Engineer-vs-Reviewer disputes (ad-hoc; fires only when Engineer adds `## Dispute` to PR; task: `arbitrate-dispute`)
-- `compass/roles/security-reviewer.md` (LEGACY — Codex; migration pending) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions
-- `compass/roles/tech-writer.md` (LEGACY — migration pending) — post-merge changelog accumulation (Phase 7)
+- `compass/agents/security-reviewer.md` (migrated v0.3.36; `preferred_hosts: [codex, gemini]` deliberately excludes claude) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions; task: `review-pr-security`
+- `compass/agents/tech-writer.md` (migrated v0.3.36) — post-merge changelog accumulation (Phase 7); task: `accumulate-changelog`
 
 ## Dispatch graph
 
@@ -97,7 +97,7 @@ Either way, the GRAPH is the same.
 **Task definition:** `compass/agents/reviewer.md` → Task `review-pr`
 **Task-internal gate (load-bearing):** Reviewer's task has a `Freshness window` precondition — `today - last_verified > freshness_window_days` on `compass/agents/reviewer.md` → **refuse before review begins** per `[freshness-check]` (canon v0.3.3 → v0.3.11). The workflow inherits this gate; no separate check needed at workflow level. _Note: freshness markers were relocated from `compass/roles/reviewer.md` → `compass/agents/reviewer.md` in v0.3.16 alongside the Reviewer migration._
 **What it covers:** wait for CI green (refuse if failing) → **Step 0 framework-registration check** (conditional, when PR touches framework-discovered surfaces — per `[mechanical-output-verification]`) → read diff file-by-file → bet-architecture compliance → **review-time freshness on NEW load-bearing claims** per `[freshness-check]` scope-tightening (v0.3.11) → categorize findings (BLOCKER / ISSUE / NIT) → cite, don't assert → post structured PR comment in the documented format.
-**Auto-engagement (parallel):** Security Reviewer (Codex; legacy role file `compass/roles/security-reviewer.md` until migration) auto-engages if diff touches auth/PII/payments/secrets/external input/sessions. Two reviews, two PR comments. `review-pr` does NOT absorb Security Reviewer's role.
+**Auto-engagement (parallel):** Security Reviewer (`compass/agents/security-reviewer.md` → Task `review-pr-security`) auto-engages if diff touches auth/PII/payments/secrets/external input/sessions. Two reviews, two PR comments. `review-pr` does NOT absorb Security Reviewer's role.
 **Stop point:** halts after PR comment posted. Awaits Engineer's response.
 
 <!-- COMPASS_ROLE_BOUNDARY: exit | role=reviewer | workflow=build | step=3 -->
@@ -142,7 +142,8 @@ Squash merge to main (per `compass/config.yaml` merge strategy). CI/CD pipeline 
 
 ### Step 8. Post-merge — tech-writer engagement + story status finalization
 
-**Dispatches:** Tech Writer (LEGACY — `compass/roles/tech-writer.md` until migration; load the legacy role file for task details)
+**Dispatches:** Tech Writer agent
+**Task definition:** `compass/agents/tech-writer.md` → Task `accumulate-changelog`
 
 <!-- COMPASS_ROLE_BOUNDARY: enter | role=tech-writer | workflow=build | step=8 -->
 
@@ -252,7 +253,7 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 - **`.github/workflows/ai-review.yml` installed** — Engineer → Reviewer handoff automated on CI-green per `[agent-handoff]` (canon v0.3.5). Either path (automated OR manual `codex` invocation) terminates at the same place (PR comment); automation removes the tool-switch only.
 - **Security-Reviewer auto-engages** in parallel with Reviewer when diff touches sensitive surfaces. Two reviews + two PR comments; both must clear (zero BLOCKERs + zero CRITICALs) before Step 7 mechanical merge constraints pass.
 - **Single-host run (everything on Claude Code)** — works but VIOLATES cross-host integrity per Reviewer's `preferred_hosts: [codex, gemini]`. Engineer can run on Claude Code; Reviewer task must dispatch to Codex CLI (or Gemini CLI) for a fresh model perspective. Do NOT run Reviewer-on-Claude against Claude-written code.
-- **Tech Writer / Security Reviewer not migrated** — workflow references `compass/roles/tech-writer.md` + `compass/roles/security-reviewer.md` during v0.3.x grace period; dispatch graph reference moves to `compass/agents/tech-writer.md` + `compass/agents/security-reviewer.md` when those agents migrate. Dispatch graph **shape** stable.
+- **Tech Writer / Security Reviewer migrated v0.3.36** — workflow references `compass/agents/tech-writer.md` (Task `accumulate-changelog`) + `compass/agents/security-reviewer.md` (Task `review-pr-security`). Legacy `compass/roles/` copies are grace-period only (removed in v0.4).
 
 ### Migration (v0.3.0-alpha → v0.3.23)
 

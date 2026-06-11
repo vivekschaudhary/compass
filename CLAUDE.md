@@ -13,7 +13,7 @@ When the user invokes a workflow command (`/<workflow-name>`):
 3. Execute the task in the agent file. Respect the gates. Halt at HITL handoffs.
 4. Move to the next step.
 
-If the workflow file still references `compass/roles/<role>.md` (a legacy role file not yet migrated to `compass/agents/`), use the role file as the task source. Role-to-agent migrations are tracked per release (v0.3.14 migrated pm, researcher, engineer; others migrate v0.3.15+).
+All 14 agents are migrated to `compass/agents/` as of v0.3.36. `compass/roles/` is grace-period only (removed in v0.4) — if a workflow file still references `compass/roles/<role>.md`, prefer the migrated `compass/agents/<agent>.md` and flag the stale workflow reference.
 
 ## Commands available
 
@@ -34,6 +34,9 @@ Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 - `/dashboard` — `compass/workflows/dashboard.md`
 - `/metrics` — `compass/workflows/metrics.md`
 - `/measure` — `compass/workflows/measure.md`
+- `/scan` — `compass/workflows/scan.md`
+- `/retro` — `compass/workflows/retro.md`
+- `/advance` — `compass/workflows/advance.md` (DEPRECATED — prints the status-field migration table)
 
 ## Host-specific tool preferences (Claude Code as runtime)
 
@@ -78,15 +81,15 @@ Pre-v0.3.14, this file declared "you play every Compass role EXCEPT Reviewer / S
 
 Under `[agent-as-surface-independent-unit]` (canon v0.3.14):
 - **Role authority moved to agent files.** Each `compass/agents/<agent>.md` declares its own `preferred_hosts: [...]`. Workflow dispatch graphs name `<agent>.<task>` per step. The host (Claude Code, here) just runs whatever the dispatch graph names.
-- **Cross-host independence preserved structurally.** The Reviewer agent (migrated v0.3.16) declares `preferred_hosts: [codex, gemini]` (NOT claude) — making the implementer/reviewer model split enforced at the agent-frontmatter level, not via CLAUDE.md prose. Security Reviewer still pending migration; the legacy `compass/roles/security-reviewer.md` and `.codex/prompts/security-reviewer.md` remain Codex-assigned via `compass/config.yaml` until its own migration session.
+- **Cross-host independence preserved structurally.** The Reviewer agent (migrated v0.3.16) declares `preferred_hosts: [codex, gemini]` (NOT claude) — making the implementer/reviewer model split enforced at the agent-frontmatter level, not via CLAUDE.md prose. Security Reviewer migrated v0.3.36 with the same exclusion: `compass/agents/security-reviewer.md` declares `preferred_hosts: [codex, gemini]`; `.codex/prompts/security-reviewer.md` is the Codex CLI entry wrapper.
 - **No same-host self-review.** Even though Claude Code CAN execute any agent file, do not run reviewer / security-reviewer tasks against code Claude Code wrote. The cross-model review independence is a Compass design principle; respect it at runtime.
 
-## Notes for the orchestrator (v0.4 — not yet present)
+## Notes on the orchestrator (v0.4-alpha, shipped — `compass/orchestrator/`)
 
-When the v0.4 orchestrator ships, it will:
-1. Read `compass/workflows/<workflow>.md` dispatch graph
-2. For each step, look up the agent's `preferred_hosts:` and dispatch via the appropriate host's API (Claude API for Claude-assigned agents, OpenAI Responses API for ChatGPT-assigned, Codex API or CLI for Codex-assigned)
-3. Pass agent file contents as system prompt; pass task-step inputs as user prompt
-4. Collect outputs; commit artifacts to repo; advance the graph
+The orchestrator (currently v0.4.0-alpha-5, see CHANGELOG.md):
+1. Reads `compass/workflows/<workflow>.md` dispatch graph
+2. For each step, looks up the agent's `preferred_hosts:` and dispatches via the appropriate host's API (Claude API / OpenAI API / Gemini API per `router.py`)
+3. Passes agent file contents as system prompt; task-step inputs as user prompt
+4. Writes step outputs to `docs/orchestrator-runs/<workflow>/` and advances the graph. (Committing outputs to canonical artifact paths — `docs/foundation/`, `docs/bets/` — is NOT yet implemented; promotion is manual.)
 
 This file (CLAUDE.md) becomes irrelevant to the orchestrator's routing — Claude is just one of several configured hosts. CLAUDE.md remains useful for **interactive Claude Code sessions** where the human runs Compass workflows manually.

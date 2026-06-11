@@ -31,7 +31,7 @@ Creates the **foundational architecture bet** — the platform's load-bearing te
 
 ## Roles invoked
 
-- `compass/roles/enterprise-architect.md` — primary role throughout both phases
+- `compass/agents/enterprise-architect.md` (migrated v0.3.36) — primary agent throughout both phases. NOTE: this workflow file predates the agent migration and still embeds full methodology; the agent file's `setup-foundation-architecture` task is the source of truth on divergence. Workflow refactor to dispatch-graph shape is tracked separately.
 
 ---
 
@@ -49,7 +49,7 @@ Creates the **foundational architecture bet** — the platform's load-bearing te
 
 **Precondition (GATE):** Step 1 postcondition holds.
 
-**Work (Claude):** Load `compass/roles/enterprise-architect.md` as active role context for the rest of the workflow.
+**Work (Claude):** Load `compass/agents/enterprise-architect.md` as active agent context for the rest of the workflow.
 
 **Postcondition (GATE):** EA role active.
 
@@ -81,7 +81,7 @@ These are the architecture bet's falsification criteria. **Per [evolutionary-arc
 
 **Precondition (GATE):** Fitness functions declared.
 
-**Work (Claude):** EA produces evidence across all 6 architecture-research categories (see `compass/roles/enterprise-architect.md` → "Where to research"). **"Smart default" / "team preference" is NOT a substitute** — mirrors the ban on Researcher's log-and-walk-away. Findings live in `docs/foundation/architecture.md` under "Architecture Research" OR a standalone `docs/foundation/architecture-research.md` if substantial.
+**Work (Claude):** EA produces evidence across all 6 architecture-research categories (see `compass/agents/enterprise-architect.md` → Task `setup-foundation-architecture`, Phase A research framework). **"Smart default" / "team preference" is NOT a substitute** — mirrors the ban on Researcher's log-and-walk-away. Findings live in `docs/foundation/architecture.md` under "Architecture Research" OR a standalone `docs/foundation/architecture-research.md` if substantial.
 
 **Postcondition (GATE):** Architecture research findings present with cited sources per category. Per [cite-or-mark-na] — empty cells fail; "n/a" without reason fails.
 

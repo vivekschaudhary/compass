@@ -12,7 +12,7 @@ OR
 
 ### Phase 1 — triage (Support)
 
-1. **Load Support role context** (`compass/roles/support.md`)
+1. **Load Support agent context** (`compass/agents/support.md`, migrated v0.3.31)
 2. **Reproduce** the bug. If not reproducible → ask reporter for more info.
 3. **Classify severity** P0 / P1 / P2 / P3
 4. **Check for duplicates** in ticketing system
@@ -30,7 +30,7 @@ OR
 
 ### Phase 2 — fix (Engineer)
 
-10. **Load Engineer role context** (`compass/roles/engineer.md`)
+10. **Load Engineer agent context** (`compass/agents/engineer.md`, migrated v0.3.14 — has the `fix-bug` task)
 11. **Engineer reads triage note + bet context** (brief, architecture, affected story)
 12. **Write failing regression test FIRST** (first commit: `test: reproduce <bug>`)
 13. **Implement fix** (subsequent commits: `fix: <description>`)

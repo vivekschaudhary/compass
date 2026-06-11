@@ -23,8 +23,8 @@ After the MVP ships, the project transitions to steady-state: new bets come one-
 
 1. **Verify gate:** both `docs/foundation/product.md` AND `docs/foundation/architecture.md` exist with `status: approved`. If not, refuse and tell user which is missing.
 2. **Check state** per table above.
-3. **Load PM role context** (`compass/roles/pm.md`).
-4. **Engage Researcher** (mandatory — `compass/roles/researcher.md`). Researcher's job here:
+3. **Load PM agent context** (`compass/agents/pm.md`, migrated v0.3.14).
+4. **Engage Researcher** (mandatory — `compass/agents/researcher.md`, migrated v0.3.14). Researcher's job here:
    - Surface market patterns for MVP wedge shape in this product's category (what did comparable products need to ship to be usable?).
    - Flag MVP candidates the user might be missing (auth, billing, observability bare minimums).
    - Apply the 6-category framework (especially User pain, Competitive, Moat) — same rules as foundation: no log-and-walk-away.

@@ -3,7 +3,7 @@
 
 schema_version: 1
 framework: compass
-framework_version: 1.0
+framework_version: 0.3.36
 
 # ─── HITL ─────────────────────────────────────────────────────────────
 # Human-in-the-loop level

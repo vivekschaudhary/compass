@@ -22,7 +22,7 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 ## Process
 
 1. Verify bet exists (or `--all` mode).
-2. **Load Scanner role context** (`compass/roles/scanner.md`).
+2. **Load Scanner agent context** (`compass/agents/scanner.md`, migrated v0.3.32).
 3. **Determine current phase** from bet frontmatter + artifact statuses:
    - Brief exists, status `proposed` → **Product** (in review)
    - Brief `approved`, no architecture → **Architecture** (or Build if arch declined)
