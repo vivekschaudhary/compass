@@ -76,7 +76,7 @@ consolidates_from: []
 
 - **Consumer friction (real-world):** 3 of 5 improvements — #65 (crypto-app v0.1 migration gap), #71 (12 CB-bot cross-artifact drift instances), #72 (hitl.jsonl gap observed during consumer orchestrator run)
 - **Framework-internal (institutional positioning):** 2 of 5 — #69 (README discipline + OKR overlay), #70 (data layer vision + architecture amendment)
-- **Concentration:** single consumer (crypto-bot / crypto-app) is still the primary signal source. Kindtree install done but hasn't generated friction yet. Second consumer signal expected as kindtree runs its first workflows.
+- **Concentration:** single consumer (crypto-bot / crypto-app) is still the primary signal source. Kindtree install is done but no workflow runs are planned for this validation cycle. Second consumer signal TBD.
 
 ## Watch-for list (next 5 improvements, #73–#77)
 
@@ -84,7 +84,7 @@ consolidates_from: []
 - **Connector abstraction layer** — HITL approval triggering connector push (Confluence / Linear / GitHub / docs/ fallback). Without this, #70's gating redesign can't ship and brief.md stays the de-facto canonical.
 - **`[test-alongside-implementation]`** 2nd instance — watch for the next orchestrator feature to confirm the pattern or flag its absence.
 - **`[consumer-as-primary-signal]`** promotion decision — user to confirm or defer; shape is stable at 5+ instances.
-- **Kindtree first workflow run** — first new consumer friction signal. Will it surface framework gaps the crypto-app didn't hit?
+- **Second consumer validation** — kindtree framework install is done but no workflow runs planned. Crypto-app remains the primary consumer signal source. Watch for a second consumer (TBD) to validate cross-consumer patterns.
 
 ## Meta-observations
 
