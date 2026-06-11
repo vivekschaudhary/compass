@@ -24,7 +24,7 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #014** (post v0.4.0-alpha-5 — improvements #64–#68): [retros/2026-06-09-retro-014-v0.4.0-alpha-5-extensions.md](retros/2026-06-09-retro-014-v0.4.0-alpha-5-extensions.md) — **fired ON TIME at #68** (10th consecutive on-time retro). 4 shipped improvements + 1 held gap (#65): `--full-project` orchestrator context · `reviewer.py` + LLM-agnostic `dispatch.py` · `--context-files` injection. Infrastructure-consolidation batch. Convention candidates: `[context-injection-discipline]` (2 instances) · `[ci-script-llm-discipline]` (1 instance). Watch-fors: `[context-injection-discipline]` 3rd instance · #65 consumer migration guide · artifact routing gap.
 
-**Next retro fires after improvement #73.** (Retro #014 = #68; next = #73.)
+**Next retro fires after improvement #77.** (Retro #015 = #72; next = #77.) [Retro #015](retros/2026-06-10-retro-015-improvements-69-to-72.md) — **fired ON TIME at #72** (11th consecutive on-time retro). 5 improvements: consumer migration guide (late #65) + README discipline/OKR overlay (#69) + institutional data layer declaration (#70) + cross-artifact-sweep Principle #17 (#71) + runs.jsonl + hitl.jsonl end-to-end with 15 tests (#72). Promotion candidate: `[consumer-as-primary-signal]` (5+ instances). Watch-fors: 3 unmigrated agents · connector abstraction · test-alongside-implementation 2nd instance.
 
 ## Template
 
