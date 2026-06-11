@@ -2436,3 +2436,20 @@ Counter slot #65 was reserved in session #66 and held open honestly (first count
 - **Path B (full upgrade):** step-by-step in-place migration — copy `compass/agents/` + `compass/workflows/` from current framework, preserve project's own `improvements.md`, archive/delete `compass/roles/`, update `AGENTS.md`. Includes gotchas (half-migrated state, three not-yet-migrated agents, interactive Claude Code behavior post-migration).
 
 **Files touched (1):** `MIGRATION.md` (NEW). Counter: #70 → (gap closed). Effective position: #71 next. 3 of 5 before Retro #015.
+
+---
+
+### 2026-06-10 — `[cross-artifact-sweep-on-contract-shift]` codified as AGENTS.md Principle #17 (#71)
+
+**Friction:** The pattern was already in engineer.md (Step 7 of implement-story), build.md verification checklist, and the AGENTS.md patterns catalog — but it was never promoted to a numbered cross-cutting principle. Without a numbered principle, agents reading only the principles section (not the full catalog) missed the structural mandate. n=12 evidence instances across CB-2.2 through CB-4.1, including three catches in one PR review (CB-4.1 #59) and an intra-file case that proved same-file drift is the same class as inter-file drift.
+
+**Change (IMPLEMENTED):**
+
+AGENTS.md cross-cutting principles: inserted #17 `[cross-artifact-sweep-on-contract-shift]` after #16 (refuse+escalate); renumbered previous #17 "Minimize friction" to #18. Three-element structure per Principle #14: explicit imperative + mechanical verification gate (existing engineer.md Step 7 + build.md checklist item) + named anti-pattern with four named variants (intra-file, inter-file, external-source, same-fact-cited-twice). Self-reference in "Minimize friction" updated from Principle #17 to Principle #18.
+
+**Sweep (hitl.jsonl + runs.jsonl):** sweep requested as part of this improvement — applying the pattern retroactively to recent #70 contract changes. Findings:
+- `runs.jsonl`: consistent across logger.py (writes), run.py (reads), CHANGELOG.md, improvements.md, retros/2026-06-09-retro-013. No stale references.
+- `hitl.jsonl`: declared only in improvements.md #70 amendment — correctly declared-not-implemented. No inconsistencies.
+- `agent.json`: does not exist in the framework. Not a contract that has been shipped.
+
+**Files touched (1):** `AGENTS.md` (principle #17 inserted, #17 Minimize friction renumbered to #18). Counter: #71. 4 of 5 before Retro #015.
