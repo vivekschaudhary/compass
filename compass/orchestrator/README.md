@@ -1,6 +1,8 @@
-# Compass Orchestrator — v0.4-alpha-2
+# Compass Orchestrator — v0.4-alpha
 
-Walks Compass dispatch-graph workflows and dispatches each step to the named agent's host via API. **v0.4-alpha-2 ships multi-host dispatch:** each step reads the agent's `preferred_hosts:` frontmatter and routes to the best available host (Claude API, OpenAI API, or Gemini API).
+> Current alpha number is tracked in the repo-root `CHANGELOG.md` — this file deliberately avoids restating it (same-fact-cited-twice drift, Principle #17).
+
+Walks Compass dispatch-graph workflows and dispatches each step to the named agent's host via API. **Multi-host dispatch:** each step reads the agent's `preferred_hosts:` frontmatter and routes to the best available host (Claude API, OpenAI API, or Gemini API).
 
 This closes the P0 drift from Retro #009: Reviewer steps (`preferred_hosts: [codex, gemini]`) no longer dispatch to Claude — they route to OpenAI API (Codex) or Gemini API, preserving cross-model independence.
 
@@ -93,7 +95,7 @@ With `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` set:
 
 Engineer and Reviewer dispatch to different models — cross-model independence restored.
 
-## v0.4-alpha-2 scope and known gaps
+## v0.4-alpha scope and known gaps
 
 - **Multi-host dispatch** — routes per agent `preferred_hosts:` to Claude API, OpenAI API, or Gemini API.
 - **Artifact write** — step outputs written to `docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md`.
@@ -109,7 +111,7 @@ compass/orchestrator/
   __init__.py        # package marker
   graph.py           # dispatch graph parser
   hitl.py            # HITL gate handler
-  run.py             # CLI entry point (v0.4-alpha-2)
+  run.py             # CLI entry point
   hosts/
     __init__.py
     claude.py        # Claude API adapter (anthropic SDK)

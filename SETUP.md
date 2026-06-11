@@ -264,7 +264,7 @@ Paste any `compass/agents/<agent>.md` file into your LLM host's system-prompt sl
 The framework lives in `compass/`. To add Cursor, Cline, Windsurf, etc.:
 
 1. Create the tool's expected config folder (`.cursor/rules/`, `.clinerules`, etc.)
-2. Write thin wrappers that paste `compass/agents/<agent>.md` (migrated) or `compass/roles/<role>.md` (legacy) as the system prompt, referencing `compass/workflows/<workflow>.md` for dispatch.
+2. Write thin wrappers that paste `compass/agents/<agent>.md` as the system prompt, referencing `compass/workflows/<workflow>.md` for dispatch.
 3. Add the tool's credential env var to the orchestrator's host map (`compass/orchestrator/hosts/router.py`) if you want automated dispatch.
 4. `compass/agents/` and `compass/workflows/` files don't change. Only the wrapper folder is added.
 

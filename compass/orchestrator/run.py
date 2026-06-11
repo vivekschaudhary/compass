@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compass orchestrator CLI — v0.4-alpha-4
+Compass orchestrator CLI — v0.4-alpha (current alpha tracked in CHANGELOG.md)
 
 Usage:
     python3 -m compass.orchestrator.run <workflow> [options]
@@ -593,7 +593,7 @@ def _run_workflow(
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="compass run",
-        description="Compass orchestrator v0.4-alpha-4",
+        description="Compass orchestrator v0.4-alpha",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Single workflow:
