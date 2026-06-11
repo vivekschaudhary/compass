@@ -52,8 +52,18 @@ def load_workflow(workflow_file: Path) -> list:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(graph_text)
         step_body = graph_text[start:end]
 
+        # HITL detection must be formatting-tolerant: a human gate silently
+        # becoming a "workflow-level step" because someone wrote
+        # `Dispatches: **HUMAN**` instead of `**Dispatches:** HUMAN` would
+        # delete the gate without anyone noticing. Accept any bold/colon/dash
+        # placement on the Dispatches line, and a HITL marker in the title.
         is_hitl = bool(
-            re.search(r'\*\*Dispatches:\*\*\s+HUMAN', step_body, re.IGNORECASE)
+            re.search(
+                r'^[*_>\s-]*Dispatches[*_\s:—–-]*HUMAN\b',
+                step_body,
+                re.IGNORECASE | re.MULTILINE,
+            )
+            or re.search(r'\bHITL\b', step_title_raw)
         )
 
         agent = task = agent_file = None

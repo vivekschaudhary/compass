@@ -2566,3 +2566,19 @@ Retro still reports, never prescribes — audit findings become improvements via
 `compass/orchestrator/run.py` — both skip sites now **halt with exit code 2** and an actionable message (which key to set, how to resume with `--from-step N`). New explicit escape hatch: `--skip-missing` flag restores skip behavior but prints a loud `STEP N SKIPPED (explicit --skip-missing)` line and instructs that the skip be logged as a DRI Decision — skips are now a deliberate, visible operator choice, never a default. Flag threaded through single-workflow and pipeline modes. Verified: run.py parses, `--dry-run` walks the graph correctly, 15/15 tests pass.
 
 **Files touched (2):** `compass/orchestrator/run.py` · `compass/workflows/improvements.md`. Counter: #79. 2 of 5 before Retro #017 (fires after #82).
+
+---
+
+### 2026-06-11 — HITL gate-detection hardening + first graph.py tests (#80)
+
+**Friction:** Independent-review finding C5: `graph.py` detected HITL gates with a single exact regex (`\*\*Dispatches:\*\*\s+HUMAN`). Any formatting variation — `Dispatches: **HUMAN**`, `**Dispatches**: HUMAN`, an em-dash — parsed as a "workflow-level step," which `run.py` skips with a print. A markdown formatting nit could silently delete a human approval gate, the worst possible parser failure given README's HITL promise. graph.py (the module the whole orchestrator stands on) had zero tests.
+
+**Change (IMPLEMENTED):**
+
+`compass/orchestrator/graph.py` — formatting-tolerant gate detection: any bold/colon/dash placement on the Dispatches line (`^[*_>\s-]*Dispatches[*_\s:—–-]*HUMAN\b`, multiline + case-insensitive) OR `\bHITL\b` in the step title. Failure direction is now safe: a false positive adds a visible gate; the old failure removed one invisibly. Verified zero behavior change on all 4 current dispatch-graph workflows (same step counts, same gate positions).
+
+`compass/orchestrator/tests/test_graph.py` (NEW) — 17 tests: 8 HITL-detection cases (canonical + 4 formatting variants + title marker + 2 negative cases incl. HUMAN-in-prose), 5 step-parsing cases (backtick agent.task, Task-definition file resolution, workflow-level steps, section scoping, markup stripping), 4 integration tests parsing the real setup-product/build/create-brief/create-bet-architecture graphs and asserting gate positions. Suite: 32/32 pass (`python3 -m unittest discover -s compass/orchestrator/tests`).
+
+**Note:** 2nd instance of `[test-alongside-implementation]` (1st: #72 logger tests) — new parsing behavior shipped with its tests in the same commit. Candidate now at the 2-instance threshold from Retro #015's watch-for.
+
+**Files touched (3):** `compass/orchestrator/graph.py` · `compass/orchestrator/tests/test_graph.py` (NEW) · `compass/workflows/improvements.md`. Counter: #80. 3 of 5 before Retro #017 (fires after #82).
