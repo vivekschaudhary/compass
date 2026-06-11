@@ -2401,3 +2401,20 @@ The v0.4 data layer (`runs.jsonl`) was designed with no downstream analytics in 
 **Convention candidate:** `[data-as-institutional-memory]` — the real moat of a Compass-running org is not the methodology files (copyable) but the accumulated HITL decisions, DRI logs, and run patterns that encode the organization's judgment about what good looks like. 1 instance. Surface when 2nd instance appears (likely when first org-altitude retro runs with multi-project data).
 
 **Files touched (0):** declaration only. Counter: #69 → #70 (2 of 5 before Retro #015).
+
+---
+
+### 2026-06-10 — Consumer migration guide: v0.1 roles/ → current agents/ (#65, shipped late)
+
+**Friction:** Crypto-app (and any v0.1 consumer) has `compass/roles/` structure predating the v0.3.14 `compass/agents/` migration. The `--compass-dir` orchestrator workaround covered automated dispatch but interactive Claude Code sessions inside v0.1 projects still loaded stale role files. No documented path existed for consumers to upgrade their embedded `compass/` in-place.
+
+Counter slot #65 was reserved in session #66 and held open honestly (first counter gap in framework history). Now shipped.
+
+**Change (IMPLEMENTED):**
+
+`MIGRATION.md` added at repo root (alongside README.md, SETUP.md). Two paths:
+
+- **Path A (workaround):** `--compass-dir` flag — zero file changes, orchestrator reads current framework externally. Validated on crypto-app CB-4.
+- **Path B (full upgrade):** step-by-step in-place migration — copy `compass/agents/` + `compass/workflows/` from current framework, preserve project's own `improvements.md`, archive/delete `compass/roles/`, update `AGENTS.md`. Includes gotchas (half-migrated state, three not-yet-migrated agents, interactive Claude Code behavior post-migration).
+
+**Files touched (1):** `MIGRATION.md` (NEW). Counter: #70 → (gap closed). Effective position: #71 next. 3 of 5 before Retro #015.
