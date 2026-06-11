@@ -2618,3 +2618,20 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Self-check disposition (the discipline applied to its own codification):** script run on "7 shapes / 18 patterns" + "enforcement (5)" returned 3 hits, all in canon.md "catalog grows from X → Y" lines — justified as point-in-time historical records by canon convention (same class as the excluded history files). No unswept mentions.
 
 **Files touched (6):** `compass/scripts/pre-push-consistency-check.py` (NEW) · `compass/framework/canon.md` · `CLAUDE.md` · `AGENTS.md` · `compass/framework/mvp.md` · `compass/workflows/improvements.md`. Counter: #82. **5 of 5 → Retro #017 fires next** (first retro under the #78 full-surface-audit rule).
+
+---
+
+### 2026-06-11 — `[consumer-as-primary-signal]` promoted to Principle #19 (#83)
+
+**Friction:** Carried as promotion-ready since Retro #015 (5+ instances across Retros #013–#015: crypto-app prod defects → #50/#51 · v0.1 migration pain → #65 · 12 cross-artifact drift instances → #71 · hitl.jsonl gap from live consumer run → #72 · CB-3.3 retro signals → 4 anti-patterns). **User decision 2026-06-11: promote.**
+
+**Change (IMPLEMENTED, v0.3.39):**
+
+- `AGENTS.md` — **Principle #19**: consumer friction is the primary codification trigger; improvement entries name their trigger origin; no-consumer-origin entries say so explicitly and verify against `ceremony-without-constraint`; retro Trigger-origin analysis tracks the per-batch ratio (consecutive zero-consumer batches = drift signal, not violation). Anti-pattern: `synthetic-improvement-bias`. Catalog counts → 7 shapes / 20 patterns, scope-discipline (4).
+- `compass/framework/canon.md` — `### consumer-as-primary-signal` entry (4th scope-discipline member) with the 5 promotion instances, **honest counter-evidence** (two consecutive zero-consumer batches #73–#82 immediately preceding promotion; single-active-consumer concentration), and relationships to `[user-as-load-bearing-oversight]` (corrects execution vs directs evolution) + `[independent-review-as-signal-source]` (complementary signal classes).
+
+**Trigger origin (per the new principle, applied to itself):** user decision + retro accumulation — no NEW consumer instance this batch; the promotion packages 5 prior consumer-driven instances. Not ceremony: the principle adds two mechanical obligations (origin naming per entry; explicit no-consumer-origin flag) that change how every future entry is written.
+
+**Pre-push sweep:** run on "19 patterns" / "scope-discipline (3)" — 4 hits, all canon grows-from→to historical lines, justified per point-in-time convention.
+
+**Files touched (3):** `AGENTS.md` · `compass/framework/canon.md` · `compass/workflows/improvements.md`. Counter: #83. 1 of 5 before Retro #018 (fires after #87).
