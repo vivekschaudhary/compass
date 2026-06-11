@@ -2554,3 +2554,15 @@ Also updated `MIGRATION.md` Gotchas note: was "3 agents not yet migrated"; now r
 Retro still reports, never prescribes — audit findings become improvements via normal triggers.
 
 **Files touched (3):** `compass/workflows/retro.md` · `compass/templates/retro.md` · `compass/workflows/improvements.md`. Counter: #78. 1 of 5 before Retro #017 (fires after #82).
+
+---
+
+### 2026-06-11 — orchestrator halt-not-skip on missing host/agent (#79)
+
+**Friction:** Independent-review finding C4 (highest-severity blind spot): `run.py` handled a missing agent file or unavailable host with warn-and-`continue`. A `/build` run with neither `OPENAI_API_KEY` nor `GEMINI_API_KEY` set silently skipped the Reviewer step and proceeded to merge constraints — the run shipped with NO independent review, directly violating the "No silent skips" principle and hollowing out the framework's central cross-model-review invariant.
+
+**Change (IMPLEMENTED):**
+
+`compass/orchestrator/run.py` — both skip sites now **halt with exit code 2** and an actionable message (which key to set, how to resume with `--from-step N`). New explicit escape hatch: `--skip-missing` flag restores skip behavior but prints a loud `STEP N SKIPPED (explicit --skip-missing)` line and instructs that the skip be logged as a DRI Decision — skips are now a deliberate, visible operator choice, never a default. Flag threaded through single-workflow and pipeline modes. Verified: run.py parses, `--dry-run` walks the graph correctly, 15/15 tests pass.
+
+**Files touched (2):** `compass/orchestrator/run.py` · `compass/workflows/improvements.md`. Counter: #79. 2 of 5 before Retro #017 (fires after #82).

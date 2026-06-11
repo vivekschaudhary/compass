@@ -306,6 +306,7 @@ def _run_workflow(
     from_step: int = None,
     initial_prior_outputs: list = None,
     dry_run: bool = False,
+    skip_missing: bool = False,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -460,25 +461,53 @@ def _run_workflow(
                 break
 
         if agent_file is None:
+            if skip_missing:
+                print(
+                    f"STEP {step.number} SKIPPED (explicit --skip-missing): "
+                    f"agent file for '{step.agent}' not found. "
+                    f"Log this skip as a DRI Decision with rationale.",
+                    file=sys.stderr,
+                )
+                continue
             print(
-                f"Warning: agent file for '{step.agent}' not found. Skipping.",
+                f"Error: agent file for '{step.agent}' not found "
+                f"(looked in {compass_dir}/agents/ and {compass_dir}/roles/).\n"
+                f"  Halting — no silent skips (AGENTS.md principle).\n"
+                f"  Fix the dispatch graph or agent file, then resume with "
+                f"--from-step {step.number}.\n"
+                f"  To skip explicitly instead, rerun with --skip-missing "
+                f"(the skip must be logged as a DRI Decision).",
                 file=sys.stderr,
             )
-            continue
+            sys.exit(2)
 
         # ── host selection ───────────────────────────────────────────────────
         preferred_hosts = _read_preferred_hosts(agent_file)
         host = select_host(preferred_hosts)
 
         if host is None:
+            if skip_missing:
+                print(
+                    f"STEP {step.number} SKIPPED (explicit --skip-missing): "
+                    f"no host available for {step.agent}.{step.task} "
+                    f"(preferred_hosts: {preferred_hosts}). "
+                    f"Log this skip as a DRI Decision with rationale.",
+                    file=sys.stderr,
+                )
+                continue
             print(
-                f"Warning: no host available for step {step.number} "
+                f"Error: no host available for step {step.number} "
                 f"({step.agent}.{step.task}).\n"
                 f"  preferred_hosts: {preferred_hosts}\n"
-                f"  Set one of: ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY",
+                f"  Halting — no silent skips (AGENTS.md principle). Skipping a "
+                f"review step would mean the run ships with NO independent review.\n"
+                f"  Set the matching key ({', '.join('ANTHROPIC_API_KEY' if h == 'claude' else 'OPENAI_API_KEY' if h in ('codex', 'chatgpt') else 'GEMINI_API_KEY' for h in preferred_hosts)}), "
+                f"then resume with --from-step {step.number}.\n"
+                f"  To skip explicitly instead, rerun with --skip-missing "
+                f"(the skip must be logged as a DRI Decision).",
                 file=sys.stderr,
             )
-            continue
+            sys.exit(2)
 
         try:
             agent_label = agent_file.relative_to(project_dir)
@@ -637,6 +666,17 @@ def main(argv=None):
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
+        "--skip-missing",
+        action="store_true",
+        dest="skip_missing",
+        help=(
+            "Skip steps whose agent file or host is unavailable instead of "
+            "halting. Skips are printed loudly and must be logged as DRI "
+            "Decisions — the default (halt) enforces the no-silent-skips "
+            "principle."
+        ),
+    )
+    parser.add_argument(
         "--log",
         action="store_true",
         help="Print the run log table (docs/orchestrator-runs/runs.jsonl) and exit.",
@@ -692,6 +732,7 @@ def main(argv=None):
             only_step=args.step,
             from_step=args.from_step,
             dry_run=args.dry_run,
+            skip_missing=args.skip_missing,
         )
         return
 
@@ -736,6 +777,7 @@ def main(argv=None):
             only_step=args.step if idx == 0 else None,
             from_step=args.from_step if idx == 0 else None,
             initial_prior_outputs=accumulated_outputs,
+            skip_missing=args.skip_missing,
         )
 
         accumulated_outputs.extend(wf_outputs)
