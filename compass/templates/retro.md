@@ -81,6 +81,16 @@ Workflows being repeatedly patched in this batch — possible over-engineering o
 |---|---|---|
 | <signal> | <which patches> | <what to look at> |
 
+## Full-surface audit
+
+> Framework + project altitudes: MANDATORY (v0.3.38). The source log sees what changed; this section reports what *drifted* in artifacts nobody touched. Name the method (independent context-free agent / mechanical sweep). Every finding is verified against the surface before recording — reviewer claims are claims, not facts. Leaf altitudes (role / workflow / bet) may note "n/a — altitude reads raw logs only."
+
+**Method:** <independent agent (model/session) | mechanical sweep (greps run)>
+
+| Finding | Verified? | Disposition |
+|---|---|---|
+| <claim + file:line evidence> | yes / refuted | fixed-in-batch / watch-for / improvement-candidate |
+
 ## Trigger-origin analysis
 
 Where did the improvements in this batch come from? Single project? Diverse? Synthetic vs. real-world friction?

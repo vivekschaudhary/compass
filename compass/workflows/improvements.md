@@ -2538,3 +2538,19 @@ Also updated `MIGRATION.md` Gotchas note: was "3 agents not yet migrated"; now r
 - `compass/orchestrator/run.py` `_write_rejection_note`: rejection-note rerun hint was `--from-step <gate step>` (re-asks approval of the unchanged rejected artifact) while the console hint correctly said `<gate step − 1>`; both now agree on the producing step (review finding C10). 15/15 tests pass (unittest).
 
 **Files touched (6):** `compass/agents/reviewer.md` · `compass/workflows/build.md` · `compass/orchestrator/README.md` · `compass/orchestrator/run.py` · `compass/roles/reviewer.md` · `compass/workflows/improvements.md`. Counter: #77. 5 of 5 → **Retro #016 fires next.**
+
+---
+
+### 2026-06-11 — Retro full-surface audit step (#78)
+
+**Friction:** Retro #016's meta-observation, confirmed by user directive same day: retros read the improvements log, so they catch process drift but are structurally blind to artifact drift — stale docs in files nobody touched. A zero-context reviewer found in one pass (11 critical findings, 13 inconsistencies) what 12 consecutive on-time retros did not, because the drift lived in README/SETUP/CLAUDE.md/build.md, not in the log the retro reads. User direction (verbatim intent): "when we do retro — we look at the entire codebase and not just the improvements."
+
+**Change (IMPLEMENTED):**
+
+`compass/workflows/retro.md` — new mandatory Process step 6 for framework + project altitudes: **full-surface audit**. Preferred method: dispatch an independent context-free reviewer agent over the full artifact surface, treating output as claims-to-verify per `[independent-review-as-signal-source]` (Retro #016, 1 instance). Minimum bar: mechanical sweep (version strings, "N of M" counts, `compass/roles/` refs, task-ownership cross-checks, dead refs, doc-claims-vs-code spot-checks). Verification checklist gains a gate item: audit performed, method named, findings verified, each with disposition (fixed-in-batch / watch-for / refuted). Skipping the audit at these altitudes is a gate failure.
+
+`compass/templates/retro.md` — new **Full-surface audit** section (method + verified-findings table with dispositions) between Drift signals and Trigger-origin analysis. Leaf altitudes may mark n/a.
+
+Retro still reports, never prescribes — audit findings become improvements via normal triggers.
+
+**Files touched (3):** `compass/workflows/retro.md` · `compass/templates/retro.md` · `compass/workflows/improvements.md`. Counter: #78. 1 of 5 before Retro #017 (fires after #82).
