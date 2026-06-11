@@ -2599,3 +2599,20 @@ Retro still reports, never prescribes — audit findings become improvements via
 Verified: 32/32 tests pass; env-override precedence unit-checked.
 
 **Files touched (8):** `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/README.md` · `docs/role-activity/.gitkeep` (NEW) · `docs/workflow-runs/.gitkeep` (NEW) · `docs/orchestrator-runs/.gitkeep` (NEW) · `compass/workflows/improvements.md`. Counter: #81. 4 of 5 before Retro #017 (fires after #82).
+
+---
+
+### 2026-06-11 — `[pre-push-grep-discipline]` codified (#82)
+
+**Friction:** Pattern hit its threshold with the user's deferral conditions met (post-MVP + 2nd instance). Instances: (1) 2026-06-08 consumer Codex session — 4 rounds of rename sweeps + 30-day-window drift caught by the paid reviewer instead of a free grep (user's verbatim commit note: "grep the full artifact + neighbors for old phrasing before pushing. That would have caught this one before Codex got a turn"); (2) v0.3.36 migration shift unswept across 13+ files (#76); (3) v0.3.33 reviewer→automation split unswept for ~2 days (#77). Root cause: Principle #17's mechanical gate lives only in consumer-facing `/build` Step 7 — framework-edit sessions had no equivalent. **User decision 2026-06-11: codify.**
+
+**Change (IMPLEMENTED, v0.3.38):**
+
+- `compass/scripts/pre-push-consistency-check.py` (NEW) — takes the old phrasing of an amended concept; greps tracked text files; excludes append-only history (CHANGELOG, improvements.md, retros/) by default with `--include-history` override; exit 1 on hits. **Validated on first real run:** caught `compass/framework/mvp.md` still citing the phantom `compass run` CLI that #76 swept everywhere else — fixed in this commit (4th instance, same-session).
+- `compass/framework/canon.md` — `### pre-push-grep-discipline` entry: 6th enforcement-class member; catalog 7 shapes / 19 patterns; anti-pattern `grep-class-work-to-reviewer`; orchestrator pre-Reviewer-dispatch sub-step DECLARED per `[declare-not-implement]`.
+- `CLAUDE.md` — host-runtime discipline rule 8: run the script before committing any load-bearing amendment; sweep hits in the SAME commit or justify in DRI.
+- `AGENTS.md` — catalog counts 18→19 / enforcement 5→6; Principle #17 element 2 names the script as the framework-edit-session gate.
+
+**Self-check disposition (the discipline applied to its own codification):** script run on "7 shapes / 18 patterns" + "enforcement (5)" returned 3 hits, all in canon.md "catalog grows from X → Y" lines — justified as point-in-time historical records by canon convention (same class as the excluded history files). No unswept mentions.
+
+**Files touched (6):** `compass/scripts/pre-push-consistency-check.py` (NEW) · `compass/framework/canon.md` · `CLAUDE.md` · `AGENTS.md` · `compass/framework/mvp.md` · `compass/workflows/improvements.md`. Counter: #82. **5 of 5 → Retro #017 fires next** (first retro under the #78 full-surface-audit rule).

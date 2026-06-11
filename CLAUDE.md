@@ -58,6 +58,7 @@ These preferences are runtime-shape, not role-shape — they let you execute age
 5. **Do not skip git hooks** (`--no-verify`, `--no-gpg-sign`) unless user explicitly requests. Fix root causes, don't bypass.
 6. **Do not commit secrets** (`.env`, credentials.json, etc.).
 7. **Do not run destructive git operations** (`reset --hard`, `push --force`, `clean -f`, `branch -D`) unless user explicitly requests.
+8. **Pre-push grep on load-bearing amendments** (`[pre-push-grep-discipline]`, canon v0.3.38). Before committing an edit that changes a load-bearing fact — a rename, a count ("N of M"), a version string, a task-ownership move, a contract surface — run `python3 compass/scripts/pre-push-consistency-check.py "<old phrasing>"` and sweep every hit in the SAME commit (or justify it in a DRI Decision). Framework-edit sessions have no other gate for Principle #17; this is it.
 
 Per-task refusal rules (don't review your own code, don't paraphrase UX Writer copy, don't improvise architecture, etc.) live in the agent files themselves — `compass/agents/<agent>.md` → Refusal rules section. Load those when executing the agent's tasks.
 

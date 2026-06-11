@@ -124,8 +124,8 @@ Don't build horizontal (all agents, then orchestrator). Build vertical: one work
 ## What "start sending" means
 
 MVP is shippable when:
-- [ ] `compass run setup-product` runs end-to-end without human host-switching
-- [ ] `compass run build` runs end-to-end without human host-switching
+- [ ] `python3 -m compass.orchestrator.run setup-product` runs end-to-end without human host-switching
+- [ ] `python3 -m compass.orchestrator.run build` runs end-to-end without human host-switching
 - [ ] All Product pack + Build pack agents present in `compass/agents/`
 - [ ] Orchestrator handles HITL gates correctly (doesn't skip, doesn't loop)
-- [ ] A new user can clone the repo, set `ANTHROPIC_API_KEY`, run `compass run setup-product`, and get an artifact
+- [ ] A new user can clone the repo, set `ANTHROPIC_API_KEY`, run `python3 -m compass.orchestrator.run setup-product`, and get an artifact
