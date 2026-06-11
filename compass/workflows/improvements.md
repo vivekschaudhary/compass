@@ -2453,3 +2453,19 @@ AGENTS.md cross-cutting principles: inserted #17 `[cross-artifact-sweep-on-contr
 - `agent.json`: does not exist in the framework. Not a contract that has been shipped.
 
 **Files touched (1):** `AGENTS.md` (principle #17 inserted, #17 Minimize friction renumbered to #18). Counter: #71. 4 of 5 before Retro #015.
+
+---
+
+### 2026-06-10 — runs.jsonl + hitl.jsonl end-to-end (#72)
+
+**Friction:** HITL gate outcomes (approve/reject) were printed to the console but never persisted. `hitl.jsonl` was declared in #70 but had zero implementation. When a user approved a brief, there was no machine-readable record that it happened, no way to join the approval event to the step that produced the artifact, and no `--hitl-log` command to inspect the decision trail.
+
+**Change (IMPLEMENTED):**
+
+`compass/orchestrator/logger.py` — added `log_hitl()` (appends one JSON record to `docs/orchestrator-runs/hitl.jsonl` on every HITL gate decision), `load_hitl_log()`, `print_hitl_table()`. Schema: `run_id · ts · workflow · bet_id · step · artifact_path · decision (approved|rejected) · feedback · reviewer (human) · connector (null until connector built)`. Also fixed `_extract_files` regex to accept `**Files created:**` format (colon inside bold) — was silently dropping file paths from the runs.jsonl parser.
+
+`compass/orchestrator/run.py` — imports `log_hitl`; calls it after every `handle_hitl_gate()` return (approved AND rejected), logs `[hitl → approved]` / `[hitl → rejected]` to stdout; adds `--hitl-log` CLI flag that prints the HITL decision table and exits.
+
+`compass/orchestrator/tests/test_jsonl_pipeline.py` (NEW) — 15 tests covering: `log_step()` creates + appends correctly; `log_hitl()` approved/rejected records; `load_runs()` / `load_hitl_log()` round-trip; `run_id` linkage test (same run_id in both files so steps and HITL decisions can be joined); `parse_step_output()` unit tests (tldr, files_created, dri_decisions, output_chars, empty input). All 15 pass.
+
+**Files touched (4):** `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/__init__.py` (NEW) · `compass/orchestrator/tests/test_jsonl_pipeline.py` (NEW). Counter: #72. 5 of 5 before Retro #015 → **Retro #015 fires next.**

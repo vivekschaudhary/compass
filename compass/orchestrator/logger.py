@@ -104,7 +104,7 @@ def _extract_files(output: str, label: str) -> list:
     summary = _extract_section(output, "Output summary")
     if not summary:
         return []
-    pattern = rf'\*\*Files? {re.escape(label)}\*\*[:\s]*(.*?)(?=\n\*\*|\Z)'
+    pattern = rf'\*\*Files? {re.escape(label)}:?\*\*[:\s]*(.*?)(?=\n\*\*|\Z)'
     match = re.search(pattern, summary, re.DOTALL | re.IGNORECASE)
     if not match:
         return []
@@ -256,6 +256,109 @@ def print_run_table(project_dir: Path) -> None:
         print("  ".join(trunc(v, w).ljust(w) for v, w in zip(row, col_widths)))
     print(sep)
     print(f"\n{len(records)} step(s) logged.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HITL journal — log every gate decision to hitl.jsonl
+# ─────────────────────────────────────────────────────────────────────────────
+
+HITL_SCHEMA = """
+hitl.jsonl schema (one JSON object per line):
+  run_id        str   — matches the step record in runs.jsonl
+  ts            str   — ISO-8601 UTC of the gate decision
+  workflow      str   — workflow name
+  bet_id        str   — bet ID or null
+  step          int   — step number of the HITL gate
+  artifact_path str   — path of the artifact reviewed, or null
+  decision      str   — "approved" | "rejected"
+  feedback      str   — reviewer notes on rejection, or null
+  reviewer      str   — "human" (all HITL gates today are human)
+  connector     str   — connector artifact was pushed to, or null (not yet built)
+"""
+
+
+def log_hitl(
+    project_dir: Path,
+    run_id: str,
+    workflow: str,
+    bet_id: str,
+    step: int,
+    artifact_path: str,
+    decision: str,
+    feedback: str = None,
+    reviewer: str = "human",
+    connector: str = None,
+) -> dict:
+    """Append a HITL gate decision to hitl.jsonl."""
+    record = {
+        "run_id": run_id,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "workflow": workflow,
+        "bet_id": bet_id,
+        "step": step,
+        "artifact_path": artifact_path,
+        "decision": decision,
+        "feedback": feedback or None,
+        "reviewer": reviewer,
+        "connector": connector,
+    }
+
+    log_path = project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    return record
+
+
+def load_hitl_log(project_dir: Path) -> list:
+    """Load all HITL records from hitl.jsonl."""
+    log_path = project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"
+    if not log_path.exists():
+        return []
+    records = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return records
+
+
+def print_hitl_table(project_dir: Path) -> None:
+    """Print a human-readable summary table of all HITL gate decisions."""
+    records = load_hitl_log(project_dir)
+    if not records:
+        print("No HITL decisions logged yet (docs/orchestrator-runs/hitl.jsonl is empty).")
+        return
+
+    col_widths = [10, 24, 6, 10, 8, 28]
+    headers = ["ts", "workflow", "step", "bet", "decision", "feedback"]
+    sep = "  ".join("─" * w for w in col_widths)
+
+    def trunc(s, n):
+        s = str(s or "")
+        return s[:n] if len(s) <= n else s[: n - 1] + "…"
+
+    print(sep)
+    print("  ".join(h.ljust(w) for h, w in zip(headers, col_widths)))
+    print(sep)
+    for r in records:
+        ts_short = (r.get("ts") or "")[:10]
+        row = [
+            ts_short,
+            r.get("workflow", ""),
+            str(r.get("step", "")),
+            r.get("bet_id") or "",
+            r.get("decision") or "",
+            r.get("feedback") or "",
+        ]
+        print("  ".join(trunc(v, w).ljust(w) for v, w in zip(row, col_widths)))
+    print(sep)
+    print(f"\n{len(records)} HITL decision(s) logged.")
 
 
 def dri_decisions_report(project_dir: Path) -> None:

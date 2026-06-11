@@ -316,7 +316,7 @@ def _run_workflow(
     from .graph import load_workflow
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host
-    from .logger import log_step
+    from .logger import log_step, log_hitl
 
     workflow_file = compass_dir / "workflows" / f"{workflow_name}.md"
     if not workflow_file.exists():
@@ -414,6 +414,22 @@ def _run_workflow(
                 last_artifact=last_artifact_path,
                 last_output=last_agent_output,
             )
+            artifact_rel = (
+                str(last_artifact_path.relative_to(project_dir))
+                if last_artifact_path else None
+            )
+            decision = "approved" if result["approved"] else "rejected"
+            log_hitl(
+                project_dir=project_dir,
+                run_id=run_id,
+                workflow=workflow_name,
+                bet_id=bet_id,
+                step=step.number,
+                artifact_path=artifact_rel,
+                decision=decision,
+                feedback=result.get("feedback") or None,
+            )
+            print(f"[hitl → {decision}]")
             if not result["approved"]:
                 if not no_write:
                     note_path = _write_rejection_note(
@@ -629,16 +645,24 @@ def main(argv=None):
         action="store_true",
         help="Print all DRI decisions extracted from logged runs and exit.",
     )
+    parser.add_argument(
+        "--hitl-log",
+        action="store_true",
+        dest="hitl_log",
+        help="Print the HITL decision log (docs/orchestrator-runs/hitl.jsonl) and exit.",
+    )
     args = parser.parse_args(argv)
 
-    # ── log / dri report modes (no workflow needed) ──────────────────────────
-    if args.log or args.dri:
-        from .logger import print_run_table, dri_decisions_report
+    # ── log / dri / hitl-log report modes (no workflow needed) ──────────────
+    if args.log or args.dri or args.hitl_log:
+        from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
         if args.log:
             print_run_table(project_dir)
         if args.dri:
             dri_decisions_report(project_dir)
+        if args.hitl_log:
+            print_hitl_table(project_dir)
         return
 
     if not args.workflow and not args.pipeline:
