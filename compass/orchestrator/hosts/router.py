@@ -33,39 +33,56 @@ def select_host(preferred_hosts: list) -> Optional[str]:
     return None
 
 
+# Per-host default models. Override order: --model flag > COMPASS_MODEL_<HOST>
+# env var > these defaults. Env vars keep model pinning out of code per the
+# LLM-agnostic-scripts discipline (no SDK/model hardcoding outside hosts/).
+DEFAULT_MODELS = {
+    "claude": "claude-opus-4-8",
+    "openai": "gpt-5",
+    "gemini": "gemini-2.5-pro",
+}
+
+
+def _default_model(host_family: str) -> str:
+    return (
+        os.environ.get(f"COMPASS_MODEL_{host_family.upper()}")
+        or DEFAULT_MODELS[host_family]
+    )
+
+
 def dispatch_to_host(
     host: str,
     agent_file_path: str,
     task_name: str,
     user_message: str,
     model: str = None,
-    max_tokens: int = 8096,
+    max_tokens: int = 8192,
 ) -> str:
     """
     Dispatch to the named host adapter.
 
-    model is passed only when explicitly overridden by the caller; each adapter
-    has its own default if model is None.
+    model is passed only when explicitly overridden by the caller; otherwise
+    COMPASS_MODEL_<CLAUDE|OPENAI|GEMINI> env var, then the DEFAULT_MODELS entry.
     """
     if host == "claude":
         from .claude import dispatch
         return dispatch(
             agent_file_path, task_name, user_message,
-            model=model or "claude-opus-4-8",
+            model=model or _default_model("claude"),
             max_tokens=max_tokens,
         )
     elif host in ("codex", "chatgpt", "openai"):
         from .openai import dispatch
         return dispatch(
             agent_file_path, task_name, user_message,
-            model=model or "gpt-4o",
+            model=model or _default_model("openai"),
             max_tokens=max_tokens,
         )
     elif host == "gemini":
         from .gemini_api import dispatch
         return dispatch(
             agent_file_path, task_name, user_message,
-            model=model or "gemini-2.0-flash",
+            model=model or _default_model("gemini"),
             max_tokens=max_tokens,
         )
     else:

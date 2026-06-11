@@ -444,7 +444,9 @@ def _run_workflow(
                     f"  python3 -m compass.orchestrator.run {workflow_name} "
                     f"--from-step {max(1, step.number - 1)}"
                 )
-                sys.exit(0)
+                # Non-zero: a rejected gate is a halted run, not a success —
+                # CI and pipeline callers must not read this as green.
+                sys.exit(1)
             continue
 
         # ── workflow-level steps (no agent) ──────────────────────────────────

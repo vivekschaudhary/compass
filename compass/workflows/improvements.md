@@ -2582,3 +2582,20 @@ Retro still reports, never prescribes — audit findings become improvements via
 **Note:** 2nd instance of `[test-alongside-implementation]` (1st: #72 logger tests) — new parsing behavior shipped with its tests in the same commit. Candidate now at the 2-instance threshold from Retro #015's watch-for.
 
 **Files touched (3):** `compass/orchestrator/graph.py` · `compass/orchestrator/tests/test_graph.py` (NEW) · `compass/workflows/improvements.md`. Counter: #80. 3 of 5 before Retro #017 (fires after #82).
+
+---
+
+### 2026-06-11 — orchestrator small-fix batch from independent review (#81)
+
+**Friction:** Independent-review Bucket-D nits, batched: (1) `router.py` hardcoded `gpt-4o` as the OpenAI default — a dated model for the framework's most load-bearing dispatch (independent review) — plus `gemini-2.0-flash`, with no override surface except per-run `--model`; (2) `max_tokens: 8096` typo (intended 8192); (3) HITL rejection exited with code 0 — CI/pipeline callers read a halted run as success; (4) `docs/role-activity/`, `docs/workflow-runs/`, `docs/orchestrator-runs/` were referenced by every agent's logging section but absent from the kit — first append depended on each host creating directories; (5) `compass/orchestrator/README.md` options table documented only alpha-2 flags (8 shipped flags missing).
+
+**Change (IMPLEMENTED):**
+
+- `compass/orchestrator/hosts/router.py` — `DEFAULT_MODELS` map (claude-opus-4-8 / gpt-5 / gemini-2.5-pro) with `COMPASS_MODEL_<CLAUDE|OPENAI|GEMINI>` env-var override layer (precedence: `--model` flag > env var > default). Keeps model pinning out of code per the LLM-agnostic-scripts discipline. `max_tokens` 8096 → 8192.
+- `compass/orchestrator/run.py` — HITL rejection now exits 1 (halted ≠ success). Exit-code contract: 0 complete · 1 HITL rejection · 2 missing host/agent without `--skip-missing`.
+- `docs/role-activity/.gitkeep` + `docs/workflow-runs/.gitkeep` + `docs/orchestrator-runs/.gitkeep` (NEW) — kit now ships the log directories agents append to.
+- `compass/orchestrator/README.md` — options table completed (--compass-dir, --pipeline, --from-step, --bet, --full-project, --skip-missing, --log/--dri/--hitl-log) + exit-code contract documented. Closes review inconsistency I12.
+
+Verified: 32/32 tests pass; env-override precedence unit-checked.
+
+**Files touched (8):** `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/README.md` · `docs/role-activity/.gitkeep` (NEW) · `docs/workflow-runs/.gitkeep` (NEW) · `docs/orchestrator-runs/.gitkeep` (NEW) · `compass/workflows/improvements.md`. Counter: #81. 4 of 5 before Retro #017 (fires after #82).

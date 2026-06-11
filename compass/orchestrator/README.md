@@ -50,11 +50,20 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
 | Flag | Description |
 |---|---|
 | `--project-dir PATH` | Root of the project repo (default: current directory) |
+| `--compass-dir PATH` | Framework directory override (default: `<project-dir>/compass`) — use when Compass lives in a separate repo |
+| `--pipeline W1,W2,…` | Run workflows in sequence with cross-workflow context handoff |
 | `--dry-run` | Print dispatch graph with host routing (no API calls) |
 | `--step N` | Execute only step N (1-indexed) |
+| `--from-step N` | Resume from step N (prior step outputs loaded from disk) |
 | `--context TEXT` | Inline context for the first agent step (skips interactive prompt) |
-| `--model ID` | Model override applied to whichever host is selected |
+| `--bet ID` | Auto-load `docs/bets/<ID>/` brief + architecture + story summaries as context |
+| `--full-project` | Load foundation docs + status + all bet summaries as context |
+| `--model ID` | Model override applied to whichever host is selected (see also `COMPASS_MODEL_<CLAUDE\|OPENAI\|GEMINI>` env vars) |
 | `--no-write` | Print output to stdout only; do not write artifact files |
+| `--skip-missing` | Skip steps with no available host/agent instead of halting (loud, must be DRI-logged; default is halt — no silent skips) |
+| `--log` / `--dri` / `--hitl-log` | Report modes: runs.jsonl table / DRI decisions / HITL decision log |
+
+Exit codes: `0` complete · `1` HITL rejection (run halted) · `2` missing host/agent without `--skip-missing`.
 
 ## How it works
 
