@@ -2469,3 +2469,41 @@ AGENTS.md cross-cutting principles: inserted #17 `[cross-artifact-sweep-on-contr
 `compass/orchestrator/tests/test_jsonl_pipeline.py` (NEW) — 15 tests covering: `log_step()` creates + appends correctly; `log_hitl()` approved/rejected records; `load_runs()` / `load_hitl_log()` round-trip; `run_id` linkage test (same run_id in both files so steps and HITL decisions can be joined); `parse_step_output()` unit tests (tldr, files_created, dri_decisions, output_chars, empty input). All 15 pass.
 
 **Files touched (4):** `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/__init__.py` (NEW) · `compass/orchestrator/tests/test_jsonl_pipeline.py` (NEW). Counter: #72. 5 of 5 before Retro #015 → **Retro #015 fires next.**
+
+---
+
+### 2026-06-11 — enterprise-architect agent migration (#73)
+
+**Friction:** `compass/roles/enterprise-architect.md` (211 lines) was the last of the 3 unmigrated "big" agents. Workflows referencing it still loaded a legacy fat-role file with no `preferred_hosts:`, no gate/work/postcondition triplets, and no HITL gate placement — blocking v0.4 orchestrator dispatch for the `/setup-foundation-architecture` and `/create-bet-architecture` paths.
+
+**Change (IMPLEMENTED):**
+
+`compass/agents/enterprise-architect.md` (NEW, v0.3.36) — 4 tasks: `setup-foundation-architecture` (Phase A research → HITL → Phase B derivation; 6-category research framework; 9-axis data model decisions; Well-Architected 6-pillar scoring; 2 mandatory HITL gates), `join-bet-architecture` (constraint-violation review join), `lead-ops-change` (foundational amendment + `[cross-artifact-sweep-on-contract-shift]` blast-radius sweep), `join-triage` (structural classification + redirect or amendment trigger). `preferred_hosts: [claude, codex, gemini]`.
+
+**Files touched (3):** `compass/agents/enterprise-architect.md` (NEW) · `AGENTS.md` (migration table row: legacy → ✅ v0.3.36) · `compass/workflows/improvements.md`. Counter: #73.
+
+---
+
+### 2026-06-11 — security-reviewer agent migration (#74)
+
+**Friction:** `compass/roles/security-reviewer.md` (97 lines) had hard-rules in prose, no `preferred_hosts:` declaration, and no gate/work/postcondition triplet — blocking the enforced `[codex, gemini]` routing that makes cross-model security review structurally independent of the implementer.
+
+**Change (IMPLEMENTED):**
+
+`compass/agents/security-reviewer.md` (NEW, v0.3.36) — single task: `review-pr-security`. Auto-engagement triggers (10 sensitive surfaces). 6-category check framework (injection/validation, authN/authZ, secrets/PII, sessions/cookies, dependencies, frontend). Explicit "no findings" postcondition. Severity model (CRITICAL/HIGH/MEDIUM/LOW) with exploitability-based definitions. Hard separation from Reviewer role (two comments, not one). `preferred_hosts: [codex, gemini]` — excludes claude, same structural rationale as the Reviewer agent.
+
+**Files touched (3):** `compass/agents/security-reviewer.md` (NEW) · `AGENTS.md` (migration table row: legacy → ✅ v0.3.36) · `compass/workflows/improvements.md`. Counter: #74.
+
+---
+
+### 2026-06-11 — tech-writer agent migration (#75)
+
+**Friction:** `compass/roles/tech-writer.md` (56 lines) was the smallest unmigrated role — but it blocked the `accumulate-changelog` and `finalize-brief-docs` handoffs from being machine-dispatchable. With all 14 agents now migrated, `compass/roles/` is grace-period-only pending v0.4 cleanup.
+
+**Change (IMPLEMENTED):**
+
+`compass/agents/tech-writer.md` (NEW, v0.3.36) — 2 tasks: `accumulate-changelog` (per merged PR; append-only changelog entry format; gates on bet changelog existence; never edits prior entries) + `finalize-brief-docs` (at bet close; gate on all stories shipped + HITL-approved brief; assembles `docs/bets/<bet_id>/finalized/`; connector push or filesystem fallback; DRI Decision logged). `preferred_hosts: [claude, codex, gemini]`.
+
+Also updated `MIGRATION.md` Gotchas note: was "3 agents not yet migrated"; now reads "All 14 agents migrated as of v0.3.36."
+
+**Files touched (4):** `compass/agents/tech-writer.md` (NEW) · `AGENTS.md` (migration table row: legacy → ✅ v0.3.36; description updated; roles/ description updated) · `MIGRATION.md` (Gotchas updated) · `compass/workflows/improvements.md`. Counter: #75. **All 14 agents migrated. `compass/roles/` is now grace-period-only.** 3 of 5 before Retro #016 → next retro fires after #77.
