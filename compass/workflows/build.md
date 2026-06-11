@@ -53,7 +53,8 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 ## Roles invoked (agents dispatched)
 
 - `compass/agents/engineer.md` — implementation + PR open + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
-- `compass/agents/reviewer.md` — E2E tests + code review (migrated v0.3.16; `preferred_hosts: [codex, gemini]` deliberately excludes claude per cross-host integrity; tasks: `write-e2e-tests`, `review-pr`)
+- `compass/agents/reviewer.md` — PR code review (migrated v0.3.16; `preferred_hosts: [codex, gemini]` deliberately excludes claude per cross-host integrity; task: `review-pr`. E2E authoring split to Automation in v0.3.33)
+- `compass/agents/automation.md` — E2E tests + test framework + CI configs (NEW agent v0.3.33, split from Reviewer; task: `write-e2e-tests`)
 - `compass/agents/pm.md` — arbitrate Engineer-vs-Reviewer disputes (ad-hoc; fires only when Engineer adds `## Dispute` to PR; task: `arbitrate-dispute`)
 - `compass/agents/security-reviewer.md` (migrated v0.3.36; `preferred_hosts: [codex, gemini]` deliberately excludes claude) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions; task: `review-pr-security`
 - `compass/agents/tech-writer.md` (migrated v0.3.36) — post-merge changelog accumulation (Phase 7); task: `accumulate-changelog`
@@ -78,16 +79,16 @@ Either way, the GRAPH is the same.
 
 <!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=1 -->
 
-### Step 2. `reviewer.write-e2e-tests` (Reviewer agent owns) — covers Phase 3
+### Step 2. `automation.write-e2e-tests` (Automation agent owns) — covers Phase 3
 
-<!-- COMPASS_ROLE_BOUNDARY: enter | role=reviewer | workflow=build | step=2 -->
+<!-- COMPASS_ROLE_BOUNDARY: enter | role=automation | workflow=build | step=2 -->
 
-**Dispatches:** Reviewer agent (Codex by Compass default — `preferred_hosts: [codex, gemini]`)
-**Task definition:** `compass/agents/reviewer.md` → Task `write-e2e-tests`
+**Dispatches:** Automation agent (`preferred_hosts: [claude, codex, gemini]`)
+**Task definition:** `compass/agents/automation.md` → Task `write-e2e-tests` (split from Reviewer in v0.3.33 — Reviewer is read-only on all code as of v0.3.37)
 **What it covers:** write E2E tests covering AC user flows in top-level `e2e/` folder → maintain E2E framework (Playwright/Cypress/etc.) → author CI/CD pipeline configs for test orchestration → commit with `test:` prefix.
-**Sequencing note:** can run in parallel with Step 1's later phases OR after Step 1 completes; preferred = after Step 1 so Reviewer sees the implementation surface before writing E2E. Engineer does not review Reviewer's test code (Reviewer is the test owner per `[role-boundary]`).
+**Sequencing note:** can run in parallel with Step 1's later phases OR after Step 1 completes; preferred = after Step 1 so Automation sees the implementation surface before writing E2E. Engineer does not review Automation's test code (Automation is the test owner per `[role-boundary]`).
 
-<!-- COMPASS_ROLE_BOUNDARY: exit | role=reviewer | workflow=build | step=2 -->
+<!-- COMPASS_ROLE_BOUNDARY: exit | role=automation | workflow=build | step=2 -->
 
 ### Step 3. `reviewer.review-pr` (Reviewer agent owns) — covers Phase 5 review side
 
@@ -179,7 +180,7 @@ Mirrors per-task postconditions + cross-agent invariants.
 - [ ] (Step 1 — pre-PR) **`[rsc-prop-serialization]`** checked if story touches RSC boundary: Server→Client props are JSON-serializable or Server Actions — no functions, class instances, Promises; confirmed or DRI Risk logged
 - [ ] (Step 1 — pre-PR) **`[server-action-file-export-purity]`** checked if story adds/touches `"use server"` files: all exports are `async` functions — no non-async exports; confirmed or DRI Risk logged
 - [ ] (Step 1 — pre-PR) **`[cross-artifact-sweep-on-contract-shift]`** complete if story changed any contract: DRI Decision logged confirming all referencing artifacts swept (components · API clients · tests · config · docs · env vars); no stale references remain
-- [ ] (Step 2 — reviewer.write-e2e-tests) E2E tests in `e2e/`; AC user flows covered; CI configs version-controlled
+- [ ] (Step 2 — automation.write-e2e-tests) E2E tests in `e2e/`; AC user flows covered; CI configs version-controlled
 - [ ] (Step 3 — reviewer.review-pr) PR comment posted in documented format; every finding has File · Rule violated · Issue · Fix; BLOCKERs are real BLOCKERs (not softened to ISSUE); Step 0 framework-registration check completed if PR touches framework-discovered surfaces
 - [ ] (Step 3 — security-reviewer if applicable) Second PR comment posted if diff touched auth/PII/payments/secrets/external input/sessions
 - [ ] (Step 4 — engineer.respond-to-review) All BLOCKERs addressed; ISSUEs addressed or explicitly deferred with rationale; commits use conventional-commit prefixes
@@ -230,7 +231,7 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 
 ### What changed in v0.3.23
 
-- **Heavy step content moved out of this file** into `compass/agents/engineer.md` (tasks `implement-story` + `respond-to-review` NEW), `compass/agents/reviewer.md` (tasks `write-e2e-tests` + `review-pr`), `compass/agents/pm.md` (task `arbitrate-dispute`). This file became a thin **dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14).
+- **Heavy step content moved out of this file** into `compass/agents/engineer.md` (tasks `implement-story` + `respond-to-review` NEW), `compass/agents/reviewer.md` (tasks `write-e2e-tests` + `review-pr` at the time; `write-e2e-tests` later split to `compass/agents/automation.md` in v0.3.33), `compass/agents/pm.md` (task `arbitrate-dispute`). This file became a thin **dispatch graph** per `[agent-as-surface-independent-unit]` (canon v0.3.14).
 - **No behavior change.** Every gate/work/postcondition that existed in v0.3.0-alpha shape is preserved, now inside the agent task definitions. Verification items unchanged. Refusal cases unchanged. HITL gates unchanged. Mechanical merge constraints unchanged.
 - **NEW task `engineer.respond-to-review`** added so the Phase 5 review-response loop has an explicit dispatch surface (previously inline guidance in engineer.md's "Addressing reviewer findings" section).
 - **PM agent now participates in `/build`** (frontmatter `participates_in_workflows:` updated) — explicit recognition of the existing `arbitrate-dispute` task that fires in `/build` disputes.

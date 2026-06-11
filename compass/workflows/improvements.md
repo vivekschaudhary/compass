@@ -2519,3 +2519,19 @@ Also updated `MIGRATION.md` Gotchas note: was "3 agents not yet migrated"; now r
 **Note:** 2nd instance of `[pre-push-grep-discipline]` (1st: v0.3.33 reviewer/automation split missed reviewer.md — fixed as #77). Candidate now eligible for codification discussion per 2-instance threshold (user-gated).
 
 **Files touched (15):** `README.md` · `SETUP.md` · `CLAUDE.md` · `AGENTS.md` · `MIGRATION.md` · `compass/config.yaml` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `compass/workflows/create-story.md` · `compass/workflows/create-bet-portfolio.md` · `compass/workflows/setup-foundation-architecture.md` · `.claude/skills/dashboard/SKILL.md` · `.claude/skills/scan/SKILL.md` (+ this file). Counter: #76. 4 of 5 before Retro #016 → next retro fires after #77.
+
+---
+
+### 2026-06-11 — reviewer/automation task-ownership reconciliation (#77)
+
+**Friction:** The v0.3.33 Reviewer→Automation split updated `automation.md` + CHANGELOG but never swept `reviewer.md` (frozen at v0.3.16, still declaring "Write E2E tests — the only place you write code" + a full `write-e2e-tests` task definition) or `build.md` Step 2 (still dispatching `reviewer.write-e2e-tests`). Two agents owned the same task; the dispatch graph routed E2E authoring to the agent the framework's own changelog said no longer owns it. Found by the independent review (finding C2). 1st instance of `[pre-push-grep-discipline]` retroactively; #76 is the 2nd.
+
+**Change (IMPLEMENTED):**
+
+- `compass/agents/reviewer.md` → v0.3.37: removed `write-e2e-tests` task + all E2E-ownership language. Identity is now single-purpose (PR review, read-only on ALL code); `[role-boundary]` principle, refusal rules, and framework-knowledge refs updated to point E2E ownership at `compass/agents/automation.md`.
+- `compass/workflows/build.md` Step 2: `reviewer.write-e2e-tests` → `automation.write-e2e-tests` (dispatch line, task definition pointer, COMPASS_ROLE_BOUNDARY markers role=reviewer→automation, sequencing note, verification checklist, roles-invoked list + automation.md added). v0.3.23 migration-history note annotated with the later split.
+- `compass/orchestrator/README.md` host-routing example: Step 2 row → `automation.write-e2e-tests` `[claude, codex, gemini]` → Claude API.
+- `compass/roles/reviewer.md` legacy banner: task list corrected.
+- `compass/orchestrator/run.py` `_write_rejection_note`: rejection-note rerun hint was `--from-step <gate step>` (re-asks approval of the unchanged rejected artifact) while the console hint correctly said `<gate step − 1>`; both now agree on the producing step (review finding C10). 15/15 tests pass (unittest).
+
+**Files touched (6):** `compass/agents/reviewer.md` · `compass/workflows/build.md` · `compass/orchestrator/README.md` · `compass/orchestrator/run.py` · `compass/roles/reviewer.md` · `compass/workflows/improvements.md`. Counter: #77. 5 of 5 → **Retro #016 fires next.**

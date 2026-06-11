@@ -106,9 +106,10 @@ def _write_rejection_note(
     if feedback:
         content += f"## Reviewer feedback\n\n{feedback}\n\n"
     content += (
-        f"## To rerun from this step\n\n"
+        f"## To regenerate the rejected artifact\n\n"
+        f"Rerun from the step that produced it (the HITL gate re-fires after):\n\n"
         f"```bash\n"
-        f"python3 -m compass.orchestrator.run {workflow} --from-step {step_num}\n"
+        f"python3 -m compass.orchestrator.run {workflow} --from-step {max(1, step_num - 1)}\n"
         f"```\n"
     )
     note_file.write_text(content, encoding="utf-8")

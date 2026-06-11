@@ -77,7 +77,7 @@ With `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` set:
 | Step | Agent | preferred_hosts | Dispatches to |
 |---|---|---|---|
 | 1 | `engineer.implement-story` | `[claude, codex, gemini]` | Claude API |
-| 2 | `reviewer.write-e2e-tests` | `[codex, gemini]` | OpenAI API (codex) |
+| 2 | `automation.write-e2e-tests` | `[claude, codex, gemini]` | Claude API |
 | 3 | `reviewer.review-pr` | `[codex, gemini]` | OpenAI API (codex) |
 | 4 | `engineer.respond-to-review` | `[claude, codex, gemini]` | Claude API |
 | 5 | `pm.arbitrate-dispute` | `[chatgpt, claude, ...]` | OpenAI API (chatgpt) |
