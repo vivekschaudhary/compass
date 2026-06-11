@@ -2400,6 +2400,24 @@ The v0.4 data layer (`runs.jsonl`) was designed with no downstream analytics in 
 
 **Convention candidate:** `[data-as-institutional-memory]` — the real moat of a Compass-running org is not the methodology files (copyable) but the accumulated HITL decisions, DRI logs, and run patterns that encode the organization's judgment about what good looks like. 1 instance. Surface when 2nd instance appears (likely when first org-altitude retro runs with multi-project data).
 
+**Architecture amendment (2026-06-10):** Initial framing assumed artifact routing = auto-write to `docs/bets/<id>/brief.md` after each step. User correctly identified this as wrong — `runs.jsonl` IS the source of truth; writing to local `docs/` is just the no-connector fallback. The canonical location is connector-dependent:
+
+```
+Confluence org  → brief pushed to Confluence page
+Linear org      → bet record updated in Linear
+GitHub-native   → brief.md committed to repo
+No connector    → docs/ as local fallback only
+```
+
+**Revised architecture:**
+- `runs.jsonl` = source of truth for step completion AND artifact content (draft)
+- HITL approval = the trigger for pushing to the connector, not step completion
+- `hitl.jsonl` records: approved, pushed to `<connector>`, timestamp — completing the audit chain
+- **Gating redesign:** orchestrator gates on `runs.jsonl` having a completed + approved step for the prior capability.play, NOT on a local file existing. This makes gates connector-agnostic.
+- `runs.jsonl` + `hitl.jsonl` together = "what was produced" + "what was approved and where" — the complete institutional record
+
+This eliminates the sync problem (which location is canonical?) and makes the data layer the single source of truth rather than a log beside the "real" files. The HITL journal is now explicitly the bridge between draft (runs.jsonl) and canonical (connector).
+
 **Files touched (0):** declaration only. Counter: #69 → #70 (2 of 5 before Retro #015).
 
 ---
