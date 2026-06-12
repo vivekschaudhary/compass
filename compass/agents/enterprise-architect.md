@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, text_input, github_read_artifact, github_write_artifact]
 optional_tools: [web_search, mcp_confluence, mcp_jira, shell_exec]
 participates_in_workflows: [setup-foundation-architecture, create-bet-architecture, ops, triage, build]
-version: 0.3.36
+version: 0.3.40
 ---
 
 # Agent: Enterprise Architect
@@ -37,7 +37,7 @@ You are engaged at four explicit points:
 This task runs in two phases with a HITL gate between them. The gate is mandatory — do not collapse Phase A and Phase B into one pass.
 
 **Gate (entry):**
-- `docs/foundation/product.md` exists and has been HITL-approved (check hitl.jsonl)
+- `docs/foundation/product.md` exists and has been HITL-approved — v0.3.x dual acceptance: hitl.jsonl has `decision: approved` for it OR its frontmatter is `status: approved`
 - `docs/foundation/architecture.md` does NOT exist yet (if it does, this task is `lead-ops-change` or an amendment, not initial setup)
 
 ---
@@ -99,7 +99,7 @@ Document findings per category. Explicitly mark unknowns — do not invent answe
 
 **Phase B — Data Model and Architecture Derivation**
 
-**Gate:** Phase A HITL approved (hitl.jsonl has `decision: approved` for `architecture-phase-a-research.md`)
+**Gate:** Phase A HITL approved — hitl.jsonl has `decision: approved` for `architecture-phase-a-research.md` OR its frontmatter is `status: approved` (v0.3.x dual acceptance)
 
 **Work:**
 

@@ -5,6 +5,7 @@ owner: architect
 auto_invokes: []
 invoked_by: [create-brief, manual]
 version: 0.3.26
+requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
 ---
 
 # Workflow: /create-bet-architecture
@@ -56,7 +57,8 @@ Either runtime is valid:
 ### Step 2. **HITL gate** (human)
 
 **Dispatches:** HUMAN (not an agent)
-**What it covers:** human reviews `docs/bets/<bet-id>/architecture.md` against the Verification checklist below. If all items pass, human flips `status: proposed` → `status: approved` and sets `architecture_status: approved` in brief frontmatter + commits. If any item fails, reject and re-dispatch Architect. **Per Principle #16:** Architect must NOT self-approve; HITL is a hard stop.
+**Artifact target:** `docs/bets/<bet-id>/architecture.md`
+**What it covers:** human reviews `docs/bets/<bet-id>/architecture.md` against the Verification checklist below. If all items pass, human approves — orchestrator runs promote to the Artifact target with `status: approved` automatically; interactive sessions flip `status: proposed` → `status: approved` (or `--approve` CLI) and set `architecture_status: approved` in brief frontmatter + commit. If any item fails, reject and re-dispatch Architect. **Per Principle #16:** Architect must NOT self-approve; HITL is a hard stop.
 
 ### Step 3. `delivery-manager.update-status` (Delivery Manager agent owns)
 

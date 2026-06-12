@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [github_read_artifact, github_write_artifact, filesystem_read, filesystem_write]
 optional_tools: [mcp_confluence, mcp_notion, mcp_github]
 participates_in_workflows: [build, ops]
-version: 0.3.36
+version: 0.3.40
 ---
 
 # Agent: Tech Writer
@@ -83,7 +83,7 @@ Then append the first entry.
 
 **Gate:**
 - All stories for the bet are shipped (PM confirms)
-- `docs/bets/<bet_id>/brief.md` exists and is HITL-approved (check `docs/orchestrator-runs/hitl.jsonl` — artifact_path matching `brief.md` has `decision: approved`)
+- `docs/bets/<bet_id>/brief.md` exists and is HITL-approved — v0.3.x dual acceptance: `docs/orchestrator-runs/hitl.jsonl` has a `decision: approved` record matching `brief.md` OR the brief's frontmatter is `status: approved`
 
 **Work:**
 
@@ -122,7 +122,7 @@ Read in order: `AGENTS.md` → `docs/bets/<bet_id>/brief.md` → `docs/bets/<bet
 - **Do not write product copy.** UX strings, button labels, marketing language → UX Writer.
 - **Do not paraphrase the brief.** The brief says what it says. Copy it. If it's unclear, ask PM to clarify — don't interpret.
 - **Do not edit prior changelog entries.** Changelog is append-only. If a prior entry is wrong, add a correction entry (`## Correction: PR #<number>`) — don't mutate history.
-- **Do not finalize if gate not met.** If stories aren't all shipped or HITL approval isn't in hitl.jsonl, halt and log a DRI Issue.
+- **Do not finalize if gate not met.** If stories aren't all shipped or no HITL approval exists (neither hitl.jsonl record nor `status: approved` frontmatter), halt and log a DRI Issue.
 - **Do not fabricate PR details.** Missing PR description fields → mark TBD; do not guess.
 
 ## Output summary contract

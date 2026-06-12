@@ -116,6 +116,97 @@ def _write_rejection_note(
     return note_file
 
 
+def _requirement_met(project_dir: Path, rel_path: str) -> tuple:
+    """
+    Check whether an artifact requirement is approved (#70 dual acceptance).
+
+    Returns (met: bool, how: str|None). PASS via either mechanism:
+      - hitl.jsonl: latest record whose canonical_path or artifact_path
+        matches has decision "approved"
+      - frontmatter: the file exists with `status: approved`
+    """
+    from .connector import read_frontmatter_status
+    from .logger import load_hitl_log
+
+    latest = None
+    for r in load_hitl_log(project_dir):
+        if rel_path in (r.get("canonical_path"), r.get("artifact_path")):
+            latest = r.get("decision")  # records are chronological; last wins
+    if latest == "approved":
+        return True, "hitl.jsonl approved record"
+
+    if read_frontmatter_status(project_dir / rel_path) == "approved":
+        return True, "status: approved frontmatter"
+
+    return False, None
+
+
+def _producer_hint(rel_path: str) -> str:
+    """Name the workflow that produces a required artifact path."""
+    if rel_path.endswith("foundation/product.md"):
+        return "setup-product"
+    if rel_path.endswith("foundation/architecture.md"):
+        return "setup-foundation-architecture"
+    if rel_path.endswith("brief.md"):
+        return "create-brief"
+    if rel_path.endswith("architecture.md"):
+        return "create-bet-architecture"
+    return None
+
+
+def _manual_hitl_decision(
+    project_dir: Path, path_arg: str, decision: str, feedback: str, bet_id: str
+) -> int:
+    """
+    Manual approval bridge (#70 / C6): one command satisfies BOTH gate
+    mechanisms — appends a hitl.jsonl record AND (on approve) flips the
+    artifact's `status:` frontmatter to approved.
+    """
+    from datetime import datetime, timezone
+
+    from .connector import set_frontmatter_status
+    from .logger import log_hitl
+
+    target = Path(path_arg)
+    if not target.is_absolute():
+        target = project_dir / path_arg
+    try:
+        rel = str(target.resolve().relative_to(project_dir))
+    except ValueError:
+        print(
+            f"Error: {path_arg} is not inside the project directory {project_dir}.",
+            file=sys.stderr,
+        )
+        return 2
+
+    run_id = f"manual--{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+
+    if decision == "approved":
+        if not target.exists():
+            print(f"Error: artifact not found: {target}", file=sys.stderr)
+            return 2
+        content = set_frontmatter_status(
+            target.read_text(encoding="utf-8"), "approved", run_id
+        )
+        target.write_text(content, encoding="utf-8")
+        print(f"[{rel} → status: approved]")
+
+    log_hitl(
+        project_dir=project_dir,
+        run_id=run_id,
+        workflow="manual",
+        bet_id=bet_id,
+        step=0,
+        artifact_path=rel,
+        decision=decision,
+        feedback=feedback or None,
+        connector="filesystem" if decision == "approved" else None,
+        canonical_path=rel if decision == "approved" else None,
+    )
+    print(f"[hitl.jsonl ← {decision}: {rel}]")
+    return 0
+
+
 def _load_prior_outputs_from_disk(
     project_dir: Path, workflow: str, steps: list, up_to_step: int,
 ) -> list:
@@ -315,7 +406,7 @@ def _run_workflow(
       prior_outputs  — list of step output dicts (step, agent, task, host, output)
       artifact_paths — list of relative path strings for written artifacts
     """
-    from .graph import load_workflow
+    from .graph import load_workflow, load_workflow_meta
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host
     from .logger import log_step, log_hitl
@@ -337,6 +428,45 @@ def _run_workflow(
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # ── requirement gate (#70 redesign) ──────────────────────────────────────
+    # A workflow's frontmatter may declare `requires_approved:` artifact paths.
+    # PASS per path: approved hitl.jsonl record OR `status: approved`
+    # frontmatter (v0.3.x dual acceptance — the orchestrator/manual bridge).
+    requirements = load_workflow_meta(workflow_file)["requires_approved"]
+    if requirements:
+        unmet = []
+        print(f"\nRequirement gate — {workflow_name} requires approved:")
+        for req in requirements:
+            if "<bet-id>" in req and not bet_id:
+                print(f"  ✗ {req}  (pass --bet <ID> to resolve <bet-id>)")
+                unmet.append(req)
+                continue
+            rel = req.replace("<bet-id>", bet_id or "")
+            ok, how = _requirement_met(project_dir, rel)
+            if ok:
+                print(f"  ✓ {rel}  ({how})")
+            else:
+                print(f"  ✗ {rel}  (no approval found)")
+                unmet.append(rel)
+        if unmet and not dry_run:
+            print(
+                f"\nError: {len(unmet)} requirement(s) not approved. "
+                f"Halting — gates are load-bearing.",
+                file=sys.stderr,
+            )
+            for path in unmet:
+                hint = _producer_hint(path)
+                if hint:
+                    print(f"  {path} → produced by: python3 -m compass.orchestrator.run {hint}", file=sys.stderr)
+            print(
+                f"  Already approved outside the orchestrator? Record it:\n"
+                f"    python3 -m compass.orchestrator.run --approve <path>",
+                file=sys.stderr,
+            )
+            sys.exit(3)
+        if unmet and dry_run:
+            print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
 
     # ── dry-run ──────────────────────────────────────────────────────────────
     if dry_run:
@@ -421,6 +551,46 @@ def _run_workflow(
                 if last_artifact_path else None
             )
             decision = "approved" if result["approved"] else "rejected"
+
+            # Promotion (#70): approval is the write trigger — push the gated
+            # draft to its canonical path with status: approved.
+            canonical_rel = connector_label = None
+            if result["approved"] and step.artifact_target:
+                from .connector import (
+                    extract_artifact_body,
+                    push_artifact,
+                    resolve_connector,
+                    set_frontmatter_status,
+                )
+                if "<bet-id>" in step.artifact_target and not bet_id:
+                    print(
+                        f"Warning: cannot promote — artifact target "
+                        f"'{step.artifact_target}' needs --bet <ID>. "
+                        f"Promote manually with --approve once written.",
+                        file=sys.stderr,
+                    )
+                elif not last_agent_output:
+                    print(
+                        "Warning: no prior step output to promote.",
+                        file=sys.stderr,
+                    )
+                else:
+                    canonical_rel = step.artifact_target.replace("<bet-id>", bet_id or "")
+                    content = set_frontmatter_status(
+                        extract_artifact_body(last_agent_output), "approved", run_id
+                    )
+                    if no_write:
+                        print(f"[no-write: would promote → {canonical_rel}]")
+                        canonical_rel = None
+                    else:
+                        connector_label = push_artifact(
+                            project_dir,
+                            canonical_rel,
+                            content,
+                            resolve_connector(project_dir, compass_dir),
+                        )
+                        print(f"[promoted → {canonical_rel} via {connector_label}]")
+
             log_hitl(
                 project_dir=project_dir,
                 run_id=run_id,
@@ -430,6 +600,8 @@ def _run_workflow(
                 artifact_path=artifact_rel,
                 decision=decision,
                 feedback=result.get("feedback") or None,
+                connector=connector_label,
+                canonical_path=canonical_rel,
             )
             print(f"[hitl → {decision}]")
             if not result["approved"]:
@@ -694,7 +866,45 @@ def main(argv=None):
         dest="hitl_log",
         help="Print the HITL decision log (docs/orchestrator-runs/hitl.jsonl) and exit.",
     )
+    parser.add_argument(
+        "--approve",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Manual approval bridge: flip PATH's frontmatter to "
+            "status: approved AND append an approved hitl.jsonl record, "
+            "then exit. Satisfies requirement gates from interactive sessions."
+        ),
+    )
+    parser.add_argument(
+        "--reject",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Record a rejected hitl.jsonl decision for PATH (file untouched), "
+            "then exit. Pair with --feedback."
+        ),
+    )
+    parser.add_argument(
+        "--feedback",
+        default=None,
+        metavar="TEXT",
+        help="Reviewer feedback recorded with --reject (or --approve).",
+    )
     args = parser.parse_args(argv)
+
+    # ── manual approval bridge (no workflow needed) ──────────────────────────
+    if args.approve or args.reject:
+        if args.approve and args.reject:
+            parser.error("Provide either --approve or --reject, not both.")
+        code = _manual_hitl_decision(
+            project_dir=Path(args.project_dir).resolve(),
+            path_arg=args.approve or args.reject,
+            decision="approved" if args.approve else "rejected",
+            feedback=args.feedback,
+            bet_id=args.bet,
+        )
+        sys.exit(code)
 
     # ── log / dri / hitl-log report modes (no workflow needed) ──────────────
     if args.log or args.dri or args.hitl_log:

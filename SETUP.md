@@ -77,7 +77,9 @@ In the Claude Code panel:
 
 You'll be asked for source material (Confluence link, GDrive doc, or free text describing what you're building). Compass drafts `docs/foundation/product.md` as a measurable bet.
 
-**Approve it** by editing the status field from `proposed` to `approved` in the file frontmatter, then commit.
+**Approve it** either way — the two are equivalent (v0.3.x dual acceptance):
+- edit the status field from `proposed` to `approved` in the file frontmatter and commit, **or**
+- run `python3 -m compass.orchestrator.run --approve docs/foundation/product.md` — flips the frontmatter AND records the decision in `docs/orchestrator-runs/hitl.jsonl` (the machine-readable approval journal that orchestrator gates also check).
 
 ### Step 2 — foundational architecture bet
 

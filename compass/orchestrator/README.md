@@ -64,8 +64,16 @@ python3 -m compass.orchestrator.run setup-product --step 1 \
 | `--no-write` | Print output to stdout only; do not write artifact files |
 | `--skip-missing` | Skip steps with no available host/agent instead of halting (loud, must be DRI-logged; default is halt — no silent skips) |
 | `--log` / `--dri` / `--hitl-log` | Report modes: runs.jsonl table / DRI decisions / HITL decision log |
+| `--approve PATH` | Manual approval bridge: flip PATH's frontmatter to `status: approved` AND append an approved hitl.jsonl record, then exit |
+| `--reject PATH [--feedback TEXT]` | Record a rejected hitl.jsonl decision for PATH (file untouched), then exit |
 
-Exit codes: `0` complete · `1` HITL rejection (run halted) · `2` missing host/agent without `--skip-missing`.
+Exit codes: `0` complete · `1` HITL rejection (run halted) · `2` missing host/agent without `--skip-missing` · `3` unmet requirement gate.
+
+## Requirement gates + artifact promotion (improvement #70)
+
+- A workflow's frontmatter may declare `requires_approved:` — artifact paths that must be approved before dispatch. PASS per path (v0.3.x dual acceptance): an approved hitl.jsonl record (latest decision wins) **or** the file existing with `status: approved` frontmatter. Unmet → live runs halt (exit 3) naming the producing workflow; `--dry-run` reports without halting. Paths may use a `<bet-id>` placeholder resolved from `--bet`.
+- HITL gate steps may declare `**Artifact target:** \`<path>\``. On approval, the orchestrator promotes the gated draft (the preceding step's output, with its `## Output summary` tail stripped) to that canonical path with `status: approved` frontmatter, via the connector layer (`connector.py` — filesystem backend; configured-but-unimplemented connectors fall back with an honest label in the hitl.jsonl record).
+- The two mechanisms close the loop: approval writes the canonical artifact, which satisfies the next workflow's requirement gate — `--pipeline` chains are no longer gate-broken.
 
 ## How it works
 

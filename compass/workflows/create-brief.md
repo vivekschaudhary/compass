@@ -5,6 +5,7 @@ owner: pm
 auto_invokes: []
 invoked_by: [create-bet-portfolio, manual]
 version: 0.3.27
+requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md]
 ---
 
 # Workflow: /create-brief
@@ -57,7 +58,8 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 ### Step 3. **HITL gate** (human)
 
 **Dispatches:** HUMAN (not an agent)
-**What it covers:** human reviews `docs/bets/<bet-id>/brief.md` against Verification checklist. Pass → flip `status: proposed` → `status: approved` + commit. Fail → reject and re-dispatch PM. **Principle #16:** PM must NOT self-approve.
+**Artifact target:** `docs/bets/<bet-id>/brief.md`
+**What it covers:** human reviews `docs/bets/<bet-id>/brief.md` against Verification checklist. Pass → approve: orchestrator runs promote to the Artifact target with `status: approved` automatically; interactive sessions flip `status: proposed` → `status: approved` (or `--approve` CLI) + commit. Fail → reject and re-dispatch PM. **Principle #16:** PM must NOT self-approve.
 
 ### Step 4. `delivery-manager.update-status` (Delivery Manager agent owns)
 

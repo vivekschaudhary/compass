@@ -5,6 +5,7 @@ owner: engineer
 auto_invokes: []
 invoked_by: []
 version: 0.3.35
+requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
 ---
 
 # Workflow: /build

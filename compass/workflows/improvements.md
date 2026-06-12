@@ -2635,3 +2635,23 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Pre-push sweep:** run on "19 patterns" / "scope-discipline (3)" — 4 hits, all canon grows-from→to historical lines, justified per point-in-time convention.
 
 **Files touched (3):** `AGENTS.md` · `compass/framework/canon.md` · `compass/workflows/improvements.md`. Counter: #83. 1 of 5 before Retro #018 (fires after #87).
+
+---
+
+### 2026-06-12 — #70 implementation slice: requirement gates + artifact promotion + manual approval bridge (#84)
+
+**Trigger origin (Principle #19):** consumer — #70's architecture was declared from a live consumer orchestrator run (2026-06-09/10, crypto-app cycle: approvals vanished, gates unsatisfiable); the independent review (2026-06-11) confirmed the gap as findings C3 + C6. Retro #017 put it on a hard-line clock (3 batches deferred).
+
+**Friction:** Orchestrator output landed only in `docs/orchestrator-runs/step-NN-*.md` — canonical artifacts were never written, so every downstream workflow's preconditions were mechanically unsatisfiable and `--pipeline` chains were gate-broken by design (C3). run.py never evaluated workflow Preconditions at all. And the two approval mechanisms were incompatible: manual = `status:` frontmatter flip; orchestrator = hitl.jsonl record; newer agent gates (EA, tech-writer) checked only hitl.jsonl — unsatisfiable manually (C6).
+
+**Change (IMPLEMENTED, v0.4.0-alpha-6 / agents v0.3.40):**
+
+- **Requirement gates:** `requires_approved:` workflow frontmatter (graph.py `load_workflow_meta()`, no YAML dependency) checked before dispatch via `_requirement_met()` — **dual acceptance during v0.3.x:** approved hitl.jsonl record (latest decision per path wins) OR `status: approved` frontmatter. Unmet → halt exit 3 naming the producing workflow + the `--approve` remedy; `--dry-run` reports without halting; `<bet-id>` resolved from `--bet`. Declared on create-brief / create-bet-architecture / build.
+- **Artifact promotion:** HITL steps declare `**Artifact target:**` (parsed tolerantly into `WorkflowStep.artifact_target`). On approval the gated draft is promoted — `## Output summary` tail stripped, `status: approved` + `approved:` + `source_run:` frontmatter set — via new `connector.py` (filesystem backend only per `[declare-not-implement]`; unimplemented configured connectors fall back with an honest label). hitl.jsonl gains `canonical_path`; `connector` now populated. Approval is the write trigger, exactly as #70 declared.
+- **Manual bridge:** `--approve PATH` / `--reject PATH [--feedback]` CLI — one command satisfies BOTH mechanisms (frontmatter flip + journal record, `workflow: "manual"`). EA + tech-writer gates updated to dual acceptance (v0.3.40); SETUP.md presents both approval paths as equivalent; orchestrator README documents gates/promotion/exit code 3.
+- **Tests:** `tests/test_gates.py` (NEW, 22 tests) — suite 32 → 54, all green. **`[test-alongside-implementation]` 3rd instance.**
+- **Verified end-to-end without API keys:** live create-brief halts exit 3 → `--approve` both foundation docs → gate passes via journal path AND via frontmatter path independently; all 4 dispatch graphs dry-run clean; bet-scoped requirements correctly demand `--bet`.
+
+**What stays declared, not built:** real Confluence/Notion connector backends (interface documented in connector.py); gate wiring for the 13 non-dispatch-graph workflows (C7 track); runs.jsonl step-completion gating for resume.
+
+**Files touched (14):** `compass/orchestrator/connector.py` (NEW) · `compass/orchestrator/graph.py` · `compass/orchestrator/run.py` · `compass/orchestrator/logger.py` · `compass/orchestrator/README.md` · `compass/orchestrator/tests/test_gates.py` (NEW) · `compass/workflows/setup-product.md` · `compass/workflows/create-brief.md` · `compass/workflows/create-bet-architecture.md` · `compass/workflows/build.md` · `compass/agents/enterprise-architect.md` · `compass/agents/tech-writer.md` · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #84. 2 of 5 before Retro #018 (fires after #87). **Hard-line clock on #70 cleared.**

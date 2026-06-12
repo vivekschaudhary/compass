@@ -14,6 +14,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+## [0.4.0-alpha-6] — 2026-06-12
+
+> **The #70 data-layer slice lands — requirement gates + artifact promotion + manual approval bridge. Counter #84.**
+
+### Added
+
+- **Requirement gates** (`requires_approved:` workflow frontmatter, parsed by `graph.py:load_workflow_meta()`): before dispatch, each declared artifact path must be approved — via an approved hitl.jsonl record (latest decision wins) OR `status: approved` frontmatter (v0.3.x dual acceptance, the orchestrator/manual bridge). Unmet → halt exit 3 with the producing workflow named; `--dry-run` reports without halting; `<bet-id>` placeholder resolved from `--bet`. Declared on create-brief, create-bet-architecture, build.
+- **Artifact promotion on HITL approval** (`**Artifact target:**` line in HITL gate steps, parsed into `WorkflowStep.artifact_target`): approval is now the write trigger per #70 — the gated draft (preceding step output, `## Output summary` tail stripped) is pushed to its canonical path with `status: approved` + `source_run:` frontmatter. Declared on setup-product (product.md), create-brief (brief.md), create-bet-architecture (architecture.md); build's merge gate promotes nothing by design.
+- **`compass/orchestrator/connector.py`** (new): push interface per `[declare-not-implement]` — filesystem backend only; a configured-but-unimplemented connector (e.g. `connectors.docs: confluence`) falls back to filesystem with an honest label recorded in hitl.jsonl. Plus `extract_artifact_body()` / `set_frontmatter_status()` / `read_frontmatter_status()` helpers.
+- **`--approve PATH` / `--reject PATH [--feedback TEXT]`** CLI modes: the manual approval bridge — one command flips the artifact's frontmatter AND appends the hitl.jsonl record, satisfying both gate mechanisms from interactive sessions.
+- **hitl.jsonl schema**: `canonical_path` field added; `connector` field now populated on promotion.
+- **22 new tests** (`tests/test_gates.py`) — meta parsing, target parsing, dual-acceptance checks, promotion helpers, manual-bridge round-trips. Suite: 54.
+
+### Changed
+
+- `enterprise-architect.md` + `tech-writer.md` → v0.3.40: gates accept dual acceptance (hitl.jsonl record OR `status: approved` frontmatter). SETUP.md documents both approval paths as equivalent.
+
 ## [0.4.0-alpha-5] — 2026-06-09
 
 > **Consumer-ready orchestrator — live-validated against crypto-app CB-4. Counter #63 — fires Retro #013 (9th consecutive on-time).**

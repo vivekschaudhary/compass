@@ -273,7 +273,11 @@ hitl.jsonl schema (one JSON object per line):
   decision      str   — "approved" | "rejected"
   feedback      str   — reviewer notes on rejection, or null
   reviewer      str   — "human" (all HITL gates today are human)
-  connector     str   — connector artifact was pushed to, or null (not yet built)
+  connector     str   — backend the artifact was pushed through on approval
+                        ("filesystem" | "filesystem fallback — <name> not
+                        implemented"), or null when nothing was promoted
+  canonical_path str  — canonical path the artifact was promoted to on
+                        approval (the gate-requirement match key), or null
 """
 
 
@@ -288,6 +292,7 @@ def log_hitl(
     feedback: str = None,
     reviewer: str = "human",
     connector: str = None,
+    canonical_path: str = None,
 ) -> dict:
     """Append a HITL gate decision to hitl.jsonl."""
     record = {
@@ -301,6 +306,7 @@ def log_hitl(
         "feedback": feedback or None,
         "reviewer": reviewer,
         "connector": connector,
+        "canonical_path": canonical_path,
     }
 
     log_path = project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"

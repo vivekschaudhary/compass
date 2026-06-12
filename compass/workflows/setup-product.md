@@ -72,7 +72,8 @@ Either way, the GRAPH is the same.
 ### Step 3. **HITL gate** (human)
 
 **Dispatches:** HUMAN (not an agent)
-**What it covers:** human reviews `docs/foundation/product.md` against the workflow-level Verification checklist below. If all items pass, human flips frontmatter `status: proposed` → `status: approved` and commits. If any item fails, human rejects and either re-dispatches PM/Researcher or aborts. **Per Principle #16:** PM agent must NOT self-approve; HITL is a hard stop.
+**Artifact target:** `docs/foundation/product.md`
+**What it covers:** human reviews `docs/foundation/product.md` against the workflow-level Verification checklist below. If all items pass, human approves — orchestrator runs promote the draft to the Artifact target with `status: approved` automatically (v0.4-alpha, per improvement #70); interactive sessions flip frontmatter `status: proposed` → `status: approved` (or run `python3 -m compass.orchestrator.run --approve docs/foundation/product.md`) and commit. If any item fails, human rejects and either re-dispatches PM/Researcher or aborts. **Per Principle #16:** PM agent must NOT self-approve; HITL is a hard stop.
 
 ### Step 4. `delivery-manager.update-status` (Delivery Manager agent owns)
 

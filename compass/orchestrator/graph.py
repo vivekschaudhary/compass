@@ -13,6 +13,37 @@ class WorkflowStep:
     agent: Optional[str] = None
     task: Optional[str] = None
     agent_file: Optional[str] = None
+    artifact_target: Optional[str] = None  # canonical path promoted on HITL approval
+
+
+def load_workflow_meta(workflow_file: Path) -> dict:
+    """
+    Parse machine-readable workflow frontmatter without a YAML dependency.
+
+    Currently extracts `requires_approved:` — the list of artifact paths that
+    must be HITL-approved before this workflow may dispatch (improvement #70
+    gate redesign). Supports both inline (`requires_approved: [a, b]`) and
+    block list forms. Paths may contain a `<bet-id>` placeholder.
+    """
+    text = workflow_file.read_text()
+    fm_match = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
+    requires = []
+    if fm_match:
+        fm = fm_match.group(1)
+        inline = re.search(r"^requires_approved\s*:\s*\[(.*?)\]", fm, re.MULTILINE)
+        if inline:
+            requires = [p.strip().strip("'\"") for p in inline.group(1).split(",") if p.strip()]
+        else:
+            block = re.search(
+                r"^requires_approved\s*:\s*\n((?:\s+-\s+.*\n?)+)", fm, re.MULTILINE
+            )
+            if block:
+                requires = [
+                    re.sub(r"^\s+-\s+", "", line).strip().strip("'\"")
+                    for line in block.group(1).splitlines()
+                    if line.strip()
+                ]
+    return {"requires_approved": requires}
 
 
 def load_workflow(workflow_file: Path) -> list:
@@ -66,6 +97,17 @@ def load_workflow(workflow_file: Path) -> list:
             or re.search(r'\bHITL\b', step_title_raw)
         )
 
+        # Canonical path promoted when this gate approves. Tolerant of bold /
+        # colon placement, same rationale as the Dispatches parsing above.
+        artifact_target = None
+        target_match = re.search(
+            r"^[*_>\s-]*Artifact target[*_\s:]*`?([^`\n]+?)`?\s*$",
+            step_body,
+            re.IGNORECASE | re.MULTILINE,
+        )
+        if target_match:
+            artifact_target = target_match.group(1).strip()
+
         agent = task = agent_file = None
         if not is_hitl:
             # agent.task from backtick pair in title: `agent.task_name`
@@ -93,6 +135,7 @@ def load_workflow(workflow_file: Path) -> list:
                 agent=agent,
                 task=task,
                 agent_file=agent_file,
+                artifact_target=artifact_target,
             )
         )
 
