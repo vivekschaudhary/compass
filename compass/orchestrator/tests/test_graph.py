@@ -136,6 +136,27 @@ class TestRealWorkflows(unittest.TestCase):
         steps = load_workflow(WORKFLOWS / "create-bet-architecture.md")
         self.assertEqual([s.number for s in steps if s.is_hitl], [2])
 
+    def test_setup_foundation_architecture(self):
+        steps = load_workflow(WORKFLOWS / "setup-foundation-architecture.md")
+        self.assertEqual(len(steps), 6)
+        # two HITL gates, at steps 2 and 4, each with an artifact target
+        gates = [s for s in steps if s.is_hitl]
+        self.assertEqual([s.number for s in gates], [2, 4])
+        self.assertEqual(
+            gates[0].artifact_target, "docs/foundation/architecture-phase-a-research.md"
+        )
+        self.assertEqual(gates[1].artifact_target, "docs/foundation/architecture.md")
+        # three EA tasks dispatched in order
+        ea = [(s.agent, s.task) for s in steps if s.agent == "enterprise-architect"]
+        self.assertEqual(
+            ea,
+            [
+                ("enterprise-architect", "research-architecture"),
+                ("enterprise-architect", "derive-architecture"),
+                ("enterprise-architect", "scaffold-foundation"),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

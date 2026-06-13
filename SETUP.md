@@ -207,7 +207,7 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 ├── compass/                     ← ★ THE FRAMEWORK (vendor-neutral)
 │   ├── agents/                  #   14 agent files — all migrated as of v0.3.36
 │   ├── roles/                   #   legacy role files (grace period only; removed in v0.4)
-│   ├── workflows/               #   17 workflows (one per command; 4 as dispatch graphs)
+│   ├── workflows/               #   17 workflows (one per command; 5 as dispatch graphs)
 │   ├── orchestrator/            #   v0.4-alpha multi-host orchestrator (python3 -m compass.orchestrator.run)
 │   ├── templates/               #   10 artifact templates
 │   └── config.yaml              #   team decisions

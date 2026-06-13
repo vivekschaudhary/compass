@@ -2655,3 +2655,21 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **What stays declared, not built:** real Confluence/Notion connector backends (interface documented in connector.py); gate wiring for the 13 non-dispatch-graph workflows (C7 track); runs.jsonl step-completion gating for resume.
 
 **Files touched (14):** `compass/orchestrator/connector.py` (NEW) · `compass/orchestrator/graph.py` · `compass/orchestrator/run.py` · `compass/orchestrator/logger.py` · `compass/orchestrator/README.md` · `compass/orchestrator/tests/test_gates.py` (NEW) · `compass/workflows/setup-product.md` · `compass/workflows/create-brief.md` · `compass/workflows/create-bet-architecture.md` · `compass/workflows/build.md` · `compass/agents/enterprise-architect.md` · `compass/agents/tech-writer.md` · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #84. 2 of 5 before Retro #018 (fires after #87). **Hard-line clock on #70 cleared.**
+
+---
+
+### 2026-06-12 — #85: setup-foundation-architecture → dispatch graph + C7 reconciliation
+
+**Trigger origin (Principle #19):** framework-internal — independent-review finding C7 (dual source of truth) + the strategic decision to open the orchestrator's full chain. No new consumer signal this batch; the gap blocks consumer pipeline runs (kindtree bootstrap needs this workflow), so the work is upstream of the next consumer validation, not ceremony.
+
+**Friction:** `/setup-foundation-architecture` was the 363-line embedded-methodology holdout (last at v0.3.2). Its EA agent task (v0.3.36) and the workflow had diverged: the workflow held the rich method (fitness functions, 6-category research, 5-category signal consultation, anchor + 4 cascading elicitations, constraints, per-target canary gate); the agent task held only research + 9-axis data model + Well-Architected scoring. Which one ran depended on which file the host loaded — the `embedded-methodology` anti-pattern C7 named. It also blocked the orchestrator's end-to-end chain: `create-brief` now machine-requires an approved `architecture.md`, but nothing orchestratable produced one.
+
+**Change (IMPLEMENTED):**
+
+- `compass/agents/enterprise-architect.md` → v0.3.41: the single two-phase `setup-foundation-architecture` task split into three dispatchable tasks — `research-architecture` (fitness functions + 6-category research + 5-category signal consultation), `derive-architecture` (data-model-before-stack + anchor + 4 cascading elicitations + constraints + Well-Architected + ADRs + compose), `scaffold-foundation` (plan → confirm → scaffold → config → per-target canaries). **All legacy methodology reconciled IN — nothing dropped.** Added orchestrator-mode degradation note (text-only hosts present option-sets + recommendation; the HITL gate is where the human confirms picks) and a filesystem-host note on scaffolding/canaries. Anti-patterns section absorbed the 6 workflow anti-patterns.
+- `compass/workflows/setup-foundation-architecture.md` → v0.3.41: 363-line embedded workflow → thin 6-step dispatch graph (`research-architecture` → HITL → `derive-architecture` → HITL → `scaffold-foundation` → `delivery-manager.update-status`). `requires_approved: [docs/foundation/product.md]`; both HITL gates carry `**Artifact target:**` for #84 promotion (research doc + architecture.md). **5th workflow in dispatch-graph shape.**
+- Agent file is now the single source of truth; dual-source-of-truth drift (C7) closed.
+
+**Verified:** graph parses to 6 steps (gates at 2 + 4 with correct artifact targets); dry-run passes the `requires_approved` gate on an approved product.md and walks all 6 steps; full suite 55 tests green (+1 SFA integration test in test_graph.py).
+
+**Files touched (5):** `compass/agents/enterprise-architect.md` · `compass/workflows/setup-foundation-architecture.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` (4→5 of 17) · `SETUP.md` (4→5 dispatch graphs) (+ this file). Counter: #85. 3 of 5 before Retro #018 (fires after #87).
