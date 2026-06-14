@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, shell_exec, git]
 optional_tools: [mcp_github, mcp_sentry, mcp_linear, mcp_vercel]
 participates_in_workflows: [build, fix, ops]
-version: 0.3.33
+version: 0.3.43
 ---
 
 # Agent: Automation
@@ -35,9 +35,10 @@ Gates + postconditions = load-bearing. Work = guidance.
 3. Cover all 6 Standard Experience Checklist categories: Navigation · States · Feedback · Accessibility · Edge cases · Cross-surface consistency
 4. Use the project's E2E framework (Playwright / Cypress / detected from `package.json`)
 5. Tests must run against the prod-equivalent runtime (deploy preview URL or staging); flag if only localhost-runnable
-6. Verify tests pass in CI (not just locally)
-7. Log any framework runtime contract checks performed (RSC boundary, Server Actions, middleware) as DRI Decisions
-**Postcondition:** E2E tests exist for every AC item (happy + failure paths) · all 6 Standard Experience Checklist categories covered or explicitly `n/a — <reason>` · tests run against prod-equivalent runtime · CI green.
+6. **Per-surface vertical test (`[per-surface-vertical-test]`, load-bearing):** for each data surface (view/route reading or writing authorization-gated data), write ≥1 test traversing the REAL vertical end-to-end on a prod-like build — authenticate as a real user → authorization-enforced queries (e.g., Supabase RLS) → render (e.g., RSC). **Mocked auth, service-role/admin keys, and dev-server builds do NOT satisfy** — they bypass the authz layer + prod render path, so a broken RLS policy or render contract ships green. Anti-pattern: `mocked-auth-green`.
+7. Verify tests pass in CI (not just locally)
+8. Log any framework runtime contract checks performed (RSC boundary, Server Actions, middleware) as DRI Decisions
+**Postcondition:** E2E tests exist for every AC item (happy + failure paths) · all 6 Standard Experience Checklist categories covered or explicitly `n/a — <reason>` · tests run against prod-equivalent runtime · **every data surface has ≥1 real auth→authz→render vertical test on a prod-like build (no mocked-auth / service-role / dev-build substitute) per `[per-surface-vertical-test]`** · CI green.
 
 ### `configure-ci` — set up or update CI/CD pipeline
 

@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, shell_exec, git, github_write_artifact]
 optional_tools: [mcp_github, mcp_sentry, mcp_linear]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.35
+version: 0.3.43
 ---
 
 # Agent: Engineer
@@ -56,6 +56,7 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
    - Expo: prebuild native config + bundle
    - General rule: when runtime config is data-driven, reading source ≠ reading runtime.
    - **UI numeric inputs** — `<input type="number">` delivers `0` when empty, not `""` or `undefined`. If this story adds or touches numeric input fields: validate empty vs zero as explicitly distinct states; `0` must not be silently treated as "no input." (`[empty-numeric-input-zero-trap]`)
+   - **Data-surface vertical-test flag (`[per-surface-vertical-test]`)** — auth-mocked unit tests prove query logic, NOT the authorization boundary (e.g., Supabase RLS) or the prod render path (e.g., RSC). For each data surface this story adds or touches, flag the real auth→authz→render vertical test for Automation (`write-e2e-tests`); do NOT treat auth-mocked or dev-build green as coverage of the RLS/render path (anti-pattern `mocked-auth-green`).
 7. **Pre-PR contract-shift sweep (`[cross-artifact-sweep-on-contract-shift]`)** — if this story changed ANY contract (API shape, data model field, shared type, env var name, exported interface, component prop): grep the full codebase for every reference to the old name/shape. Fix all consumers before the PR opens. Do NOT leave stale references for Reviewer to find.
    - Contracts to check: renamed/removed fields · changed type signatures · new required props · env var renames · exported function signature changes
    - Sweep targets: components · API clients · tests · config files · docs · env var declarations (`.env.example`, CI config)

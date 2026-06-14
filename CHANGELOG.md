@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **DECLARED (not built):** `[pluggable-graph-executor]` — LLM-as-orchestrator over a mechanical gate floor (#87). Design sketch at `compass/orchestrator/DESIGN-pluggable-executor.md`; a 3rd executor (Claude driving subagents) alongside `run.py` and Claude Code interactive, valid only if gates/routing/promotion stay mechanical tool calls. Build trigger: orchestrator context-composition friction or v0.4-beta multi-agent scope.
+- **`[per-surface-vertical-test]` canon pattern (#88, v0.3.43)** — 7th enforcement-class Compass-original. Every data surface needs ≥1 test traversing the real auth → authorization (RLS) → render vertical end-to-end on a prod-like build; mocked-auth / service-role / dev-build does not satisfy (anti-pattern `mocked-auth-green`). Codified into `automation.md` (`write-e2e-tests`, v0.3.43, primary owner) + `engineer.md` (`implement-story`, v0.3.43, flag the vertical-test need) + `/build` verification + `/scan` BUILD-08. Origin: first end-to-end orchestrator run on a consumer (home-app).
 
 ### Changed
 

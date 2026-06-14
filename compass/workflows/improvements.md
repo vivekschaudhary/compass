@@ -2709,3 +2709,23 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Candidate class:** would be the 4th architecture-discipline-class Compass-original when codified. Codify after a 2nd instance OR once built + validated.
 
 **Files touched (2):** `compass/orchestrator/DESIGN-pluggable-executor.md` (NEW — full design sketch) · `compass/workflows/improvements.md` (+ CHANGELOG [Unreleased]). **No code changed — declared only.** Counter: #87. **5 of 5 → Retro #018 fires next.** Note: batch #83–#87 is the 3rd consecutive zero-consumer batch — a drift signal Retro #018 should weigh per Principle #19; the kindtree validation run is the standing remedy.
+
+---
+
+### 2026-06-14 — `[per-surface-vertical-test]` codified: auth→RLS→render prod-parity test discipline (#88)
+
+**Trigger origin (Principle #19):** **consumer** — the first real end-to-end Compass orchestrator run on a consumer project (**home-app**, 2026-06-14) surfaced it. This breaks the 3-batch zero-consumer streak the moment the chain became runnable (exactly the Retro #018 meta-observation). User directed: codify now.
+
+**Friction:** tests that authenticate with mocked auth / a Supabase service-role (admin) key, or run on a dev-server build, pass green while **bypassing the authorization layer (RLS) and the prod render path (RSC)**. A broken RLS policy or a render-path contract violation therefore ships green locally and fails only in prod. Same local-green/prod-broken class as #50/#51 (RSC prop serialization + `"use server"` export purity) and the Next.js runtime-contract consumer signal — 3rd instance, now on the auth→RLS→render vertical.
+
+**Change (IMPLEMENTED, v0.3.43):**
+
+- `compass/framework/canon.md` — new `### per-surface-vertical-test` entry. **7th enforcement-class member**; catalog 7 shapes / 21 patterns. Rule: every data surface has ≥1 test traversing the real auth → authorization (RLS) → render vertical end-to-end on a prod-like build; mocked-auth / service-role / dev-build does NOT satisfy. Anti-pattern `mocked-auth-green`. Explicitly distinct from `[mechanical-output-verification]` (build-artifact inspection vs test-coverage of the live security+render vertical — complementary layers).
+- `compass/agents/automation.md` → v0.3.43: `write-e2e-tests` Work step 6 + postcondition (primary owner of the vertical test).
+- `compass/agents/engineer.md` → v0.3.43: `implement-story` step 6 bullet — flag each data surface's vertical-test need for Automation; auth-mocked unit green ≠ RLS/render coverage.
+- `/build` verification (Step 2 check) + `/scan` BUILD-08 (new finding) enforce it at workflow + scanner level.
+- AGENTS.md catalog: enforcement 6→7, 20→21 patterns. **Swept two stale facts in the same commit (Principle #17):** the AGENTS.md "scope-discipline total 3" prose (stale since #83 made it 4 — fixed to list `[consumer-as-primary-signal]`) and the last "Codex E2E" refs (fix.md Phase 3 + scan-report.md template — stale since the #77 reviewer/automation split; now "Automation E2E").
+
+**Verified:** `pre-push-consistency-check.py` clean on all amended catalog facts; no agent-cap HARD-FAILs; 57 tests green.
+
+**Files touched (8):** `compass/framework/canon.md` · `compass/agents/automation.md` · `compass/agents/engineer.md` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `compass/workflows/fix.md` · `compass/templates/scan-report.md` · `AGENTS.md` · `CHANGELOG.md` (+ this file). Counter: #88. 1 of 5 before Retro #019 (fires after #92). First consumer-origin improvement since the orchestrator-chain arc began.

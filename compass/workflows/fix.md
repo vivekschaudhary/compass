@@ -39,9 +39,9 @@ OR
     - `e2e: true|false`
 15. **Run all checks locally**
 
-### Phase 3 — Codex E2E + review
+### Phase 3 — Automation E2E + review
 
-16. **Codex extends E2E coverage** if user-flow regression
+16. **Automation extends E2E coverage** (`automation.write-e2e-tests`) if user-flow regression — incl. the per-surface auth→authz(RLS)→render vertical test (`[per-surface-vertical-test]`) for any data surface the fix touches
 17. **Engineer opens PR** linking triage note + affected bet(s)
 18. **CI green → Codex reviews** — full review (no shortcuts even for tiny fixes)
 19. **Architect compliance check** — bet architecture still respected after fix

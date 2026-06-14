@@ -59,7 +59,7 @@ _No open findings in this phase._
 - **Severity:** High
 - **Confidence:** Medium
 - **Location:** `docs/bets/<BET-ID>/stories/<story-id>/story.md` AC items vs. test files in `e2e/`
-- **Reason:** 3 of 5 AC items have no matching test reference. Cross-checked against story AC list and Codex E2E commit log.
+- **Reason:** 3 of 5 AC items have no matching test reference. Cross-checked against story AC list and Automation E2E commit log.
 - **Fix:** Add E2E tests for the unmapped ACs, OR document in story DRI why AC is not test-covered (with risk acceptance).
 - **Applies to bet types:** feature, architectural-initiative
 - **Suppressible:** Yes (DRI justification required).

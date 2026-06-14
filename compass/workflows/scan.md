@@ -88,11 +88,12 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 |---|---|---|---|---|
 | BUILD-01 | AC test coverage incomplete (AC items without test references) | High | Yes (DRI per AC) | feature, architectural-initiative |
 | BUILD-02 | Test layer coverage incomplete (missing unit / API / component per role definition) | High | Yes (DRI) | feature, architectural-initiative |
-| BUILD-03 | E2E coverage gap (Codex E2E missing for AC user flows) | High | Yes (DRI) | feature |
+| BUILD-03 | E2E coverage gap (Automation E2E missing for AC user flows) | High | Yes (DRI) | feature |
 | BUILD-04 | Open review BLOCKERs on PRs | Critical | No | all |
 | BUILD-05 | Security review skipped (touches auth/PII/payments/secrets/external input/sessions) | Critical | No (non-suppressible) | any bet touching above |
 | BUILD-06 | Architecture drift undetected (Architect compliance check absent on PR) | High | Yes (DRI) | feature, architectural-initiative |
 | BUILD-07 | Performance budget exceeded (budget defined in arch doc, exceeded in CI) | High | Yes (DRI) | as above |
+| BUILD-08 | Per-surface vertical test missing (`[per-surface-vertical-test]`) — a data surface has no test traversing the real auth→authz(RLS)→render vertical on a prod-like build; mocked-auth / service-role / dev-build only | High | Yes (DRI per surface) | feature, architectural-initiative |
 
 ### Phase 4: Production Ready (new — currently silent in Compass)
 
