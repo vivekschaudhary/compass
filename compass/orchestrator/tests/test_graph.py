@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from compass.orchestrator.graph import load_workflow
+from compass.orchestrator.graph import load_workflow, load_workflow_meta
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
 WORKFLOWS = COMPASS_DIR / "workflows"
@@ -156,6 +156,26 @@ class TestRealWorkflows(unittest.TestCase):
                 ("enterprise-architect", "scaffold-foundation"),
             ],
         )
+
+    def test_create_story(self):
+        steps = load_workflow(WORKFLOWS / "create-story.md")
+        self.assertEqual(len(steps), 5)
+        # PM decompose first, designer + ux-writer conditional, DM status last
+        self.assertEqual((steps[0].agent, steps[0].task), ("pm", "decompose-bet-to-story"))
+        agents = [s.agent for s in steps]
+        self.assertIn("designer", agents)
+        self.assertIn("ux-writer", agents)
+        self.assertEqual(steps[-1].agent, "delivery-manager")
+        # one HITL gate (every_phase) targeting the story
+        gates = [s for s in steps if s.is_hitl]
+        self.assertEqual(len(gates), 1)
+        self.assertEqual(
+            gates[0].artifact_target, "docs/bets/<bet-id>/stories/<story-id>/story.md"
+        )
+
+    def test_create_story_requires_brief(self):
+        meta = load_workflow_meta(WORKFLOWS / "create-story.md")
+        self.assertEqual(meta["requires_approved"], ["docs/bets/<bet-id>/brief.md"])
 
 
 if __name__ == "__main__":

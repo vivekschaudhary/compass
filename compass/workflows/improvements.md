@@ -2673,3 +2673,21 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Verified:** graph parses to 6 steps (gates at 2 + 4 with correct artifact targets); dry-run passes the `requires_approved` gate on an approved product.md and walks all 6 steps; full suite 55 tests green (+1 SFA integration test in test_graph.py).
 
 **Files touched (5):** `compass/agents/enterprise-architect.md` · `compass/workflows/setup-foundation-architecture.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` (4→5 of 17) · `SETUP.md` (4→5 dispatch graphs) (+ this file). Counter: #85. 3 of 5 before Retro #018 (fires after #87).
+
+---
+
+### 2026-06-14 — #86: create-story → dispatch graph; full bootstrap→build chain now orchestratable
+
+**Trigger origin (Principle #19):** framework-internal — completes the strategic "open the full chain" arc (paired with #85). No new consumer signal this batch; this is the last gap blocking an end-to-end consumer pipeline run (kindtree bootstrap), so it is upstream of the next consumer validation, not ceremony. The pm.md host change additionally draws on prior consumer-signal evidence (see below).
+
+**Friction:** `/create-story` was the second gap in the orchestrator's chain — `/build` requires an approved story, but nothing orchestratable produced one. Its drift was the INVERSE of #85's: the workflow held the full method while `compass/agents/pm.md` → `decompose-bet-to-story` was a 2-line stub pointing BACK at the workflow. That breaks orchestrator dispatch (the agent receives only its own file as system prompt — never the workflow), so a dispatched PM would have no method. Making the task self-sufficient was blocked by pm.md sitting at 7991/8000 of the ChatGPT instructions cap (9 chars free).
+
+**Change (IMPLEMENTED):**
+
+- `compass/agents/pm.md` → v0.3.42: **`chatgpt` dropped from `preferred_hosts`** → `[claude, codex, gemini]`, lifting the 8000-char cap (it is ChatGPT-only). `decompose-bet-to-story` rewritten from a workflow-pointing stub into a full self-sufficient gate/work/postcondition (slice selection · story ID · conditional Designer/UX-Writer · story.md per template · Standard Experience Checklist gate). **Resolves the pm half of `[host-preference-validation]`** — two independent drivers now: (1) consumer-signal evidence (2026-06-08) that ChatGPT underperformed on pm output, (2) the cap blocking orchestration (2026-06-14). `researcher.md` half stays queued. User-approved decision.
+- `compass/workflows/create-story.md` → v0.3.42: fat 10-step process → thin 5-step dispatch graph (`pm.decompose-bet-to-story` → conditional `designer.draft-design-spec` + `ux-writer.write-copy` → HITL gate → `delivery-manager.update-status`). `requires_approved: [docs/bets/<bet-id>/brief.md]`; conditional architecture requirement stays in the PM task gate (not machine-checkable unconditionally). HITL gate carries `**Artifact target:**` for #84 promotion. Methodology now lives in the pm task + `compass/templates/story.md` (Standard Experience Checklist already there). **6th workflow in dispatch-graph shape.**
+- `AGENTS.md` host table: pm split to its own row with rationale; count 5→6 of 17 + the full-chain statement. `SETUP.md`: 5→6 dispatch graphs.
+
+**Capstone verification — the full chain is open:** scripted end-to-end gate-unlock simulation (`--approve` at each gate) confirmed `/setup-product` → `/setup-foundation-architecture` → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build` gates unlock in sequence (each via both hitl.jsonl record AND `status: approved` frontmatter paths). Full suite 57 tests green (+2 create-story integration tests).
+
+**Files touched (5):** `compass/agents/pm.md` · `compass/workflows/create-story.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` · `SETUP.md` (+ this file). Counter: #86. 4 of 5 before Retro #018 (fires after #87).
