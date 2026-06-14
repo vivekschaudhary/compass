@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **DECLARED (not built):** `[pluggable-graph-executor]` — LLM-as-orchestrator over a mechanical gate floor (#87). Design sketch at `compass/orchestrator/DESIGN-pluggable-executor.md`; a 3rd executor (Claude driving subagents) alongside `run.py` and Claude Code interactive, valid only if gates/routing/promotion stay mechanical tool calls. Build trigger: orchestrator context-composition friction or v0.4-beta multi-agent scope.
+
 ### Changed
 
 -

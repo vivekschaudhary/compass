@@ -2691,3 +2691,19 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Capstone verification — the full chain is open:** scripted end-to-end gate-unlock simulation (`--approve` at each gate) confirmed `/setup-product` → `/setup-foundation-architecture` → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build` gates unlock in sequence (each via both hitl.jsonl record AND `status: approved` frontmatter paths). Full suite 57 tests green (+2 create-story integration tests).
 
 **Files touched (5):** `compass/agents/pm.md` · `compass/workflows/create-story.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` · `SETUP.md` (+ this file). Counter: #86. 4 of 5 before Retro #018 (fires after #87).
+
+---
+
+### 2026-06-14 — `[pluggable-graph-executor]`: LLM-as-orchestrator over a mechanical gate floor — DECLARED, not implemented (#87)
+
+**Trigger origin (Principle #19):** framework-internal — surfaced from a user architecture question this session ("can I eventually use Claude as my orchestrator using this architecture"). **No consumer origin** — flagged explicitly per Principle #19. This is a legitimate `[declare-not-implement]` forward-architecture declaration, not ceremony: it names a property the substrate already has and the discipline that must guard it, so the shape is captured before the build. Real consumer friction (the kindtree run's context-composition limits) is the natural validation that would pull it declared → built.
+
+**Realization:** the dispatch-graph + agent-file substrate already separates the *plan* (workflow) from the *executor* (the thing that walks it). Per `[workflow-as-dispatch-graph]` (v0.3.24) + `[agent-as-surface-independent-unit]` (v0.3.14), the executor is swappable. Three surfaces over one substrate: (1) deterministic `run.py` [shipped], (2) Claude Code interactive [shipped], (3) Claude as autonomous orchestrator spawning one subagent per step [this declaration].
+
+**Load-bearing constraint — the mechanical gate floor:** Compass fights soft-spec rationalization (Principle #14). A deterministic loop *cannot* skip a HITL gate or self-review; an LLM orchestrator *can* rationalize past both. So an LLM executor is valid ONLY if gates/routing/promotion stay mechanical tools it MUST call, not judgments it makes. The orchestrator MAY NOT: decide a requirement gate passed (must call `_requirement_met`), self-approve a HITL gate (must stop + `log_hitl`), review code it dispatched (reviewer routes through `router.py` to a non-Claude host), or skip a step silently (#79 rule). **Hybrid, not handoff:** Claude drives judgment-heavy parts (context composition, ambiguity, dynamic conditional dispatch, recovery); the floor stays mechanical. The floor is Principle #14 applied to the orchestrator itself.
+
+**Reuse (thin new module — replaces only the driver):** `graph.py` (parse), `_requirement_met` (gate), `router.py` (reviewer routing/exclusion), `connector.py` (promote), `logger.py` (runs.jsonl + hitl.jsonl), `hitl.py` (prompt). Implementation surface when built: (a) Claude Code `/run <workflow>` skill via Agent/Task subagents, OR (b) Agent-SDK `agent_run.py` headless, tools = `{dispatch_step, check_gate, promote_artifact, log_decision}` — slots in as a 3rd executor beside `run.py`.
+
+**Candidate class:** would be the 4th architecture-discipline-class Compass-original when codified. Codify after a 2nd instance OR once built + validated.
+
+**Files touched (2):** `compass/orchestrator/DESIGN-pluggable-executor.md` (NEW — full design sketch) · `compass/workflows/improvements.md` (+ CHANGELOG [Unreleased]). **No code changed — declared only.** Counter: #87. **5 of 5 → Retro #018 fires next.** Note: batch #83–#87 is the 3rd consecutive zero-consumer batch — a drift signal Retro #018 should weigh per Principle #19; the kindtree validation run is the standing remedy.
