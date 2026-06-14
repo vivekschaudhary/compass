@@ -29,7 +29,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #017** (improvements #78–#82): [retros/2026-06-11-retro-017-improvements-78-to-82.md](retros/2026-06-11-retro-017-improvements-78-to-82.md) — **fired ON TIME at #82** (13th consecutive on-time retro; first under the #78 mandatory full-surface-audit rule). 5 improvements: retro full-surface audit (#78) + halt-not-skip (#79) + gate-parse hardening with first graph.py tests (#80) + orchestrator small-fix batch (#81) + `[pre-push-grep-discipline]` codified (#82). Audit found + fixed-in-batch: orchestrator version self-claims (alpha-4/alpha-2 → generic, CHANGELOG single-source). **Codification-ready: `[test-alongside-implementation]` (2 instances — user-gated).** Watch-fors: #70 implementation slice (3 batches deferred — hard-line trigger if it passes #87) · C7 reconciliation · script adoption tracking · #79 halt-branch tests.
 
-**Next retro fires after improvement #87.** (Retro #017 = #82; next = #87.)
+- **Retro #018** (improvements #83–#87): [retros/2026-06-14-retro-018-improvements-83-to-87.md](retros/2026-06-14-retro-018-improvements-83-to-87.md) — **fired ON TIME at #87** (14th consecutive on-time retro; 2nd under the #78 full-surface-audit rule). 5 improvements: [consumer-as-primary-signal] → Principle #19 (#83) + the #70 gate/promotion slice (#84) + setup-foundation-architecture dispatch graph (#85) + create-story dispatch graph — **full bootstrap→build chain now orchestratable** (#86) + [pluggable-graph-executor] declared (#87). Audit caught + fixed orchestrator alpha-5 version drift + a stale skip→halt reviewer claim (e73fded). **Batch closed with the first real end-to-end consumer orchestrator run (home-app)** → surfaced the auth→RLS→render prod-parity test finding, codified as #88. Codification-ready: `[test-alongside-implementation]` (5 instances, user-gated). Watch-fors: pre-push script mechanization · stay consumer-anchored · MVP doc refresh.
+
+**Next retro fires after improvement #92.** (Retro #018 = #87; next = #92.)
 
 ## Template
 
