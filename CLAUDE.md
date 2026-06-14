@@ -87,7 +87,7 @@ Under `[agent-as-surface-independent-unit]` (canon v0.3.14):
 
 ## Notes on the orchestrator (v0.4-alpha, shipped — `compass/orchestrator/`)
 
-The orchestrator (currently v0.4.0-alpha-5, see CHANGELOG.md):
+The orchestrator (v0.4-alpha; exact alpha number in CHANGELOG.md — the single source, not restated here):
 1. Reads `compass/workflows/<workflow>.md` dispatch graph
 2. For each step, looks up the agent's `preferred_hosts:` and dispatches via the appropriate host's API (Claude API / OpenAI API / Gemini API per `router.py`)
 3. Passes agent file contents as system prompt; task-step inputs as user prompt
