@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [text_input, web_search, github_write_artifact]
 optional_tools: [mcp_confluence, mcp_jira, mcp_gdrive, mcp_notion, mcp_linear]
 participates_in_workflows: [setup-product, create-bet-portfolio, create-brief, create-story, build]
-version: 0.3.42
+version: 0.3.44
 ---
 
 # Agent: PM (Product Manager)
@@ -59,7 +59,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 4. If the slice has a UI surface, Designer (`draft-design-spec`) + UX Writer (`write-copy`) engage first — the workflow sequences them in parallel; their `design.md` + `copy.md` land alongside the story.
 5. Draft `docs/bets/<bet-id>/stories/<story-id>/story.md` per `compass/templates/story.md`: frontmatter (id · bet · type · `status: ready`, or `needs-design` until design exists) · title · description · acceptance criteria · **Standard Experience Checklist** (6 categories — Navigation · States · Feedback · Accessibility · Edge cases · Cross-surface consistency — each covered by ≥1 AC item OR explicit `n/a — <reason>`) · design link (if UI) · tech notes (cite bet architecture) · dependencies · priority · DRI log.
 6. Mirror to the tracker as a story under the bet's epic (else log skip as DRI Decision).
-**Postcondition:** `status: ready` (or `needs-design`) · **Standard Experience Checklist has no empty category** (each covered by AC or `n/a — <reason>`; an empty category blocks `ready` — the bridge between Designer's per-screen completeness and the implementation contract) · ≥1 DRI Decision · mirrored or skip-logged · not self-approved.
+**Postcondition:** `status: ready` (or `needs-design`) · **Standard Experience Checklist has no empty category** (each covered by AC or `n/a — <reason>`; an empty category blocks `ready` — the bridge between Designer's per-screen completeness and the implementation contract) · **if the story mutates persistent data, ≥1 AC requires E2E test-data cleanup** (created rows deleted or soft-deleted — no residue; per `[per-surface-vertical-test]` companion) · ≥1 DRI Decision · mirrored or skip-logged · not self-approved.
 
 ### `arbitrate-dispute` — Engineer-vs-Reviewer dispute resolution
 Read both sides + artifact → arbitrate. Execute decision; don't make engineering choices. Post rationale.

@@ -48,7 +48,9 @@ _Auto-populated as PRs open. A story may have multiple PRs (implementation, test
 ## Tests
 
 _Engineer writes unit/API/component tests co-located with code._
-_Codex writes E2E tests in top-level `e2e/`._
+_Automation writes E2E tests in top-level `e2e/`._
+
+**Test-data cleanup (required AC for any data-mutating story):** any E2E that creates or mutates persistent records MUST clean them up after the run — **hard delete, or soft-delete** (mark rows deleted/inactive) when hard delete isn't possible (append-only / audit / RLS-restricted tables). Author it as an explicit AC, e.g. *"AC-N: E2E run leaves no residual test records — created rows are deleted or soft-deleted."* No orphaned test data in shared / prod-like environments. (`[per-surface-vertical-test]` companion; anti-pattern `orphaned-test-data`.)
 
 Tags applied to test files:
 - `regression: true|false`

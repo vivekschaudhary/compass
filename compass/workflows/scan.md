@@ -94,6 +94,7 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 | BUILD-06 | Architecture drift undetected (Architect compliance check absent on PR) | High | Yes (DRI) | feature, architectural-initiative |
 | BUILD-07 | Performance budget exceeded (budget defined in arch doc, exceeded in CI) | High | Yes (DRI) | as above |
 | BUILD-08 | Per-surface vertical test missing (`[per-surface-vertical-test]`) — a data surface has no test traversing the real auth→authz(RLS)→render vertical on a prod-like build; mocked-auth / service-role / dev-build only | High | Yes (DRI per surface) | feature, architectural-initiative |
+| BUILD-09 | Test-data cleanup missing (`orphaned-test-data`) — a data-mutating E2E test has no teardown deleting or soft-deleting the records it creates; story lacks the cleanup AC | Medium | Yes (DRI) | feature, architectural-initiative |
 
 ### Phase 4: Production Ready (new — currently silent in Compass)
 

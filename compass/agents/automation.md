@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, shell_exec, git]
 optional_tools: [mcp_github, mcp_sentry, mcp_linear, mcp_vercel]
 participates_in_workflows: [build, fix, ops]
-version: 0.3.43
+version: 0.3.44
 ---
 
 # Agent: Automation
@@ -36,9 +36,10 @@ Gates + postconditions = load-bearing. Work = guidance.
 4. Use the project's E2E framework (Playwright / Cypress / detected from `package.json`)
 5. Tests must run against the prod-equivalent runtime (deploy preview URL or staging); flag if only localhost-runnable
 6. **Per-surface vertical test (`[per-surface-vertical-test]`, load-bearing):** for each data surface (view/route reading or writing authorization-gated data), write ≥1 test traversing the REAL vertical end-to-end on a prod-like build — authenticate as a real user → authorization-enforced queries (e.g., Supabase RLS) → render (e.g., RSC). **Mocked auth, service-role/admin keys, and dev-server builds do NOT satisfy** — they bypass the authz layer + prod render path, so a broken RLS policy or render contract ships green. Anti-pattern: `mocked-auth-green`.
-7. Verify tests pass in CI (not just locally)
-8. Log any framework runtime contract checks performed (RSC boundary, Server Actions, middleware) as DRI Decisions
-**Postcondition:** E2E tests exist for every AC item (happy + failure paths) · all 6 Standard Experience Checklist categories covered or explicitly `n/a — <reason>` · tests run against prod-equivalent runtime · **every data surface has ≥1 real auth→authz→render vertical test on a prod-like build (no mocked-auth / service-role / dev-build substitute) per `[per-surface-vertical-test]`** · CI green.
+7. **Test-data cleanup (load-bearing):** any test that creates or mutates persistent records cleans them up in teardown — **hard delete, or soft-delete** (mark the rows deleted/inactive) when hard delete isn't possible (append-only / audit / RLS-restricted tables). Verify no residual test rows after the run. The story must carry this as an explicit AC (PM authors it). Anti-pattern: `orphaned-test-data` — real-vertical tests run against a prod-like DB, so uncleaned rows bloat data and flake later runs.
+8. Verify tests pass in CI (not just locally)
+9. Log any framework runtime contract checks performed (RSC boundary, Server Actions, middleware) as DRI Decisions
+**Postcondition:** E2E tests exist for every AC item (happy + failure paths) · all 6 Standard Experience Checklist categories covered or explicitly `n/a — <reason>` · tests run against prod-equivalent runtime · **every data surface has ≥1 real auth→authz→render vertical test on a prod-like build (no mocked-auth / service-role / dev-build substitute) per `[per-surface-vertical-test]`** · **data-mutating tests clean up all created records (hard delete or soft-delete) — no residue in shared/prod-like envs** · CI green.
 
 ### `configure-ci` — set up or update CI/CD pipeline
 

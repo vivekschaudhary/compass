@@ -183,6 +183,7 @@ Mirrors per-task postconditions + cross-agent invariants.
 - [ ] (Step 1 — pre-PR) **`[cross-artifact-sweep-on-contract-shift]`** complete if story changed any contract: DRI Decision logged confirming all referencing artifacts swept (components · API clients · tests · config · docs · env vars); no stale references remain
 - [ ] (Step 2 — automation.write-e2e-tests) E2E tests in `e2e/`; AC user flows covered; CI configs version-controlled
 - [ ] (Step 2 — automation.write-e2e-tests) **Per-surface vertical test** (`[per-surface-vertical-test]`): every data surface has ≥1 test traversing the real auth→authz(RLS)→render vertical on a prod-like build — no mocked-auth / service-role / dev-build substitute
+- [ ] (Step 2 — automation.write-e2e-tests) **Test-data cleanup**: data-mutating E2E tests delete or soft-delete every record they create (no residue in shared/prod-like envs); story has the cleanup AC (anti-pattern `orphaned-test-data`)
 - [ ] (Step 3 — reviewer.review-pr) PR comment posted in documented format; every finding has File · Rule violated · Issue · Fix; BLOCKERs are real BLOCKERs (not softened to ISSUE); Step 0 framework-registration check completed if PR touches framework-discovered surfaces
 - [ ] (Step 3 — security-reviewer if applicable) Second PR comment posted if diff touched auth/PII/payments/secrets/external input/sessions
 - [ ] (Step 4 — engineer.respond-to-review) All BLOCKERs addressed; ISSUEs addressed or explicitly deferred with rationale; commits use conventional-commit prefixes

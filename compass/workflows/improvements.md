@@ -2729,3 +2729,24 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Verified:** `pre-push-consistency-check.py` clean on all amended catalog facts; no agent-cap HARD-FAILs; 57 tests green.
 
 **Files touched (8):** `compass/framework/canon.md` · `compass/agents/automation.md` · `compass/agents/engineer.md` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `compass/workflows/fix.md` · `compass/templates/scan-report.md` · `AGENTS.md` · `CHANGELOG.md` (+ this file). Counter: #88. 1 of 5 before Retro #019 (fires after #92). First consumer-origin improvement since the orchestrator-chain arc began.
+
+---
+
+### 2026-06-14 — Test-data cleanup AC: data-mutating E2E must delete or soft-delete its records (#89)
+
+**Trigger origin (Principle #19):** **consumer-rooted user directive** — surfaced from the home-app end-to-end run context: #88 made E2E run the real auth→RLS→render vertical against a prod-like DB, so tests now create real records. User directed that every E2E case carry an AC to clean up DB records after use, "or at least soft-delete them."
+
+**Friction:** real-vertical E2E (#88) against a prod-like DB leaves residue unless tests tear down what they create. Orphaned rows bloat the database, flake later runs (stale data / uniqueness collisions), and risk test data leaking in a near-prod environment. The cleanup expectation was implicit; it needs to be a contracted, verifiable AC.
+
+**Change (IMPLEMENTED, v0.3.44):** companion rule on `[per-surface-vertical-test]` (not a new catalog pattern — a rider on #88, keeps the count honest at 21).
+- `compass/agents/automation.md` → v0.3.44: `write-e2e-tests` Work step 7 (teardown deletes OR soft-deletes created records; soft-delete is the floor when hard delete isn't possible — append-only / audit / RLS-restricted) + postcondition.
+- `compass/agents/pm.md` → v0.3.44: `decompose-bet-to-story` postcondition — data-mutating stories must carry ≥1 cleanup AC (PM authors it).
+- `compass/templates/story.md`: Test-data-cleanup AC requirement note + example AC. **Swept the last stale "Codex writes E2E" ref** here → "Automation writes E2E" (Principle #17; #77 split residue).
+- `compass/framework/canon.md`: companion rule + anti-pattern `orphaned-test-data` added to the `[per-surface-vertical-test]` entry.
+- `/build` verification (Step 2 cleanup check) + `/scan` BUILD-09 (new finding, Medium).
+
+**Soft-delete nuance (per user):** hard delete is preferred; soft-delete (mark rows deleted/inactive) is the acceptable floor when the table is append-only / audit / RLS-restricted and hard delete isn't possible.
+
+**Verified:** `pre-push-consistency-check.py` clean; 57 tests green (no code paths changed — discipline/doc only).
+
+**Files touched (7):** `compass/agents/automation.md` · `compass/agents/pm.md` · `compass/templates/story.md` · `compass/framework/canon.md` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `CHANGELOG.md` (+ this file). Counter: #89. 2 of 5 before Retro #019 (fires after #92). 2nd consecutive consumer-rooted improvement.
