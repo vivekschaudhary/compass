@@ -2782,3 +2782,25 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sideways delegation is the new capability (→ `[pluggable-graph-executor]` #87); the cockpit already exists split across `/plan` (schedule) + `/status` (decision queue) + `/dashboard` (merged view) — the vision is to **elevate `/status` into a live, actionable, portfolio-wide cockpit fed by `/plan`**. Roadmap: tool-using roles → roles-delegate → cockpit → fill SRE+Monitor → full parallel loop. Cross-ref added from `DESIGN-pluggable-executor.md` (#87 = roadmap step 1).
 
 **Files touched (3):** `compass/orchestrator/VISION.md` (NEW) · `compass/orchestrator/DESIGN-pluggable-executor.md` (Serves: pointer) · `compass/workflows/improvements.md`. No counter increment (strategic artifact).
+
+---
+
+### 2026-06-19 — `[pluggable-graph-executor]` slice 1: read-only tool-using executor (#91)
+
+**Trigger origin (Principle #19):** user direction — "split and start small with the tools, start with fix"; "vision first" + "tool-using roles (full loop)" as the chosen next step. Rooted in the home-app/crypto-app reality that orchestrated code work was blind to the repo. First build toward `compass/orchestrator/VISION.md` roadmap step 1; moves #87 from declared → built (slice 1).
+
+**Friction:** the orchestrator's host adapters were single-shot, repo-blind (`claude.py` = one `messages.create`, no tools, no filesystem). `engineer.fix-bug` emitted code against a *guessed* schema — a draft, not a grounded change. (Distinct from "can't write code" — it can; the gap was no tool loop + no repo access. Corrected framing from the #90 discussion.)
+
+**Change (IMPLEMENTED, v0.4.0-alpha-7):**
+- `compass/orchestrator/hosts/tools.py` (NEW) — read-only repo tools `read_file` / `glob` / `grep`, all **sandboxed to `project_dir`** (`_resolve_in_sandbox` refuses any escaping path — the one security-critical function); `execute_tool()` returns model-readable error strings, never crashes. Size/result caps. No writes, no shell (slice 1).
+- `compass/orchestrator/hosts/claude.py` — `dispatch_with_tools()`: messages loop with `tools=`, executes each `tool_use` via `execute_tool(..., project_dir)`, feeds `tool_result` back, stops at final text; `max_iterations` runaway backstop; `client` injectable for tests. Existing single-shot `dispatch` unchanged.
+- `compass/orchestrator/hosts/router.py` — `dispatch_to_host` gains `tools` + `project_dir`; routes to `dispatch_with_tools` only when `tools` set AND host is Claude; all other paths unchanged.
+- `compass/orchestrator/run.py` — `_read_agent_tools()` parses `executor_tools:` frontmatter (named distinctly from the abstract `required_tools`/`optional_tools`); passed at the dispatch site with `project_dir`; prints `(tools: …)` when active. `--dry-run` + single-shot agents unaffected.
+- `compass/agents/engineer.md` → v0.3.46: `executor_tools: [read_file, glob, grep]`; `implement-story` + `fix-bug` note that on a tool-capable host they read the real repo via tools (don't guess the schema).
+- Tests: `tests/test_tools.py` (NEW, 14) — sandbox path-escape refusal (relative + absolute), read/glob/grep, unknown-tool + missing-arg error strings, the dispatch loop via a fake client (tool→tool_result→final; immediate-final; max-iterations backstop), `executor_tools` parse (present/absent/real engineer.md). **73 total, green.** `[test-alongside-implementation]`.
+
+**Mechanical floor preserved:** gates, HITL, promotion, logging, exit codes, reviewer-exclusion all unchanged — only the implementer's dispatch gained tools (#87 invariant).
+
+**Out of scope (this slice):** writes, shell, openai/gemini tool-use, Agent SDK, LLM-as-driver. **Slice 2 (next, user-prioritized "full loop"):** add `write_file` + `bash` (apply fix + run regression test fail→pass), guarded by agent refusal rules; re-evaluate Claude Agent SDK there.
+
+**Files touched (7):** `compass/orchestrator/hosts/tools.py` (NEW) · `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/agents/engineer.md` · `compass/orchestrator/tests/test_tools.py` (NEW) · `CHANGELOG.md` (+ this file). Counter: #91. 4 of 5 before Retro #019 (fires after #92).

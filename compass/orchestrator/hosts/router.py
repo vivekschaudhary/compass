@@ -57,15 +57,27 @@ def dispatch_to_host(
     user_message: str,
     model: str = None,
     max_tokens: int = 8192,
+    tools: list = None,
+    project_dir=None,
 ) -> str:
     """
     Dispatch to the named host adapter.
 
     model is passed only when explicitly overridden by the caller; otherwise
     COMPASS_MODEL_<CLAUDE|OPENAI|GEMINI> env var, then the DEFAULT_MODELS entry.
+
+    When `tools` is provided AND the host supports tool-use (Claude today,
+    #87 slice 1), the agent runs a read-tool loop grounded in project_dir.
+    Other hosts ignore `tools` and use the single-shot path unchanged.
     """
     if host == "claude":
-        from .claude import dispatch
+        from .claude import dispatch, dispatch_with_tools
+        if tools:
+            return dispatch_with_tools(
+                agent_file_path, task_name, user_message, project_dir,
+                model=model or _default_model("claude"),
+                max_tokens=max_tokens,
+            )
         return dispatch(
             agent_file_path, task_name, user_message,
             model=model or _default_model("claude"),

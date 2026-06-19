@@ -50,6 +50,27 @@ def _read_preferred_hosts(agent_file: Path) -> list:
     return [h.strip() for h in ph_match.group(1).split(",")]
 
 
+def _read_agent_tools(agent_file: Path) -> list:
+    """
+    Parse the optional `executor_tools:` list from agent frontmatter (#87 slice 1).
+
+    Distinct from `required_tools`/`optional_tools` (abstract capability
+    declarations): `executor_tools` names the concrete read tools the
+    orchestrator grants this agent during a tool-using run (e.g. engineer.md
+    `executor_tools: [read_file, glob, grep]`). When present AND the selected
+    host supports tool-use, the agent runs a tool loop instead of a single-shot
+    call. Absent → empty list → single-shot path (unchanged).
+    """
+    text = agent_file.read_text(encoding="utf-8")
+    fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+    if not fm_match:
+        return []
+    t_match = re.search(r'^executor_tools:\s*\[([^\]]+)\]', fm_match.group(1), re.MULTILINE)
+    if not t_match:
+        return []
+    return [t.strip() for t in t_match.group(1).split(",") if t.strip()]
+
+
 def _collect_input(step_label: str, inline_context: str = "") -> str:
     """Return user context for a step, either inline or via interactive prompt."""
     if inline_context:
@@ -702,10 +723,13 @@ def _run_workflow(
         user_context = _collect_input(step.title, inline)
         user_message = _build_user_message(step.task, user_context, prior_outputs)
 
-        print(f"\nDispatching to {host} …")
+        agent_tools = _read_agent_tools(agent_file)
+        tools_note = f" (tools: {', '.join(agent_tools)})" if agent_tools and host == "claude" else ""
+        print(f"\nDispatching to {host}{tools_note} …")
         try:
             result = dispatch_to_host(
                 host, str(agent_file), step.task, user_message, model=model,
+                tools=agent_tools or None, project_dir=project_dir,
             )
         except (RuntimeError, ImportError) as exc:
             print(f"Error: {exc}", file=sys.stderr)

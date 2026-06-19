@@ -3,8 +3,9 @@ name: engineer
 preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, shell_exec, git, github_write_artifact]
 optional_tools: [mcp_github, mcp_sentry, mcp_linear]
+executor_tools: [read_file, glob, grep]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.45
+version: 0.3.46
 ---
 
 # Agent: Engineer
@@ -44,7 +45,7 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
 
 **Work outline:**
 
-1. **Read context** in order: AGENTS.md → brief → bet architecture (if exists) → story (AC + design + tech notes) → copy doc (use verbatim) → foundation architecture (stack-wide rules) → existing code in the area.
+1. **Read context** in order: AGENTS.md → brief → bet architecture (if exists) → story (AC + design + tech notes) → copy doc (use verbatim) → foundation architecture (stack-wide rules) → existing code in the area. **On a tool-capable host** (orchestrator grants `executor_tools: read_file/glob/grep`, #87), read these from the real repo via tools — ground the diff in the actual schema/types/conventions; do NOT guess.
 2. **Plan smallest viable diff** — implementation, library use, structural choices logged as Decisions with rationale + area tag.
 3. **Write tests first when possible** (especially for fixes — failing test reproduces the bug).
 4. **Implement** following bet architecture. Do NOT invent architectural decisions.
@@ -120,7 +121,7 @@ Fix a defect, regression test first. The `/fix` counterpart of `implement-story`
 
 **Gate:** A triage note exists (`support.triage-bug` output) classifying severity + affected bet/hygiene, and the triage classification is HITL-confirmed. Bug is reproducible (or the triage note explicitly states why not).
 **Work:**
-1. Read the triage note + bet context (brief, bet architecture, affected story) if bet-linked.
+1. Read the triage note + bet context (brief, bet architecture, affected story) if bet-linked. **On a tool-capable host** (`executor_tools`, #87), read the actual source via tools to ground the fix in the real schema/selectors — don't guess.
 2. **Write the failing regression test FIRST** (first commit: `test: reproduce <bug>`) — it must fail for the right reason before any fix exists.
 3. Implement the **minimum** fix (subsequent commits: `fix: <description>`) — no scope creep beyond the defect.
 4. Tag tests: `regression: true` · `e2e: true|false`.
