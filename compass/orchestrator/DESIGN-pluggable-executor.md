@@ -1,6 +1,6 @@
 # Design: Pluggable graph executor — LLM-as-orchestrator over a mechanical gate floor
 
-> **Status: DECLARED, not implemented** (improvement #87, 2026-06-14) per `[declare-not-implement]` (canon v0.3.9). This file is the design sketch; build when a concrete need pulls it from declared → built (see Triggers). Working pattern name: `[pluggable-graph-executor]`.
+> **Status: PARTIALLY BUILT.** Declared #87 (2026-06-14). **Tool-using executor slices SHIPPED:** slice 1 read-only tools (#91, v0.4.0-alpha-7), slice 2 write+verify under `--allow-write` (#92, v0.4.0-alpha-8) — `hosts/tools.py` + `claude.py:dispatch_with_tools`. **Still declared, not built:** surface 3 below (Claude-as-autonomous-orchestrator / LLM-as-driver) and the openai/gemini tool-use adapters. Working pattern name: `[pluggable-graph-executor]`.
 >
 > **Serves:** [`VISION.md`](VISION.md) — the orchestrator's product north star (conductor over the full lifecycle, portfolio parallelism, the cockpit). This design is roadmap step 1 (tool-using roles) toward that vision.
 
@@ -10,7 +10,7 @@ The dispatch-graph + agent-file substrate already separates the **plan** (`compa
 
 Three execution surfaces over one substrate:
 
-1. **Deterministic orchestrator** — `run.py`. Plain control flow; no LLM in the driver's seat. Shipped (v0.4-alpha-6).
+1. **Deterministic orchestrator** — `run.py`. Plain control flow; no LLM in the driver's seat. Shipped (v0.4-alpha). Its Claude implementer steps now run a **tool loop** (read + opt-in write/bash) per #91/#92 — still a deterministic driver, but the steps are agentic.
 2. **Claude Code interactive** — Claude reads the workflow + agent files, executes tasks, halts at gates; a human drives cadence + approvals. Shipped (the `/setup-product` etc. skills).
 3. **Claude as autonomous orchestrator** — Claude (Agent SDK / Task-style subagents) walks the graph and spawns one subagent per step with `compass/agents/<agent>.md` as system prompt, collecting outputs and advancing. **This design.**
 
