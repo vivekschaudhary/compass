@@ -2848,3 +2848,22 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Why not a new canon pattern:** this is the mechanical defense for existing Principle #17 / `[pre-push-grep-discipline]`, like `check-agent-cap.py` is for `[agent-file-compression]` — a script, not a new pattern. Catalog unchanged at 21.
 
 **Files touched (6):** `compass/scripts/consistency-check.py` (NEW) · `compass/scripts/githooks/pre-commit` (NEW) · `.github/workflows/consistency-check.yml` (NEW) · `compass/orchestrator/tests/test_consistency.py` (NEW) · `CLAUDE.md` · `compass/scripts/README.md` (+ this file). Counter: #93. 1 of 5 before Retro #020 (fires after #97). Closes the 3-retro-old "mechanize the pre-push check" watch-for.
+
+---
+
+### 2026-06-19 — codify `[test-alongside-implementation]` (#94)
+
+**Trigger origin (Principle #19):** framework-internal — long-flagged codification-ready (since Retro #015), repeatedly named "the clearest pending codification," user-gated; "keep going" + ~7 instances triggered it. Not consumer-rooted (flagged per Principle #19); it's a discipline already universally followed, now written to canon so it binds future work.
+
+**Friction:** the discipline was perfect-in-practice but un-codified — every orchestrator change shipped tests in-commit, yet nothing bound future (especially non-orchestrator) work to do the same. Promotion had been deferred only by the deliberate-promotion rule, not doubt.
+
+**Change (IMPLEMENTED):**
+- `compass/framework/canon.md` — `### test-alongside-implementation` entry: **8th enforcement-class member**, catalog 7 shapes / 22 patterns. Anti-pattern `tests-later`. ~7 instances cited (#72, #80, #84, #85/#86, #91, #92, #93). Explicitly distinct from `[per-surface-vertical-test]` (consumer product tests) — this is framework engineering (Compass testing its own orchestrator).
+- `AGENTS.md` — catalog 21→22, enforcement 7→8, member added.
+- `CLAUDE.md` — rule 10 (ship tests with new orchestrator/script write paths, same commit).
+
+**Versioned `v0.3.47` (framework-era), NOT `v0.4.0-alpha-N`** — and that correction was forced by #93's own check: the consistency-check flagged `alpha-10` in CLAUDE.md rule 10 (a canon-citation colliding with the orchestrator-self-claim ban). Lesson encoded: **canon entries cite the framework version (v0.3.x), the orchestrator alpha-N lives only in CHANGELOG** — which keeps citations distinguishable from self-claims and keeps the check unambiguous. **#93 caught a real drift in #94 within minutes of shipping — the mechanization proving itself immediately.**
+
+**Catalog sweep (Principle #17, same commit):** canon now 22 entries → AGENTS.md updated to 22; consistency-check.py confirms agreement (the check now guards this invariant). 90 tests green.
+
+**Files touched (4):** `compass/framework/canon.md` · `AGENTS.md` · `CLAUDE.md` · `CHANGELOG.md` (+ this file). Counter: #94. 2 of 5 before Retro #020 (fires after #97). Clears the longest-standing codification candidate.
