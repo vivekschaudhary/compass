@@ -1,6 +1,8 @@
 # Design: Pluggable graph executor — LLM-as-orchestrator over a mechanical gate floor
 
 > **Status: DECLARED, not implemented** (improvement #87, 2026-06-14) per `[declare-not-implement]` (canon v0.3.9). This file is the design sketch; build when a concrete need pulls it from declared → built (see Triggers). Working pattern name: `[pluggable-graph-executor]`.
+>
+> **Serves:** [`VISION.md`](VISION.md) — the orchestrator's product north star (conductor over the full lifecycle, portfolio parallelism, the cockpit). This design is roadmap step 1 (tool-using roles) toward that vision.
 
 ## The realization
 

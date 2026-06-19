@@ -2770,3 +2770,15 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Caveat recorded:** the orchestrator's hosts are text-only, so orchestrated `/fix` and `/ops` produce text plans, not applied code/infra — actual execution stays interactive (Claude Code, fs/shell). The dispatch-graph shape is the prerequisite for orchestratability + single-source methodology + the future `[pluggable-graph-executor]` (#87), and it benefits interactive execution too (agents own the method).
 
 **Files touched (8):** `compass/agents/engineer.md` · `compass/agents/reviewer.md` · `compass/agents/tech-writer.md` · `compass/agents/security-reviewer.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #90. 3 of 5 before Retro #019 (fires after #92). Tier-2 reactive workflows done; remaining 9 (create-bet-portfolio, triage, status, plan, measure, scan, metrics, dashboard, retro) are v0.4-beta scope.
+
+---
+
+### 2026-06-14 — Orchestrator product vision doc (strategic artifact, unnumbered)
+
+**Not a numbered framework improvement** — per the `compass/framework/mvp.md` precedent, a strategic/vision artifact doesn't take a counter slot. Recorded here for traceability.
+
+`compass/orchestrator/VISION.md` (NEW) — the orchestrator's product north star, captured in PM-level language at the user's direction (acting as product owner). Core: the orchestrator is a **conductor** running the full product lifecycle (Triage → PM → Architect → Engineer → Reviewer → E2E → SRE → Deploy → Monitor) for new OR existing products; roles hand off down the lifecycle AND delegate sideways on demand (PM→Researcher, etc.); the **whole portfolio runs in parallel**; a **cockpit** shows what's moving / blocked / decisions-waiting-on-me and lets the user act on that queue; HITL sign-off + decision journal are the permanent floor.
+
+Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sideways delegation is the new capability (→ `[pluggable-graph-executor]` #87); the cockpit already exists split across `/plan` (schedule) + `/status` (decision queue) + `/dashboard` (merged view) — the vision is to **elevate `/status` into a live, actionable, portfolio-wide cockpit fed by `/plan`**. Roadmap: tool-using roles → roles-delegate → cockpit → fill SRE+Monitor → full parallel loop. Cross-ref added from `DESIGN-pluggable-executor.md` (#87 = roadmap step 1).
+
+**Files touched (3):** `compass/orchestrator/VISION.md` (NEW) · `compass/orchestrator/DESIGN-pluggable-executor.md` (Serves: pointer) · `compass/workflows/improvements.md`. No counter increment (strategic artifact).
