@@ -419,6 +419,7 @@ def _run_workflow(
     initial_prior_outputs: list = None,
     dry_run: bool = False,
     skip_missing: bool = False,
+    allow_write: bool = False,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -724,12 +725,18 @@ def _run_workflow(
         user_message = _build_user_message(step.task, user_context, prior_outputs)
 
         agent_tools = _read_agent_tools(agent_file)
-        tools_note = f" (tools: {', '.join(agent_tools)})" if agent_tools and host == "claude" else ""
+        if agent_tools and host == "claude":
+            granted = [t for t in agent_tools if t in ("read_file", "glob", "grep") or allow_write]
+            mode = "read+write" if allow_write else "read-only"
+            tools_note = f" (tools: {', '.join(granted)} — {mode})"
+        else:
+            tools_note = ""
         print(f"\nDispatching to {host}{tools_note} …")
         try:
             result = dispatch_to_host(
                 host, str(agent_file), step.task, user_message, model=model,
                 tools=agent_tools or None, project_dir=project_dir,
+                allow_write=allow_write,
             )
         except (RuntimeError, ImportError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -864,6 +871,18 @@ def main(argv=None):
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
+        "--allow-write",
+        action="store_true",
+        dest="allow_write",
+        help=(
+            "Grant tool-using agents the WRITE tools (write_file, bash) in "
+            "addition to read tools. OFF by default — without it, executor_tools "
+            "are read-only. bash is sandboxed to the project + screened against a "
+            "destructive-command denylist. Use only when you intend the "
+            "orchestrator to modify the working tree."
+        ),
+    )
+    parser.add_argument(
         "--skip-missing",
         action="store_true",
         dest="skip_missing",
@@ -969,6 +988,7 @@ def main(argv=None):
             from_step=args.from_step,
             dry_run=args.dry_run,
             skip_missing=args.skip_missing,
+            allow_write=args.allow_write,
         )
         return
 
@@ -1014,6 +1034,7 @@ def main(argv=None):
             from_step=args.from_step if idx == 0 else None,
             initial_prior_outputs=accumulated_outputs,
             skip_missing=args.skip_missing,
+            allow_write=args.allow_write,
         )
 
         accumulated_outputs.extend(wf_outputs)

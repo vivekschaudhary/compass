@@ -3,9 +3,9 @@ name: engineer
 preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, shell_exec, git, github_write_artifact]
 optional_tools: [mcp_github, mcp_sentry, mcp_linear]
-executor_tools: [read_file, glob, grep]
+executor_tools: [read_file, glob, grep, write_file, bash]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.46
+version: 0.3.47
 ---
 
 # Agent: Engineer
@@ -121,7 +121,7 @@ Fix a defect, regression test first. The `/fix` counterpart of `implement-story`
 
 **Gate:** A triage note exists (`support.triage-bug` output) classifying severity + affected bet/hygiene, and the triage classification is HITL-confirmed. Bug is reproducible (or the triage note explicitly states why not).
 **Work:**
-1. Read the triage note + bet context (brief, bet architecture, affected story) if bet-linked. **On a tool-capable host** (`executor_tools`, #87), read the actual source via tools to ground the fix in the real schema/selectors — don't guess.
+1. Read the triage note + bet context (brief, bet architecture, affected story) if bet-linked. **On a tool-capable host** (`executor_tools`, #87), read the actual source via tools to ground the fix in the real schema/selectors — don't guess. **In write mode** (`--allow-write`, #87 slice 2): write the failing regression test with `write_file`, run it with `bash` to confirm it FAILS for the right reason, apply the minimum fix, re-run to confirm it PASSES, then run typecheck/lint/build. `bash` is sandboxed to the project and refuses destructive commands (force-push, `--no-verify`, `reset --hard`, etc.) — never try to bypass the refusal; the human still approves the merge.
 2. **Write the failing regression test FIRST** (first commit: `test: reproduce <bug>`) — it must fail for the right reason before any fix exists.
 3. Implement the **minimum** fix (subsequent commits: `fix: <description>`) — no scope creep beyond the defect.
 4. Tag tests: `regression: true` · `e2e: true|false`.

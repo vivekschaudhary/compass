@@ -169,7 +169,85 @@ class TestAgentToolsFrontmatter(unittest.TestCase):
 
     def test_real_engineer_declares_tools(self):
         eng = Path(__file__).resolve().parents[2] / "agents" / "engineer.md"
-        self.assertEqual(_read_agent_tools(eng), ["read_file", "glob", "grep"])
+        self.assertEqual(
+            _read_agent_tools(eng), ["read_file", "glob", "grep", "write_file", "bash"]
+        )
+
+
+class TestWriteGating(unittest.TestCase):
+    """Slice 2: write tools are opt-in (allow_write) at both layers."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.proj = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_schemas_for_drops_write_when_off(self):
+        names = ["read_file", "glob", "grep", "write_file", "bash"]
+        got = [s["name"] for s in tools.schemas_for(names, allow_write=False)]
+        self.assertEqual(got, ["read_file", "glob", "grep"])
+
+    def test_schemas_for_includes_write_when_on(self):
+        names = ["read_file", "write_file", "bash"]
+        got = [s["name"] for s in tools.schemas_for(names, allow_write=True)]
+        self.assertEqual(got, ["read_file", "write_file", "bash"])
+
+    def test_execute_refuses_write_without_allow(self):
+        out = tools.execute_tool("write_file", {"path": "x.txt", "content": "hi"}, self.proj, allow_write=False)
+        self.assertIn("requires --allow-write", out)
+        self.assertFalse((self.proj / "x.txt").exists())
+
+    def test_write_file_when_allowed(self):
+        out = tools.execute_tool(
+            "write_file", {"path": "sub/x.txt", "content": "hi"}, self.proj, allow_write=True
+        )
+        self.assertIn("wrote", out)
+        self.assertEqual((self.proj / "sub" / "x.txt").read_text(), "hi")
+
+    def test_write_file_path_escape_refused(self):
+        out = tools.execute_tool(
+            "write_file", {"path": "../evil.txt", "content": "x"}, self.proj, allow_write=True
+        )
+        self.assertIn("escapes project directory", out)
+
+
+class TestBashSafety(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.proj = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _run(self, cmd):
+        return tools.execute_tool("bash", {"command": cmd}, self.proj, allow_write=True)
+
+    def test_denies_force_push(self):
+        self.assertIn("refused", self._run("git push --force origin main"))
+
+    def test_denies_no_verify(self):
+        self.assertIn("refused", self._run("git commit -m x --no-verify"))
+
+    def test_denies_reset_hard(self):
+        self.assertIn("refused", self._run("git reset --hard HEAD~3"))
+
+    def test_denies_rm_rf(self):
+        self.assertIn("refused", self._run("rm -rf ."))
+
+    def test_denies_sudo(self):
+        self.assertIn("refused", self._run("sudo rm x"))
+
+    def test_allows_safe_command_in_sandbox(self):
+        (self.proj / "marker.txt").write_text("ok", encoding="utf-8")
+        out = self._run("ls")
+        self.assertIn("exit code: 0", out)
+        self.assertIn("marker.txt", out)
+
+    def test_bash_refused_without_allow_write(self):
+        out = tools.execute_tool("bash", {"command": "ls"}, self.proj, allow_write=False)
+        self.assertIn("requires --allow-write", out)
 
 
 if __name__ == "__main__":

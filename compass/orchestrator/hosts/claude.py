@@ -51,6 +51,7 @@ def dispatch_with_tools(
     model: str = "claude-opus-4-8",
     max_tokens: int = 8192,
     tool_schemas: list = None,
+    allow_write: bool = False,
     max_iterations: int = 25,
     client=None,
 ) -> str:
@@ -108,7 +109,9 @@ def dispatch_with_tools(
         tool_results = []
         for block in response.content:
             if getattr(block, "type", None) == "tool_use":
-                result = repo_tools.execute_tool(block.name, block.input, project_dir)
+                result = repo_tools.execute_tool(
+                    block.name, block.input, project_dir, allow_write=allow_write
+                )
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,

@@ -59,6 +59,7 @@ def dispatch_to_host(
     max_tokens: int = 8192,
     tools: list = None,
     project_dir=None,
+    allow_write: bool = False,
 ) -> str:
     """
     Dispatch to the named host adapter.
@@ -66,17 +67,22 @@ def dispatch_to_host(
     model is passed only when explicitly overridden by the caller; otherwise
     COMPASS_MODEL_<CLAUDE|OPENAI|GEMINI> env var, then the DEFAULT_MODELS entry.
 
-    When `tools` is provided AND the host supports tool-use (Claude today,
-    #87 slice 1), the agent runs a read-tool loop grounded in project_dir.
-    Other hosts ignore `tools` and use the single-shot path unchanged.
+    When `tools` (executor_tool names) is provided AND the host supports tool-use
+    (Claude today, #87), the agent runs a tool loop grounded in project_dir.
+    Write tools (write_file, bash) are granted only when allow_write is True
+    (the --allow-write opt-in). Other hosts ignore `tools` (single-shot path).
     """
     if host == "claude":
+        from . import tools as repo_tools
         from .claude import dispatch, dispatch_with_tools
         if tools:
+            schemas = repo_tools.schemas_for(tools, allow_write)
             return dispatch_with_tools(
                 agent_file_path, task_name, user_message, project_dir,
                 model=model or _default_model("claude"),
                 max_tokens=max_tokens,
+                tool_schemas=schemas,
+                allow_write=allow_write,
             )
         return dispatch(
             agent_file_path, task_name, user_message,

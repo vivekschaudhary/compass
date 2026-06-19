@@ -2804,3 +2804,24 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope (this slice):** writes, shell, openai/gemini tool-use, Agent SDK, LLM-as-driver. **Slice 2 (next, user-prioritized "full loop"):** add `write_file` + `bash` (apply fix + run regression test fail→pass), guarded by agent refusal rules; re-evaluate Claude Agent SDK there.
 
 **Files touched (7):** `compass/orchestrator/hosts/tools.py` (NEW) · `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/agents/engineer.md` · `compass/orchestrator/tests/test_tools.py` (NEW) · `CHANGELOG.md` (+ this file). Counter: #91. 4 of 5 before Retro #019 (fires after #92).
+
+---
+
+### 2026-06-19 — `[pluggable-graph-executor]` slice 2: write+verify loop (#92)
+
+**Trigger origin (Principle #19):** user direction — "lets go with slice 2," the full read→write→verify loop prioritized over alternatives. Continues #91 toward `VISION.md` roadmap step 1 (tool-using roles). The riskiest slice (autonomous writes + shell on a real repo), so the safety model is the load-bearing part.
+
+**Friction:** after slice 1, orchestrated `/fix` could *read* the real repo but still only emitted a diff — it couldn't apply the fix or run the regression test (the `fix-bug` discipline of test-fails-then-passes can't be verified without execution).
+
+**Change (IMPLEMENTED, v0.4.0-alpha-8):**
+- `compass/orchestrator/hosts/tools.py` — `write_file` (sandboxed via `_resolve_in_sandbox`, size-capped) + `bash` (cwd=project root, **denylist `_screen_bash` mechanizing the framework refusal rules**: force-push, `--no-verify`, `--no-gpg-sign`, `reset --hard`, `clean -f`, `branch -D`, `rm -rf`, sudo, chmod 777, mkfs/dd-to-device, fork bomb, curl|sh; + `BASH_TIMEOUT_S` + output cap). `schemas_for(names, allow_write)` resolves declared `executor_tools` → schemas, dropping write tools unless opted in.
+- **Opt-in safety model:** new `run.py --allow-write` (default OFF). Without it, executor_tools are filtered to read-only (slice-1 behavior preserved). **Two defense layers:** (1) `schemas_for` keeps write/bash out of what the model can even call; (2) `execute_tool(..., allow_write)` refuses them anyway if reached. `bash` adds the denylist as a third. run.py prints the granted tools + `read-only`/`read+write` mode.
+- `compass/orchestrator/hosts/claude.py` + `router.py` — thread `allow_write` + the granted schema list through `dispatch_with_tools` → `execute_tool`.
+- `compass/agents/engineer.md` → v0.3.47: `executor_tools: [read_file, glob, grep, write_file, bash]`; `fix-bug` + `implement-story` describe the write-mode apply→verify loop and that bash refusals must NOT be bypassed (human still approves merge).
+- Tests: +12 (`TestWriteGating` + `TestBashSafety`) — schema filtering on/off, execute-layer refusal without opt-in, write sandbox + path-escape, bash denylist (force-push / --no-verify / reset --hard / rm -rf / sudo), safe command runs in sandbox, bash refused without --allow-write. **85 total, green.**
+
+**Decision (re-evaluated per plan):** stayed **hand-rolled** at the host-adapter layer rather than adopting the Claude Agent SDK — the slice-1 loop already existed, adding two guarded tools was incremental, and it preserves multi-host symmetry + `[llm-agnostic-scripts]`. The Agent SDK's robust edit/bash engine would only pay off for a much more open-ended agent than the bounded fix loop.
+
+**Mechanical floor preserved:** gates, HITL (still gates the merge), promotion, logging, reviewer-exclusion all unchanged. The orchestrator still does not auto-commit/push — write mode touches the working tree; the human approves.
+
+**Files touched (6):** `compass/orchestrator/hosts/tools.py` · `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/agents/engineer.md` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #92. **5 of 5 → Retro #019 fires next.** The text-only gap (from the #90 discussion) is now closed for Claude implementer steps under explicit opt-in.
