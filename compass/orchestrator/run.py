@@ -71,6 +71,19 @@ def _read_agent_tools(agent_file: Path) -> list:
     return [t.strip() for t in t_match.group(1).split(",") if t.strip()]
 
 
+def _skip_for_route(router_number: int, target: int) -> set:
+    """
+    Steps to skip when a routing gate (#96) chooses `target`.
+
+    Forward-only: skip everything strictly between the gate and the chosen
+    target (the not-taken branch). Choosing the immediate next step (or any
+    backward target) skips nothing.
+    """
+    if target <= router_number + 1:
+        return set()
+    return set(range(router_number + 1, target))
+
+
 def _collect_input(step_label: str, inline_context: str = "") -> str:
     """Return user context for a step, either inline or via interactive prompt."""
     if inline_context:
@@ -549,16 +562,41 @@ def _run_workflow(
     last_artifact_path = None
     last_agent_output = ""
     first_step = True
+    skipped = set()  # steps in a not-taken branch (#96 conditional dispatch)
 
     for step in steps:
         if only_step is not None and step.number != only_step:
             continue
         if from_step is not None and step.number < from_step:
             continue
+        if step.number in skipped:
+            print(f"\n[step {step.number} skipped — not on the chosen branch]")
+            continue
 
         print(f"\n{'─' * 60}")
         print(f"[{workflow_name}] Step {step.number}: {step.title}")
         print(f"{'─' * 60}")
+
+        # ── routing gate (#96, [conditional-dispatch]) ────────────────────────
+        if step.is_hitl and step.routes:
+            from .hitl import handle_routing_gate
+            choice = handle_routing_gate(
+                step.number, step.title, step.routes, last_agent_output
+            )
+            target = choice["target"]
+            # Forward-only: skip the steps between this gate and the chosen target.
+            skipped.update(_skip_for_route(step.number, target))
+            log_hitl(
+                project_dir=project_dir,
+                run_id=run_id,
+                workflow=workflow_name,
+                bet_id=bet_id,
+                step=step.number,
+                artifact_path=None,
+                decision=choice["route"],
+            )
+            print(f"[route → {choice['route']} (continue at step {target})]")
+            continue
 
         # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:

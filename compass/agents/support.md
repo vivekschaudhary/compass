@@ -4,7 +4,7 @@ preferred_hosts: [chatgpt, claude, codex, gemini]
 required_tools: [text_input]
 optional_tools: [mcp_jira, mcp_linear, mcp_sentry, mcp_pagerduty, mcp_slack]
 participates_in_workflows: [fix, triage, create-brief]
-version: 0.3.31
+version: 0.3.48
 ---
 
 # Agent: Support
@@ -37,6 +37,12 @@ Gates + postconditions = load-bearing. Work = guidance.
 **Gate:** Alert or incident signal present (PagerDuty, Sentry, user report). On-call runbook accessible OR incident template loaded.
 **Work:** acknowledge alert → engage Engineer + Support + PM (PM for awareness only) → assess blast radius (what's affected, how many users, revenue impact) → identify stop-the-bleed options → HITL halt: present options to human; human decides (rollback / flag toggle / traffic shift) → draft status page / customer comms / internal comms → HITL halt before publishing → document timeline in incident artifact → seed DRI ≥1 Decision AND ≥1 Risk.
 **Postcondition:** incident artifact exists at `docs/incidents/<incident-id>/triage.md` or `docs/bets/<bet-id>/incidents/<incident-id>/triage.md` · stop-the-bleed decision made by human (not auto-acted) · comms drafted AND HITL-approved before publishing · postmortem scheduled · ≥1 DRI Decision + ≥1 Risk logged.
+
+### `write-postmortem` — blameless postmortem after an incident is resolved
+
+**Gate:** incident resolved (stop-the-bleed done; fix-forward landed or mitigation held). Incident artifact (`triage.md`) exists.
+**Work:** assemble the postmortem at `docs/incidents/<incident-id>/postmortem.md` (or `docs/bets/<bet-id>/incidents/<incident-id>/postmortem.md`): **timeline** with timestamps → **root-cause analysis** → contributing factors → what went well / what didn't (blameless) → **action items**, each phrased so it becomes a `/create-brief` tech-debt bet or a `/create-story` slice → DRI log. Recurring-incident or systemic root → flag for Enterprise Architect foundational review.
+**Postcondition:** postmortem artifact exists with timeline + RCA + ≥1 action item (each routable to a bet/story) · DRI ≥1 Decision + ≥1 Risk · HITL approval announced before marking `complete` (humans approve the postmortem).
 
 ### `supply-user-pain` — provide user-voice signal for brief creation
 

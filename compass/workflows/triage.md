@@ -1,91 +1,111 @@
+---
+name: triage
+status: active
+owner: support
+auto_invokes: []
+invoked_by: [manual, incident_alert]
+version: 0.3.48
+requires_approved: []
+---
+
 # Workflow: /triage
 
-Incident response. Engineer + Support + PO engage (PO for awareness). Stop-the-bleed actions are HUMAN-DRIVEN (framework does not auto-rollback). Discipline still holds — full review on any code change.
+## Framework grounding
 
-## Trigger
+- **Compass-originals operationalized:** [agent-as-surface-independent-unit] (v0.3.14) · [workflow-as-dispatch-graph] (v0.3.24) · [conditional-dispatch] (#95 — first instance) · [per-surface-vertical-test] · [agent-handoff] · [refuse-escalate]
+- **Verifies adherence to:** Principle #14 · Principle #16 · human-driven-stop-the-bleed (framework never auto-acts) · discipline-holds-under-P0 (full review on any code change, no carve-out)
 
-- Manual: `/triage <description>`
-- Auto: alert routed from configured tool (PagerDuty / Slack / Sentry / Linear — per `compass/config.yaml` connectors.incident_alert)
+## Purpose
 
-## Process
+Production incident response. Support + Engineer engage immediately (PM for awareness). **Stop-the-bleed is human-driven** — the framework drafts options and the human decides + executes; it never auto-rolls-back. Full review discipline holds on any code change, even under P0.
 
-### Phase 1 — first response
+## Architectural shape (v0.3.48)
 
-1. **Load Support role context** for triage classification
-2. **Load Engineer role context** — engaged immediately for technical investigation
-3. **PO awareness** — notified, does not block (Engineer doesn't wait for PO before acting)
-4. **Acknowledge alert** in configured channel
-5. **Initial severity classification** (P0 / P1 / P2 / P3)
-6. **Create incident artifact:**
-   - If incident tied to a known bet: `docs/bets/<bet-id>/incidents/<incident-id>/triage.md`
-   - If unknown / cross-system: `docs/incidents/<incident-id>/triage.md`
-   - Use `compass/templates/incident.md`
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th workflow in dispatch-graph shape**. Methodology lives in the agent tasks (`support.triage-incident`, `engineer.fix-bug`, `reviewer.review-pr`, `support.write-postmortem`, `tech-writer.accumulate-changelog`).
 
-### Phase 2 — investigate
+**First `[conditional-dispatch]` instance (#95→#96):** the fix-forward gate (Step 2) is a **routing gate** — the human routes to one of two branches based on whether the mitigation resolved the incident or a code fix is needed.
 
-7. **Engineer investigates:**
-   - Read Sentry / observability data via MCP
-   - Identify recent deploys, ops changes, related incidents
-   - Form hypothesis about cause
-8. **DRI log:** Engineer logs hypotheses, ruled-out options, current best theory
+## Preconditions (workflow-level GATE)
 
-### Phase 3 — stop the bleed (HUMAN-DRIVEN)
+- **Trigger present** — `/triage <description>` OR an alert routed from the configured tool (PagerDuty / Sentry / Slack / Linear per `compass/config.yaml` `connectors.incident_alert`).
+- **No `requires_approved` gate** — an incident is reactive; it does not wait on foundation approval.
 
-9. **Framework drafts** possible mitigation actions:
-   - Rollback (last deploy)
-   - Feature flag toggle
-   - Traffic shift
-   - Hotpatch (still requires full review per discipline rule)
-10. **Human chooses** which action to take. Framework does NOT auto-act.
-11. **Human executes** the action (or instructs Engineer to execute via standard tools)
-12. **Status update** drafted by framework, HITL approval before publishing to customers / status page
+## Roles invoked (agents dispatched)
 
-### Phase 4 — fix forward
+- `compass/agents/support.md` — `triage-incident` (first response, stop-the-bleed options, comms) + `write-postmortem`
+- `compass/agents/engineer.md` — `fix-bug` (fix-forward branch) + investigation
+- `compass/agents/reviewer.md` — `review-pr` (+ `security-reviewer.review-pr-security` if the fix touches sensitive surfaces)
+- `compass/agents/tech-writer.md` — `accumulate-changelog` (if user-visible)
 
-13. If mitigation was a rollback / flag toggle (no code change) → skip to postmortem
-14. If mitigation needs a code fix → enter `/fix` flow for the code change
-    - Full Codex review applies (discipline holds even under P0 pressure)
-    - Architect compliance check applies
-    - Security review if applicable
+## Dispatch graph
 
-### Phase 5 — postmortem
+### Step 1. `support.triage-incident` (Support agent owns)
 
-15. **After incident resolved, generate postmortem** at `docs/bets/<bet-id>/incidents/<incident-id>/postmortem.md` or `docs/incidents/<incident-id>/postmortem.md`
-16. **Postmortem contents:**
-    - Timeline (with timestamps)
-    - Root cause analysis
-    - Contributing factors
-    - What went well / what didn't
-    - Action items (each becomes a story or tech-debt bet)
-    - DRI Log
-17. **HITL gate** — human reviews postmortem before it's marked `complete`
-18. **Action items spawned as bets or stories** via `/create-brief` or `/create-story`
+**Dispatches:** Support agent
+**Task definition:** `compass/agents/support.md` → Task `triage-incident`
+**Input:** incident description / alert · observability (Sentry/Datadog via MCP) · recent deploys + ops changes
+**What it covers:** acknowledge → engage Engineer + Support (+ PM awareness) → classify severity (P0–P3) → assess blast radius → Engineer investigates (recent deploys/ops, hypothesis) → identify stop-the-bleed options → draft incident artifact + comms.
+**Output:** incident artifact (`docs/incidents/<incident-id>/triage.md` or under the affected bet) with stop-the-bleed options + drafted comms
 
-### Phase 6 — comms
+### Step 2. **HITL — stop-the-bleed + fix-forward routing gate** (human)
 
-19. **External comms** (status page, customer email, social) — framework drafts, HITL approves
-20. **Internal comms** (Slack channel, all-hands summary) — framework drafts, HITL approves
-21. **Tech Writer** adds incident to changelog if user-visible
+**Dispatches:** HUMAN (not an agent)
+**What it covers:** human chooses and **executes** the mitigation (rollback / flag toggle / traffic shift — framework never auto-acts), approves comms for publishing, then **routes the fix-forward decision**:
+**Routes:**
+- `resolved` → Step 5 — mitigation resolved it (rollback / flag); no code change needed, go straight to postmortem.
+- `needs-fix` → Step 3 — a code fix is required; enter the fix branch (full review holds under P0).
 
-## DRI logging
+### Step 3. `engineer.fix-bug` (Engineer agent owns) — [needs-fix branch]
 
-Throughout:
-- **Decisions:** mitigation chosen, classification changes, scope of fix-forward — rationale
-- **Risks:** of recurrence, of customer impact spreading, of related systems — likelihood + impact
-- **Issues:** missing observability, gaps in runbook, untested rollback — severity + owner (Enterprise Architect for systemic)
+**Dispatches:** Engineer agent
+**Task definition:** `compass/agents/engineer.md` → Task `fix-bug`
+**What it covers:** failing regression test first → minimum fix → checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → open PR linking the incident artifact. **No P0 carve-out** — discipline holds.
 
-## Discipline always
+### Step 4. `reviewer.review-pr` (Reviewer agent owns) — [needs-fix branch]
 
-Even during a P0 incident:
-- Full Codex review on any code change
-- Full Architect compliance check
-- Security review if applicable
-- HITL approval for comms
+**Dispatches:** Reviewer agent (`preferred_hosts: [codex, gemini]` — excludes Claude)
+**Task definition:** `compass/agents/reviewer.md` → Task `review-pr`
+**What it covers:** full review of the incident fix; Security Reviewer (`security-reviewer.review-pr-security`) auto-engages if the fix touches auth/PII/payments/secrets/external input/sessions. Engineer responds (`engineer.respond-to-review`) until clean; human approves merge.
 
-The framework's speed makes this practical. No exceptions.
+### Step 5. `support.write-postmortem` (Support agent owns) — [reconverge: both branches]
 
-## Cross-cutting
+**Dispatches:** Support agent
+**Task definition:** `compass/agents/support.md` → Task `write-postmortem`
+**What it covers:** blameless postmortem — timeline + root-cause analysis + contributing factors + what-went-well/didn't + **action items** (each routable to a `/create-brief` tech-debt bet or `/create-story` slice). Recurring/systemic root → flag Enterprise Architect for foundational review.
+**Output:** `postmortem.md` with action items
 
-- Incident artifacts get `area:*` tags for filtering
-- Recurring incidents auto-flagged as systemic issues → escalate to Enterprise Architect for foundational review
-- Postmortem action items roll up into `/metrics` as "incident-driven work" — visible category
+### Step 6. **HITL — postmortem approved** (human)
+
+**Dispatches:** HUMAN (not an agent)
+**What it covers:** human reviews the postmortem before it's marked `complete`; action items are spawned as bets/stories via `/create-brief` or `/create-story`.
+
+### Step 7. `tech-writer.accumulate-changelog` (Tech Writer agent owns)
+
+**Dispatches:** Tech Writer agent
+**Task definition:** `compass/agents/tech-writer.md` → Task `accumulate-changelog`
+**What it covers:** add the incident to the changelog if user-visible; internal/external comms already drafted + HITL-approved in Step 2.
+
+## Workflow-level verification (final GATE)
+
+- [ ] (Step 1) Incident artifact exists; severity + blast radius classified; stop-the-bleed options + comms drafted
+- [ ] (Step 2) **Stop-the-bleed chosen + executed by a human** (framework did not auto-act); comms HITL-approved before publishing; fix-forward route chosen
+- [ ] (Steps 3–4, if `needs-fix`) regression-test-first fix · full Reviewer pass · Security Reviewer if sensitive · zero unresolved BLOCKERs/CRITICALs · **no P0 review carve-out**
+- [ ] (Step 5) Postmortem: timeline + RCA + ≥1 action item (each routable to a bet/story)
+- [ ] (Step 6) Postmortem HITL-approved before `complete`; action items spawned
+- [ ] (Step 7) Changelog updated if user-visible
+
+## Output summary contract
+
+**TL;DR** (what broke / mitigation / status) · **Files created/modified** · **Next recommended command** (`/create-brief` or `/create-story` for action items) · **Open questions/risks**.
+
+## Notes
+
+**Discipline always:** full Reviewer pass on any incident code change, Security Reviewer when applicable, comms HITL-gated, postmortem HITL-gated. The framework's speed makes this practical — no P0 exceptions.
+
+**Cross-cutting:** incident artifacts carry `area:*` tags; recurring incidents auto-flag as systemic → Enterprise Architect foundational review; postmortem action items roll up into `/metrics` as incident-driven work.
+
+### Migration (legacy prose → v0.3.48 dispatch graph)
+
+- **Pre-v0.3.48:** 6-phase embedded-methodology prose (21 numbered steps).
+- **v0.3.48:** thin dispatch graph (9th in dispatch-graph shape) + **the first `[conditional-dispatch]` instance** (#95→#96). The Phase-4 prose branch ("rollback resolved → postmortem" vs "needs code fix → /fix") became a real **routing gate** (Step 2) the orchestrator executes — forward-only, human-chosen. New `support.write-postmortem` task added (no existing task owned the postmortem). No behavior dropped: human-driven stop-the-bleed, full-review-under-P0, comms + postmortem HITL gates, action-items-spawn-work all preserved. `[explicit-dispatch-surfaces-latent-participation]`: added `triage` to reviewer + tech-writer `participates_in_workflows`.
+- **Conditional dispatch v1 scope:** HITL-routing only (human picks the branch); agent-classified/autonomous routing deferred to the LLM-driver surface (#87 surface 3); forward-only branches.

@@ -50,6 +50,51 @@ def handle_hitl_gate(
         print("Please enter 'y' or 'n'.")
 
 
+def handle_routing_gate(
+    step_num: int,
+    step_title: str,
+    routes: list,
+    last_output: str = "",
+) -> dict:
+    """
+    Routing gate (#96, [conditional-dispatch]): the human picks which branch the
+    workflow takes. `routes` is [(label, target_step_number)]. Returns
+    {"route": <label>, "target": <int>}.
+
+    Forward-only branches; matches /triage's human-driven incident ethos — the
+    framework presents options, the human decides.
+    """
+    print(f"\n{'=' * 60}")
+    print(f"  ROUTING GATE — Step {step_num}")
+    print(f"  {step_title}")
+    print(f"{'=' * 60}")
+
+    if last_output:
+        preview = last_output.strip()[:600]
+        if len(last_output.strip()) > 600:
+            preview += "\n\n[... open the artifact file for the full output ...]"
+        print(f"\n--- Output preview ---\n{preview}\n--- end preview ---\n")
+
+    print("  Choose the branch:")
+    for label, target in routes:
+        print(f"    {label}  → continue at Step {target}")
+    print()
+
+    labels = {label.lower(): (label, target) for label, target in routes}
+    prompt = f"Route [{' / '.join(label for label, _ in routes)}]: "
+    while True:
+        try:
+            choice = input(prompt).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\nAborted — defaulting to the first route.")
+            label, target = routes[0]
+            return {"route": label, "target": target}
+        if choice in labels:
+            label, target = labels[choice]
+            return {"route": label, "target": target}
+        print(f"Please enter one of: {', '.join(label for label, _ in routes)}")
+
+
 def _collect_feedback() -> str:
     """Prompt the reviewer for rejection notes (end with '.')."""
     print(

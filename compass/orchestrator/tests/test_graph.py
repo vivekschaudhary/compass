@@ -177,6 +177,43 @@ class TestRealWorkflows(unittest.TestCase):
         meta = load_workflow_meta(WORKFLOWS / "create-story.md")
         self.assertEqual(meta["requires_approved"], ["docs/bets/<bet-id>/brief.md"])
 
+    def test_triage_routing_gate(self):
+        steps = load_workflow(WORKFLOWS / "triage.md")
+        self.assertEqual(len(steps), 7)
+        gate = next(s for s in steps if s.is_hitl and s.routes)
+        self.assertEqual(gate.number, 2)
+        self.assertEqual(gate.routes, [("resolved", 5), ("needs-fix", 3)])
+        # fix branch present; postmortem reconverges
+        self.assertEqual((steps[2].agent, steps[2].task), ("engineer", "fix-bug"))
+        self.assertEqual((steps[4].agent, steps[4].task), ("support", "write-postmortem"))
+
+
+class TestRouteParsing(unittest.TestCase):
+    def test_routes_parsed(self):
+        steps = _parse(_wf(
+            "### Step 1. **HITL — route** (human)\n\n**Dispatches:** HUMAN\n"
+            "**Routes:**\n- `resolved` → Step 5\n- needs-fix -> Step 3\n"
+        ))
+        self.assertEqual(steps[0].routes, [("resolved", 5), ("needs-fix", 3)])
+
+    def test_plain_hitl_has_no_routes(self):
+        steps = _parse(_wf("### Step 1. **HITL gate** (human)\n\n**Dispatches:** HUMAN\n"))
+        self.assertIsNone(steps[0].routes)
+
+
+class TestSkipForRoute(unittest.TestCase):
+    def test_forward_branch_skips_between(self):
+        from compass.orchestrator.run import _skip_for_route
+        self.assertEqual(_skip_for_route(2, 5), {3, 4})   # resolved: skip fix branch
+
+    def test_immediate_next_skips_nothing(self):
+        from compass.orchestrator.run import _skip_for_route
+        self.assertEqual(_skip_for_route(2, 3), set())    # needs-fix: run everything
+
+    def test_backward_target_skips_nothing(self):
+        from compass.orchestrator.run import _skip_for_route
+        self.assertEqual(_skip_for_route(5, 2), set())
+
     def test_fix(self):
         steps = load_workflow(WORKFLOWS / "fix.md")
         self.assertEqual(len(steps), 8)

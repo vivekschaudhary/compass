@@ -14,6 +14,7 @@ class WorkflowStep:
     task: Optional[str] = None
     agent_file: Optional[str] = None
     artifact_target: Optional[str] = None  # canonical path promoted on HITL approval
+    routes: Optional[list] = None          # [(label, target_step_number)] — routing gate (#96)
 
 
 def load_workflow_meta(workflow_file: Path) -> dict:
@@ -108,6 +109,19 @@ def load_workflow(workflow_file: Path) -> list:
         if target_match:
             artifact_target = target_match.group(1).strip()
 
+        # Routing gate (#96, [conditional-dispatch]): a HITL step whose outcome
+        # chooses the next step. Parse `- <label> → Step N` lines (tolerant of
+        # ->/→ and "Step"/"step"). Forward-only; the human picks at the gate.
+        routes = None
+        if is_hitl:
+            route_pairs = re.findall(
+                r'^\s*[-*]\s*`?([\w-]+)`?\s*(?:→|->)\s*Step\s+(\d+)',
+                step_body,
+                re.IGNORECASE | re.MULTILINE,
+            )
+            if route_pairs:
+                routes = [(label, int(n)) for label, n in route_pairs]
+
         agent = task = agent_file = None
         if not is_hitl:
             # agent.task from backtick pair in title: `agent.task_name`
@@ -136,6 +150,7 @@ def load_workflow(workflow_file: Path) -> list:
                 task=task,
                 agent_file=agent_file,
                 artifact_target=artifact_target,
+                routes=routes,
             )
         )
 

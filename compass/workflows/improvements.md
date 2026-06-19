@@ -2887,3 +2887,24 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Per `[declare-not-implement]`:** declared now (the shape is clear, the build isn't prioritized); build when `/triage` is refactored or the LLM-as-driver surface lands. Codify as canon after a 2nd instance OR once built.
 
 **Files touched (3):** `compass/orchestrator/DESIGN-pluggable-executor.md` (forward-link) · `CHANGELOG.md` · `compass/workflows/improvements.md`. **No code, no canon entry, no catalog change — declared only.** Counter: #95. 3 of 5 before Retro #020 (fires after #97).
+
+---
+
+### 2026-06-19 — /triage → dispatch graph + conditional dispatch built (#96)
+
+**Trigger origin (Principle #19):** user direction — "prioritize the shape change to triage." Builds `[conditional-dispatch]` (declared #95) on `/triage`'s existing fix-forward branch — the natural first instance.
+
+**Friction:** `/triage` (incident response) was legacy prose (9th un-refactored workflow), and its Phase-4 branch ("rollback resolved → postmortem" vs "needs code fix → /fix") was exactly the routing the linear dispatch-graph model couldn't express. Two gaps, one fix.
+
+**Change (IMPLEMENTED, v0.4.0-alpha-10 / triage+support v0.3.48):**
+- **Conditional dispatch (first build of #95):** `graph.py` parses a `**Routes:**` block (`- <label> → Step N`, tolerant of →/->) on a HITL step into `WorkflowStep.routes`; `hitl.py:handle_routing_gate` presents labeled branches + returns the human's choice; `run.py` executes forward-only branches via a skip-set (`_skip_for_route(router, target)` — pure, unit-tested), logging the chosen route to hitl.jsonl. Plain HITL gates unchanged.
+- **`/triage` → dispatch graph (9th):** `support.triage-incident` → **routing gate** (`resolved` → postmortem, skipping the fix branch · `needs-fix` → `engineer.fix-bug` → `reviewer.review-pr` → reconverge) → `support.write-postmortem` → HITL → `tech-writer.accumulate-changelog`. `requires_approved: []`.
+- **New `support.write-postmortem` task** (no existing task owned the postmortem): timeline + RCA + action-items-routable-to-bets/stories + HITL.
+- `participates_in_workflows`: +triage on reviewer + tech-writer (support/engineer already had it). AGENTS.md 8→9 of 17 (consistency-check guards it — passed).
+- Tests: +6 (route parsing, plain-HITL-has-no-routes, `_skip_for_route` forward/immediate/backward, triage integration). **96 total, green.**
+
+**v1 scope (declared limits):** HITL-routing only (human picks the branch — matches `/triage`'s human-driven ethos); agent-classified/autonomous routing deferred to the LLM-driver surface (#87 surface 3); forward-only branches. No incident discipline dropped (human-driven stop-the-bleed, full-review-under-P0, comms + postmortem HITL gates).
+
+**Mechanical floor preserved:** routing is a HITL decision logged like any gate; promotion/logging/exit-codes/reviewer-exclusion unchanged.
+
+**Files touched (8):** `compass/orchestrator/graph.py` · `compass/orchestrator/hitl.py` · `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/agents/reviewer.md` · `compass/agents/tech-writer.md` · `compass/workflows/triage.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` · `CHANGELOG.md` (+ this file). Counter: #96. **4 of 5 → Retro #020 fires after #97.** `[conditional-dispatch]` now has 1 built instance — codify as canon at the 2nd (e.g. the bug-intake router).

@@ -3,7 +3,7 @@ name: tech-writer
 preferred_hosts: [claude, codex, gemini]
 required_tools: [github_read_artifact, github_write_artifact, filesystem_read, filesystem_write]
 optional_tools: [mcp_confluence, mcp_notion, mcp_github]
-participates_in_workflows: [build, fix, ops]
+participates_in_workflows: [build, fix, ops, triage]
 version: 0.3.40
 ---
 
