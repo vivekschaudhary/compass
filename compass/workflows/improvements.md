@@ -31,7 +31,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #018** (improvements #83–#87): [retros/2026-06-14-retro-018-improvements-83-to-87.md](retros/2026-06-14-retro-018-improvements-83-to-87.md) — **fired ON TIME at #87** (14th consecutive on-time retro; 2nd under the #78 full-surface-audit rule). 5 improvements: [consumer-as-primary-signal] → Principle #19 (#83) + the #70 gate/promotion slice (#84) + setup-foundation-architecture dispatch graph (#85) + create-story dispatch graph — **full bootstrap→build chain now orchestratable** (#86) + [pluggable-graph-executor] declared (#87). Audit caught + fixed orchestrator alpha-5 version drift + a stale skip→halt reviewer claim (e73fded). **Batch closed with the first real end-to-end consumer orchestrator run (home-app)** → surfaced the auth→RLS→render prod-parity test finding, codified as #88. Codification-ready: `[test-alongside-implementation]` (5 instances, user-gated). Watch-fors: pre-push script mechanization · stay consumer-anchored · MVP doc refresh.
 
-**Next retro fires after improvement #92.** (Retro #018 = #87; next = #92.)
+- **Retro #019** (improvements #88–#92): [retros/2026-06-19-retro-019-improvements-88-to-92.md](retros/2026-06-19-retro-019-improvements-88-to-92.md) — **fired ON TIME at #92** (15th consecutive on-time retro; 3rd under the #78 audit rule). 5 improvements: `[per-surface-vertical-test]` (#88) + test-data-cleanup AC (#89) + `/fix`+`/ops` dispatch graphs (#90) + tool-using executor slices 1 (#91) & 2 (#92). **The text-only gap is closed** for Claude implementer steps under `--allow-write` (read→write→verify loop). Audit fixed stale DESIGN-doc status (declared→partially-built) + alpha marker (c2549d0). Top watch-for: **mechanize the pre-push hook** (3 straight audits caught what it would catch at commit time). Codification-ready: `[test-alongside-implementation]` (~7 instances, user-gated).
+
+**Next retro fires after improvement #97.** (Retro #019 = #92; next = #97.)
 
 ## Template
 
