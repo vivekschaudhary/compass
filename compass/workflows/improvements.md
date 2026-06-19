@@ -2827,3 +2827,24 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Mechanical floor preserved:** gates, HITL (still gates the merge), promotion, logging, reviewer-exclusion all unchanged. The orchestrator still does not auto-commit/push — write mode touches the working tree; the human approves.
 
 **Files touched (6):** `compass/orchestrator/hosts/tools.py` · `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/agents/engineer.md` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #92. **5 of 5 → Retro #019 fires next.** The text-only gap (from the #90 discussion) is now closed for Claude implementer steps under explicit opt-in.
+
+---
+
+### 2026-06-19 — mechanical consistency check + git hook (#93)
+
+**Trigger origin (Principle #19):** framework-internal — **three consecutive retro audits** (#017/#018/#019) caught the same drift classes (stale counts, hardcoded version self-claims) that a commit-time check computes for free. Top watch-for from Retro #019. Not consumer-rooted, flagged explicitly per Principle #19 — but it's a force-multiplier that makes every consumer-facing change cheaper to keep clean, not introspection-for-its-own-sake.
+
+**Friction:** `pre-push-consistency-check.py` (#82) needs the human to name the amended term, so it only runs when someone remembers. The audits kept finding drift at retro-time that should have been blocked at commit-time. The discipline existed; the enforcement didn't.
+
+**Change (IMPLEMENTED, v0.4.0-alpha-9):**
+- `compass/scripts/consistency-check.py` (NEW) — computes + verifies three invariants, no arguments: (1) dispatch-graph count (AGENTS.md "N of 17" == actual `## Dispatch graph` workflows), (2) catalog count (AGENTS.md "7 shapes / N patterns" == canon `### ` entries), (3) version self-claims (no hardcoded `alpha-<N>` in README/CLAUDE/orchestrator run.py+README — CHANGELOG is the single source). Importable check functions + exit-1-on-drift main.
+- `compass/scripts/githooks/pre-commit` (NEW) — runs the check + orchestrator tests; committable/shared via `git config core.hooksPath compass/scripts/githooks`.
+- `.github/workflows/consistency-check.yml` (NEW) — the enforced CI layer (check + tests on push/PR).
+- CLAUDE.md rule 9 + `compass/scripts/README.md` entry document it.
+- Tests: `tests/test_consistency.py` (NEW, 5) — repo self-consistent on HEAD + each drift class detected in a synthetic mirror. **90 total, green.**
+
+**Relationship to #82:** rule 8 (`pre-push-consistency-check.py`) is the human-named term-sweep; rule 9 (`consistency-check.py`) is the computable backstop. Together they close the Principle #17 gap for framework-edit sessions — the gap that had no commit-time gate.
+
+**Why not a new canon pattern:** this is the mechanical defense for existing Principle #17 / `[pre-push-grep-discipline]`, like `check-agent-cap.py` is for `[agent-file-compression]` — a script, not a new pattern. Catalog unchanged at 21.
+
+**Files touched (6):** `compass/scripts/consistency-check.py` (NEW) · `compass/scripts/githooks/pre-commit` (NEW) · `.github/workflows/consistency-check.yml` (NEW) · `compass/orchestrator/tests/test_consistency.py` (NEW) · `CLAUDE.md` · `compass/scripts/README.md` (+ this file). Counter: #93. 1 of 5 before Retro #020 (fires after #97). Closes the 3-retro-old "mechanize the pre-push check" watch-for.

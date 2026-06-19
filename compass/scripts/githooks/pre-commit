@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Compass pre-commit hook — mechanizes the drift checks the retro audits keep
+# catching (Retro #017/#018/#019). Committable + shared via:
+#
+#     git config core.hooksPath compass/scripts/githooks
+#
+# Runs the computable consistency check + the orchestrator test suite. Fast
+# (sub-second + ~0.05s). Exit non-zero blocks the commit.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "[pre-commit] consistency-check …"
+python3 compass/scripts/consistency-check.py --repo-root "$repo_root"
+
+echo "[pre-commit] orchestrator tests …"
+python3 -m unittest discover -s compass/orchestrator/tests >/dev/null
+
+echo "[pre-commit] ok"

@@ -274,6 +274,28 @@ Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md
 
 ---
 
+## `consistency-check.py` — commit-time drift backstop (#93, v0.4.0-alpha-9)
+
+Mechanizes the drift classes the retro full-surface audits kept catching (Retro #017/#018/#019). Computes the truth and compares — **no arguments needed** (unlike `pre-push-consistency-check.py`, which needs the human to name the amended term).
+
+### What it checks
+- **Dispatch-graph count** — AGENTS.md "N of 17 workflows" == actual count of `compass/workflows/*.md` containing `## Dispatch graph`.
+- **Catalog count** — AGENTS.md "7 shapes / N patterns" == `### ` entries under canon.md `## Compass-original patterns`.
+- **Version self-claims** — no hardcoded `alpha-<N>` in README / CLAUDE / `orchestrator/run.py` / `orchestrator/README.md` (CHANGELOG.md is the single source).
+
+### Usage
+```bash
+python3 compass/scripts/consistency-check.py            # exit 0 consistent, 1 drift
+```
+
+### Enable as a shared git hook (once per clone)
+```bash
+git config core.hooksPath compass/scripts/githooks
+```
+`compass/scripts/githooks/pre-commit` then runs this check + the orchestrator tests on every commit. Also enforced in CI via `.github/workflows/consistency-check.yml`. This is the commit-time complement to rule 8's term-sweep; together they close the Principle #17 gap for framework-edit sessions.
+
+---
+
 ## Future scripts + templates
 
 Reference implementations may join this directory as Compass evolves. Candidates:
