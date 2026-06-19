@@ -177,6 +177,25 @@ class TestRealWorkflows(unittest.TestCase):
         meta = load_workflow_meta(WORKFLOWS / "create-story.md")
         self.assertEqual(meta["requires_approved"], ["docs/bets/<bet-id>/brief.md"])
 
+    def test_fix(self):
+        steps = load_workflow(WORKFLOWS / "fix.md")
+        self.assertEqual(len(steps), 8)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 7])
+        self.assertEqual((steps[0].agent, steps[0].task), ("support", "triage-bug"))
+        self.assertEqual((steps[2].agent, steps[2].task), ("engineer", "fix-bug"))
+        # fix is reactive — no foundation requirement gate (hygiene fixes have no bet)
+        self.assertEqual(load_workflow_meta(WORKFLOWS / "fix.md")["requires_approved"], [])
+
+    def test_ops(self):
+        steps = load_workflow(WORKFLOWS / "ops.md")
+        self.assertEqual(len(steps), 7)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 6])
+        self.assertEqual(
+            (steps[0].agent, steps[0].task), ("enterprise-architect", "lead-ops-change")
+        )
+        self.assertEqual((steps[2].agent, steps[2].task), ("engineer", "apply-ops-change"))
+        self.assertEqual(load_workflow_meta(WORKFLOWS / "ops.md")["requires_approved"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

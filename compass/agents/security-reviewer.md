@@ -3,7 +3,7 @@ name: security-reviewer
 preferred_hosts: [codex, gemini]
 required_tools: [filesystem_read, github_read_artifact, mcp_github]
 optional_tools: [shell_exec, web_search]
-participates_in_workflows: [build, ops, triage]
+participates_in_workflows: [build, fix, ops, triage]
 version: 0.3.36
 ---
 

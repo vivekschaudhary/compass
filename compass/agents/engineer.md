@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, shell_exec, git, github_write_artifact]
 optional_tools: [mcp_github, mcp_sentry, mcp_linear]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.43
+version: 0.3.45
 ---
 
 # Agent: Engineer
@@ -116,9 +116,35 @@ Address Reviewer's findings on a PR. Slots into `/build` Phase 5 response loop (
 
 ### Task: `fix-bug`
 
-Fix a defect with regression test first. Slots into `/fix` workflow.
+Fix a defect, regression test first. The `/fix` counterpart of `implement-story` — same review + quality discipline, specialized for defects.
 
-**Status in v0.3.14:** Task migration pending. Follow `compass/workflows/fix.md` step-by-step. Critical: **failing test first** (reproduces the bug); then minimum fix; then verify the test passes.
+**Gate:** A triage note exists (`support.triage-bug` output) classifying severity + affected bet/hygiene, and the triage classification is HITL-confirmed. Bug is reproducible (or the triage note explicitly states why not).
+**Work:**
+1. Read the triage note + bet context (brief, bet architecture, affected story) if bet-linked.
+2. **Write the failing regression test FIRST** (first commit: `test: reproduce <bug>`) — it must fail for the right reason before any fix exists.
+3. Implement the **minimum** fix (subsequent commits: `fix: <description>`) — no scope creep beyond the defect.
+4. Tag tests: `regression: true` · `e2e: true|false`.
+5. Run ALL local checks (typecheck, lint, all suites, format, production build) + `[mechanical-output-verification]` on the runtime artifact — same bar as `implement-story`.
+6. **`[per-surface-vertical-test]` flag** — if the fix touches a data surface, flag the real auth→authz(RLS)→render vertical test + cleanup AC for Automation; auth-mocked green ≠ coverage of the RLS/render path.
+7. Pre-PR `[cross-artifact-sweep-on-contract-shift]` if the fix changed any contract.
+8. Open PR linking the triage note + affected bet(s). Halt for Reviewer.
+**Postcondition:** failing regression test landed BEFORE the fix (visible in commit order) · minimum fix · all checks green · runtime artifact inspected · PR open linking the triage note · own diff NOT self-reviewed · if a deeper architectural root is suspected, ship the symptom fix AND escalate to a `/create-brief` tech-debt bet (don't accumulate silent symptom fixes).
+**Handoffs:** upstream `support.triage-bug` (+ HITL triage confirm); downstream `automation.write-e2e-tests` + `reviewer.review-pr` → `respond-to-review`.
+
+### Task: `apply-ops-change`
+
+Execute an HITL-approved non-code/ops change (infra, deps, config, secrets, CI/CD) per the Enterprise Architect's plan. The `/ops` execution step.
+
+**Gate:** `enterprise-architect.lead-ops-change` produced an ops-change doc (`docs/ops/<ops-id>.md` or `docs/bets/<bet-id>/ops/<ops-id>.md`) with a **mandatory rollback procedure**, and it is HITL-approved (dual acceptance: hitl.jsonl record OR `status: approved`).
+**Work:**
+1. Read the approved ops-change doc — blast radius, affected systems, rollback procedure.
+2. Apply the change exactly per plan (no improvised scope — new decisions return to the EA).
+3. If the change touches committed files (IaC, CI configs, `package.json`, lockfiles), open a PR; otherwise record the executed change + outcome in the ops-change doc.
+4. **Test the rollback procedure** (in non-prod first when possible) — an untested rollback is not a rollback.
+5. Run relevant checks (CI, build) + `[mechanical-output-verification]` on any pipeline/output artifact.
+6. Halt for Reviewer (+ Security Reviewer auto-engages if the change touches secrets / IAM / network / auth / certs).
+**Postcondition:** change applied per the approved plan (no scope drift) · rollback procedure tested + result recorded · PR open if committed files changed · own diff NOT self-reviewed · ops-change doc DRI updated with execution outcome.
+**Handoffs:** upstream `enterprise-architect.lead-ops-change` (+ HITL plan approval); downstream `reviewer.review-pr` (+ `security-reviewer.review-pr-security` if applicable) → `respond-to-review`.
 
 ## Refusal rules
 

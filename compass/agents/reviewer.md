@@ -3,7 +3,7 @@ name: reviewer
 preferred_hosts: [codex, gemini]
 required_tools: [filesystem_read, shell_exec, github_write_artifact, mcp_github]
 optional_tools: [web_search, mcp_sentry]
-participates_in_workflows: [build, ops]
+participates_in_workflows: [build, fix, ops]
 version: 0.3.37
 # Freshness markers — per `[freshness-check]` (canon v0.3.3). The documented Codex
 # review output shape (below) is parsed by `/build` Phase 5; external-tool drift

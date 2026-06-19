@@ -2750,3 +2750,23 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 **Verified:** `pre-push-consistency-check.py` clean; 57 tests green (no code paths changed — discipline/doc only).
 
 **Files touched (7):** `compass/agents/automation.md` · `compass/agents/pm.md` · `compass/templates/story.md` · `compass/framework/canon.md` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `CHANGELOG.md` (+ this file). Counter: #89. 2 of 5 before Retro #019 (fires after #92). 2nd consecutive consumer-rooted improvement.
+
+---
+
+### 2026-06-14 — `/fix` + `/ops` → dispatch graphs (#90)
+
+**Trigger origin (Principle #19):** **consumer-rooted user directive** — "we should move fix to the orchestrator and ops as well," arising from the home-app/crypto-app work (the reactive flows are needed on live consumers, and consistency with the now-orchestratable bootstrap→build chain). 3rd consecutive consumer-rooted improvement.
+
+**Friction:** `/fix` and `/ops` were the last two high-traffic reactive workflows still in legacy embedded-methodology prose — un-orchestratable, and a dual-source-of-truth risk (methodology in the workflow vs the agent files). `engineer.fix-bug` was still a v0.3.14 stub ("migration pending; follow fix.md step-by-step"), and `/ops` had no execution-owner task at all.
+
+**Change (IMPLEMENTED, v0.3.45):** both converted to thin dispatch graphs per `[workflow-as-dispatch-graph]` (7th + 8th in dispatch-graph shape).
+
+- `compass/agents/engineer.md` → v0.3.45: `fix-bug` rewritten stub→self-sufficient (gate/work/postcondition: regression-test-first, minimum fix, `[mechanical-output-verification]`, `[per-surface-vertical-test]` flag, contract sweep, PR); **new `apply-ops-change` task** (execute HITL-approved ops plan exactly, open PR if committed files, **test the rollback**, halt for review).
+- `compass/workflows/fix.md` → dispatch graph: `support.triage-bug` → HITL (triage confirm) → `engineer.fix-bug` → `automation.write-e2e-tests` → `reviewer.review-pr` (+security auto-engage) → `engineer.respond-to-review` → HITL (merge) → `tech-writer.accumulate-changelog`. `requires_approved: []` (reactive; hygiene fixes have no bet).
+- `compass/workflows/ops.md` → dispatch graph: `enterprise-architect.lead-ops-change` → HITL (plan, rollback mandatory) → `engineer.apply-ops-change` → `reviewer.review-pr` (+security on secrets/IAM/network/auth/certs) → `engineer.respond-to-review` → HITL (merge) → `tech-writer.accumulate-changelog`. `requires_approved: []`.
+- `participates_in_workflows`: added `fix` to reviewer, tech-writer, security-reviewer (`[explicit-dispatch-surfaces-latent-participation]` — the refactor surfaced their latent fix participation). AGENTS.md catalog: **6 → 8 of 17** dispatch-graph workflows (Principle #17 sweep, same commit).
+- Tests: `test_fix` + `test_ops` added to test_graph.py (parse, gate positions, agent dispatch, empty requires). **59 tests green.**
+
+**Caveat recorded:** the orchestrator's hosts are text-only, so orchestrated `/fix` and `/ops` produce text plans, not applied code/infra — actual execution stays interactive (Claude Code, fs/shell). The dispatch-graph shape is the prerequisite for orchestratability + single-source methodology + the future `[pluggable-graph-executor]` (#87), and it benefits interactive execution too (agents own the method).
+
+**Files touched (8):** `compass/agents/engineer.md` · `compass/agents/reviewer.md` · `compass/agents/tech-writer.md` · `compass/agents/security-reviewer.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #90. 3 of 5 before Retro #019 (fires after #92). Tier-2 reactive workflows done; remaining 9 (create-bet-portfolio, triage, status, plan, measure, scan, metrics, dashboard, retro) are v0.4-beta scope.
