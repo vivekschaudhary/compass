@@ -67,3 +67,7 @@ Build when one of:
 - v0.4-beta multi-agent coordination scope opens (the MVP doc already gestures at this).
 
 Codify as a canon pattern after a 2nd instance OR once built and validated. Until then: declared.
+
+## Related capability: conditional dispatch (`[conditional-dispatch]`, declared #95)
+
+Today's dispatch graphs are **linear** — every step runs in order; the only control flow is "HITL reject → halt." That can't express a step whose *outcome chooses the next step*. The motivating case: **triage as a router** — intake should decide and route (fix / `create-brief` for deeper work / close as duplicate·L1·won't-fix·not-repro / incident), with `/fix` being one *branch*, not the presumed entry. Conditional dispatch is the graph-control-flow sibling of this executor work (an LLM-as-driver naturally does dynamic routing; a declarative branch could also be deterministic). See improvement #95. Natural build point: the `/triage` → dispatch-graph refactor.

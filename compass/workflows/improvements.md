@@ -2867,3 +2867,23 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Catalog sweep (Principle #17, same commit):** canon now 22 entries → AGENTS.md updated to 22; consistency-check.py confirms agreement (the check now guards this invariant). 90 tests green.
 
 **Files touched (4):** `compass/framework/canon.md` · `AGENTS.md` · `CLAUDE.md` · `CHANGELOG.md` (+ this file). Counter: #94. 2 of 5 before Retro #020 (fires after #97). Clears the longest-standing codification candidate.
+
+---
+
+### 2026-06-19 — `[conditional-dispatch]` / triage-as-router — DECLARED, not implemented (#95)
+
+**Trigger origin (Principle #19):** user reasoning during the write-mode `/fix` live-test discussion — "fix means there *is* an issue; triage should decide if a fix is even needed." Framework-internal (flagged), but rooted in real workflow reasoning about how reactive work should enter the system.
+
+**Friction:** dispatch graphs are **linear** — every step runs in order; the only control flow is "HITL reject → halt." So a step whose *outcome should choose the next step* can't be expressed. `/fix` therefore presumes its outcome: triage runs as step 1 and *can* conclude "no fix needed" (duplicate / not-reproducible / L1-close / won't-fix / escalate-to-brief), but the graph can only model that as a blunt HITL-reject halt — not as triage **routing** the work to the right destination.
+
+**Declared shape (`[conditional-dispatch]`):**
+- **Mechanism — conditional/branching dispatch.** A step declares branch outcomes; the orchestrator selects the next step from the step's classified result, instead of always advancing linearly. Representation TBD at build (e.g., a router step emits a routing decision + the graph declares branch targets); `run.py` gains branch execution. Deterministic branches are possible; an LLM-as-driver (#87 surface 3) does dynamic routing naturally.
+- **First application — triage-as-router.** Intake decides and routes: → `/fix` (real bounded defect) · → `/create-brief` (deeper/architectural work) · → close (duplicate / L1 / won't-fix / not-repro) · → `/triage` incident path (production fire). `/fix` becomes a *branch destination*, not the presumed entry. Matches the VISION's Triage-as-front-door role ("routes to the right starting point").
+
+**Mechanical floor still applies:** branches still pass through HITL gates; a "close / won't-fix" outcome is a logged DRI decision, not a silent drop.
+
+**Relationships:** VISION Triage-as-front-door + "roles delegate on demand"; `[pluggable-graph-executor]` (#87) — the LLM-as-driver surface is the natural enabler of dynamic routing (forward-linked from `DESIGN-pluggable-executor.md`). **Natural build point: the `/triage` → dispatch-graph refactor** (the next reactive-workflow refactor), where branching would first earn its place. Candidate architecture-discipline-class member when built.
+
+**Per `[declare-not-implement]`:** declared now (the shape is clear, the build isn't prioritized); build when `/triage` is refactored or the LLM-as-driver surface lands. Codify as canon after a 2nd instance OR once built.
+
+**Files touched (3):** `compass/orchestrator/DESIGN-pluggable-executor.md` (forward-link) · `CHANGELOG.md` · `compass/workflows/improvements.md`. **No code, no canon entry, no catalog change — declared only.** Counter: #95. 3 of 5 before Retro #020 (fires after #97).
