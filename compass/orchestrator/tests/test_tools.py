@@ -127,8 +127,9 @@ class TestDispatchLoop(unittest.TestCase):
         )
         self.assertEqual(out, "done")
 
-    def test_max_iterations_backstop(self):
-        # Always asks for a tool → loop must terminate at the cap, not hang.
+    def test_max_iterations_raises(self):
+        # Always asks for a tool → cap reached → RAISE (failure halts run.py, #97),
+        # not return a non-answer string that flows downstream.
         always_tool = _Resp("tool_use", [
             _Block("tool_use", name="glob", input={"pattern": "*.md"}, id="t"),
         ])
@@ -140,10 +141,28 @@ class TestDispatchLoop(unittest.TestCase):
         class _C:
             messages = _Loop()
 
-        out = dispatch_with_tools(
-            str(self.agent), "fix-bug", "x", self.proj, client=_C(), max_iterations=3,
+        with self.assertRaises(RuntimeError):
+            dispatch_with_tools(
+                str(self.agent), "fix-bug", "x", self.proj, client=_C(),
+                max_iterations=3, on_event=lambda e: None,
+            )
+
+    def test_on_event_streams_tool_calls(self):
+        scripted = [
+            _Resp("tool_use", [
+                _Block("tool_use", name="read_file", input={"path": "arch.md"}, id="t1"),
+            ]),
+            _Resp("end_turn", [_Block("text", text="done")]),
+        ]
+        events = []
+        dispatch_with_tools(
+            str(self.agent), "fix-bug", "x", self.proj,
+            client=_FakeClient(scripted), on_event=events.append,
         )
-        self.assertIn("max_iterations", out)
+        types = [e["type"] for e in events]
+        self.assertIn("tool_use", types)
+        self.assertIn("tool_result", types)
+        self.assertEqual(next(e for e in events if e["type"] == "tool_use")["name"], "read_file")
 
 
 class TestAgentToolsFrontmatter(unittest.TestCase):
@@ -248,6 +267,43 @@ class TestBashSafety(unittest.TestCase):
     def test_bash_refused_without_allow_write(self):
         out = tools.execute_tool("bash", {"command": "ls"}, self.proj, allow_write=False)
         self.assertIn("requires --allow-write", out)
+
+    def test_stdin_command_does_not_hang(self):
+        # `cat` reads stdin; with stdin=DEVNULL it gets immediate EOF → exits 0
+        # fast, instead of blocking until the 120s timeout (#97).
+        out = self._run("cat")
+        self.assertIn("exit code: 0", out)
+
+
+class TestHostSelection(unittest.TestCase):
+    """#97: a host is selectable only if its key AND its SDK are present."""
+
+    def test_pkg_importable(self):
+        from compass.orchestrator.hosts.router import _pkg_importable
+        self.assertTrue(_pkg_importable("os"))
+        self.assertFalse(_pkg_importable("definitely_not_a_real_pkg_xyz"))
+
+    def test_adapter_importable(self):
+        from compass.orchestrator.hosts.router import _adapter_importable
+        self.assertTrue(_adapter_importable("claude"))    # anthropic installed
+        self.assertTrue(_adapter_importable("unknown"))   # no mapping → pass-through
+
+    def test_select_host_ready_needs_key_and_pkg(self):
+        import os
+        from compass.orchestrator.hosts import router
+        old = os.environ.get("ANTHROPIC_API_KEY")
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        try:
+            self.assertEqual(router.select_host(["claude"]), "claude")
+        finally:
+            if old is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = old
+
+    def test_select_host_none_when_no_ready_host(self):
+        from compass.orchestrator.hosts import router
+        self.assertIsNone(router.select_host(["deepseek"]))  # no key path → skipped
 
 
 if __name__ == "__main__":

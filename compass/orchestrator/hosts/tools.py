@@ -260,6 +260,7 @@ def _bash(project_dir: Path, command: str) -> str:
         proc = subprocess.run(
             command, shell=True, cwd=str(project_dir.resolve()),
             capture_output=True, text=True, timeout=BASH_TIMEOUT_S,
+            stdin=subprocess.DEVNULL,  # a command that reads stdin fails fast, not hangs (#97)
         )
     except subprocess.TimeoutExpired:
         return f"error: command timed out after {BASH_TIMEOUT_S}s"

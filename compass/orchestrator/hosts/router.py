@@ -11,25 +11,55 @@ Credential check per host:
 
 If no host is available, returns None from select_host() — the caller must handle.
 """
+import importlib.util
 import os
 from typing import Optional
+
+# SDK package each host's adapter needs. A host is only selectable if BOTH its
+# key is set AND its package is importable — otherwise the run would die
+# mid-dispatch on ImportError instead of falling through (#97 consumer signal:
+# OPENAI_API_KEY set but openai not installed → picked chatgpt then crashed).
+_HOST_PACKAGE = {
+    "claude": "anthropic",
+    "codex": "openai",
+    "chatgpt": "openai",
+    "openai": "openai",
+    "gemini": "google.generativeai",
+}
+
+
+def _pkg_importable(pkg: str) -> bool:
+    try:
+        return importlib.util.find_spec(pkg) is not None
+    except (ImportError, ValueError, ModuleNotFoundError):
+        return False
+
+
+def _adapter_importable(host: str) -> bool:
+    pkg = _HOST_PACKAGE.get(host)
+    return True if pkg is None else _pkg_importable(pkg)
+
+
+def _has_key(host: str) -> bool:
+    if host == "claude":
+        return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    if host in ("codex", "chatgpt", "openai"):
+        return bool(os.environ.get("OPENAI_API_KEY"))
+    if host == "gemini":
+        return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+    return False
 
 
 def select_host(preferred_hosts: list) -> Optional[str]:
     """
-    Return the first host in preferred_hosts that has API credentials available.
-    Returns None if none are available.
+    Return the first host in preferred_hosts that is READY — has API credentials
+    AND its SDK is importable. Skips hosts whose adapter package is missing
+    (falls through to the next) so a run never dies mid-dispatch on ImportError.
+    Returns None if none are ready.
     """
     for host in preferred_hosts:
-        if host == "claude":
-            if os.environ.get("ANTHROPIC_API_KEY"):
-                return "claude"
-        elif host in ("codex", "chatgpt", "openai"):
-            if os.environ.get("OPENAI_API_KEY"):
-                return host
-        elif host == "gemini":
-            if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
-                return "gemini"
+        if _has_key(host) and _adapter_importable(host):
+            return "claude" if host == "claude" else ("gemini" if host == "gemini" else host)
     return None
 
 

@@ -2,6 +2,22 @@
 import os
 
 
+def _default_tool_event(event: dict) -> None:
+    """
+    Terminal sink for tool-loop progress (#97). Prints each tool call as it
+    happens so a tool-using run is legible, not a frozen prompt. Designed as a
+    swappable sink — a dashboard/Slack delivery layer passes its own `on_event`
+    and receives the same structured events (the event spine for the cockpit).
+    """
+    if event.get("type") == "tool_use":
+        inp = event.get("input") or {}
+        arg = inp.get("path") or inp.get("pattern") or inp.get("command") or ""
+        print(f"  → {event['name']}({str(arg)[:80]})")
+    elif event.get("type") == "tool_result":
+        mark = "✗" if event.get("is_error") else "✓"
+        print(f"    {mark} {str(event.get('summary', ''))[:100]}")
+
+
 def dispatch(
     agent_file_path: str,
     task_name: str,
@@ -54,6 +70,7 @@ def dispatch_with_tools(
     allow_write: bool = False,
     max_iterations: int = 25,
     client=None,
+    on_event=None,
 ) -> str:
     """
     Tool-using dispatch (#87 slice 1): load agent_file as system prompt, run a
@@ -73,6 +90,7 @@ def dispatch_with_tools(
     if tool_schemas is None:
         tool_schemas = repo_tools.TOOL_SCHEMAS
     project_dir = Path(project_dir)
+    emit = on_event or _default_tool_event
 
     if client is None:
         try:
@@ -109,9 +127,16 @@ def dispatch_with_tools(
         tool_results = []
         for block in response.content:
             if getattr(block, "type", None) == "tool_use":
+                emit({"type": "tool_use", "name": block.name, "input": block.input})
                 result = repo_tools.execute_tool(
                     block.name, block.input, project_dir, allow_write=allow_write
                 )
+                emit({
+                    "type": "tool_result",
+                    "name": block.name,
+                    "is_error": isinstance(result, str) and result.startswith("error"),
+                    "summary": result.splitlines()[0] if result else "",
+                })
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -119,7 +144,9 @@ def dispatch_with_tools(
                 })
         messages.append({"role": "user", "content": tool_results})
 
-    return (
-        "[tool loop hit max_iterations without a final answer — "
-        "the agent may need a tighter task or higher cap]"
+    # Hitting the cap is a FAILURE, not a result — raise so run.py halts (#97)
+    # rather than silently promoting a non-answer downstream.
+    raise RuntimeError(
+        f"tool loop hit max_iterations ({max_iterations}) without a final answer — "
+        f"task likely too broad for this step (consider /create-brief), or raise the cap."
     )

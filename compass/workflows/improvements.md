@@ -2908,3 +2908,27 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Mechanical floor preserved:** routing is a HITL decision logged like any gate; promotion/logging/exit-codes/reviewer-exclusion unchanged.
 
 **Files touched (8):** `compass/orchestrator/graph.py` · `compass/orchestrator/hitl.py` · `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/agents/reviewer.md` · `compass/agents/tech-writer.md` · `compass/workflows/triage.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` · `CHANGELOG.md` (+ this file). Counter: #96. **4 of 5 → Retro #020 fires after #97.** `[conditional-dispatch]` now has 1 built instance — codify as canon at the 2nd (e.g. the bug-intake router).
+
+---
+
+### 2026-06-20 — tool-loop hardening + event spine (#97)
+
+**Trigger origin (Principle #19):** **consumer run** — the first live write-mode `/fix --allow-write` on home-app surfaced four distinct orchestrator gaps in one go. Strongest single-run consumer signal of the v0.4 build. (The run: a feature-parity request routed through `/fix` — triage correctly flagged it as "enhancement, not a bug," the user pressed Y to try it anyway, and `engineer.fix-bug` blew the 25-iteration cap.)
+
+**Friction (four gaps):**
+1. The tool loop printed one line then ran silently through many Claude calls + `bash` runs (each up to 120s) → looked hung.
+2. Hitting `max_iterations` returned a backstop *string* that `run.py` treated as a successful result and **advanced to the next step** — a failed loop silently promoted a non-answer (violates the #79 "failures halt" principle).
+3. `bash` inherited stdin → a command that reads stdin could block to the timeout.
+4. `select_host` picked a host by API-key presence only; with `OPENAI_API_KEY` set but `openai` not installed it chose `chatgpt` then **crashed mid-dispatch** on ImportError instead of falling through to Claude.
+
+**Change (IMPLEMENTED, v0.4.0-alpha-11):**
+- `claude.py:dispatch_with_tools` — `on_event` sink (default `_default_tool_event` terminal printer) emits `tool_use`/`tool_result` events per call → progress is visible **and the sink is the event spine** for a future dashboard/Slack delivery layer (answers the "deliver to the user's surface / dashboard-as-orchestrator" question — structured events now, surface routing later). Max-iterations now **raises RuntimeError** → caught by run.py's existing `except` → halts (exit 1), no silent advance.
+- `tools.py:_bash` — `stdin=subprocess.DEVNULL`.
+- `router.py:select_host` — rewritten around `_has_key` + `_adapter_importable` (`_pkg_importable` via `importlib.util.find_spec`); a host is selectable only if key AND SDK present, else skip to the next. Map: claude→anthropic, codex/chatgpt/openai→openai, gemini→google.generativeai.
+- Tests: +9 (max-iter raises, on_event streams, bash-stdin-no-hang, host-selection key+pkg logic). **102 total, green.**
+
+**Event spine = cockpit foundation:** per the user's product question, the orchestrator's terminal output is a dev surface; real users live in Slack/WhatsApp/the dashboard. The `on_event` sink makes progress **structured and routable** — the delivery layer + dashboard-as-orchestrator (VISION cockpit, step 3) plug into it without touching the loop. Declared follow-on.
+
+**Meta-signal:** routing a feature through `/fix` blew the cap — reinforces the **bug-intake router** need (triage routes feature-gaps → `/create-brief`), the #95 follow-on. This run is its Principle-#19 evidence.
+
+**Files touched (5):** `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/tools.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #97. **5 of 5 → Retro #020 fires next.**
