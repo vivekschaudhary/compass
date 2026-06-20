@@ -127,25 +127,21 @@ class TestDispatchLoop(unittest.TestCase):
         )
         self.assertEqual(out, "done")
 
-    def test_max_iterations_raises(self):
-        # Always asks for a tool → cap reached → RAISE (failure halts run.py, #97),
-        # not return a non-answer string that flows downstream.
-        always_tool = _Resp("tool_use", [
+    def test_max_iterations_wraps_up(self):
+        # Cap reached → final tools-disabled turn forces a summary (#100), NOT a
+        # raise that discards completed work. Returns the summary + a cap note.
+        tool = _Resp("tool_use", [
             _Block("tool_use", name="glob", input={"pattern": "*.md"}, id="t"),
         ])
-
-        class _Loop:
-            def create(self_inner, **kw):
-                return always_tool
-
-        class _C:
-            messages = _Loop()
-
-        with self.assertRaises(RuntimeError):
-            dispatch_with_tools(
-                str(self.agent), "fix-bug", "x", self.proj, client=_C(),
-                max_iterations=3, on_event=lambda e: None,
-            )
+        scripted = [tool, tool, tool, _Resp("end_turn", [
+            _Block("text", text="Summary: wrote the fix + test, all checks green."),
+        ])]
+        out = dispatch_with_tools(
+            str(self.agent), "fix-bug", "x", self.proj,
+            client=_FakeClient(scripted), max_iterations=3, on_event=lambda e: None,
+        )
+        self.assertIn("Summary:", out)
+        self.assertIn("cap", out.lower())   # the wrap-up note
 
     def test_on_event_streams_tool_calls(self):
         scripted = [
@@ -320,7 +316,7 @@ class TestWorkBranch(unittest.TestCase):
         from compass.orchestrator.run import _work_branch_name
         self.assertEqual(
             _work_branch_name("ops", None, "Change: rotate the api secret"),
-            "ops/rotate-the-api-secret",
+            "ops/rotate-api-secret",   # 'the' dropped as a stopword (#100)
         )
 
     def test_branch_type_by_workflow(self):

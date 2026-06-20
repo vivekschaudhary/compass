@@ -83,12 +83,21 @@ _WORKFLOW_BRANCH_TYPE = {
 }
 
 
-def _slug(text: str, words: int = 5) -> str:
-    """Lowercase hyphen-slug from the first few words of text."""
+_SLUG_STOPWORDS = {
+    "the", "a", "an", "i", "we", "to", "of", "in", "on", "at", "is", "it", "its",
+    "im", "and", "or", "but", "while", "when", "get", "got", "see", "my", "me",
+    "as", "be", "that", "this", "with", "for", "should", "user", "am", "are",
+}
+
+
+def _slug(text: str, words: int = 6) -> str:
+    """Lowercase hyphen-slug from the first few MEANINGFUL words (stopwords dropped)."""
     import re as _re
     cleaned = _re.sub(r"[^a-z0-9\s-]", "", (text or "").lower())
-    parts = cleaned.split()[:words]
-    slug = "-".join(parts).strip("-")
+    toks = [w for w in cleaned.split() if w and w not in _SLUG_STOPWORDS]
+    if not toks:
+        toks = cleaned.split()  # fallback: all words were stopwords
+    slug = "-".join(toks[:words]).strip("-")
     return slug[:40] or "work"
 
 
@@ -494,6 +503,7 @@ def _run_workflow(
     dry_run: bool = False,
     skip_missing: bool = False,
     allow_write: bool = False,
+    max_tool_iterations: int = None,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -843,7 +853,7 @@ def _run_workflow(
             result = dispatch_to_host(
                 host, str(agent_file), step.task, user_message, model=model,
                 tools=agent_tools or None, project_dir=project_dir,
-                allow_write=allow_write,
+                allow_write=allow_write, max_tool_iterations=max_tool_iterations,
             )
         except (RuntimeError, ImportError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -978,6 +988,18 @@ def main(argv=None):
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
+        "--max-tool-iterations",
+        type=int,
+        default=None,
+        dest="max_tool_iterations",
+        metavar="N",
+        help=(
+            "Cap on a tool-using step's read/write/run loop (default 50). On "
+            "reaching it the agent does a final tools-disabled summary turn "
+            "rather than aborting — raise it for big tasks, lower to fail fast."
+        ),
+    )
+    parser.add_argument(
         "--allow-write",
         action="store_true",
         dest="allow_write",
@@ -1096,6 +1118,7 @@ def main(argv=None):
             dry_run=args.dry_run,
             skip_missing=args.skip_missing,
             allow_write=args.allow_write,
+            max_tool_iterations=args.max_tool_iterations,
         )
         return
 
@@ -1142,6 +1165,7 @@ def main(argv=None):
             initial_prior_outputs=accumulated_outputs,
             skip_missing=args.skip_missing,
             allow_write=args.allow_write,
+            max_tool_iterations=args.max_tool_iterations,
         )
 
         accumulated_outputs.extend(wf_outputs)

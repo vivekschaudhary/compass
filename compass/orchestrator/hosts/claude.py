@@ -68,7 +68,7 @@ def dispatch_with_tools(
     max_tokens: int = 8192,
     tool_schemas: list = None,
     allow_write: bool = False,
-    max_iterations: int = 25,
+    max_iterations: int = 50,
     client=None,
     on_event=None,
 ) -> str:
@@ -144,9 +144,31 @@ def dispatch_with_tools(
                 })
         messages.append({"role": "user", "content": tool_results})
 
-    # Hitting the cap is a FAILURE, not a result — raise so run.py halts (#97)
-    # rather than silently promoting a non-answer downstream.
-    raise RuntimeError(
-        f"tool loop hit max_iterations ({max_iterations}) without a final answer — "
-        f"task likely too broad for this step (consider /create-brief), or raise the cap."
+    # Cap reached (#100): don't raise-and-discard (a thorough run may have already
+    # finished the work on disk). Do ONE final tools-disabled turn to force a text
+    # summary — the work + state get captured and the workflow advances to review,
+    # where HITL decides. A genuinely-stuck run summarizes "incomplete" and is
+    # caught downstream; a complete-but-thorough run reports what it did.
+    emit({"type": "note", "text": f"max tool iterations ({max_iterations}) reached — forcing final summary"})
+    messages.append({
+        "role": "user",
+        "content": (
+            "You've reached the tool-use limit for this step. Stop using tools and "
+            "give your final answer now: what you changed (files), the test / "
+            "typecheck / lint / build results you saw, and any remaining steps or risks."
+        ),
+    })
+    final = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=messages,
+    )
+    text = "".join(
+        block.text for block in final.content if getattr(block, "type", None) == "text"
+    )
+    return (
+        text
+        + f"\n\n[note: hit the {max_iterations}-iteration tool cap; the above is a "
+        f"forced wrap-up summary — review the diff to confirm completeness.]"
     )

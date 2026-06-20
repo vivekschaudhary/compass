@@ -90,6 +90,7 @@ def dispatch_to_host(
     tools: list = None,
     project_dir=None,
     allow_write: bool = False,
+    max_tool_iterations: int = None,
 ) -> str:
     """
     Dispatch to the named host adapter.
@@ -113,6 +114,7 @@ def dispatch_to_host(
                 max_tokens=max_tokens,
                 tool_schemas=schemas,
                 allow_write=allow_write,
+                max_iterations=max_tool_iterations or 50,
             )
         return dispatch(
             agent_file_path, task_name, user_message,

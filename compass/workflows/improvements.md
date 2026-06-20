@@ -2973,3 +2973,21 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Scope:** branch creation only; the PR-open + merge-to-main remain manual / the engineer task's `gh pr` (full git-automation is the declared v0.4-beta gap). The point of #99 is that write-mode changes never silently mutate `main`.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #99. 2 of 5 before Retro #021 (fires after #102). Another consumer-signal fix from the live home-app run (with #97).
+
+---
+
+### 2026-06-20 — tool-loop cap: wrap-up instead of abort (#100)
+
+**Trigger origin (Principle #19):** **consumer** — the home-app `/fix --allow-write` run on the login-message bug. The engineer did the *entire* job (wrote test + fix, ran vitest/typecheck/lint/full-suite/build all green, did manifest verification) across ~25 tool calls — then hit #97's cap and **raised, aborting a finished job** before it could summarize or advance to review. The fix on disk was correct; the orchestration threw it away.
+
+**Friction:** #97 made max-iterations raise-and-halt (to stop silent-success-advancing). But a genuine fix+verify loop legitimately needs 25+ calls, so a *complete* run was treated as a failure. Raise-and-abort was too blunt: it discarded completed work and skipped the review step.
+
+**Change (IMPLEMENTED, v0.4.0-alpha-13):**
+- `claude.py:dispatch_with_tools` — **default cap 25 → 50**; on reaching the cap, **one final tools-disabled turn** forces a text summary ("what you changed, the check results, remaining steps/risks") instead of raising. Returns that summary + a `[hit the N-iteration cap — review the diff]` note → the workflow advances to review, where HITL decides. A genuinely-stuck run summarizes "incomplete" and is caught downstream; a complete-but-thorough run reports what it did. This is the right reading of #97's intent: don't promote a *non-answer* as success — but a forced honest summary IS an answer, and review is the safety net.
+- `--max-tool-iterations N` flag (run.py → router → dispatch_with_tools) to tune per-run.
+- **`_slug` (#99 refinement):** drops stopwords so branch names are meaningful — `fix/logging-message-welcome-back-…` instead of `fix/while-logging-in-i-get`.
+- Tests: max-iter now wraps up (returns summary, no raise); slug stopword behavior. **107 total, green.**
+
+**The home-app run was a substantive success** (first real grounded+verified write-mode fix on a live consumer bug); #100 makes the orchestration finish cleanly so the *next* one walks itself through to the review gate instead of aborting at the cap.
+
+**Files touched (5):** `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #100. 3 of 5 before Retro #021 (fires after #102). Third consumer-signal fix from the live home-app run (with #97, #99).
