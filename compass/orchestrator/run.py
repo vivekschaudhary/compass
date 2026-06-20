@@ -154,6 +154,35 @@ def _skip_for_route(router_number: int, target: int) -> set:
     return set(range(router_number + 1, target))
 
 
+def _handoff_message(target: str, project_dir, last_artifact_path=None) -> str:
+    """
+    Render the recommendation printed when a routing gate (#103) routes to a
+    cross-workflow hand-off (`/fix`, `/create-brief`, `/ops`) or `close`.
+
+    v1 hand-off = recommend, don't chain: this workflow's job (classify + route)
+    is done; the human runs the recommended command. Auto-chaining is v2 (#87
+    surface 3). The category→workflow mapping lives in the dispatch graph's
+    Routes block, not here — `target` IS the workflow path.
+    """
+    if target == "close":
+        return "[closed — no action taken; logged as the routing decision]"
+
+    wf = target.lstrip("/")
+    if last_artifact_path:
+        try:
+            ctx = f'--context "$(cat {last_artifact_path.relative_to(project_dir)})"'
+        except (ValueError, AttributeError):
+            ctx = '--context "<paste the triage classification above>"'
+    else:
+        ctx = '--context "<paste the triage classification above>"'
+    return (
+        f"Next: run {target} on this item (the triage classification is above).\n"
+        f"  python3 -m compass.orchestrator.run {wf} "
+        f"--project-dir {project_dir} {ctx}\n"
+        f"(v1 hand-off — auto-chaining is deferred to v2; run the command to continue.)"
+    )
+
+
 def _collect_input(step_label: str, inline_context: str = "") -> str:
     """Return user context for a step, either inline or via interactive prompt."""
     if inline_context:
@@ -579,7 +608,12 @@ def _run_workflow(
         print(f"\nDispatch graph: {workflow_name}")
         print(f"{'─' * 50}")
         for s in steps:
-            if s.is_hitl:
+            if s.is_hitl and s.routes:
+                routes_desc = ", ".join(
+                    f"{lbl}→{t}" for lbl, t in s.routes
+                )
+                marker, label = "[ROUTE]", f"routing gate — {routes_desc}"
+            elif s.is_hitl:
                 marker, label = "[HITL]", "human gate"
             elif s.agent and s.task:
                 marker = f"[{s.agent}.{s.task}]"
@@ -663,8 +697,6 @@ def _run_workflow(
                 step.number, step.title, step.routes, last_agent_output
             )
             target = choice["target"]
-            # Forward-only: skip the steps between this gate and the chosen target.
-            skipped.update(_skip_for_route(step.number, target))
             log_hitl(
                 project_dir=project_dir,
                 run_id=run_id,
@@ -674,8 +706,17 @@ def _run_workflow(
                 artifact_path=None,
                 decision=choice["route"],
             )
-            print(f"[route → {choice['route']} (continue at step {target})]")
-            continue
+            if isinstance(target, int):
+                # Inline branch (#96): skip the not-taken steps, keep walking.
+                skipped.update(_skip_for_route(step.number, target))
+                print(f"[route → {choice['route']} (continue at step {target})]")
+                continue
+            # Cross-workflow hand-off or close (#103): this workflow's job —
+            # classify + route — is done. Recommend the next command and end
+            # the run cleanly (break → normal success finalization).
+            print(f"\n[route → {choice['route']} — hand off to {target}]")
+            print(_handoff_message(target, project_dir, last_artifact_path))
+            break
 
         # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:

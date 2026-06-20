@@ -14,7 +14,9 @@ class WorkflowStep:
     task: Optional[str] = None
     agent_file: Optional[str] = None
     artifact_target: Optional[str] = None  # canonical path promoted on HITL approval
-    routes: Optional[list] = None          # [(label, target_step_number)] — routing gate (#96)
+    routes: Optional[list] = None          # [(label, target)] — routing gate (#96/#103);
+                                           # target is int (inline step), "/<workflow>"
+                                           # (cross-workflow hand-off), or "close" (terminal)
 
 
 def load_workflow_meta(workflow_file: Path) -> dict:
@@ -45,6 +47,20 @@ def load_workflow_meta(workflow_file: Path) -> dict:
                     if line.strip()
                 ]
     return {"requires_approved": requires}
+
+
+def _parse_route_target(raw: str):
+    """
+    Normalize a routing-gate target string into its runtime form (#103):
+      "Step 7" / "step 7" → 7 (int — inline forward-skip, #96)
+      "/fix"              → "/fix" (str — cross-workflow hand-off)
+      "close"            → "close" (str — terminal)
+    """
+    raw = raw.strip()
+    m = re.match(r"Step\s+(\d+)$", raw, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    return raw.lower() if raw.lower() == "close" else raw
 
 
 def load_workflow(workflow_file: Path) -> list:
@@ -109,18 +125,22 @@ def load_workflow(workflow_file: Path) -> list:
         if target_match:
             artifact_target = target_match.group(1).strip()
 
-        # Routing gate (#96, [conditional-dispatch]): a HITL step whose outcome
-        # chooses the next step. Parse `- <label> → Step N` lines (tolerant of
-        # ->/→ and "Step"/"step"). Forward-only; the human picks at the gate.
+        # Routing gate (#96/#103, [conditional-dispatch]): a HITL step whose
+        # outcome chooses what happens next. A route target is one of:
+        #   `Step N`      → inline forward-skip within this graph (#96)
+        #   `/<workflow>` → cross-workflow hand-off (#103) — recommend + end run
+        #   `close`       → terminal, no action (#103)
+        # Parse `- <label> → <target>` lines (tolerant of ->/→, backticks, case).
+        # Forward-only; the human picks at the gate.
         routes = None
         if is_hitl:
             route_pairs = re.findall(
-                r'^\s*[-*]\s*`?([\w-]+)`?\s*(?:→|->)\s*Step\s+(\d+)',
+                r'^\s*[-*]\s*`?([\w-]+)`?\s*(?:→|->)\s*`?(Step\s+\d+|/[\w-]+|close)`?',
                 step_body,
                 re.IGNORECASE | re.MULTILINE,
             )
             if route_pairs:
-                routes = [(label, int(n)) for label, n in route_pairs]
+                routes = [(label, _parse_route_target(raw)) for label, raw in route_pairs]
 
         agent = task = agent_file = None
         if not is_hitl:

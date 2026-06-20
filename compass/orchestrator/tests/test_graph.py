@@ -177,15 +177,39 @@ class TestRealWorkflows(unittest.TestCase):
         meta = load_workflow_meta(WORKFLOWS / "create-story.md")
         self.assertEqual(meta["requires_approved"], ["docs/bets/<bet-id>/brief.md"])
 
-    def test_triage_routing_gate(self):
+    def test_triage_front_door_graph(self):
+        # #103: /triage is the front-door ITIL intake router — 9 steps,
+        # classify-intake first, two routing gates (intake + fix-forward).
         steps = load_workflow(WORKFLOWS / "triage.md")
-        self.assertEqual(len(steps), 7)
-        gate = next(s for s in steps if s.is_hitl and s.routes)
+        self.assertEqual(len(steps), 9)
+        self.assertEqual((steps[0].agent, steps[0].task), ("support", "classify-intake"))
+
+    def test_triage_intake_routing_gate(self):
+        # Step 2: ITIL intake gate — 7 routes mixing an inline step, five
+        # cross-workflow hand-offs, and a close (target types int | str).
+        steps = load_workflow(WORKFLOWS / "triage.md")
+        gate = steps[1]
+        self.assertTrue(gate.is_hitl and gate.routes)
         self.assertEqual(gate.number, 2)
-        self.assertEqual(gate.routes, [("resolved", 5), ("needs-fix", 3)])
-        # fix branch present; postmortem reconverges
-        self.assertEqual((steps[2].agent, steps[2].task), ("engineer", "fix-bug"))
-        self.assertEqual((steps[4].agent, steps[4].task), ("support", "write-postmortem"))
+        routes = dict(gate.routes)
+        self.assertEqual(routes["incident"], 3)          # inline branch (int)
+        self.assertEqual(routes["bug"], "/fix")          # hand-off (str)
+        self.assertEqual(routes["enhancement"], "/create-brief")
+        self.assertEqual(routes["problem"], "/create-brief")
+        self.assertEqual(routes["change"], "/ops")
+        self.assertEqual(routes["service-request"], "/ops")
+        self.assertEqual(routes["not-an-issue"], "close")
+        self.assertEqual(len(gate.routes), 7)
+
+    def test_triage_fix_forward_gate_renumbered(self):
+        # Step 4: incident fix-forward gate, renumbered for the inserted front door.
+        steps = load_workflow(WORKFLOWS / "triage.md")
+        gate = steps[3]
+        self.assertEqual(gate.number, 4)
+        self.assertEqual(gate.routes, [("resolved", 7), ("needs-fix", 5)])
+        self.assertEqual((steps[2].agent, steps[2].task), ("support", "triage-incident"))
+        self.assertEqual((steps[4].agent, steps[4].task), ("engineer", "fix-bug"))
+        self.assertEqual((steps[6].agent, steps[6].task), ("support", "write-postmortem"))
 
 
 class TestRouteParsing(unittest.TestCase):
@@ -199,6 +223,56 @@ class TestRouteParsing(unittest.TestCase):
     def test_plain_hitl_has_no_routes(self):
         steps = _parse(_wf("### Step 1. **HITL gate** (human)\n\n**Dispatches:** HUMAN\n"))
         self.assertIsNone(steps[0].routes)
+
+    def test_mixed_route_targets(self):
+        # #103: a routing gate's targets may be an inline step (int), a
+        # cross-workflow hand-off (/x), or close — all in one Routes block.
+        steps = _parse(_wf(
+            "### Step 1. **HITL — intake** (human)\n\n**Dispatches:** HUMAN\n"
+            "**Routes:**\n"
+            "- `incident` → Step 3\n"
+            "- `bug` → /fix\n"
+            "- enhancement -> /create-brief\n"
+            "- `not-an-issue` → close\n"
+        ))
+        self.assertEqual(
+            steps[0].routes,
+            [("incident", 3), ("bug", "/fix"),
+             ("enhancement", "/create-brief"), ("not-an-issue", "close")],
+        )
+        # types: inline is int, hand-off + close are str
+        targets = dict(steps[0].routes)
+        self.assertIsInstance(targets["incident"], int)
+        self.assertIsInstance(targets["bug"], str)
+        self.assertIsInstance(targets["not-an-issue"], str)
+
+
+class TestHandoffMessage(unittest.TestCase):
+    # #103: cross-workflow hand-off / close handling at a routing gate.
+    def test_handoff_recommends_command(self):
+        from compass.orchestrator.run import _handoff_message
+        msg = _handoff_message("/fix", "/tmp/proj")
+        self.assertIn("run /fix", msg)
+        self.assertIn("compass.orchestrator.run fix", msg)  # leading slash stripped
+        self.assertIn("--project-dir /tmp/proj", msg)
+        self.assertIn("--context", msg)
+
+    def test_handoff_hyphenated_workflow(self):
+        from compass.orchestrator.run import _handoff_message
+        msg = _handoff_message("/create-brief", "/tmp/proj")
+        self.assertIn("compass.orchestrator.run create-brief", msg)
+
+    def test_close_is_terminal_not_a_command(self):
+        from compass.orchestrator.run import _handoff_message
+        msg = _handoff_message("close", "/tmp/proj")
+        self.assertIn("closed", msg.lower())
+        self.assertNotIn("compass.orchestrator.run", msg)
+
+    def test_route_target_desc(self):
+        from compass.orchestrator.hitl import _route_target_desc
+        self.assertEqual(_route_target_desc(3), "continue at Step 3")
+        self.assertEqual(_route_target_desc("/fix"), "hand off to /fix")
+        self.assertEqual(_route_target_desc("close"), "close (no action)")
 
 
 class TestSkipForRoute(unittest.TestCase):

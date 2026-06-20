@@ -3033,3 +3033,20 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Per `[declare-not-implement]`:** declared (consumer-evidenced, mechanism clear — git worktrees); build when parallel execution is scheduled. No code, no canon change.
 
 **Files touched (1):** `compass/workflows/improvements.md`. Counter: #102. **5 of 5 → Retro #021 fires next.** Fifth consumer-signal item from the home-app session (#97/#99/#100/#101/#102).
+
+### 2026-06-20 — front-door `/triage` ITIL intake router BUILT — implements declared #98 (#103)
+
+**Trigger origin (Principle #19):** **consumer** — the two live home-app `/triage` runs that classified items correctly (a feature-as-bug, a bug-as-incident) but had nowhere to route them. Declared as #98 in the same home-app batch; built here per Retro #021's top watch-for ("build the declared backlog, don't just accrue it").
+
+**What shipped:** `/triage` is now the **front door** for every incoming item, not incident-response only.
+- **`support.classify-intake`** (new task, support.md v0.3.49) — proposes exactly one ITIL category (incident / bug / enhancement / problem / change / service-request / not-an-issue) by observed impact+urgency, with a one-line rationale + recommended route + an intake summary for hand-off context. Proposes; the human disposes at the gate.
+- **Intake routing gate** (triage.md Step 2) — routes `incident` inline (Step 3, the unchanged incident branch), **hands off** `bug`→`/fix`, `enhancement`/`problem`→`/create-brief`, `change`/`service-request`→`/ops`, and `close`s `not-an-issue`. The fix-forward gate renumbered (resolved→7, needs-fix→5).
+- **Engine generalization (`[conditional-dispatch]` 2nd instance):** route targets widened from `int` (inline step, #96) to `int | str`. A `str` target is a `/workflow` hand-off or `close`: `graph.py` parses it (`_parse_route_target`), `hitl.py` describes it (`_route_target_desc`), `run.py` logs the decision, prints the recommended command (`_handoff_message`), and ends the run (`break`). The category→workflow mapping lives in the Routes block (data), never hardcoded in the executor. `--dry-run` now renders routing gates with routes.
+
+**Codified to canon:** `[conditional-dispatch]` — Compass-original (v0.3.49), **4th architecture-discipline member**; catalog 22 → **23 patterns**. Two instances: within-graph fix-forward (#96) + cross-workflow ITIL intake (#103). Anti-pattern named: `linear-graph-routing-dead-end`.
+
+**Scope (v1):** HITL-routing only (human confirms every route); hand-off **recommends** the next command (auto-chaining the child workflow with carried context = v2, needs the #87 LLM-driver). Forward-only branches.
+
+**Verification:** consistency-check CONSISTENT (23 patterns, 9 of 17 workflows); `python3 -m unittest discover -s compass/orchestrator/tests` → **114 pass** (+7); `run triage --dry-run` renders the 9-step front-door graph with both routing gates.
+
+**Files touched (8):** `compass/orchestrator/graph.py` · `compass/orchestrator/hitl.py` · `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/workflows/triage.md` · `compass/framework/canon.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #103. **1 of 5 before Retro #022 (fires after #107).** First post-#102 build; converts a declared item to a built one per the Retro #021 watch-for.

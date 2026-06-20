@@ -50,6 +50,15 @@ def handle_hitl_gate(
         print("Please enter 'y' or 'n'.")
 
 
+def _route_target_desc(target) -> str:
+    """Human-readable description of a routing-gate target (#103)."""
+    if isinstance(target, int):
+        return f"continue at Step {target}"
+    if target == "close":
+        return "close (no action)"
+    return f"hand off to {target}"
+
+
 def handle_routing_gate(
     step_num: int,
     step_title: str,
@@ -57,9 +66,10 @@ def handle_routing_gate(
     last_output: str = "",
 ) -> dict:
     """
-    Routing gate (#96, [conditional-dispatch]): the human picks which branch the
-    workflow takes. `routes` is [(label, target_step_number)]. Returns
-    {"route": <label>, "target": <int>}.
+    Routing gate (#96/#103, [conditional-dispatch]): the human picks which branch
+    the workflow takes. `routes` is [(label, target)] where target is an int
+    (inline step, #96), a "/<workflow>" hand-off, or "close" (#103). Returns
+    {"route": <label>, "target": <int|str>}.
 
     Forward-only branches; matches /triage's human-driven incident ethos — the
     framework presents options, the human decides.
@@ -77,7 +87,7 @@ def handle_routing_gate(
 
     print("  Choose the branch:")
     for label, target in routes:
-        print(f"    {label}  → continue at Step {target}")
+        print(f"    {label}  → {_route_target_desc(target)}")
     print()
 
     labels = {label.lower(): (label, target) for label, target in routes}
