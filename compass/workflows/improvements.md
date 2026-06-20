@@ -2991,3 +2991,22 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **The home-app run was a substantive success** (first real grounded+verified write-mode fix on a live consumer bug); #100 makes the orchestration finish cleanly so the *next* one walks itself through to the review gate instead of aborting at the cap.
 
 **Files touched (5):** `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #100. 3 of 5 before Retro #021 (fires after #102). Third consumer-signal fix from the live home-app run (with #97, #99).
+
+---
+
+### 2026-06-20 — canary should verify a TESTABLE preview/staging, not just a green build — DECLARED (#101)
+
+**Trigger origin (Principle #19):** **consumer** — home-app's Vercel preview can't exercise auth (Supabase redirect URLs don't whitelist the dynamic `*.vercel.app` preview domains; preview-scoped env vars not set). So a login fix can't be verified on preview — and `[per-surface-vertical-test]` (#88) says auth→RLS→render bugs must be tested on a prod-like build. If the consumer has no auth-testable preview/staging, that discipline collapses to "test in prod."
+
+**Gap:** `scaffold-foundation`'s deploy canary (`/setup-foundation-architecture`, #85) verifies the stack **builds + deploys** per target — but not that the preview/staging env is **functionally testable** (env vars present, auth redirect URLs cover preview domains, a real user flow can run). A green build ≠ a testable environment.
+
+**Declared (extends #88 + the scaffold canary):**
+- The canary's postcondition should include **"preview/staging is auth-testable"** for any target with authenticated surfaces: preview-scoped env vars present, auth provider redirect/callback URLs include the preview domain pattern, and a smoke auth flow succeeds (or the gap is surfaced as a finding). 
+- `/scan` Build/Production-Ready phase gains a check: **"no auth-testable preview"** → finding (you can't run `[per-surface-vertical-test]` without one).
+- Companion `/ops` recipe for the common Vercel+Supabase case (preview env vars + Supabase redirect-URL wildcard + deployment-URL-based callback).
+
+**Why it matters:** #88 mandates prod-parity testing; #101 ensures the *environment to do it in actually exists and works*. Without it, the vertical-test discipline is unenforceable on consumers with broken previews — exactly home-app today.
+
+**Per `[declare-not-implement]`:** declared (consumer-evidenced, spec clear); build when the canary/scan work is scheduled. No code, no canon change.
+
+**Files touched (1):** `compass/workflows/improvements.md`. Counter: #101. **4 of 5 → Retro #021 fires after #102.** Fourth consumer-signal item from the home-app session (with #97/#99/#100).
