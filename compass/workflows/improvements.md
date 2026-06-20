@@ -3010,3 +3010,24 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Per `[declare-not-implement]`:** declared (consumer-evidenced, spec clear); build when the canary/scan work is scheduled. No code, no canon change.
 
 **Files touched (1):** `compass/workflows/improvements.md`. Counter: #101. **4 of 5 → Retro #021 fires after #102.** Fourth consumer-signal item from the home-app session (with #97/#99/#100).
+
+---
+
+### 2026-06-20 — per-worker worktree isolation — DECLARED, not implemented (#102)
+
+**Trigger origin (Principle #19):** **consumer** — user ran two writers against home-app at once (interactive Claude in VS Code + the orchestrator); the branch one created wasn't isolated from the other. Live evidence of the parallelism-isolation problem the VISION's parallel-portfolio depends on.
+
+**The reality:** a single git working directory holds exactly ONE branch. Concurrent writers in the *same* clone fight over the one working tree — `git checkout` by one switches files under the other. `[#99]`'s in-place branch creation is correct for a **solo** run but unsafe for **concurrent** runs. "Each thread keeps its own branch" is unachievable in a shared working dir; the real requirement is **one working directory per worker.**
+
+**Declared design (`[worktree-per-worker]`):**
+- When a run could be concurrent (a flag `--worktree`, or auto when another active run is detected for the same repo), the orchestrator creates its own **git worktree** — `git worktree add <.compass-worktrees/<run-id>> -b <branch>` (branch per `[#99]` naming) — and runs there, sharing the one `.git`. No collision with the human's clone or other runs.
+- **Remember it:** persist `run_id → {worktree_path, branch}` (in `runs.jsonl` / a small state file) so a resumed/continued run (`--from-step`) reuses the same worktree+branch instead of re-branching.
+- **Cleanup:** remove the worktree on completion/merge (auto-remove if unchanged, like the Agent worktree pattern).
+- **Human side:** document the discipline — one writer per working dir; run a second concurrent worker in its own worktree (or clone). Interactive Claude Code + orchestrator in the same clone is the anti-pattern.
+- **#99 relationship:** in-place branch = the solo path; worktree = the concurrent path. Both honor branch→review→merge.
+
+**Why it matters:** the VISION's "run the whole portfolio in parallel" = many workers at once; without per-worker worktrees they corrupt each other's working trees. This is the concrete isolation mechanism that makes safe parallelism (and the cockpit's "many things in flight") possible. Pairs with the (declared) cockpit + connector/delivery layer.
+
+**Per `[declare-not-implement]`:** declared (consumer-evidenced, mechanism clear — git worktrees); build when parallel execution is scheduled. No code, no canon change.
+
+**Files touched (1):** `compass/workflows/improvements.md`. Counter: #102. **5 of 5 → Retro #021 fires next.** Fifth consumer-signal item from the home-app session (#97/#99/#100/#101/#102).
