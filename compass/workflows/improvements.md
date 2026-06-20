@@ -35,7 +35,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #020** (improvements #93–#97): [retros/2026-06-20-retro-020-improvements-93-to-97.md](retros/2026-06-20-retro-020-improvements-93-to-97.md) — **fired ON TIME at #97** (16th consecutive). 5 improvements: consistency-check + hook (#93) + codified `[test-alongside-implementation]` (#94) + declared `[conditional-dispatch]` (#95) + `/triage` dispatch graph + conditional dispatch built (#96) + tool-loop hardening from the first live write-mode run (#97). **First audit that found nothing — #93's commit-time check now prevents the drift the last 3 audits caught.** Codification-ready: `[failure-direction-inversion]` (~4 instances). Watch-fors: bug-intake router (home-app evidence) · delivery/cockpit layer (event spine → dashboard/Slack) · sweep silent-success-on-failure paths.
 
-**Next retro fires after improvement #102.** (Retro #020 = #97; next = #102.)
+- **Retro #021** (improvements #98–#102): [retros/2026-06-20-retro-021-improvements-98-to-102.md](retros/2026-06-20-retro-021-improvements-98-to-102.md) — **fired ON TIME at #102** (17th consecutive). 5 improvements, **all 5 traced to one live home-app `/fix` run**: declared front-door triage intake router (#98) + branch-not-main (#99) + tool-loop cap wrap-up (#100) + declared testable-preview canary (#101) + declared worktree isolation (#102). **Milestone: write-mode `/fix` worked end-to-end** on a real bug. Codification-ready: `[failure-direction-inversion]`. Watch-fors: build the declared backlog (intake router · worktree isolation · cockpit), don't just accrue it.
+
+**Next retro fires after improvement #107.** (Retro #021 = #102; next = #107.)
 
 ## Template
 
