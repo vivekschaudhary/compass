@@ -2955,3 +2955,21 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Per `[declare-not-implement]`:** declared now (spec clear, build not yet scheduled). No code, no canon entry, no catalog change.
 
 **Files touched (3):** `compass/orchestrator/DESIGN-pluggable-executor.md` (intake-router section) · `CHANGELOG.md` · `compass/workflows/improvements.md`. Counter: #98. 1 of 5 before Retro #021 (fires after #102).
+
+---
+
+### 2026-06-20 — write-mode work lands on a branch, never main (#99)
+
+**Trigger origin (Principle #19):** **consumer** — during the home-app `/fix --allow-write` run the user noticed the orchestrator was editing files on `main`. That violates the framework's own branch→review→merge discipline (and CLAUDE.md's no-write-to-main stance): every fix/feature/ops change should land on a branch, get reviewed, then merge.
+
+**Friction:** write mode (#92) edited the working tree on whatever branch was checked out — `main` by default. The user had to remember to create a throwaway branch manually; forget, and the agent commits straight to main.
+
+**Change (IMPLEMENTED, v0.4.0-alpha-12):**
+- `run.py:_work_branch_name(workflow, bet_id, context)` — derives `<type>/<id>-<slug>` per config.yaml `branch_pattern`: type by workflow (fix/ops/triage→fix|ops; build/create-story/brief/bet-arch→feat), id from `--bet` if present, slug from the context (strips a leading `bug:`/`incident:`/`enhancement:`/`change:` label). Pure + tested.
+- `run.py:_ensure_work_branch(project_dir, name)` — git ops scoped to `project_dir`: if on `main`/`master`, create+checkout the work branch (carrying any working changes); if already on a non-main branch, reuse it; no-op outside a git repo.
+- Called at the top of `_run_workflow` **only when `--allow-write`** (read-only/dry-run runs never touch git), before the step loop. Prints `[branch] write-mode work on '<name>' (not main) — open a PR + merge after review`.
+- Tests: +6 (branch-name derivation with/without bet + label-strip + type-by-workflow; `_ensure_work_branch` in a real tmp git repo: creates off main, reuses on a work branch; no-op for non-git). **107 total, green.**
+
+**Scope:** branch creation only; the PR-open + merge-to-main remain manual / the engineer task's `gh pr` (full git-automation is the declared v0.4-beta gap). The point of #99 is that write-mode changes never silently mutate `main`.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #99. 2 of 5 before Retro #021 (fires after #102). Another consumer-signal fix from the live home-app run (with #97).

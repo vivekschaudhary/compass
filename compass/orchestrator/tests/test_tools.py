@@ -306,5 +306,52 @@ class TestHostSelection(unittest.TestCase):
         self.assertIsNone(router.select_host(["deepseek"]))  # no key path → skipped
 
 
+class TestWorkBranch(unittest.TestCase):
+    """#99: write-mode work lands on a branch, never on main."""
+
+    def test_branch_name_with_bet(self):
+        from compass.orchestrator.run import _work_branch_name
+        self.assertEqual(
+            _work_branch_name("fix", "WLT-12", "Bug: session expires too quickly"),
+            "fix/WLT-12-session-expires-too-quickly",
+        )
+
+    def test_branch_name_no_bet_strips_label(self):
+        from compass.orchestrator.run import _work_branch_name
+        self.assertEqual(
+            _work_branch_name("ops", None, "Change: rotate the api secret"),
+            "ops/rotate-the-api-secret",
+        )
+
+    def test_branch_type_by_workflow(self):
+        from compass.orchestrator.run import _work_branch_name
+        self.assertTrue(_work_branch_name("build", None, "x").startswith("feat/"))
+        self.assertTrue(_work_branch_name("triage", None, "x").startswith("fix/"))
+
+    def test_ensure_branch_off_main(self):
+        import subprocess
+        from compass.orchestrator.run import _ensure_work_branch
+        with tempfile.TemporaryDirectory() as d:
+            def git(*a):
+                return subprocess.run(["git", "-C", d, *a], capture_output=True, text=True)
+            git("init", "-b", "main")
+            git("config", "user.email", "t@t")
+            git("config", "user.name", "t")
+            (Path(d) / "f.txt").write_text("x")
+            git("add", "."); git("commit", "-m", "init")
+            # on main → creates the work branch
+            self.assertEqual(_ensure_work_branch(d, "fix/x-y"), "fix/x-y")
+            self.assertEqual(
+                git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "fix/x-y"
+            )
+            # already on a work branch → reuse, don't re-branch
+            self.assertEqual(_ensure_work_branch(d, "fix/other"), "fix/x-y")
+
+    def test_ensure_branch_non_git_returns_none(self):
+        from compass.orchestrator.run import _ensure_work_branch
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(_ensure_work_branch(d, "fix/x"))
+
+
 if __name__ == "__main__":
     unittest.main()

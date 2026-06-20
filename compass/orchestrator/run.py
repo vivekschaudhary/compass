@@ -71,6 +71,67 @@ def _read_agent_tools(agent_file: Path) -> list:
     return [t.strip() for t in t_match.group(1).split(",") if t.strip()]
 
 
+# Workflow → branch type prefix (config.yaml branch_pattern `<type>/<id>-<slug>`).
+_WORKFLOW_BRANCH_TYPE = {
+    "fix": "fix",
+    "ops": "ops",
+    "triage": "fix",
+    "build": "feat",
+    "create-story": "feat",
+    "create-brief": "feat",
+    "create-bet-architecture": "feat",
+}
+
+
+def _slug(text: str, words: int = 5) -> str:
+    """Lowercase hyphen-slug from the first few words of text."""
+    import re as _re
+    cleaned = _re.sub(r"[^a-z0-9\s-]", "", (text or "").lower())
+    parts = cleaned.split()[:words]
+    slug = "-".join(parts).strip("-")
+    return slug[:40] or "work"
+
+
+def _work_branch_name(workflow: str, bet_id: str, context: str) -> str:
+    """
+    Branch name per config.yaml `<type>/<id>-<slug>` (#99). Strips a leading
+    'bug:'/'incident:' label from the context before slugging.
+    """
+    typ = _WORKFLOW_BRANCH_TYPE.get(workflow, "chore")
+    ctx = re.sub(r"^\s*(bug|incident|enhancement|change)\s*:\s*", "", context or "", flags=re.IGNORECASE)
+    slug = _slug(ctx)
+    return f"{typ}/{bet_id}-{slug}" if bet_id else f"{typ}/{slug}"
+
+
+def _ensure_work_branch(project_dir, branch_name: str):
+    """
+    Put write-mode work on a branch, never on main/master (#99).
+
+    Returns the branch the work will run on, or None if project_dir isn't a git
+    repo. If already on a non-main branch, reuses it. If on main/master, creates
+    (or checks out) branch_name. Carries any working changes along.
+    """
+    import subprocess
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(project_dir), *args],
+            capture_output=True, text=True,
+        )
+
+    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
+        return None
+    current = git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    if current and current not in ("main", "master"):
+        return current  # already on a work branch
+    made = git("checkout", "-b", branch_name)
+    if made.returncode == 0:
+        return branch_name
+    # branch may already exist — switch to it
+    switched = git("checkout", branch_name)
+    return branch_name if switched.returncode == 0 else current or None
+
+
 def _skip_for_route(router_number: int, target: int) -> set:
     """
     Steps to skip when a routing gate (#96) chooses `target`.
@@ -558,6 +619,14 @@ def _run_workflow(
         bet_context = _load_bet_context(project_dir, bet_id)
         context = bet_context + ("\n\n" + context if context else "")
         print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
+
+    # Write-mode work lands on a work branch, never directly on main (#99) —
+    # the framework's branch→review→merge discipline. Only when --allow-write.
+    if allow_write:
+        bname = _work_branch_name(workflow_name, bet_id, context)
+        on = _ensure_work_branch(project_dir, bname)
+        if on:
+            print(f"[branch] write-mode work on '{on}' (not main) — open a PR + merge after review")
 
     last_artifact_path = None
     last_agent_output = ""
