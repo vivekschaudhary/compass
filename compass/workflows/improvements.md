@@ -2934,3 +2934,24 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Meta-signal:** routing a feature through `/fix` blew the cap — reinforces the **bug-intake router** need (triage routes feature-gaps → `/create-brief`), the #95 follow-on. This run is its Principle-#19 evidence.
 
 **Files touched (5):** `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/tools.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #97. **5 of 5 → Retro #020 fires next.**
+
+---
+
+### 2026-06-20 — front-door /triage ITIL intake router — DECLARED, not implemented (#98)
+
+**Trigger origin (Principle #19):** **consumer** — two live home-app runs (feature routed through `/fix`; bug routed through `/triage`-incident) where the triage agent *correctly* classified but the linear flow had nowhere to route. User specified the model: ITIL service-desk intake, front-door `/triage` (no separate `/intake`), HITL-confirmed classification.
+
+**Insight:** triage's job is to classify and route, not to presume the outcome. ITIL names the categories and the discipline (categorize → validate → route to the right practice). `/fix` presumed a fix; `/triage` presumed an incident — both wrong for the items they received. The fix is a real front door.
+
+**Declared design (front-door `/triage` = the intake router):**
+- **ITIL category → Compass route:** incident → incident-response branch (today's `/triage` flow becomes *one* route) · bug/defect → `/fix` · enhancement / problem (root-cause) → `/create-brief` · change (config/infra) → `/ops` · service request → `/ops` or answer+close · not-an-issue / duplicate / L1 → close (logged).
+- **HITL-confirmed classification** — the intake agent proposes the category + rationale; the human confirms/overrides at the routing gate; then dispatch. (ITIL discipline; the #96 routing gate IS the HITL-confirm primitive — already built.)
+- **Two entry points for work, both feeding PM** (user's framing): *reactive* — front-door `/triage` classifies incoming items and routes; *proactive* — planned features enter directly via `/create-brief`. PM's inputs = triage-routed work (bugs/enhancements/problems) + proactively-planned briefs.
+- **Shape:** classifier step (generalize `support.triage-incident` or add `support.classify-intake`) → #96 routing gate with the full ITIL option set → HITL → dispatch.
+- **Build phasing:** **v1 = cross-workflow hand-off** (record route + emit recommended command with the triage note as the input artifact; only *incident* continues inline). **v2 = auto-chain** (orchestrator runs the target workflow directly — cross-workflow dispatch, related to `--pipeline`).
+
+**Relationships:** realizes VISION Triage-as-front-door; ITIL service desk; **2nd `[conditional-dispatch]` instance** (#95 declared, #96 built within-graph, #98 = cross-workflow front-door) → **codify `[conditional-dispatch]` to canon when #98 builds.** No separate `/intake` (user decision).
+
+**Per `[declare-not-implement]`:** declared now (spec clear, build not yet scheduled). No code, no canon entry, no catalog change.
+
+**Files touched (3):** `compass/orchestrator/DESIGN-pluggable-executor.md` (intake-router section) · `CHANGELOG.md` · `compass/workflows/improvements.md`. Counter: #98. 1 of 5 before Retro #021 (fires after #102).
