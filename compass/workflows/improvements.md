@@ -33,7 +33,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #019** (improvements #88–#92): [retros/2026-06-19-retro-019-improvements-88-to-92.md](retros/2026-06-19-retro-019-improvements-88-to-92.md) — **fired ON TIME at #92** (15th consecutive on-time retro; 3rd under the #78 audit rule). 5 improvements: `[per-surface-vertical-test]` (#88) + test-data-cleanup AC (#89) + `/fix`+`/ops` dispatch graphs (#90) + tool-using executor slices 1 (#91) & 2 (#92). **The text-only gap is closed** for Claude implementer steps under `--allow-write` (read→write→verify loop). Audit fixed stale DESIGN-doc status (declared→partially-built) + alpha marker (c2549d0). Top watch-for: **mechanize the pre-push hook** (3 straight audits caught what it would catch at commit time). Codification-ready: `[test-alongside-implementation]` (~7 instances, user-gated).
 
-**Next retro fires after improvement #97.** (Retro #019 = #92; next = #97.)
+- **Retro #020** (improvements #93–#97): [retros/2026-06-20-retro-020-improvements-93-to-97.md](retros/2026-06-20-retro-020-improvements-93-to-97.md) — **fired ON TIME at #97** (16th consecutive). 5 improvements: consistency-check + hook (#93) + codified `[test-alongside-implementation]` (#94) + declared `[conditional-dispatch]` (#95) + `/triage` dispatch graph + conditional dispatch built (#96) + tool-loop hardening from the first live write-mode run (#97). **First audit that found nothing — #93's commit-time check now prevents the drift the last 3 audits caught.** Codification-ready: `[failure-direction-inversion]` (~4 instances). Watch-fors: bug-intake router (home-app evidence) · delivery/cockpit layer (event spine → dashboard/Slack) · sweep silent-success-on-failure paths.
+
+**Next retro fires after improvement #102.** (Retro #020 = #97; next = #102.)
 
 ## Template
 
