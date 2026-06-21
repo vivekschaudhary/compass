@@ -1,21 +1,10 @@
 """Claude API adapter for the Compass orchestrator."""
 import os
 
-
-def _default_tool_event(event: dict) -> None:
-    """
-    Terminal sink for tool-loop progress (#97). Prints each tool call as it
-    happens so a tool-using run is legible, not a frozen prompt. Designed as a
-    swappable sink — a dashboard/Slack delivery layer passes its own `on_event`
-    and receives the same structured events (the event spine for the cockpit).
-    """
-    if event.get("type") == "tool_use":
-        inp = event.get("input") or {}
-        arg = inp.get("path") or inp.get("pattern") or inp.get("command") or ""
-        print(f"  → {event['name']}({str(arg)[:80]})")
-    elif event.get("type") == "tool_result":
-        mark = "✗" if event.get("is_error") else "✓"
-        print(f"    {mark} {str(event.get('summary', ''))[:100]}")
+# Default tool-loop sink (#97) now lives in the unified event spine (#104) so
+# tool events and run/step/gate lifecycle events render the same way. Aliased
+# here for back-compat (the #97 tests + the dispatch_with_tools default).
+from ..events import terminal_sink as _default_tool_event
 
 
 def dispatch(

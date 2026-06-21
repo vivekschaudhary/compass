@@ -533,6 +533,7 @@ def _run_workflow(
     skip_missing: bool = False,
     allow_write: bool = False,
     max_tool_iterations: int = None,
+    no_events: bool = False,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -545,6 +546,7 @@ def _run_workflow(
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host
     from .logger import log_step, log_hitl
+    from . import events as ev
 
     workflow_file = compass_dir / "workflows" / f"{workflow_name}.md"
     if not workflow_file.exists():
@@ -666,16 +668,36 @@ def _run_workflow(
 
     # Write-mode work lands on a work branch, never directly on main (#99) —
     # the framework's branch→review→merge discipline. Only when --allow-write.
+    work_branch = None
     if allow_write:
         bname = _work_branch_name(workflow_name, bet_id, context)
-        on = _ensure_work_branch(project_dir, bname)
-        if on:
-            print(f"[branch] write-mode work on '{on}' (not main) — open a PR + merge after review")
+        work_branch = _ensure_work_branch(project_dir, bname)
+        if work_branch:
+            print(f"[branch] write-mode work on '{work_branch}' (not main) — open a PR + merge after review")
+
+    # Event spine (#104): one emit per run, stamping project/run_id/workflow onto
+    # every event and fanning to the terminal + the user-local events.jsonl
+    # (~/.compass/orchestrator/) the portfolio cockpit reads. --no-events / --dry-run
+    # suppress the durable sink (telemetry is best-effort, never a project artifact).
+    _project = ev.project_label(project_dir)
+    _sinks = [ev.terminal_sink]
+    if not no_events and not dry_run:
+        _sinks.append(ev.jsonl_sink())
+    _fan = ev.multi_sink(*_sinks)
+
+    def emit(type, **fields):
+        _fan(ev.make_event(
+            type, project=_project, run_id=run_id,
+            workflow=workflow_name, bet_id=bet_id, **fields
+        ))
+
+    emit(ev.RUN_START, allow_write=allow_write, branch=work_branch)
 
     last_artifact_path = None
     last_agent_output = ""
     first_step = True
     skipped = set()  # steps in a not-taken branch (#96 conditional dispatch)
+    handed_off = False  # set when a #103 cross-workflow hand-off ends the run early
 
     for step in steps:
         if only_step is not None and step.number != only_step:
@@ -689,10 +711,13 @@ def _run_workflow(
         print(f"\n{'─' * 60}")
         print(f"[{workflow_name}] Step {step.number}: {step.title}")
         print(f"{'─' * 60}")
+        emit(ev.STEP_START, step=step.number, title=step.title,
+             agent=step.agent, task=step.task)
 
         # ── routing gate (#96, [conditional-dispatch]) ────────────────────────
         if step.is_hitl and step.routes:
             from .hitl import handle_routing_gate
+            emit(ev.GATE_OPEN, step=step.number, kind="routing", title=step.title)
             choice = handle_routing_gate(
                 step.number, step.title, step.routes, last_agent_output
             )
@@ -706,6 +731,7 @@ def _run_workflow(
                 artifact_path=None,
                 decision=choice["route"],
             )
+            emit(ev.GATE_DECISION, step=step.number, decision=choice["route"])
             if isinstance(target, int):
                 # Inline branch (#96): skip the not-taken steps, keep walking.
                 skipped.update(_skip_for_route(step.number, target))
@@ -716,10 +742,14 @@ def _run_workflow(
             # the run cleanly (break → normal success finalization).
             print(f"\n[route → {choice['route']} — hand off to {target}]")
             print(_handoff_message(target, project_dir, last_artifact_path))
+            emit(ev.HANDOFF, step=step.number, target=target)
+            emit(ev.RUN_END, status="completed", reason=f"handed off to {target}")
+            handed_off = True
             break
 
         # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:
+            emit(ev.GATE_OPEN, step=step.number, kind="hitl", title=step.title)
             result = handle_hitl_gate(
                 step.number,
                 step.title,
@@ -783,6 +813,7 @@ def _run_workflow(
                 connector=connector_label,
                 canonical_path=canonical_rel,
             )
+            emit(ev.GATE_DECISION, step=step.number, decision=decision)
             print(f"[hitl → {decision}]")
             if not result["approved"]:
                 if not no_write:
@@ -796,6 +827,8 @@ def _run_workflow(
                     f"  python3 -m compass.orchestrator.run {workflow_name} "
                     f"--from-step {max(1, step.number - 1)}"
                 )
+                emit(ev.RUN_END, status="halted",
+                     reason=f"rejected at HITL gate (step {step.number})")
                 # Non-zero: a rejected gate is a halted run, not a success —
                 # CI and pipeline callers must not read this as green.
                 sys.exit(1)
@@ -833,6 +866,8 @@ def _run_workflow(
                 f"(the skip must be logged as a DRI Decision).",
                 file=sys.stderr,
             )
+            emit(ev.RUN_END, status="halted",
+                 reason=f"agent file for '{step.agent}' not found (step {step.number})")
             sys.exit(2)
 
         # ── host selection ───────────────────────────────────────────────────
@@ -861,6 +896,8 @@ def _run_workflow(
                 f"(the skip must be logged as a DRI Decision).",
                 file=sys.stderr,
             )
+            emit(ev.RUN_END, status="halted",
+                 reason=f"no host for {step.agent}.{step.task} (step {step.number})")
             sys.exit(2)
 
         try:
@@ -895,9 +932,12 @@ def _run_workflow(
                 host, str(agent_file), step.task, user_message, model=model,
                 tools=agent_tools or None, project_dir=project_dir,
                 allow_write=allow_write, max_tool_iterations=max_tool_iterations,
+                on_event=emit,
             )
         except (RuntimeError, ImportError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
+            emit(ev.RUN_END, status="halted",
+                 reason=f"dispatch error at step {step.number}: {exc}")
             sys.exit(1)
 
         print(f"\n{'=' * 60}")
@@ -921,7 +961,7 @@ def _run_workflow(
         last_agent_output = result
 
         # Log structured record to runs.jsonl
-        log_step(
+        rec = log_step(
             project_dir=project_dir,
             run_id=run_id,
             workflow=workflow_name,
@@ -934,6 +974,8 @@ def _run_workflow(
             output=result,
             artifact_path=str(last_artifact_path.relative_to(project_dir)) if last_artifact_path else None,
         )
+        emit(ev.STEP_END, step=step.number,
+             gate_result=rec.get("gate_result"), output_chars=rec.get("output_chars"))
 
         prior_outputs.append({
             "step": step.number,
@@ -943,6 +985,9 @@ def _run_workflow(
             "workflow": workflow_name,
             "output": result,
         })
+
+    if not handed_off:
+        emit(ev.RUN_END, status="completed", reason="all steps complete")
 
     return prior_outputs, artifact_paths
 
@@ -1028,6 +1073,16 @@ def main(argv=None):
     )
     parser.add_argument("--model", default=None)
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument(
+        "--no-events",
+        action="store_true",
+        dest="no_events",
+        help=(
+            "Suppress the user-local event spine (~/.compass/orchestrator/"
+            "events.jsonl) for this run. Terminal progress still prints; the "
+            "portfolio cockpit just won't see this run."
+        ),
+    )
     parser.add_argument(
         "--max-tool-iterations",
         type=int,
@@ -1160,6 +1215,7 @@ def main(argv=None):
             skip_missing=args.skip_missing,
             allow_write=args.allow_write,
             max_tool_iterations=args.max_tool_iterations,
+            no_events=args.no_events,
         )
         return
 
@@ -1207,6 +1263,7 @@ def main(argv=None):
             skip_missing=args.skip_missing,
             allow_write=args.allow_write,
             max_tool_iterations=args.max_tool_iterations,
+            no_events=args.no_events,
         )
 
         accumulated_outputs.extend(wf_outputs)

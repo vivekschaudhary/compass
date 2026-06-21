@@ -81,3 +81,16 @@ ITIL category → Compass route: **incident** → incident-response branch (toda
 **Two entry points for work, both feeding PM:** *reactive* — the front-door `/triage` classifies incoming items and routes (bugs→fix, enhancements→brief, …); *proactive* — planned features enter directly via `/create-brief`. PM's inputs = triage-routed work + proactively-planned briefs.
 
 Shape: a classifier step (generalize `support.triage-incident` or add `support.classify-intake`) proposes the ITIL category + rationale → the #96 routing gate offers the full route set → HITL confirms/overrides → dispatch. **v1 = cross-workflow hand-off** (record the route + emit the recommended command with the triage note as the input artifact; only the *incident* route continues inline). **v2 = auto-chain** (the orchestrator runs the target workflow directly — needs cross-workflow dispatch, related to `--pipeline`). This is the 2nd `[conditional-dispatch]` instance → codify it to canon when built.
+
+**BUILT (#103, v1):** `support.classify-intake` + the intake routing gate ship; route targets generalized to `int | str` so a route can hand off cross-workflow (`/fix`, `/create-brief`, `/ops`) or `close`. `[conditional-dispatch]` codified to canon v0.3.49. v2 auto-chain still pending (needs the LLM-driver / nested-run).
+
+## Delivery layer + cockpit (VISION step 3, building on #97's event spine)
+
+The orchestrator's terminal output is a *dev* surface; real users live in a dashboard / Slack / WhatsApp. The bridge is the **event spine** — structured, routable events the loop emits without knowing who consumes them.
+
+- **#97 laid the first stone:** `dispatch_with_tools` emits `tool_use`/`tool_result`/`note` through an `on_event` sink.
+- **#104 completed the spine + shipped slice 1:** lifecycle events (`run_start · step_start · gate_open · gate_decision · handoff · step_end · run_end`) emitted through one `emit` in `run.py`, threaded through `dispatch_to_host`, fanned via `multi_sink` to the terminal + a **user-local** store `~/.compass/orchestrator/events.jsonl` (`events.py`; `$COMPASS_HOME` override). First consumer: `cockpit.py` (`python3 -m compass.orchestrator.cockpit`) — a portfolio-wide text view (⏸ awaiting you · ▶ in flight · ✓ done).
+
+**Why user-local, not in-repo:** the spine is live telemetry that must span *every* project for a portfolio cockpit, and it must not churn project git or collide between concurrent worktrees (#102). The in-repo `runs.jsonl` / `hitl.jsonl` (`logger.py`) stay the auditable per-project decision journal — different purpose, both persist. *(Convention candidate `[telemetry-user-local-not-in-repo]`, 1 instance — codify on the 2nd.)*
+
+**Slice roadmap:** (1) ✅ spine + user-local store + text cockpit (#104). (2) feed the HTML `/dashboard` live tab from `events.jsonl`. (3) Slack/WhatsApp delivery sinks (add a sink to `multi_sink`). (4) make the cockpit's queue actionable inline (approve *from* the cockpit — the mechanical gate floor stays in `run.py`). (5) `--watch` live re-render. Each slice is additive: a new sink or a new reader over the same spine; the loop never changes.
