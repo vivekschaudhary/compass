@@ -3090,3 +3090,17 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope (follow-ons):** cockpit $-rollup / per-run cost totals from the `usage` events (pairs with the dashboard live feed) · a token→dollar price table · OpenAI/Gemini caching.
 
 **Files touched (5):** `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/events.py` · `compass/orchestrator/tests/test_tools.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #105. **3 of 5 before Retro #022 (fires after #107).** Pairs with #104 (cost is now both reduced and observable on the spine).
+
+### 2026-06-21 — cockpit cost rollup (#106)
+
+**Trigger origin (Principle #19):** **continuation of the user's cost directive** — the natural next step after #105 (which *emitted* usage events): make the spend *visible where the work is watched*. Closes the #104 (cockpit) + #105 (caching+telemetry) loop.
+
+**What shipped:** `cockpit.py` `fold_runs` now accumulates each run's `usage` events into token totals (`input/output/cache_read/cache_creation` + last-seen `model`); a new **💰 SPEND** render section shows per-project estimated cost + **cache-hit % of prompt tokens**, and a portfolio total with **how much prompt caching saved** (full-input-price baseline − actual input cost). Helpers: `_price_for` (labeled approximate Claude list prices, `$COMPASS_PRICES` override, defaults to the priciest family so it never under-reports), `cost_usd` (accounts for cache read 0.1× / write 1.25× multipliers), `_full_input_cost` (the no-cache baseline). Section omits cleanly when no usage exists.
+
+**Honest framing:** **tokens are exact; dollars are an at-a-glance estimate, not billing truth** (list prices drift; the table is overridable). The savings figure is real signal — it's computed from the cache-read vs full-input token split, independent of the absolute price.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **139 pass** (+6: usage accumulation, cache-aware cost math, savings>0, SPEND present-with-usage / omitted-without, env price override). consistency-check CONSISTENT (no catalog change). Smoke test renders a 2-project portfolio: `home-app ~$0.19 (89% cached) · crypto-app ~$0.02 (73% cached) · portfolio ~$0.21, caching saved ~$0.55 (78% of input cost)`.
+
+**Out of scope (follow-ons):** per-run cost lines in the DONE section · OpenAI/Gemini pricing · dashboard live-feed surfacing the same rollup.
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #106. **4 of 5 before Retro #022 (fires after #107).** Third cost/cockpit improvement in the #104→#105→#106 arc — reduced, measured, and now visible.

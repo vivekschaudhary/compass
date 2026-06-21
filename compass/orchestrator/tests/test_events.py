@@ -158,6 +158,73 @@ class TestCockpitFold(unittest.TestCase):
         self.assertIn("--approve", cmd)
 
 
+class TestCostRollup(unittest.TestCase):
+    def test_usage_accumulates_per_run(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="fix", model="claude-opus-4-8"),
+            ev.make_event(ev.USAGE, run_id="r1", model="claude-opus-4-8",
+                          input_tokens=100, output_tokens=20,
+                          cache_read_input_tokens=900, cache_creation_input_tokens=0),
+            ev.make_event(ev.USAGE, run_id="r1", model="claude-opus-4-8",
+                          input_tokens=50, output_tokens=10,
+                          cache_read_input_tokens=950, cache_creation_input_tokens=0),
+        ]
+        runs = cockpit.fold_runs(events)
+        u = runs["r1"]["usage"]
+        self.assertEqual(u["input"], 150)
+        self.assertEqual(u["output"], 30)
+        self.assertEqual(u["cache_read"], 1850)
+        self.assertEqual(runs["r1"]["model"], "claude-opus-4-8")
+
+    def test_cost_usd_accounts_for_cache(self):
+        # 1M input @ $15, 1M output @ $75, 1M cache-read @ $1.5, 1M cache-write @ $18.75
+        usage = {"input": 1_000_000, "output": 1_000_000,
+                 "cache_read": 1_000_000, "cache_creation": 1_000_000}
+        cost = cockpit.cost_usd(usage, "claude-opus-4-8")
+        self.assertAlmostEqual(cost, 15 + 75 + 1.5 + 18.75, places=4)
+
+    def test_cache_savings_positive(self):
+        # All-cached input should cost far less than full input price.
+        usage = {"input": 0, "output": 0, "cache_read": 1_000_000, "cache_creation": 0}
+        full = cockpit._full_input_cost(usage, "opus")   # 1M @ $15
+        actual = cockpit.cost_usd({**usage, "output": 0}, "opus")  # 1M @ $1.5
+        self.assertAlmostEqual(full, 15.0, places=4)
+        self.assertAlmostEqual(actual, 1.5, places=4)
+        self.assertGreater(full - actual, 0)
+
+    def test_spend_section_present_when_usage(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="fix", model="claude-opus-4-8"),
+            ev.make_event(ev.USAGE, run_id="r1", model="claude-opus-4-8",
+                          input_tokens=1000, output_tokens=200,
+                          cache_read_input_tokens=5000, cache_creation_input_tokens=500),
+            ev.make_event(ev.RUN_END, run_id="r1", status="completed", reason="done"),
+        ]
+        out = cockpit.render(cockpit.fold_runs(events))
+        self.assertIn("SPEND", out)
+        self.assertIn("saved", out)
+        self.assertIn("home", out)
+
+    def test_spend_section_omitted_without_usage(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="fix"),
+            ev.make_event(ev.RUN_END, run_id="r1", status="completed", reason="done"),
+        ]
+        out = cockpit.render(cockpit.fold_runs(events))
+        self.assertNotIn("SPEND", out)
+
+    def test_price_override_via_env(self):
+        old = os.environ.get("COMPASS_PRICES")
+        try:
+            os.environ["COMPASS_PRICES"] = '{"opus": [30, 150]}'
+            self.assertEqual(cockpit._price_for("claude-opus-4-8"), (30, 150))
+        finally:
+            if old is None:
+                os.environ.pop("COMPASS_PRICES", None)
+            else:
+                os.environ["COMPASS_PRICES"] = old
+
+
 class TestRunEmitsLifecycle(unittest.TestCase):
     """Integration: a real _run_workflow call emits RUN_START … RUN_END to the
     user-local spine, even on an early halt (no host available)."""

@@ -44,6 +44,9 @@ def fold_runs(events: list) -> dict:
             "started": None, "ended": False, "status": None, "reason": None,
             "current_step": None, "current_task": None, "open_gate": None,
             "last_ts": None,
+            # cost rollup (#106): summed token usage from `usage` events.
+            "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0},
+            "model": None,
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
         for k in ("project", "workflow", "bet_id"):
@@ -70,7 +73,70 @@ def fold_runs(events: list) -> dict:
             r["status"] = e.get("status")
             r["reason"] = e.get("reason")
             r["open_gate"] = None
+        elif t == ev.USAGE:
+            u = r["usage"]
+            u["input"] += e.get("input_tokens", 0) or 0
+            u["output"] += e.get("output_tokens", 0) or 0
+            u["cache_read"] += e.get("cache_read_input_tokens", 0) or 0
+            u["cache_creation"] += e.get("cache_creation_input_tokens", 0) or 0
+            if e.get("model"):
+                r["model"] = e["model"]
     return runs
+
+
+# ── cost rollup (#106) ───────────────────────────────────────────────────────
+# Approximate Claude list prices (USD per million tokens), keyed by model-family
+# substring. Cache reads bill at 0.1× input, cache writes at 1.25× input (the
+# Anthropic prompt-cache multipliers). Prices drift — these are a labeled
+# estimate for at-a-glance spend, not billing truth. Override via $COMPASS_PRICES
+# (JSON: {"opus": [in, out], ...}) when exactness matters.
+_PRICES = {"opus": (15.0, 75.0), "sonnet": (3.0, 15.0), "haiku": (0.80, 4.0)}
+_CACHE_READ_MULT = 0.1
+_CACHE_WRITE_MULT = 1.25
+
+
+def _prices():
+    import json
+    import os
+    raw = os.environ.get("COMPASS_PRICES")
+    if raw:
+        try:
+            return {**_PRICES, **{k: tuple(v) for k, v in json.loads(raw).items()}}
+        except (ValueError, TypeError):
+            pass
+    return _PRICES
+
+
+def _price_for(model: str):
+    table = _prices()
+    m = (model or "").lower()
+    for fam, price in table.items():
+        if fam in m:
+            return price
+    return table["opus"]  # default to the priciest — never under-report
+
+
+def cost_usd(usage: dict, model: str) -> float:
+    """Estimated USD for one run's summed usage, accounting for cache pricing."""
+    in_price, out_price = _price_for(model)
+    return (
+        usage["input"] / 1e6 * in_price
+        + usage["cache_read"] / 1e6 * in_price * _CACHE_READ_MULT
+        + usage["cache_creation"] / 1e6 * in_price * _CACHE_WRITE_MULT
+        + usage["output"] / 1e6 * out_price
+    )
+
+
+def _full_input_cost(usage: dict, model: str) -> float:
+    """What the input would have cost with NO caching (all prompt tokens at full
+    input price) — the baseline the cache savings is measured against."""
+    in_price, _ = _price_for(model)
+    total_in = usage["input"] + usage["cache_read"] + usage["cache_creation"]
+    return total_in / 1e6 * in_price
+
+
+def _has_usage(usage: dict) -> bool:
+    return any(usage.get(k) for k in ("input", "output", "cache_read", "cache_creation"))
 
 
 def _approve_cmd(run: dict) -> str:
@@ -130,7 +196,59 @@ def render(runs: dict, project_filter: str = None, limit: int = 10) -> str:
         mark = "✓" if r.get("status") == "completed" else "■"
         out.append(f"  {mark} {loc}  {r.get('status')}: {r.get('reason') or ''}")
 
+    out.append(_render_spend(vals))
     return "\n".join(out)
+
+
+def _render_spend(runs: list) -> str:
+    """💰 SPEND — estimated cost + cache savings, per project + portfolio total
+    (#106). Aggregates the `usage` events #105 emits. Omitted when no usage."""
+    priced = [r for r in runs if _has_usage(r.get("usage", {}))]
+    if not priced:
+        return ""
+
+    by_project = {}
+    for r in priced:
+        p = r.get("project") or "?"
+        agg = by_project.setdefault(p, {
+            "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0},
+            "cost": 0.0, "full_in": 0.0,
+        })
+        for k in agg["usage"]:
+            agg["usage"][k] += r["usage"].get(k, 0)
+        agg["cost"] += cost_usd(r["usage"], r.get("model"))
+        agg["full_in"] += _full_input_cost(r["usage"], r.get("model"))
+
+    lines = ["\n💰 SPEND (estimated — list prices; cache read 0.1× / write 1.25×)"]
+    tot_cost = tot_full = 0.0
+    tot_u = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
+    for p, agg in sorted(by_project.items()):
+        u = agg["usage"]
+        cached = u["cache_read"]
+        prompt_in = u["input"] + cached + u["cache_creation"]
+        hit = (cached / prompt_in * 100) if prompt_in else 0.0
+        lines.append(
+            f"  • {p}: ~${agg['cost']:.2f}  "
+            f"(in {u['input']:,} · out {u['output']:,} · cache read {cached:,} "
+            f"→ {hit:.0f}% of prompt cached)"
+        )
+        tot_cost += agg["cost"]
+        tot_full += agg["full_in"]
+        for k in tot_u:
+            tot_u[k] += u[k]
+
+    # Caching savings = full-price input baseline − actual input cost
+    # (output excluded from both, so it's purely the cache effect on prompt tokens).
+    actual_input_cost = sum(
+        cost_usd({**r["usage"], "output": 0}, r.get("model")) for r in priced
+    )
+    saved = max(0.0, tot_full - actual_input_cost)
+    pct = (saved / tot_full * 100) if tot_full else 0.0
+    lines.append(
+        f"  └ portfolio: ~${tot_cost:.2f} total · "
+        f"prompt caching saved ~${saved:.2f} ({pct:.0f}% of input cost)"
+    )
+    return "\n".join(lines)
 
 
 def main(argv=None):
