@@ -3071,3 +3071,22 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Scope / next slices (out of scope here):** HTML `/dashboard` live tab fed from the spine · Slack/WhatsApp delivery sinks · approve **from** the cockpit inline (v1 = copy-paste; mechanical gate floor stays in run.py) · `--watch` live tail · cross-host tool events. Each is additive — a new sink or reader over the same spine; the loop never changes.
 
 **Files touched (8):** `compass/orchestrator/events.py` (new) · `compass/orchestrator/cockpit.py` (new) · `compass/orchestrator/run.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/tests/test_events.py` (new) · `compass/orchestrator/VISION.md` · `compass/orchestrator/DESIGN-pluggable-executor.md` (+ CHANGELOG + this file). Counter: #104. **2 of 5 before Retro #022 (fires after #107).** 2nd consecutive declared-backlog build (after #103) — the Retro #021 watch-for in action.
+
+### 2026-06-21 — Claude prompt caching + usage telemetry on the event spine (#105)
+
+**Trigger origin (Principle #19):** **user directive, cost-driven.** With the cockpit (#104) making orchestrator runs visible, the user flagged that the underlying API spend is heavy and asked for prompt caching (or equivalent) for Claude. Scope confirmed with the user: caching **+** usage telemetry (reduce *and* make observable).
+
+**The cost:** the tool loop in `hosts/claude.py:dispatch_with_tools` re-sent the **full agent-file system prompt + all tool schemas uncached on every iteration**, plus the growing conversation (file reads can be large). A thorough write-mode `/fix` runs dozens of iterations — the same ~2k-token agent file paid for at full price each time.
+
+**What shipped:**
+- **Static-prefix caching** — `system` is now a `cache_control` text block (`_cached_system`); the last tool schema carries `cache_control` (`_cached_tools`), caching the whole tools block. Applied in both `dispatch` (single-shot) and `dispatch_with_tools`.
+- **Rolling conversation breakpoint** — `_cache_last_message` marks the last message's last dict block before each `create`, caching the growing prefix incrementally. **Keeps exactly ONE rolling breakpoint** (strips the prior one first) so system + tools + 1 ≤ Anthropic's 4-breakpoint cap — a long loop would otherwise overflow. Never mutates the SDK response objects echoed as the assistant turn (only dict blocks we build).
+- **Usage telemetry** — `_emit_usage` reads `response.usage` (guarded with `getattr` — the fake test client has none) and emits a `usage` event (`events.USAGE`, #105) with input/output/cache-read/cache-creation tokens after every call (loop + the #100 cap wrap-up + single-shot). `router.py` now threads `on_event` into single-shot `dispatch` too, so non-tool steps are measured. `terminal_sink` renders it compactly (`$ usage: in=… out=… (cache read=… new=…)`).
+
+**Why this is not an `[llm-agnostic-scripts]` violation:** prompt caching is Claude-specific and lives in the Claude **host adapter** (`hosts/claude.py`) — exactly where SDK-specific code belongs. OpenAI auto-caches; Gemini caches explicitly — those are per-adapter follow-ons, not this slice.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **133 pass** (+5: cache_control on system + tools, single rolling breakpoint after a tool turn, usage event with cache fields, no-usage-object safety, USAGE render). consistency-check CONSISTENT (no catalog change — 23 patterns, 9 of 17 workflows).
+
+**Out of scope (follow-ons):** cockpit $-rollup / per-run cost totals from the `usage` events (pairs with the dashboard live feed) · a token→dollar price table · OpenAI/Gemini caching.
+
+**Files touched (5):** `compass/orchestrator/hosts/claude.py` · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/events.py` · `compass/orchestrator/tests/test_tools.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #105. **3 of 5 before Retro #022 (fires after #107).** Pairs with #104 (cost is now both reduced and observable on the spine).

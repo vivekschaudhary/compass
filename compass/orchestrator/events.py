@@ -33,6 +33,8 @@ events.jsonl schema (one JSON object per line):
     tool_use      : name, input            (from #97)
     tool_result   : name, is_error, summary
     note          : text
+    usage         : model, input_tokens, output_tokens,            (#105)
+                    cache_read_input_tokens, cache_creation_input_tokens
 """
 import json
 import os
@@ -52,6 +54,8 @@ RUN_END = "run_end"
 TOOL_USE = "tool_use"
 TOOL_RESULT = "tool_result"
 NOTE = "note"
+# cost telemetry (#105) — token usage per API call, incl. prompt-cache hits
+USAGE = "usage"
 
 
 def compass_home() -> Path:
@@ -94,6 +98,13 @@ def terminal_sink(event: dict) -> None:
         print(f"    {mark} {str(event.get('summary', ''))[:100]}")
     elif t == NOTE:
         print(f"  · {event.get('text', '')}")
+    elif t == USAGE:
+        print(
+            f"  $ usage: in={event.get('input_tokens', 0)} "
+            f"out={event.get('output_tokens', 0)} "
+            f"(cache read={event.get('cache_read_input_tokens', 0)} "
+            f"new={event.get('cache_creation_input_tokens', 0)})"
+        )
     elif t == GATE_OPEN:
         print(f"  ⏸ gate open (step {event.get('step')}): {event.get('title', '')}")
     elif t == GATE_DECISION:

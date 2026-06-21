@@ -69,8 +69,14 @@ class TestSinks(unittest.TestCase):
             ev.make_event(ev.RUN_END, status="completed", reason="done"),
             ev.make_event(ev.RUN_START),
             ev.make_event(ev.STEP_START, step=1),
+            ev.make_event(ev.USAGE, model="claude-opus-4-8", input_tokens=10,
+                          output_tokens=5, cache_read_input_tokens=8,
+                          cache_creation_input_tokens=2),
         ]:
             ev.terminal_sink(e)  # no assertion — just must not raise
+
+    def test_usage_type_exists(self):
+        self.assertEqual(ev.USAGE, "usage")
 
     def test_load_events_skips_bad_lines(self):
         with tempfile.TemporaryDirectory() as d:

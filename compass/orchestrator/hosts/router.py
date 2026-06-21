@@ -122,6 +122,7 @@ def dispatch_to_host(
             agent_file_path, task_name, user_message,
             model=model or _default_model("claude"),
             max_tokens=max_tokens,
+            on_event=on_event,
         )
     elif host in ("codex", "chatgpt", "openai"):
         from .openai import dispatch

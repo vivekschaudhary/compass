@@ -160,6 +160,77 @@ class TestDispatchLoop(unittest.TestCase):
         self.assertIn("tool_result", types)
         self.assertEqual(next(e for e in events if e["type"] == "tool_use")["name"], "read_file")
 
+    def test_prompt_caching_system_and_tools(self):
+        # #105: system is a cache-marked block list; the last tool carries
+        # cache_control (caches the static prefix across the tool loop).
+        scripted = [_Resp("end_turn", [_Block("text", text="ok")])]
+        client = _FakeClient(scripted)
+        dispatch_with_tools(
+            str(self.agent), "fix-bug", "x", self.proj, client=client,
+            tool_schemas=[{"name": "read_file"}, {"name": "glob"}],
+            on_event=lambda e: None,
+        )
+        call = client.messages.calls[0]
+        # system → list of blocks, last block cache-marked
+        self.assertIsInstance(call["system"], list)
+        self.assertEqual(call["system"][-1]["cache_control"], {"type": "ephemeral"})
+        # tools → last entry cache-marked, earlier entries not
+        self.assertEqual(call["tools"][-1]["cache_control"], {"type": "ephemeral"})
+        self.assertNotIn("cache_control", call["tools"][0])
+
+    def test_rolling_conversation_breakpoint_single(self):
+        # After a tool turn, the next call's last message carries the rolling
+        # cache breakpoint — and there must be EXACTLY ONE across all messages
+        # (Anthropic caps total breakpoints; one per turn would overflow).
+        scripted = [
+            _Resp("tool_use", [
+                _Block("tool_use", name="read_file", input={"path": "arch.md"}, id="t1"),
+            ]),
+            _Resp("end_turn", [_Block("text", text="done")]),
+        ]
+        client = _FakeClient(scripted)
+        dispatch_with_tools(
+            str(self.agent), "fix-bug", "x", self.proj, client=client,
+            on_event=lambda e: None,
+        )
+        msgs = client.messages.calls[1]["messages"]
+        marked = [
+            b for m in msgs if isinstance(m["content"], list)
+            for b in m["content"] if isinstance(b, dict) and "cache_control" in b
+        ]
+        self.assertEqual(len(marked), 1)  # exactly one rolling breakpoint
+        # and it's on the most recent message (the tool_result we just fed back)
+        self.assertEqual(msgs[-1]["content"][-1].get("cache_control"), {"type": "ephemeral"})
+
+    def test_usage_event_emitted(self):
+        # #105: response.usage → a usage event on the spine, incl. cache fields.
+        class _Usage:
+            input_tokens = 1200
+            output_tokens = 40
+            cache_read_input_tokens = 1000
+            cache_creation_input_tokens = 200
+        resp = _Resp("end_turn", [_Block("text", text="ok")])
+        resp.usage = _Usage()
+        events = []
+        dispatch_with_tools(
+            str(self.agent), "fix-bug", "x", self.proj,
+            client=_FakeClient([resp]), on_event=events.append,
+        )
+        usage = [e for e in events if e["type"] == "usage"]
+        self.assertEqual(len(usage), 1)
+        self.assertEqual(usage[0]["cache_read_input_tokens"], 1000)
+        self.assertEqual(usage[0]["input_tokens"], 1200)
+
+    def test_no_usage_object_is_safe(self):
+        # The plain fake response has no .usage → no usage event, no crash.
+        events = []
+        dispatch_with_tools(
+            str(self.agent), "fix-bug", "x", self.proj,
+            client=_FakeClient([_Resp("end_turn", [_Block("text", text="ok")])]),
+            on_event=events.append,
+        )
+        self.assertEqual([e for e in events if e["type"] == "usage"], [])
+
 
 class TestAgentToolsFrontmatter(unittest.TestCase):
     def _agent(self, fm: str) -> Path:
