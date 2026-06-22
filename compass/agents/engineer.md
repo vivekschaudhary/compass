@@ -5,7 +5,7 @@ required_tools: [filesystem_read, filesystem_write, shell_exec, git, github_writ
 optional_tools: [mcp_github, mcp_sentry, mcp_linear]
 executor_tools: [read_file, glob, grep, write_file, bash]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.47
+version: 0.3.50
 ---
 
 # Agent: Engineer
@@ -115,22 +115,23 @@ Address Reviewer's findings on a PR. Slots into `/build` Phase 5 response loop (
 - Downstream (loop): re-dispatches `reviewer.review-pr` for re-review
 - Downstream (dispute branch): `pm.arbitrate-dispute` if `## Dispute` opened
 
-### Task: `fix-bug`
+### Task: `triage-and-fix`
 
-Fix a defect, regression test first. The `/fix` counterpart of `implement-story` — same review + quality discipline, specialized for defects.
+Reproduce, diagnose, and fix a defect — **the engineer owns triage now** (v0.3.50, the Retro #022 ITIL-tier collapse). In the AI world there's no scarce L3 to protect: a tool-capable agent reads + runs the code, so it reproduces and classifies itself instead of waiting on a repo-blind support triage. The `/fix` counterpart of `implement-story`, same review + quality discipline, specialized for defects.
 
-**Gate:** A triage note exists (`support.triage-bug` output) classifying severity + affected bet/hygiene, and the triage classification is HITL-confirmed. Bug is reproducible (or the triage note explicitly states why not).
+**Gate:** A bug report or repro path is present — via `--context`, a ticket, or a `/triage` route. **No pre-existing support triage note required.** A tool-capable host is expected (the task needs to read + run the real code).
 **Work:**
-1. Read the triage note + bet context (brief, bet architecture, affected story) if bet-linked. **On a tool-capable host** (`executor_tools`, #87), read the actual source via tools to ground the fix in the real schema/selectors — don't guess. **In write mode** (`--allow-write`, #87 slice 2): write the failing regression test with `write_file`, run it with `bash` to confirm it FAILS for the right reason, apply the minimum fix, re-run to confirm it PASSES, then run typecheck/lint/build. `bash` is sandboxed to the project and refuses destructive commands (force-push, `--no-verify`, `reset --hard`, etc.) — never try to bypass the refusal; the human still approves the merge.
-2. **Write the failing regression test FIRST** (first commit: `test: reproduce <bug>`) — it must fail for the right reason before any fix exists.
-3. Implement the **minimum** fix (subsequent commits: `fix: <description>`) — no scope creep beyond the defect.
-4. Tag tests: `regression: true` · `e2e: true|false`.
-5. Run ALL local checks (typecheck, lint, all suites, format, production build) + `[mechanical-output-verification]` on the runtime artifact — same bar as `implement-story`.
-6. **`[per-surface-vertical-test]` flag** — if the fix touches a data surface, flag the real auth→authz(RLS)→render vertical test + cleanup AC for Automation; auth-mocked green ≠ coverage of the RLS/render path.
-7. Pre-PR `[cross-artifact-sweep-on-contract-shift]` if the fix changed any contract.
-8. Open PR linking the triage note + affected bet(s). Halt for Reviewer.
-**Postcondition:** failing regression test landed BEFORE the fix (visible in commit order) · minimum fix · all checks green · runtime artifact inspected · PR open linking the triage note · own diff NOT self-reviewed · if a deeper architectural root is suspected, ship the symptom fix AND escalate to a `/create-brief` tech-debt bet (don't accumulate silent symptom fixes).
-**Handoffs:** upstream `support.triage-bug` (+ HITL triage confirm); downstream `automation.write-e2e-tests` + `reviewer.review-pr` → `respond-to-review`.
+1. **Triage from the code, not the user.** Read + run the actual source via tools (`executor_tools`, #87) to **reproduce** the defect — don't interrogate the user for what the code shows. Classify **severity** (P0: prod down/data loss/security · P1: major feature broken · P2: degraded · P3: minor/cosmetic) and check for **duplicates** (issue tracker + code). **Apply `[refuse-escalate]` (refined for a code-capable agent):** reproduce from the code first; ask the human ONLY for what code genuinely can't reveal (prod data, account-specific state, credentials); if you still cannot reproduce after exhausting code-level repro, **state exactly what you need and HALT — do not fix blind, do not escalate noise.**
+2. Read bet context (brief, bet architecture, affected story) if bet-linked. **In write mode** (`--allow-write`, #87 slice 2): write the failing regression test with `write_file`, run it with `bash` to confirm it FAILS for the right reason, apply the minimum fix, re-run to confirm it PASSES, then run typecheck/lint/build. `bash` is sandboxed to the project and refuses destructive commands (force-push, `--no-verify`, `reset --hard`, etc.) — never try to bypass the refusal; the human still approves the merge.
+3. **Write the failing regression test FIRST** (first commit: `test: reproduce <bug>`) — it must fail for the right reason before any fix exists.
+4. Implement the **minimum** fix (subsequent commits: `fix: <description>`) — no scope creep beyond the defect.
+5. Tag tests: `regression: true` · `e2e: true|false`.
+6. Run ALL local checks (typecheck, lint, all suites, format, production build) + `[mechanical-output-verification]` on the runtime artifact — same bar as `implement-story`.
+7. **`[per-surface-vertical-test]` flag** — if the fix touches a data surface, flag the real auth→authz(RLS)→render vertical test + cleanup AC for Automation; auth-mocked green ≠ coverage of the RLS/render path.
+8. Pre-PR `[cross-artifact-sweep-on-contract-shift]` if the fix changed any contract.
+9. Open PR with a short **triage summary** (severity · repro steps · root-cause vs symptom) + affected bet(s). Halt for Reviewer.
+**Postcondition:** defect reproduced from the code (or HALTED with a precise ask if irreproducible) · severity classified + repro documented in the PR · failing regression test landed BEFORE the fix (visible in commit order) · minimum fix · all checks green · runtime artifact inspected · own diff NOT self-reviewed (a different model reviews — validation ≠ review) · if a deeper architectural root is suspected, ship the symptom fix AND escalate to a `/create-brief` tech-debt bet (don't accumulate silent symptom fixes).
+**Handoffs:** upstream — a `/triage` route or a direct `/fix` invocation (no support triage step); downstream `automation.write-e2e-tests` + `reviewer.review-pr` → `respond-to-review`.
 
 ### Task: `apply-ops-change`
 

@@ -208,7 +208,7 @@ class TestRealWorkflows(unittest.TestCase):
         self.assertEqual(gate.number, 4)
         self.assertEqual(gate.routes, [("resolved", 7), ("needs-fix", 5)])
         self.assertEqual((steps[2].agent, steps[2].task), ("support", "triage-incident"))
-        self.assertEqual((steps[4].agent, steps[4].task), ("engineer", "fix-bug"))
+        self.assertEqual((steps[4].agent, steps[4].task), ("engineer", "triage-and-fix"))
         self.assertEqual((steps[6].agent, steps[6].task), ("support", "write-postmortem"))
 
 
@@ -289,11 +289,17 @@ class TestSkipForRoute(unittest.TestCase):
         self.assertEqual(_skip_for_route(5, 2), set())
 
     def test_fix(self):
+        # #108 (Retro #022 ITIL-tier collapse): /fix dropped the repo-blind
+        # support.triage-bug step + its gate. 8 steps → 6; the engineer triages
+        # from the code (triage-and-fix) as Step 1; one HITL gate (merge).
         steps = load_workflow(WORKFLOWS / "fix.md")
-        self.assertEqual(len(steps), 8)
-        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 7])
-        self.assertEqual((steps[0].agent, steps[0].task), ("support", "triage-bug"))
-        self.assertEqual((steps[2].agent, steps[2].task), ("engineer", "fix-bug"))
+        self.assertEqual(len(steps), 6)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [5])
+        self.assertEqual((steps[0].agent, steps[0].task), ("engineer", "triage-and-fix"))
+        # maker ≠ checker preserved: a different-model reviewer still runs
+        self.assertIn(("reviewer", "review-pr"), [(s.agent, s.task) for s in steps])
+        # no support step remains in /fix
+        self.assertNotIn("support", [s.agent for s in steps])
         # fix is reactive — no foundation requirement gate (hygiene fixes have no bet)
         self.assertEqual(load_workflow_meta(WORKFLOWS / "fix.md")["requires_approved"], [])
 

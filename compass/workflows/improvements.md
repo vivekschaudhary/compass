@@ -3120,3 +3120,21 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Verification:** sweep clean except the justified EA hit; consistency-check CONSISTENT (23 patterns, 9 of 17); 139 tests pass (unaffected). Skill registry now shows the front-door description.
 
 **Files touched (3):** `.claude/skills/triage/SKILL.md` · `README.md` · `CHANGELOG.md` (+ this file). Counter: #107. **5 of 5 → Retro #022 fires next.** Consumer-signal fix closing the #103 front-door arc on the surface the user actually touches.
+
+### 2026-06-22 — /fix ITIL-tier collapse (#108, implements the Retro #022 redesign)
+
+**Trigger origin (Principle #19):** **consumer → architecture.** Live home-app run: the orchestrator's `support.triage-bug` step was repo-blind, interrogating the DRI for facts the *code* answers, then "refusing to escalate" to the one agent that can read the code. The DRI named the root cause — *"do we need ITIL L1/L2/L3 in the AI world? moving to L3 is ceremony."* Captured in Retro #022 as a declared redesign; built here.
+
+**The collapse:** removed `support.triage-bug` + the "triage confirmed" HITL gate from `/fix`. `engineer.fix-bug` → **`engineer.triage-and-fix`**, expanded to own reproduce-from-code + diagnose + severity + dedupe (it reads + runs the real code instead of interrogating). `/fix`: **8 steps → 6**, one HITL gate (merge). The renamed task is used by both `/fix` and `/triage`'s needs-fix branch (one engineer fix task).
+
+**Why (the principle):** ITIL tiering exists for human economics + access control — cheap L1 deflect to protect scarce, expensive L3 engineers, and "the triager can't see the code" is an access wall. In the AI world the protected resource is an agent that reads the code instantly at token cost, so the escalation ladder is ceremony. 1st instance of candidate **`[ai-collapses-org-tiering]`** (canon codification deferred — DRI-gated).
+
+**What's KEPT (deliberately — these are not tiering):** front-door routing (`/triage`); **maker ≠ checker** — the different-model Reviewer (`[codex, gemini]`) + Security Reviewer + `respond-to-review` loop all stay (the engineer *validates* by running tests; a *different model reviews* — validation ≠ review; self-review stays forbidden); the HITL merge gate. **`[refuse-escalate]` refined at the application level** — bug-reproduction moved from Support to the Engineer and softened to "reproduce from code first; ask the human only for what code can't reveal (prod data, account state, creds); halt if still irreproducible." **AGENTS Principle #16 / canon `[refuse-escalate]` (foundational scope-widening) untouched** — different concern. No other discipline dropped: regression-test-first, MOV, per-surface-vertical-test, contract sweep, no-hotfix-exception, promote-to-tech-debt-brief all preserved (now inside `triage-and-fix`).
+
+**Support shrinks to the front door:** `triage-bug` task removed; `fix` removed from `participates_in_workflows`; Identity + inlined `[refuse-escalate]` reframed to `classify-intake` (route-no-noise) terms.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **139 pass** (test_fix updated: 6 steps, HITL [5], Step 1 engineer.triage-and-fix, asserts no support step + reviewer present; triage fix-forward assertion updated). consistency-check CONSISTENT (no count change — collapse removes steps, not a dispatch-graph workflow). `run fix --dry-run` → 6-step graph, engineer triages at Step 1, reviewer at Step 3, single HITL at Step 5. Pre-push grep sweep: remaining `triage-bug`/`fix-bug` hits are intentional migration-note history (fix.md) + a test comment; the one genuine stale ref (`tools.py` docstring example) updated.
+
+**Out of scope:** codifying `[ai-collapses-org-tiering]` to canon (DRI-gated, 1 instance); the `--allow-write` hand-off paper-cut (#103 command omits the flag — small follow-on).
+
+**Files touched (7):** `compass/agents/engineer.md` · `compass/workflows/fix.md` · `compass/agents/support.md` · `compass/workflows/triage.md` · `compass/orchestrator/hosts/tools.py` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` (+ CHANGELOG + this file). Counter: #108. **1 of 5 before Retro #023 (fires after #112).** First post-Retro-#022 build — converts the retro's headline declared redesign into shipped structure.

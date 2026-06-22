@@ -4,7 +4,7 @@ status: active
 owner: support
 auto_invokes: []
 invoked_by: [manual, incident_alert]
-version: 0.3.49
+version: 0.3.50
 requires_approved: []
 ---
 
@@ -21,7 +21,7 @@ The **front door** for every incoming item. `/triage` classifies what came in �
 
 ## Architectural shape (v0.3.49)
 
-Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th workflow in dispatch-graph shape**. Methodology lives in the agent tasks (`support.classify-intake`, `support.triage-incident`, `engineer.fix-bug`, `reviewer.review-pr`, `support.write-postmortem`, `tech-writer.accumulate-changelog`).
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th workflow in dispatch-graph shape**. Methodology lives in the agent tasks (`support.classify-intake`, `support.triage-incident`, `engineer.triage-and-fix`, `reviewer.review-pr`, `support.write-postmortem`, `tech-writer.accumulate-changelog`).
 
 **`[conditional-dispatch]` — two instances in one graph (canon v0.3.49):**
 - **Front-door ITIL intake router (Step 2, #98→#103):** a **routing gate** routing to either an inline branch (`incident` → Step 3) or a **cross-workflow hand-off** (`bug` → `/fix`, `enhancement`/`problem` → `/create-brief`, `change`/`service-request` → `/ops`) or `close`. v1 hand-off = the orchestrator records the decision and recommends the next command; auto-chaining the child workflow is v2 (#87 surface 3).
@@ -35,7 +35,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th wo
 ## Roles invoked (agents dispatched)
 
 - `compass/agents/support.md` — `classify-intake` (front-door ITIL classification) + `triage-incident` (incident first response) + `write-postmortem`
-- `compass/agents/engineer.md` — `fix-bug` (incident fix-forward branch) + investigation
+- `compass/agents/engineer.md` — `triage-and-fix` (incident fix-forward branch: reproduce-from-code + fix) + investigation
 - `compass/agents/reviewer.md` — `review-pr` (+ `security-reviewer.review-pr-security` if the fix touches sensitive surfaces)
 - `compass/agents/tech-writer.md` — `accumulate-changelog` (if user-visible)
 
@@ -78,11 +78,11 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th wo
 - `resolved` → Step 7 — mitigation resolved it (rollback / flag); no code change needed, go straight to postmortem.
 - `needs-fix` → Step 5 — a code fix is required; enter the fix branch (full review holds under P0).
 
-### Step 5. `engineer.fix-bug` (Engineer agent owns) — [needs-fix branch]
+### Step 5. `engineer.triage-and-fix` (Engineer agent owns) — [needs-fix branch]
 
 **Dispatches:** Engineer agent
-**Task definition:** `compass/agents/engineer.md` → Task `fix-bug`
-**What it covers:** failing regression test first → minimum fix → checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → open PR linking the incident artifact. **No P0 carve-out** — discipline holds.
+**Task definition:** `compass/agents/engineer.md` → Task `triage-and-fix`
+**What it covers:** reproduce-from-code → failing regression test first → minimum fix → checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → open PR linking the incident artifact. **No P0 carve-out** — discipline holds.
 
 ### Step 6. `reviewer.review-pr` (Reviewer agent owns) — [needs-fix branch]
 

@@ -1,7 +1,7 @@
 """
 Read-only repo tools for tool-using orchestrator dispatch (#87 slice 1).
 
-Gives a tool-capable agent (e.g. engineer.fix-bug) grounded read access to the
+Gives a tool-capable agent (e.g. engineer.triage-and-fix) grounded read access to the
 actual project — architecture, story, source — instead of guessing. Every tool
 is **sandboxed to project_dir**: any path that resolves outside it is refused
 (returned as an error string the model can see, never a crash, never a read).
