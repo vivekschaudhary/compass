@@ -3104,3 +3104,17 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope (follow-ons):** per-run cost lines in the DONE section · OpenAI/Gemini pricing · dashboard live-feed surfacing the same rollup.
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #106. **4 of 5 before Retro #022 (fires after #107).** Third cost/cockpit improvement in the #104→#105→#106 arc — reduced, measured, and now visible.
+
+### 2026-06-21 — /triage skill surface still framed as incident-response (#107)
+
+**Trigger origin (Principle #19):** **consumer** — live home-app session. User: "if triage is the entry point as we discussed, every time I do triage it keeps asking as if it's waiting for an incident." Real usage exposed the gap.
+
+**The bug:** #103 made `/triage` the front-door ITIL intake router in the **workflow** (`triage.md` Step 1 = `support.classify-intake`), **agents**, **canon**, and **AGENTS.md** — but the user-facing **skill description** at `.claude/skills/triage/SKILL.md` still read *"Incident response. Engineer + Support + PO engage. Stop-the-bleed is human-driven."* The interactive model reads that description first and pre-framed every `/triage` as an incident, waiting for incident details even for a plain bug. The workflow body was correct; the **surface** lied.
+
+**Fix:** rewrote the skill `description:` to the front-door framing (classify any item → route) + added an explicit guard line in the skill body ("front door for ALL intake, not just incidents — Step 1 classifies; do not assume an incident"). Swept `README.md` (`/triage <alert> → Incident response` → front-door router). `enterprise-architect.md:78` "incident response capability of the team" is a genuinely different meaning (team-capability assessment) — left as-is, DRI-justified.
+
+**Meta-lesson (the real value):** `.claude/skills/*/SKILL.md` descriptions are **load-bearing behavioral surfaces**, not cosmetic labels — the interactive model frames its whole run off them. A workflow's *semantic* change (incident-response → front-door router) must sweep the skill description in the SAME commit. `[pre-push-grep-discipline]` is the tool (`pre-push-consistency-check.py "Incident response"` would have caught all three at #103) — the gap was not running it against the skill surface when triage's meaning changed. **Watch-for: when a workflow changes what it DOES, grep `.claude/skills/` for the old framing.**
+
+**Verification:** sweep clean except the justified EA hit; consistency-check CONSISTENT (23 patterns, 9 of 17); 139 tests pass (unaffected). Skill registry now shows the front-door description.
+
+**Files touched (3):** `.claude/skills/triage/SKILL.md` · `README.md` · `CHANGELOG.md` (+ this file). Counter: #107. **5 of 5 → Retro #022 fires next.** Consumer-signal fix closing the #103 front-door arc on the surface the user actually touches.

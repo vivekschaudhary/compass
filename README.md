@@ -93,7 +93,7 @@ Do the work. Build for stories; the others for the reactive cases.
 ```
 /build <story>                  → Engineer implements + Codex reviews + Architect compliance
 /fix <ticket>                   → Bug flow (Support → Engineer → Codex)
-/triage <alert>                 → Incident response (Engineer + Support + PO awareness)
+/triage <item>                  → Front-door intake router: classify + route (bug→fix, enhancement→brief, change→ops, incident→inline)
 /ops <change>                   → Infra / config / non-code changes (Enterprise Arch + Codex)
 ```
 

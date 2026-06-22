@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/triage` skill surface still framed as incident-response (#107).** #103 turned `/triage` into the front-door ITIL intake router in the workflow, agents, canon, and AGENTS.md — but missed the user-facing **skill description** (`.claude/skills/triage/SKILL.md`), which still read *"Incident response. Engineer + Support + PO engage."* So interactive `/triage` pre-framed every item as an incident and waited for incident details, even for a plain bug. Fixed the description to the front-door framing + added an explicit guard in the skill body ("this is the front door for ALL intake, not just incidents — Step 1 classifies; do not assume an incident"). Also swept `README.md` (`/triage <alert> → Incident response` → front-door router). The `enterprise-architect.md` "incident response capability" hit is a genuinely different meaning (architecture assessment) — left as-is (DRI-justified). Consumer signal from a live home-app session. Lesson: `.claude/skills/*/SKILL.md` descriptions are load-bearing surfaces — a workflow's semantic change must sweep them too (`[pre-push-grep-discipline]`).
+
 ### Added
 
 - **Cockpit cost rollup (#106, v0.4.0-alpha-17).** Closes the loop on #104+#105: the cockpit ([cockpit.py](compass/orchestrator/cockpit.py)) now folds the `usage` events #105 emits into per-run/per-project token totals and renders a **💰 SPEND** section — per-project estimated cost + cache-hit % of prompt tokens, and a portfolio total with **how much prompt caching saved** (full-input-price baseline − actual input cost). Cost uses a labeled, approximate Claude list-price table (`opus`/`sonnet`/`haiku` per-MTok, cache read 0.1× / write 1.25×, defaults to the priciest family so it never under-reports), overridable via `$COMPASS_PRICES`. Section omitted when no usage exists. Tokens are exact; dollars are an at-a-glance estimate, not billing truth. +6 tests (139 total). The orchestrator's spend is now visible where you watch the work.
