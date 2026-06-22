@@ -37,7 +37,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #021** (improvements #98–#102): [retros/2026-06-20-retro-021-improvements-98-to-102.md](retros/2026-06-20-retro-021-improvements-98-to-102.md) — **fired ON TIME at #102** (17th consecutive). 5 improvements, **all 5 traced to one live home-app `/fix` run**: declared front-door triage intake router (#98) + branch-not-main (#99) + tool-loop cap wrap-up (#100) + declared testable-preview canary (#101) + declared worktree isolation (#102). **Milestone: write-mode `/fix` worked end-to-end** on a real bug. Codification-ready: `[failure-direction-inversion]`. Watch-fors: build the declared backlog (intake router · worktree isolation · cockpit), don't just accrue it.
 
-**Next retro fires after improvement #107.** (Retro #021 = #102; next = #107.)
+- **Retro #022** (improvements #103–#107): [retros/2026-06-22-retro-022-improvements-103-to-107.md](retros/2026-06-22-retro-022-improvements-103-to-107.md) — **fired ON TIME at #107** (18th consecutive). Two arcs, ~100% consumer-driven from one live home-app session: front-door router (#103) + event spine/cockpit (#104) + caching/telemetry (#105) + cost rollup (#106) + skill-surface fix (#107). **Headline: DRI challenged ITIL tiering itself** — captured as candidate `[ai-collapses-org-tiering]` + a **declared `/fix` tier-collapse** (one tool-capable `engineer.triage-and-fix` reproduce→diagnose→fix; keep routing + maker≠checker + HITL; drop the escalation ladder; #108-as-KB DROPPED). New candidate `[skill-surface-is-load-bearing]` (#107). `[conditional-dispatch]` CLOSED (codified #103). `[failure-direction-inversion]` still overdue. Audit clean (consistency-check CONSISTENT, 139 tests, 9 graphs).
+
+**Next retro fires after improvement #112.** (Retro #022 = #107; next = #112.)
 
 ## Template
 
