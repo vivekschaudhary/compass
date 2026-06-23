@@ -47,6 +47,8 @@ def fold_runs(events: list) -> dict:
             # cost rollup (#106): summed token usage from `usage` events.
             "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0},
             "model": None,
+            # step-level status (#111): {step_num: {status, title, agent, task}}
+            "steps": {},
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
         for k in ("project", "workflow", "bet_id"):
@@ -63,10 +65,24 @@ def fold_runs(events: list) -> dict:
                 f"{e.get('agent')}.{e.get('task')}"
                 if e.get("agent") and e.get("task") else None
             )
+            r["steps"][e.get("step")] = {
+                "status": "running", "title": e.get("title"),
+                "agent": e.get("agent"), "task": e.get("task"),
+            }
+        elif t == ev.STEP_END:
+            st = r["steps"].setdefault(e.get("step"), {})
+            st["status"] = "done"
         elif t == ev.GATE_OPEN:
             r["open_gate"] = {"step": e.get("step"), "kind": e.get("kind"),
                               "title": e.get("title")}
-        elif t in (ev.GATE_DECISION, ev.HANDOFF):
+            st = r["steps"].setdefault(e.get("step"), {})
+            st["status"] = "awaiting"
+            st.setdefault("title", e.get("title"))
+        elif t == ev.GATE_DECISION:
+            r["open_gate"] = None
+            st = r["steps"].setdefault(e.get("step"), {})
+            st["status"] = "done"
+        elif t == ev.HANDOFF:
             r["open_gate"] = None
         elif t == ev.RUN_END:
             r["ended"] = True
@@ -82,6 +98,84 @@ def fold_runs(events: list) -> dict:
             if e.get("model"):
                 r["model"] = e["model"]
     return runs
+
+
+# ── step-level view (#111) ───────────────────────────────────────────────────
+import os
+from pathlib import Path
+
+_STATUS_GLYPH = {"done": "✓", "running": "▶", "awaiting": "⏸", "pending": "·"}
+
+
+def compass_dir(override=None) -> Path:
+    """Resolve the framework dir holding workflows/ — --compass-dir, else
+    $COMPASS_FW/compass, else ./compass. Used to load workflow graphs so the
+    step view can show *pending* (not-yet-started) steps."""
+    if override:
+        return Path(override)
+    fw = os.environ.get("COMPASS_FW")
+    if fw:
+        return Path(fw) / "compass"
+    return Path("compass")
+
+
+def load_graph_steps(workflow: str, cdir) -> list:
+    """[(n, agent, task, is_hitl, title)] for a workflow, or [] if unavailable
+    (no graph → step view falls back to spine-seen steps only)."""
+    try:
+        from .graph import load_workflow
+        wf = Path(cdir) / "workflows" / f"{workflow}.md"
+        if not wf.exists():
+            return []
+        return [(s.number, s.agent, s.task, s.is_hitl, s.title) for s in load_workflow(wf)]
+    except Exception:
+        return []
+
+
+def _step_label(agent, task, title) -> str:
+    if agent and task:
+        return f"{agent}.{task}"
+    return title or "(step)"
+
+
+def render_run(run: dict, graph_steps: list) -> str:
+    """Full annotated step plan for one run: ✓done · ▶running · ⏸awaiting · ·pending."""
+    loc = " ".join(x for x in [run.get("project"), run.get("workflow"), run.get("bet_id")] if x)
+    out = [f"RUN  {loc}  ({run.get('run_id')})", "=" * 60]
+    seen = run.get("steps", {})
+    ended = run.get("ended")
+
+    rows = []
+    if graph_steps:
+        for n, agent, task, is_hitl, title in graph_steps:
+            st = seen.get(n)
+            if st:
+                status = st.get("status", "running")
+                label = _step_label(st.get("agent") or agent, st.get("task") or task, st.get("title") or title)
+            elif ended:
+                continue  # an ended run didn't run this step — not "pending"
+            else:
+                status, label = "pending", _step_label(agent, task, title)
+            rows.append((n, status, label))
+    else:
+        # spine-only fallback (no graph): show just the steps we saw
+        for n in sorted(seen):
+            st = seen[n]
+            rows.append((n, st.get("status", "running"), _step_label(st.get("agent"), st.get("task"), st.get("title"))))
+        out.append("  (workflow graph unavailable — showing observed steps only; pass --compass-dir for pending steps)")
+
+    for n, status, label in rows:
+        glyph = _STATUS_GLYPH.get(status, "·")
+        tail = "   ← awaiting your decision" if status == "awaiting" else ""
+        out.append(f"  {glyph} {n:>2}  {label}{tail}")
+
+    if ended:
+        out.append(f"\n  status: {run.get('status')} — {run.get('reason') or ''}")
+    elif any(s == "awaiting" for _, s, _ in rows):
+        out.append("\n  status: awaiting your decision")
+    else:
+        out.append("\n  status: in flight")
+    return "\n".join(out)
 
 
 # ── cost rollup (#106) ───────────────────────────────────────────────────────
@@ -154,10 +248,17 @@ def _approve_cmd(run: dict) -> str:
     return f"{base} --approve   (or --reject)"
 
 
-def render(runs: dict, project_filter: str = None, limit: int = 10) -> str:
+def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -> str:
     vals = list(runs.values())
     if project_filter:
         vals = [r for r in vals if r.get("project") == project_filter]
+    # #111: total step count per workflow (for the in-flight "step N/M"), cached.
+    _totals = {}
+    def _total_steps(workflow):
+        if workflow not in _totals:
+            gs = load_graph_steps(workflow, cdir) if (cdir and workflow) else []
+            _totals[workflow] = len(gs)
+        return _totals[workflow]
 
     awaiting = [r for r in vals if r.get("open_gate")]
     in_flight = [r for r in vals if not r.get("ended") and not r.get("open_gate")]
@@ -183,7 +284,11 @@ def render(runs: dict, project_filter: str = None, limit: int = 10) -> str:
         out.append("  (no runs in progress)")
     for r in in_flight:
         loc = " ".join(x for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
-        where = f"step {r.get('current_step')}" if r.get("current_step") else "starting"
+        total = _total_steps(r.get("workflow"))
+        if r.get("current_step"):
+            where = f"step {r['current_step']}" + (f"/{total}" if total else "")
+        else:
+            where = "starting"
         task = f" {r['current_task']}" if r.get("current_task") else ""
         out.append(f"  • {loc}  → {where}{task}")
 
@@ -259,6 +364,9 @@ def main(argv=None):
     parser.add_argument("--project", default=None, help="Filter to one project label (dir basename).")
     parser.add_argument("--home", default=None, help="Override the events.jsonl path (else $COMPASS_HOME/orchestrator/events.jsonl).")
     parser.add_argument("--limit", type=int, default=10, help="Max done/halted runs to show.")
+    parser.add_argument("--run", default=None, help="Show the full step-level plan for one run id (#111).")
+    parser.add_argument("--compass-dir", default=None, dest="compass_dir",
+                        help="Framework dir holding workflows/ (for pending steps). Else $COMPASS_FW/compass, else ./compass.")
     args = parser.parse_args(argv)
 
     path = args.home if args.home else None
@@ -269,7 +377,20 @@ def main(argv=None):
         return
 
     runs = fold_runs(events)
-    print(render(runs, project_filter=args.project, limit=args.limit))
+    cdir = compass_dir(args.compass_dir)
+
+    if args.run:
+        run = runs.get(args.run)
+        if not run:
+            print(f"No run '{args.run}'. Recent run ids:")
+            recent = sorted(runs.values(), key=lambda r: r.get("last_ts") or "", reverse=True)
+            for r in recent[: args.limit]:
+                print(f"  {r['run_id']}")
+            return
+        print(render_run(run, load_graph_steps(run.get("workflow"), cdir)))
+        return
+
+    print(render(runs, project_filter=args.project, limit=args.limit, cdir=cdir))
 
 
 if __name__ == "__main__":

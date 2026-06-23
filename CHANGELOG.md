@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Step-level cockpit + first-turn heartbeat (#111).** The cockpit was run-level (in-flight showed only the *current* step); the live `/fix` run also exposed a "looks frozen" gap (the first model turn prints nothing for 1–2 min). Now: `cockpit --run <id>` renders the **full workflow plan annotated ✓done / ▶running / ⏸awaiting-you / ·pending** — folding per-step status from the spine (`step_start`/`step_end`/`gate_open`) and loading the workflow graph (`--compass-dir`, default `$COMPASS_FW/compass`) to show *pending* steps; graph-unavailable → spine-only fallback (no crash). The default cockpit's in-flight line now shows `step N/M`. Ended runs show what ran + the end reason (no phantom pending). And `run.py` prints a one-line **heartbeat** after "Dispatching…" on tool steps ("first turn can take ~1–2 min before tool activity — watch `cockpit`"). +6 tests (150 total). Origin: DRI wanted to see the whole plan + pending steps, and the live run looked hung during the first turn.
+
 ### Changed
 
 - **Right-sized hand-off — the live recommendation, not the static route target (#110, v0.3.52).** Closes the seam #109 left: the routing gate is static (`enhancement → /create-brief`), so the dry-run *and the live hand-off message* still showed a flat "run /create-brief" even when `classify-intake` had right-sized it to `/create-story --bet CB-7` — recommendation and hand-off disagreed. Now `classify-intake` ends its output with a contract line `**Next command:** <cmd>`, and `run.py`'s hand-off branch (`_recommended_next`) **echoes that right-sized command** instead of the gate's static fallback (falls back to the generic message when absent). The static gate/route/parser is unchanged (7-ITIL set intact; `test_triage_intake_routing_gate` green). `--dry-run` now prints a note that gate targets are static fallbacks and the live run uses the classifier's right-sized recommendation. +3 tests (145 total). Origin: DRI saw the dry-run's `enhancement→/create-brief` contradict the #109 right-sizing.

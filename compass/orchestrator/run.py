@@ -1041,6 +1041,12 @@ def _run_workflow(
         else:
             tools_note = ""
         print(f"\nDispatching to {host}{tools_note} …")
+        if agent_tools and host == "claude":
+            # #111 heartbeat: a tool step's first model turn (reading the agent
+            # file + reasoning) can run 1–2 min before the first tool line prints,
+            # so it looks frozen. Set the expectation; the spine has live detail.
+            print("  (first model turn can take ~1–2 min before tool activity appears — "
+                  "watch `python3 -m compass.orchestrator.cockpit --run <id>`)")
         try:
             result = dispatch_to_host(
                 host, str(agent_file), step.task, user_message, model=model,

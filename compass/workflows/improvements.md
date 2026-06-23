@@ -3177,3 +3177,18 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope:** a dynamic/agent-classified routing gate (would let the gate itself right-size — #87 surface 3); Lane 3 brief-less trivial build (declared, #109); codifying `[right-size-the-path-to-the-work]` (DRI-gated).
 
 **Files touched (5):** `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/workflows/triage.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #110. **3 of 5 before Retro #023 (fires after #112).** Completes the #109 right-sizing on the surface the DRI actually reads — the dry-run + the live hand-off.
+
+### 2026-06-23 — step-level cockpit + first-turn heartbeat (#111)
+
+**Trigger origin (Principle #19):** **two live-run observations.** (1) DRI: *"I should be able to see the entire plan in a dashboard and the steps that are pending."* The cockpit (#104) was run-level — in-flight showed only the current step. (2) During the live `/fix`, the engineer's first model turn ran 1–2 min with no output → *"stuck in the dispatch."* The spine already had the data; the surfaces didn't show it.
+
+**What shipped:**
+- **Step-level view** — `cockpit --run <id>` renders the full workflow plan annotated **✓done / ▶running / ⏸awaiting-you / ·pending**. `fold_runs` now builds a per-run `steps` status map from `step_start`→running, `step_end`→done, `gate_open`→awaiting, `gate_decision`→done. `load_graph_steps(workflow, compass_dir)` loads the dispatch graph so *pending* (not-yet-started) steps show; `compass_dir()` resolves `--compass-dir` → `$COMPASS_FW/compass` → `./compass`. Graph-unavailable → spine-only fallback (no crash). **Ended runs show what ran + the end reason** (no phantom pending — e.g. a triage that handed off at step 2).
+- **Default view gains `step N/M`** — the in-flight line shows progress (`step 2/6`) when the graph resolves.
+- **First-turn heartbeat** — `run.py` prints one line after "Dispatching…" on tool steps: "first model turn can take ~1–2 min before tool activity — watch `cockpit`." Static expectation-setter (no thread); kills the "looks frozen" perception.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **150 pass** (+6: step-status fold, render_run pending-from-graph, ended-no-pending, graph-unavailable fallback, `load_graph_steps` on real fix.md → 6 steps). consistency-check CONSISTENT. Smoke: `cockpit --run` shows the 6-step `/fix` plan (✓/▶/·); default cockpit shows `step 2/6`.
+
+**Out of scope (declared):** a true periodic "still working…" heartbeat (needs streaming/threads — static line is v1); the HTML `/dashboard` live feed (next delivery slice); `--watch` live re-render.
+
+**Files touched (4):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #111. **4 of 5 before Retro #023 (fires after #112).** Both gaps the live run exposed — "see the whole plan / pending" and "looks frozen" — closed.

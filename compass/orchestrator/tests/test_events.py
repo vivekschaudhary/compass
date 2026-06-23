@@ -225,6 +225,66 @@ class TestCostRollup(unittest.TestCase):
                 os.environ["COMPASS_PRICES"] = old
 
 
+class TestStepCockpit(unittest.TestCase):
+    # #111: step-level view — per-run step status + pending from the graph.
+    def test_fold_builds_step_status_map(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="triage"),
+            ev.make_event(ev.STEP_START, run_id="r1", step=1, agent="support", task="classify-intake"),
+            ev.make_event(ev.STEP_END, run_id="r1", step=1),
+            ev.make_event(ev.STEP_START, run_id="r1", step=2, title="intake gate"),
+            ev.make_event(ev.GATE_OPEN, run_id="r1", step=2, kind="routing", title="intake gate"),
+        ]
+        steps = cockpit.fold_runs(events)["r1"]["steps"]
+        self.assertEqual(steps[1]["status"], "done")
+        self.assertEqual(steps[2]["status"], "awaiting")
+
+    def test_render_run_shows_pending_from_graph(self):
+        run = {
+            "run_id": "r1", "project": "home", "workflow": "fix", "bet_id": None,
+            "ended": False, "status": None, "reason": None,
+            "steps": {1: {"status": "done", "agent": "engineer", "task": "triage-and-fix"},
+                      2: {"status": "running", "agent": "automation", "task": "write-e2e-tests"}},
+        }
+        graph = [(1, "engineer", "triage-and-fix", False, ""),
+                 (2, "automation", "write-e2e-tests", False, ""),
+                 (3, "reviewer", "review-pr", False, ""),
+                 (4, None, None, True, "approve merge")]
+        out = cockpit.render_run(run, graph)
+        self.assertIn("✓  1", out)
+        self.assertIn("▶  2", out)
+        self.assertIn("·  3", out)          # pending
+        self.assertIn("reviewer.review-pr", out)
+        self.assertIn("in flight", out)
+
+    def test_render_run_ended_no_pending(self):
+        run = {
+            "run_id": "r1", "project": "home", "workflow": "triage", "bet_id": None,
+            "ended": True, "status": "completed", "reason": "handed off to /fix",
+            "steps": {1: {"status": "done", "agent": "support", "task": "classify-intake"},
+                      2: {"status": "done", "title": "intake gate"}},
+        }
+        graph = [(n, None, None, False, f"s{n}") for n in range(1, 10)]  # 9-step triage
+        out = cockpit.render_run(run, graph)
+        self.assertIn("handed off to /fix", out)
+        self.assertNotIn("·", out)          # ended run shows no pending steps
+
+    def test_render_run_graph_unavailable_fallback(self):
+        run = {"run_id": "r1", "project": "home", "workflow": "x", "bet_id": None,
+               "ended": False, "status": None, "reason": None,
+               "steps": {1: {"status": "done", "agent": "a", "task": "t"}}}
+        out = cockpit.render_run(run, [])     # no graph
+        self.assertIn("graph unavailable", out)
+        self.assertIn("✓  1", out)
+
+    def test_load_graph_steps_real_workflow(self):
+        from pathlib import Path
+        repo = Path(__file__).resolve().parents[3]
+        steps = cockpit.load_graph_steps("fix", repo / "compass")
+        self.assertEqual(len(steps), 6)      # the collapsed /fix (#108)
+        self.assertEqual(steps[0][1:3], ("engineer", "triage-and-fix"))
+
+
 class TestRunEmitsLifecycle(unittest.TestCase):
     """Integration: a real _run_workflow call emits RUN_START … RUN_END to the
     user-local spine, even on an early halt (no host available)."""
