@@ -14,6 +14,22 @@ The methodology is unchanged. The gates, postconditions, and HITL stops are the 
 
 ---
 
+## Keeping a consumer in sync (the easy way) — `sync-into-consumer.py`
+
+If you use **both** surfaces — the orchestrator (`--compass-dir` → live framework) **and** interactive Claude Code `/skills` inside your project (which read the *embedded* `compass/` + `.claude/skills`) — the embedded copy drifts. One command keeps it current, safely:
+
+```bash
+# dry-run first (prints exactly what it would overwrite / prune / preserve; writes nothing):
+python3 /path/to/compass-framework/compass/scripts/sync-into-consumer.py /path/to/your-project
+
+# then perform it (auto-backs up your compass/ to <project>/.compass-backups/<ts>/ first):
+python3 /path/to/compass-framework/compass/scripts/sync-into-consumer.py /path/to/your-project --apply
+```
+
+**It OVERWRITES** the framework machinery (`compass/{agents,workflows,framework,templates,scripts,orchestrator}`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.codex/prompts`), **PRESERVES** your own files (`compass/config.yaml`, `docs/`, `PROJECT.md`, `README.md`, `.claude/settings*.json`, `.codex/config.toml`, `.github/`, `.mcp.json` — it only ever writes paths in the overwrite set), and **PRUNES** the framework's own meta-logs from your copy (`compass/workflows/improvements.md`, `retros/`). This is the recommended way to do the manual Path-B copy below.
+
+---
+
 ## Path A — Workaround (zero file changes, orchestrator only)
 
 Use `--compass-dir` to point the orchestrator at the current framework while your project's embedded `compass/` stays on v0.1. Your project files (`docs/`, `PROJECT.md`, bets) are untouched.

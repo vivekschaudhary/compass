@@ -3227,3 +3227,20 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope (declared):** WebSocket push (meta-refresh polling is v1); approve-from-dashboard (the action channel — relays to the mechanical gate, the bigger v2); converging with the project `/dashboard`; server auth (localhost-only, read-only).
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #113. **1 of 5 before Retro #024 (fires after #117).** Delivery-layer slice 2 (after the text cockpit) — the browser "dashboard as orchestrator."
+
+### 2026-06-23 — sync-into-consumer.py: safe one-command framework sync (#114)
+
+**Trigger origin (Principle #19):** **consumer, dual-surface.** The DRI runs home-app through **both** VS Code `/skills` (which read the *embedded* `compass/` + `.claude/skills`) **and** the orchestrator (`--compass-dir` → live framework). The orchestrator stays current; the embedded copy drifts (home-app was behind #103–#113). Manual sync (MIGRATION.md) is error-prone — the preserve/overwrite split can clobber the consumer's `docs/`, `config.yaml`, or `.github/` CI.
+
+**What shipped:** `compass/scripts/sync-into-consumer.py <consumer> [--apply] [--no-backup] [--framework DIR]`.
+- **Dry-run by default** (prints the overwrite/prune/preserve plan, writes nothing); `--apply` performs it (mirrors `--allow-write` opt-in). Auto-backs-up `consumer/compass/` → `.compass-backups/<ts>/` first.
+- **Policy (load-bearing):** OVERWRITE the machinery (`compass/{agents,workflows,framework,templates,scripts,orchestrator}`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.codex/prompts`); PRESERVE the consumer's own (`config.yaml`, `roles/`, `docs/`, `PROJECT.md`, `README.md`, `.claude/settings*`, `.codex/config.toml`, `.github/`, `.mcp.json`) — **the script only ever writes paths in the overwrite set**, so everything else is safe by construction; PRUNE the framework's own meta-logs from the copy (`improvements.md`, `retros/`).
+- **Per-subdir replace, never `rm -rf compass/`** — so `compass/config.yaml` (root) + `roles/` survive untouched. Pure `plan_sync` + `apply_plan` (testable, dry-run reuses the plan).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **160 pass** (+9: plan classification — machinery in overwrite, config.yaml/docs/.github NOT; missing-framework-path skipped; apply overwrites machinery + preserves config.yaml/docs/PROJECT.md/.github/roles + prunes improvements.md + makes a backup; dry-run writes nothing). consistency-check CONSISTENT. Dry-run smoke against a fake consumer prints the plan, writes nothing.
+
+**Docs:** MIGRATION.md gains a "Keeping a consumer in sync (the easy way)" section; scripts/README.md entry.
+
+**Out of scope (declared):** a `--check` drift-report mode (CI-friendly); auto-sync on a cadence/hook; the drafted-handoff-prompt idea (bumped — this took the #114 slot).
+
+**Files touched (4):** `compass/scripts/sync-into-consumer.py` (new) · `compass/orchestrator/tests/test_sync.py` (new) · `MIGRATION.md` · `compass/scripts/README.md` (+ CHANGELOG + this file). Counter: #114. **2 of 5 before Retro #024 (fires after #117).** The embedded-copy-drift fix for dual-surface users (VS Code `/skills` + orchestrator).

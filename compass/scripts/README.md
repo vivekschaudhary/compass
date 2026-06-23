@@ -6,6 +6,17 @@ Reference utility scripts and templates that complement Compass workflows. Each 
 
 ---
 
+## `sync-into-consumer.py` — sync a consumer's embedded Compass copy (#114)
+
+Keeps a consumer project's **embedded** framework copy current with the live framework, for teams that use the interactive `/skills` surface (which reads the embedded `compass/` + `.claude/skills`) alongside the orchestrator. **Dry-run by default**; `--apply` performs it after backing up the consumer's `compass/`. Overwrites the framework machinery, preserves the consumer's own files (`config.yaml`, `docs/`, `.github/`, …), prunes the framework's meta-logs. See MIGRATION.md → "Keeping a consumer in sync."
+
+```bash
+python3 compass/scripts/sync-into-consumer.py <consumer-dir>            # dry-run (plan only)
+python3 compass/scripts/sync-into-consumer.py <consumer-dir> --apply    # perform + backup
+```
+
+---
+
 ## `token-usage.py` — per-role token rollup
 
 Parses a Claude Code session log and a Compass workflow markdown file; attributes tokens to roles using the workflow's `COMPASS_ROLE_BOUNDARY` markers as anchors (per the `[role-boundary]` Compass-original pattern in `compass/framework/canon.md`); produces a markdown report.
