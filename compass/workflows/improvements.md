@@ -3158,3 +3158,22 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope (declared):** Lane 3 fully wired (brief-less lightweight build for trivial enhancements); `[brief-work-reconciliation]` (the other candidate — surface plan↔work gaps, still open); codifying `[right-size-the-path-to-the-work]` to canon (DRI-gated).
 
 **Files touched (6):** `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/workflows/create-brief.md` · `compass/workflows/triage.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #109. **2 of 5 before Retro #023 (fires after #112).** Pairs with #108 — both *size the path to the work* (collapse the fix tier · right-size the enhancement path).
+
+### 2026-06-23 — right-sized hand-off: live recommendation over the static route target (#110)
+
+**Trigger origin (Principle #19):** **DRI spotted it in a dry-run.** Looking at `triage --dry-run`, the DRI noted Step 2 still shows `enhancement→/create-brief` — *"that should be updated based on what we just built"* (#109). Real seam: #109 right-sized the *recommendation* but kept the routing gate **static**, so the dry-run AND the **live hand-off message** still printed a flat "run /create-brief," contradicting `classify-intake`'s actual right-sized recommendation (e.g. `create-story --bet CB-7`).
+
+**Why static (the constraint):** a routing gate maps each label to exactly one target; per-item right-sizing is the classifier's job, which a static gate can't encode. #109 put the right-sizing in `classify-intake`'s output + the create-brief guard — but never surfaced it at the hand-off. This closes that.
+
+**What shipped:**
+- **A contract line** — `classify-intake` (support.md v0.3.52) now ends its output with exactly one `**Next command:** <cmd>` (the right-sized command: `create-story --bet <id>` · `create-brief` · `fix` · `close`).
+- **The hand-off echoes it** — `run.py` `_recommended_next(output)` greps that line; the routing-gate hand-off branch prints **"Recommended (right-sized): <cmd>"** (with the static route target shown only as the fallback), falling back to the generic `_handoff_message` when no contract line is present. Works for every hand-off route, carries the right-sizing for enhancement/problem.
+- **Dry-run honesty** — `run.py` prints a note (when a graph has routing gates) that gate targets are static fallbacks and the live run uses the classifier's right-sized recommendation; triage.md route prose says the same.
+
+**Scope discipline:** the gate/route/parser is **unchanged** — 7-ITIL targets, `enhancement → /create-brief` still the fallback; `test_triage_intake_routing_gate` stays green. The fix is purely "surface the recommendation that already existed."
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **145 pass** (+3: `_recommended_next` parses the contract line, None when absent, takes the last). consistency-check CONSISTENT (no count change). `triage --dry-run` shows the static routes **+ the new right-sizing note**.
+
+**Out of scope:** a dynamic/agent-classified routing gate (would let the gate itself right-size — #87 surface 3); Lane 3 brief-less trivial build (declared, #109); codifying `[right-size-the-path-to-the-work]` (DRI-gated).
+
+**Files touched (5):** `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/workflows/triage.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #110. **3 of 5 before Retro #023 (fires after #112).** Completes the #109 right-sizing on the surface the DRI actually reads — the dry-run + the live hand-off.

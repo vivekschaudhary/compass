@@ -318,6 +318,26 @@ class TestHandoffMessage(unittest.TestCase):
         self.assertEqual(_route_target_desc("/fix"), "hand off to /fix")
         self.assertEqual(_route_target_desc("close"), "close (no action)")
 
+    def test_recommended_next_parses_contract_line(self):
+        # #110: the hand-off echoes the classifier's right-sized recommendation.
+        from compass.orchestrator.run import _recommended_next
+        out = ("...intake summary...\n"
+               "**Next command:** create-story --bet CB-7 --context \"reconnect button\"\n")
+        self.assertEqual(
+            _recommended_next(out),
+            'create-story --bet CB-7 --context "reconnect button"',
+        )
+
+    def test_recommended_next_none_when_absent(self):
+        from compass.orchestrator.run import _recommended_next
+        self.assertIsNone(_recommended_next("no contract line here"))
+        self.assertIsNone(_recommended_next(""))
+
+    def test_recommended_next_takes_last(self):
+        from compass.orchestrator.run import _recommended_next
+        out = "Next command: create-brief\nthen later\n**Next command:** create-story --bet AC-2\n"
+        self.assertEqual(_recommended_next(out), "create-story --bet AC-2")
+
 
 class TestSkipForRoute(unittest.TestCase):
     def test_forward_branch_skips_between(self):

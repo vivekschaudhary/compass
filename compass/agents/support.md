@@ -5,7 +5,7 @@ required_tools: [text_input]
 optional_tools: [mcp_jira, mcp_linear, mcp_sentry, mcp_pagerduty, mcp_slack]
 participates_in_workflows: [triage, create-brief]
 loads_bet_catalog: true
-version: 0.3.51
+version: 0.3.52
 ---
 
 # Agent: Support
@@ -43,7 +43,8 @@ Gates + postconditions = load-bearing. Work = guidance.
     - *new capability / hypothesis* (no catalog bet fits) → recommend **`/create-brief`** (a new bet);
     - *trivial* (a button, a label, copy) → recommend the **hygiene** lane (skip the brief, keep review).
   Give a one-line rationale tying the category to the impact/urgency you observed → state the **right-sized** recommended command → write a short intake summary (classification + rationale + recommended command) so the routing gate and downstream workflow can use it as context. **Propose; do not decide** — the human confirms the route at the gate (and may override your category or the matched bet).
-**Postcondition:** classification states exactly one ITIL category · rationale ties the category to observed impact/urgency (not reporter emotion, per `[refuse-escalate]`) · recommended command named · **for enhancement/problem the recommendation is right-sized and names the target bet when it's a slice (from the catalog), not a reflexive `/create-brief`** · intake summary written for hand-off context · the run halts at the routing gate for the human to confirm or override (no auto-routing).
+  **End your output with the contract line `**Next command:** <cmd>`** (#110) — exactly one, last — the right-sized command the orchestrator echoes at the hand-off (it overrides the gate's static fallback). Examples: `**Next command:** create-story --bet CB-7` (a slice) · `**Next command:** create-brief` (new capability) · `**Next command:** fix` (a bug) · `**Next command:** close` (not-an-issue). Use the matched bet id from the catalog when it's a slice.
+**Postcondition:** classification states exactly one ITIL category · rationale ties the category to observed impact/urgency (not reporter emotion, per `[refuse-escalate]`) · recommended command named · **for enhancement/problem the recommendation is right-sized and names the target bet when it's a slice (from the catalog), not a reflexive `/create-brief`** · **output ends with a single `**Next command:** <cmd>` line** (the hand-off echoes it, #110) · intake summary written for hand-off context · the run halts at the routing gate for the human to confirm or override (no auto-routing).
 
 ### `triage-incident` — first response to a production incident
 

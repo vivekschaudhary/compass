@@ -171,6 +171,24 @@ def _skip_for_route(router_number: int, target: int) -> set:
     return set(range(router_number + 1, target))
 
 
+def _recommended_next(output: str):
+    """
+    The right-sized next command a step recommended (#110), parsed from a single
+    contract line `**Next command:** <cmd>` in its output. `classify-intake`
+    emits it so the hand-off echoes the right-sized lane (e.g. `create-story
+    --bet CB-7`) instead of the gate's static fallback target. Returns the last
+    such command, or None.
+    """
+    if not output:
+        return None
+    hits = re.findall(
+        r'^\s*\**\s*Next command:\s*\**\s*(.+?)\s*$',
+        output, re.IGNORECASE | re.MULTILINE,
+    )
+    cmd = hits[-1].strip().strip('`').strip() if hits else None
+    return cmd or None
+
+
 def _handoff_message(target: str, project_dir, last_artifact_path=None) -> str:
     """
     Render the recommendation printed when a routing gate (#103) routes to a
@@ -706,6 +724,12 @@ def _run_workflow(
             else:
                 marker, label = "[workflow]", s.title
             print(f"  Step {s.number:2d}  {marker:45s}  {label}")
+        # #110: routing-gate targets shown above are the STATIC fallbacks; the
+        # live hand-off echoes the classifier's right-sized `Next command:`.
+        if any(s.is_hitl and s.routes for s in steps):
+            print("\n  note: routing-gate targets are static fallbacks — the live run "
+                  "uses the\n        classifier's right-sized recommendation "
+                  "(e.g. enhancement → /create-story --bet <id>).")
         print()
         return [], []
 
@@ -813,7 +837,15 @@ def _run_workflow(
             # classify + route — is done. Recommend the next command and end
             # the run cleanly (break → normal success finalization).
             print(f"\n[route → {choice['route']} — hand off to {target}]")
-            print(_handoff_message(target, project_dir, last_artifact_path))
+            # #110: prefer the prior step's right-sized recommendation (e.g.
+            # classify-intake's `Next command: create-story --bet CB-7`) over the
+            # gate's static fallback target; fall back to the generic message.
+            rec = _recommended_next(last_agent_output)
+            if rec:
+                print(f"Recommended (right-sized):\n  {rec}")
+                print(f"  [route default was {target} — use the recommendation above if it differs]")
+            else:
+                print(_handoff_message(target, project_dir, last_artifact_path))
             emit(ev.HANDOFF, step=step.number, target=target)
             emit(ev.RUN_END, status="completed", reason=f"handed off to {target}")
             handed_off = True
