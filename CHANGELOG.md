@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **HTML cockpit — the live browser feed (#113).** The cockpit gets a browser surface over the same event spine (#104/#111): `cockpit --html [path]` writes a self-contained `cockpit.html` (inline CSS, no deps, auto-refresh meta tag) you open via `file://`; `cockpit --serve [--port N]` runs a **read-only localhost server** (`127.0.0.1`, GET-only) that re-reads `events.jsonl` per request → the **true live feed** (browser auto-refreshes, each load reflects new events). One renderer (`render_html`) reuses `fold_runs` + cost helpers + a shared `_run_step_rows` (so text and HTML never drift); shows ⏸ awaiting (+ approve commands) / ▶ in-flight (+ `step N/M` + annotated step plan) / ✓ done / 💰 spend, all HTML-escaped. Distinct from the project `/dashboard` skill (that renders a repo's artifacts; this is the portfolio-wide, user-local orchestrator cockpit). +5 tests (156 total). The "dashboard as orchestrator" delivery slice the DRI kept asking for.
+
 ### Fixed
 
 - **OpenAI/Codex adapter sent `max_tokens` → 400 on newer models; dispatch crashed with a traceback (#112).** Live consumer signal: the Codex **reviewer** step (`preferred_hosts: [codex, gemini]`) on the home-app `/fix` died with `openai.BadRequestError: 'max_tokens' is not supported with this model. Use 'max_completion_tokens'` (default model `gpt-5`). Two fixes: (1) `hosts/openai.py` now sends **`max_completion_tokens`** (the forward-compatible param; gpt-5 / o-series reject `max_tokens`) and is `client`-injectable for tests; (2) `run.py`'s dispatch wrapper now catches **any** exception (was only `RuntimeError`/`ImportError`) so an API 400 / rate-limit / network error **halts cleanly with a `--from-step` resume hint + a `RUN_END (halted)` spine event**, instead of a raw traceback (the #79 "failures halt cleanly" principle applied to host SDK errors). +1 test (151 total). Origin: the live Codex review crash mid-run.

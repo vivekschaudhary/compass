@@ -285,6 +285,63 @@ class TestStepCockpit(unittest.TestCase):
         self.assertEqual(steps[0][1:3], ("engineer", "triage-and-fix"))
 
 
+class TestHtmlCockpit(unittest.TestCase):
+    # #113: the HTML browser surface over the same spine data.
+    def _events(self):
+        return [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="triage"),
+            ev.make_event(ev.STEP_START, run_id="r1", step=1, agent="support", task="classify-intake"),
+            ev.make_event(ev.STEP_END, run_id="r1", step=1),
+            ev.make_event(ev.STEP_START, run_id="r1", step=2, title="intake gate"),
+            ev.make_event(ev.GATE_OPEN, run_id="r1", step=2, kind="routing", title="intake gate"),
+            ev.make_event(ev.RUN_START, run_id="r2", project="crypto", workflow="build", bet_id="CB-7"),
+            ev.make_event(ev.STEP_START, run_id="r2", step=3, agent="engineer", task="implement-story"),
+            ev.make_event(ev.RUN_START, run_id="r3", project="home", workflow="fix"),
+            ev.make_event(ev.RUN_END, run_id="r3", status="completed", reason="all steps complete"),
+        ]
+
+    def test_render_html_has_sections_and_data(self):
+        out = cockpit.render_html(cockpit.fold_runs(self._events()), snapshot_ts="2026-06-23")
+        self.assertIn("<!doctype html>", out)
+        self.assertIn("http-equiv='refresh'", out)          # auto-reload
+        self.assertIn("Awaiting your decision", out)
+        self.assertIn("In flight", out)
+        self.assertIn("Done", out)
+        self.assertIn("CB-7", out)                           # an in-flight run
+        self.assertIn("all steps complete", out)             # a done run's reason
+        self.assertIn("--approve", out)                      # the awaiting run's command
+
+    def test_render_html_escapes(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="x", project="home", workflow="fix"),
+            ev.make_event(ev.RUN_END, run_id="x", status="halted", reason="<script>alert(1)</script>"),
+        ]
+        out = cockpit.render_html(cockpit.fold_runs(events), snapshot_ts="t")
+        self.assertNotIn("<script>alert(1)</script>", out)   # raw tag must not survive
+        self.assertIn("&lt;script&gt;", out)                 # escaped instead
+
+    def test_render_html_empty(self):
+        out = cockpit.render_html({}, snapshot_ts="t")
+        self.assertIn("<!doctype html>", out)
+        self.assertIn("nothing waiting on you", out)         # no crash, valid page
+
+    def test_build_page_returns_bytes(self):
+        self.assertIsInstance(cockpit.build_page([], snapshot_ts="t"), bytes)
+        self.assertIsInstance(cockpit.build_page(self._events(), snapshot_ts="t"), bytes)
+
+    def test_step_rows_parity_text_and_html(self):
+        # _run_step_rows is the single source both renderers use → no drift.
+        run = {"run_id": "r", "project": "home", "workflow": "fix", "bet_id": None,
+               "ended": False, "status": None, "reason": None,
+               "steps": {1: {"status": "done", "agent": "engineer", "task": "triage-and-fix"}}}
+        graph = [(1, "engineer", "triage-and-fix", False, ""),
+                 (2, "reviewer", "review-pr", False, "")]
+        rows, has_graph = cockpit._run_step_rows(run, graph)
+        self.assertTrue(has_graph)
+        self.assertEqual(rows[0][1], "done")
+        self.assertEqual(rows[1][1], "pending")
+
+
 class TestRunEmitsLifecycle(unittest.TestCase):
     """Integration: a real _run_workflow call emits RUN_START … RUN_END to the
     user-local spine, even on an early halt (no host available)."""

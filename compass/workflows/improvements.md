@@ -3210,3 +3210,20 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Resume for the live run:** `compass-run fix --project-dir . --from-step 3 --allow-write --context "resume: Codex review of the AAL2 middleware-renewal fix"` — picks up at the reviewer with the param fix in place.
 
 **Files touched (4):** `compass/orchestrator/hosts/openai.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #112. **5 of 5 → Retro #023 fires next.** A consumer-signal bug fix that makes the cross-host (Codex) review path actually work end-to-end.
+
+### 2026-06-23 — HTML cockpit: the live browser feed (#113)
+
+**Trigger origin (Principle #19):** **DRI, repeatedly** — "see the entire plan in a dashboard." The text cockpit (#104/#111) answered it at the CLI; this is the **browser** surface the DRI kept gravitating to ("use the dashboard as the orchestrator"). First improvement of the post-Retro-#023 batch.
+
+**What shipped — one renderer, two surfaces (over the #104 spine):**
+- **`render_html`** — a self-contained HTML doc (inline CSS, no deps, `<meta http-equiv=refresh>`): ⏸ awaiting (+ ready-to-run approve command) · ▶ in-flight (+ `step N/M` + the annotated step plan ✓/▶/⏸/·) · ✓ done · 💰 spend. All run/agent/reason text HTML-escaped. Reuses `fold_runs` + cost helpers; factored `_run_step_rows` + `spend_summary` so the **text and HTML views share one source and never drift**.
+- **`cockpit --html [path]`** — writes a `file://` snapshot (default `$COMPASS_HOME/orchestrator/cockpit.html`); honest "snapshot at <ts>", re-run to refresh.
+- **`cockpit --serve [--port N]`** — a **read-only localhost server** (stdlib `http.server`, `127.0.0.1`, GET-only, no writes/traversal) that re-reads `events.jsonl` per request → the **true live feed** (browser meta-refreshes; each load reflects new events as a workflow runs).
+
+**Relationship to `/dashboard`:** distinct and deliberate. The `/dashboard` skill renders a *project's* artifacts (repo-scoped, `docs/dashboard.html`); this is the **portfolio-wide, user-local orchestrator cockpit** (spans every project, reads `~/.compass`) — same separation as the spine itself (#104). Convergence is a later call.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **156 pass** (+5: html sections/data, escaping `<script>`, empty page, `build_page` bytes, text↔html step-row parity). consistency-check CONSISTENT (no count change). Smoke: `--html` snapshot shows awaiting/in-flight(`step 4/8`)/done/spend; `--serve` + `curl 127.0.0.1` returns the live-rendered cockpit.
+
+**Out of scope (declared):** WebSocket push (meta-refresh polling is v1); approve-from-dashboard (the action channel — relays to the mechanical gate, the bigger v2); converging with the project `/dashboard`; server auth (localhost-only, read-only).
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #113. **1 of 5 before Retro #024 (fires after #117).** Delivery-layer slice 2 (after the text cockpit) — the browser "dashboard as orchestrator."
