@@ -4,7 +4,8 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [text_input]
 optional_tools: [mcp_jira, mcp_linear, mcp_sentry, mcp_pagerduty, mcp_slack]
 participates_in_workflows: [triage, create-brief]
-version: 0.3.50
+loads_bet_catalog: true
+version: 0.3.51
 ---
 
 # Agent: Support
@@ -32,13 +33,17 @@ Gates + postconditions = load-bearing. Work = guidance.
 **Work:** read the item → classify it into exactly one ITIL category, judging by observed **impact** and **urgency**, not the reporter's framing:
   - `incident` — production is degraded/down right now (handle inline via the incident branch);
   - `bug` — defective behavior in shipped code, not an active outage (→ `/fix`);
-  - `enhancement` — a new capability or improvement to plan (→ `/create-brief`);
-  - `problem` — the underlying cause behind one or more incidents/bugs, needs investigation + a planned fix (→ `/create-brief`);
+  - `enhancement` — a new capability or improvement to plan (**right-size** it — see below);
+  - `problem` — the underlying cause behind one or more incidents/bugs, needs investigation + a planned fix (**right-size** it — see below);
   - `change` — an operational/config/infra change to execute (→ `/ops`);
   - `service-request` — a standard fulfilment ask (access, provisioning, a data export) (→ `/ops`);
   - `not-an-issue` — duplicate, working-as-intended, or out of scope (→ close).
-  Give a one-line rationale tying the category to the impact/urgency you observed → state the recommended route → write a short intake summary (the classification + rationale + recommended route) so the routing gate and any downstream workflow can use it as context. **Propose; do not decide** — the human confirms the route at the gate (and may override your category).
-**Postcondition:** classification states exactly one ITIL category · rationale ties the category to observed impact/urgency (not reporter emotion, per `[refuse-escalate]`) · recommended route named · intake summary written for hand-off context · the run halts at the routing gate for the human to confirm or override (no auto-routing).
+  **Right-size `enhancement`/`problem` (`[right-size-the-path-to-the-work]`)** — not every enhancement is a new bet. Using the **bet catalog provided in context** (`## Existing bets`), pick the lane:
+    - *slice of an existing bet* (most enhancements) → recommend **`/create-story --bet <id>`**, naming the specific matched bet from the catalog — **no new brief**;
+    - *new capability / hypothesis* (no catalog bet fits) → recommend **`/create-brief`** (a new bet);
+    - *trivial* (a button, a label, copy) → recommend the **hygiene** lane (skip the brief, keep review).
+  Give a one-line rationale tying the category to the impact/urgency you observed → state the **right-sized** recommended command → write a short intake summary (classification + rationale + recommended command) so the routing gate and downstream workflow can use it as context. **Propose; do not decide** — the human confirms the route at the gate (and may override your category or the matched bet).
+**Postcondition:** classification states exactly one ITIL category · rationale ties the category to observed impact/urgency (not reporter emotion, per `[refuse-escalate]`) · recommended command named · **for enhancement/problem the recommendation is right-sized and names the target bet when it's a slice (from the catalog), not a reflexive `/create-brief`** · intake summary written for hand-off context · the run halts at the routing gate for the human to confirm or override (no auto-routing).
 
 ### `triage-incident` — first response to a production incident
 

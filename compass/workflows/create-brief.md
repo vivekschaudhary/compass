@@ -4,7 +4,7 @@ status: active
 owner: pm
 auto_invokes: []
 invoked_by: [create-bet-portfolio, manual]
-version: 0.3.27
+version: 0.3.51
 requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md]
 ---
 
@@ -19,7 +19,7 @@ requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md]
 
 ## Purpose
 
-Creates a **bet-level brief** (`docs/bets/<bet-id>/brief.md`) — the shaped bet before architecture or engineering begins. Two modes: **fresh** (new bet from source material) and **promote-stub** (fill content for a portfolio stub from `/create-bet-portfolio`).
+Creates a **bet-level brief** (`docs/bets/<bet-id>/brief.md`) — the shaped bet before architecture or engineering begins. **`/create-brief` is for a NEW bet / capability, not an addition to an existing one** (`[right-size-the-path-to-the-work]`) — if the work is a slice of a bet that already exists, it belongs in `/create-story --bet <id>`, not a fresh bet. Two modes: **fresh** (new bet from source material) and **promote-stub** (fill content for a portfolio stub from `/create-bet-portfolio`).
 
 ## Architectural shape (v0.3.27)
 
@@ -30,6 +30,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 - **Foundation approved** — `docs/foundation/product.md` AND `docs/foundation/architecture.md` both `status: approved`. **On failure:** *"Foundation not approved. Run `/setup-product` and `/setup-foundation-architecture` first."*
 - **Source or stub present** — user provides ≥1 source (link, free text, or existing stub bet-id with `portfolio_stub: true`). **On failure:** *"Provide a source link, description, or stub bet-id to begin."*
 - **Brief not already drafted** — if `docs/bets/<bet-id>/brief.md` exists with `portfolio_stub: false`, refuse: *"Brief already drafted. Use `/create-story <bet-id>` or `/create-bet-architecture <bet-id>` next."*
+- **Not a slice of an existing bet** (`[right-size-the-path-to-the-work]`, v0.3.51) — if the request is really a slice/addition to an already-approved bet (check the existing bets under `docs/bets/`), **refuse** and right-size: *"This looks like a slice of bet `<id>`. Run `/create-story <id>` instead of minting a new bet."* Only genuinely new capabilities/hypotheses get a fresh brief. (Enforced in the PM task gate, per `[refuse-escalate]` spirit — don't silently create a redundant bet.)
 
 ## Roles invoked (agents dispatched)
 

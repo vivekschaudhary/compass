@@ -4,7 +4,7 @@ status: active
 owner: support
 auto_invokes: []
 invoked_by: [manual, incident_alert]
-version: 0.3.50
+version: 0.3.51
 requires_approved: []
 ---
 
@@ -61,6 +61,8 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th wo
 - `change` → /ops — an operational/config/infra change to execute.
 - `service-request` → /ops — a standard fulfilment ask (access, provisioning, export).
 - `not-an-issue` → close — duplicate, working-as-intended, or out of scope.
+
+**Right-size `enhancement`/`problem` (`[right-size-the-path-to-the-work]`, v0.3.51):** the `/create-brief` target above is the **default for a genuinely new capability**. `classify-intake` is given the **bet catalog** and right-sizes the recommendation: a **slice of an existing bet** → run `/create-story --bet <id>` (the classifier names the bet; no new brief) · **trivial** (a button/label) → the **hygiene** lane (skip the brief, keep review). `/create-brief` itself refuses to mint a redundant bet for a slice and points to `/create-story`.
 
 ### Step 3. `support.triage-incident` (Support agent owns) — [incident branch]
 

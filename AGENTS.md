@@ -250,7 +250,9 @@ Set in `compass/config.yaml` under `hitl_level`:
 
 **Bet-driven** (default) — any user-facing change, feature work, tech debt, continuous improvement, architectural initiative. Requires a brief.
 
-**Hygiene** — `hygiene: true` tag on `/ops` or `/fix`. Dependency patches, CI fixes, doc typos, secret rotations, dev-experience tweaks. Skips brief, still gets full review.
+**Hygiene** — `hygiene: true` tag on `/ops` or `/fix` (and trivial enhancements — small affordances/copy). Dependency patches, CI fixes, doc typos, secret rotations, dev-experience tweaks. Skips brief, still gets full review. *(A brief-less lightweight-build destination for trivial enhancements is **declared**, not yet wired — #109 follow-on; today a tiny enhancement uses the smallest bet/story.)*
+
+**Right-size the path to the work** (`[right-size-the-path-to-the-work]`, candidate v0.3.51) — **not every enhancement is a new bet.** Size the path: a *new capability/hypothesis* → `/create-brief` (new bet) · a *slice of an existing bet* (most enhancements) → `/create-story --bet <id>` (no new brief) · *trivial* → hygiene. The front-door `support.classify-intake` reads the bet catalog and recommends the right-sized lane (naming the matched bet for a slice); `/create-brief` refuses to mint a redundant bet for a slice. Pairs with `[ai-collapses-org-tiering]` (the `/fix` collapse) — both *size the path to the work* rather than routing everything through the heaviest pipeline.
 
 ## When you're unsure
 

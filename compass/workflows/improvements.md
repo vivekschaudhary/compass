@@ -3138,3 +3138,23 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope:** codifying `[ai-collapses-org-tiering]` to canon (DRI-gated, 1 instance); the `--allow-write` hand-off paper-cut (#103 command omits the flag — small follow-on).
 
 **Files touched (7):** `compass/agents/engineer.md` · `compass/workflows/fix.md` · `compass/agents/support.md` · `compass/workflows/triage.md` · `compass/orchestrator/hosts/tools.py` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` (+ CHANGELOG + this file). Counter: #108. **1 of 5 before Retro #023 (fires after #112).** First post-Retro-#022 build — converts the retro's headline declared redesign into shipped structure.
+
+### 2026-06-23 — right-size the path to the work: the enhancement lanes (#109)
+
+**Trigger origin (Principle #19):** **DRI design challenge, during live use.** While walking through creating a home-app story, the DRI asked: *"are all enhancements going through the same space?"* then *"AI should also recommend the bet this new story is part of."* The front door was sending **every** `enhancement`/`problem` to `/create-brief` (a new bet + the full pipeline) regardless of size — the planning-side twin of the `/fix` ITIL ceremony (#108).
+
+**The three lanes** (`[right-size-the-path-to-the-work]`, 1st instance): *new capability* → `/create-brief` (new bet) · *slice of an existing bet* (most enhancements) → `/create-story --bet <id>` (no new brief) · *trivial* → hygiene (skip brief, keep review).
+
+**What shipped:**
+- **`classify-intake` right-sizes** (support.md v0.3.51) — for enhancement/problem it picks the lane and recommends the specific right-sized command, instead of a reflexive `/create-brief`.
+- **The classifier names the bet** (the DRI's add) — new `run.py` helpers `_load_bet_catalog(project_dir)` (compact catalog: each `docs/bets/*/brief.md`'s id + type + status + one-liner from its hypothesis/heading) + `_reads_bet_catalog(agent_file)` (a `loads_bet_catalog: true` frontmatter flag). The orchestrator injects the catalog into any flagged agent's step context; `support.md` opts in. So for a slice the recommendation is `/create-story --bet <matched id>` **by name**. Empty catalog (no bets) → recommend a new bet.
+- **Mechanical guard** (create-brief.md v0.3.51) — a new precondition refuses to mint a redundant bet for a slice of an already-approved bet, pointing to `/create-story` (mirrors the existing "Brief already drafted → refuse"; `[refuse-escalate]` spirit).
+- **Policy + lane prose** — AGENTS.md "Two paths for work" gains the right-size policy + extends `hygiene` to trivial enhancements (Lane 3 destination **declared**, not wired); triage.md Step 2 names the lanes under the enhancement route.
+
+**Scope discipline:** the 7-ITIL routing gate is **unchanged** (`enhancement → /create-brief` stays the default; right-sizing rides in the recommendation + the create-brief guard, not new gate targets) — so `test_triage_intake_routing_gate` stays green. No new ITIL category, no parser change.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **142 pass** (+3: catalog names bets with type/status + heading/hypothesis one-liner; empty-project → ""; the `loads_bet_catalog` flag). consistency-check CONSISTENT (no count change). Smoke: `_load_bet_catalog` on a 2-bet project renders the catalog correctly.
+
+**Out of scope (declared):** Lane 3 fully wired (brief-less lightweight build for trivial enhancements); `[brief-work-reconciliation]` (the other candidate — surface plan↔work gaps, still open); codifying `[right-size-the-path-to-the-work]` to canon (DRI-gated).
+
+**Files touched (6):** `compass/orchestrator/run.py` · `compass/agents/support.md` · `compass/workflows/create-brief.md` · `compass/workflows/triage.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #109. **2 of 5 before Retro #023 (fires after #112).** Pairs with #108 — both *size the path to the work* (collapse the fix tier · right-size the enhancement path).

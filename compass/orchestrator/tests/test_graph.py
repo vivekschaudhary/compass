@@ -247,6 +247,50 @@ class TestRouteParsing(unittest.TestCase):
         self.assertIsInstance(targets["not-an-issue"], str)
 
 
+class TestBetCatalog(unittest.TestCase):
+    # #109: the front-door classifier gets the existing-bets catalog so it can
+    # right-size an enhancement and name the bet a slice belongs to.
+    def _bet(self, root, bet_id, fm, body=""):
+        from pathlib import Path
+        d = Path(root) / "docs" / "bets" / bet_id
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "brief.md").write_text(f"---\n{fm}\n---\n{body}", encoding="utf-8")
+
+    def test_catalog_names_bets_with_type_status(self):
+        import tempfile
+        from compass.orchestrator.run import _load_bet_catalog
+        with tempfile.TemporaryDirectory() as d:
+            self._bet(d, "CB-7", "id: CB-7\ntype: feature\nstatus: approved",
+                      "# Accounts dashboard\nShow linked bank accounts.\n")
+            self._bet(d, "CB-9", "id: CB-9\ntype: tech-debt\nstatus: proposed\nhypothesis: Speed up sync")
+            cat = _load_bet_catalog(Path(d))
+            self.assertIn("CB-7 (feature, approved)", cat)
+            self.assertIn("Accounts dashboard", cat)           # heading one-liner
+            self.assertIn("CB-9 (tech-debt, proposed)", cat)
+            self.assertIn("Speed up sync", cat)                # hypothesis one-liner
+            self.assertIn("create-story --bet", cat)           # tells the classifier the lane
+
+    def test_catalog_empty_when_no_bets(self):
+        import tempfile
+        from compass.orchestrator.run import _load_bet_catalog
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(_load_bet_catalog(Path(d)), "")   # no docs/bets → no crash
+
+    def test_reads_bet_catalog_flag(self):
+        import tempfile
+        from pathlib import Path
+        from compass.orchestrator.run import _reads_bet_catalog
+        on = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+        on.write("---\nname: support\nloads_bet_catalog: true\n---\nbody\n"); on.close()
+        off = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+        off.write("---\nname: pm\npreferred_hosts: [claude]\n---\nbody\n"); off.close()
+        try:
+            self.assertTrue(_reads_bet_catalog(Path(on.name)))
+            self.assertFalse(_reads_bet_catalog(Path(off.name)))
+        finally:
+            Path(on.name).unlink(); Path(off.name).unlink()
+
+
 class TestHandoffMessage(unittest.TestCase):
     # #103: cross-workflow hand-off / close handling at a routing gate.
     def test_handoff_recommends_command(self):

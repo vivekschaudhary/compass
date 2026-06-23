@@ -71,6 +71,23 @@ def _read_agent_tools(agent_file: Path) -> list:
     return [t.strip() for t in t_match.group(1).split(",") if t.strip()]
 
 
+def _reads_bet_catalog(agent_file: Path) -> bool:
+    """
+    True if the agent declares `loads_bet_catalog: true` in frontmatter (#109).
+
+    When set, the orchestrator injects the project's bet catalog (existing bets'
+    ids + types + statuses + one-liners) into the agent's step context — so
+    `support.classify-intake` can right-size an enhancement and name the specific
+    bet a slice belongs to (`/create-story --bet <X>`) instead of reflexively
+    routing every enhancement to `/create-brief`.
+    """
+    text = agent_file.read_text(encoding="utf-8")
+    fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+    if not fm_match:
+        return False
+    return bool(re.search(r'^loads_bet_catalog:\s*true\b', fm_match.group(1), re.MULTILINE | re.IGNORECASE))
+
+
 # Workflow → branch type prefix (config.yaml branch_pattern `<type>/<id>-<slug>`).
 _WORKFLOW_BRANCH_TYPE = {
     "fix": "fix",
@@ -439,6 +456,61 @@ def _load_full_project_context(project_dir: Path) -> str:
         parts.append(f"### PROJECT.md\n\n{project_md.read_text(encoding='utf-8')}\n")
 
     return "\n".join(parts)
+
+
+def _load_bet_catalog(project_dir: Path) -> str:
+    """
+    Compact catalog of existing bets (#109) — one line per `docs/bets/*/brief.md`:
+    `<id> (<type>, <status>): <one-liner>`. Lets the front-door classifier match
+    an enhancement to an existing bet (→ `/create-story --bet <id>`) instead of
+    minting a redundant bet. Returns "" when there are no bets (→ recommend a new
+    bet). Reads brief frontmatter + the first heading/hypothesis only — planning
+    docs, not source.
+    """
+    bets_dir = project_dir / "docs" / "bets"
+    if not bets_dir.exists():
+        return ""
+    lines = []
+    for brief in sorted(bets_dir.glob("*/brief.md")):
+        bet_id = brief.parent.name
+        try:
+            text = brief.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        fm = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+        fm_text = fm.group(1) if fm else ""
+        body = text[fm.end():] if fm else text
+
+        def _field(name):
+            m = re.search(rf'^{name}:\s*(.+)$', fm_text, re.MULTILINE)
+            return m.group(1).strip().strip('"\'') if m else None
+
+        btype = _field("type") or "bet"
+        status = _field("status") or "?"
+        # one-liner: a `hypothesis:` frontmatter field, else the first `# ` heading,
+        # else the first non-empty body line.
+        oneliner = _field("hypothesis")
+        if not oneliner:
+            h = re.search(r'^#\s+(.+)$', body, re.MULTILINE)
+            if h:
+                oneliner = h.group(1).strip()
+        if not oneliner:
+            for ln in body.splitlines():
+                if ln.strip():
+                    oneliner = ln.strip()
+                    break
+        oneliner = (oneliner or "").lstrip("# ").strip()
+        if len(oneliner) > 120:
+            oneliner = oneliner[:120] + "…"
+        lines.append(f"- {bet_id} ({btype}, {status}): {oneliner}")
+
+    if not lines:
+        return ""
+    return (
+        "## Existing bets (catalog)\n\n"
+        "Match an enhancement to one of these (→ `/create-story --bet <id>`, no new "
+        "brief) before proposing a new bet:\n\n" + "\n".join(lines) + "\n"
+    )
 
 
 def _load_bet_context(project_dir: Path, bet_id: str) -> str:
@@ -917,6 +989,16 @@ def _run_workflow(
         first_step = False
 
         user_context = _collect_input(step.title, inline)
+
+        # Bet catalog (#109): agents that declare `loads_bet_catalog: true` (e.g.
+        # support.classify-intake) get the existing-bets list prepended so they can
+        # right-size an enhancement and name the bet a slice belongs to.
+        if _reads_bet_catalog(agent_file):
+            catalog = _load_bet_catalog(project_dir)
+            if catalog:
+                user_context = catalog + "\n" + user_context
+                print("[bet-catalog] injected existing-bets list for right-sizing")
+
         user_message = _build_user_message(step.task, user_context, prior_outputs)
 
         agent_tools = _read_agent_tools(agent_file)
