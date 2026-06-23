@@ -3192,3 +3192,19 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Out of scope (declared):** a true periodic "still working…" heartbeat (needs streaming/threads — static line is v1); the HTML `/dashboard` live feed (next delivery slice); `--watch` live re-render.
 
 **Files touched (4):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #111. **4 of 5 before Retro #023 (fires after #112).** Both gaps the live run exposed — "see the whole plan / pending" and "looks frozen" — closed.
+
+### 2026-06-23 — OpenAI adapter max_tokens→max_completion_tokens; dispatch halts cleanly (#112)
+
+**Trigger origin (Principle #19):** **live crash.** The home-app `/fix` reached Step 3 `reviewer.review-pr` on **codex** (OPENAI_API_KEY now set — the maker≠checker handoff worked!) and **crashed with a raw traceback**: `openai.BadRequestError 400 — 'max_tokens' is not supported with this model. Use 'max_completion_tokens'` (default model `gpt-5`). The reviewer never ran.
+
+**Two fixes:**
+- **`hosts/openai.py`** — send **`max_completion_tokens`** instead of the legacy `max_tokens` (gpt-5 / o-series reject the latter; it's the forward-compatible param). Made the adapter `client`-injectable (mirrors `claude.py`) for testing.
+- **`run.py`** — the dispatch wrapper caught only `(RuntimeError, ImportError)`, so a host SDK error (API 400, rate limit, network) escaped as an **uncaught traceback that killed the run**. Now it catches **any `Exception`** → prints a friendly error + **`--from-step` resume hint** + emits `RUN_END (halted)` to the spine, then exits 1. (KeyboardInterrupt is BaseException, so Ctrl-C still propagates.) This is the #79 "failures halt cleanly, no silent/ugly death" principle extended to host adapters.
+
+**Why it matters:** the Codex/Gemini review path is the **maker≠checker** guarantee — if it crashes, the independent review silently doesn't happen. This makes the cross-host review path actually usable, and any future host error degrades to a clean, resumable halt.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **151 pass** (+1: the openai adapter sends `max_completion_tokens`, not `max_tokens`, via a fake client). consistency-check CONSISTENT. The broadened dispatch-halt is exercised by the original crash scenario (now a clean halt + resume hint).
+
+**Resume for the live run:** `compass-run fix --project-dir . --from-step 3 --allow-write --context "resume: Codex review of the AAL2 middleware-renewal fix"` — picks up at the reviewer with the param fix in place.
+
+**Files touched (4):** `compass/orchestrator/hosts/openai.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_tools.py` · `CHANGELOG.md` (+ this file). Counter: #112. **5 of 5 → Retro #023 fires next.** A consumer-signal bug fix that makes the cross-host (Codex) review path actually work end-to-end.

@@ -420,5 +420,41 @@ class TestWorkBranch(unittest.TestCase):
             self.assertIsNone(_ensure_work_branch(d, "fix/x"))
 
 
+class TestOpenAIAdapter(unittest.TestCase):
+    # #112: newer OpenAI models reject `max_tokens` (400) — the adapter must send
+    # `max_completion_tokens`. Fake client captures the create() kwargs.
+    class _FakeCompletions:
+        def __init__(self):
+            self.calls = []
+        def create(self, **kw):
+            self.calls.append(kw)
+            msg = type("M", (), {"content": "review: LGTM"})()
+            return type("R", (), {"choices": [type("C", (), {"message": msg})()]})()
+
+    class _FakeChat:
+        def __init__(self, comps):
+            self.completions = comps
+
+    class _FakeClient:
+        def __init__(self, comps):
+            self.chat = TestOpenAIAdapter._FakeChat(comps)
+
+    def test_uses_max_completion_tokens_not_max_tokens(self):
+        from compass.orchestrator.hosts.openai import dispatch
+        comps = self._FakeCompletions()
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
+            f.write("---\nname: reviewer\n---\nYou review.\n")
+            agent = f.name
+        try:
+            out = dispatch(agent, "review-pr", "review this", model="gpt-5",
+                           max_tokens=4096, client=self._FakeClient(comps))
+        finally:
+            Path(agent).unlink()
+        self.assertEqual(out, "review: LGTM")
+        kw = comps.calls[0]
+        self.assertEqual(kw["max_completion_tokens"], 4096)  # the fix
+        self.assertNotIn("max_tokens", kw)                   # the bug (400 on gpt-5)
+
+
 if __name__ == "__main__":
     unittest.main()

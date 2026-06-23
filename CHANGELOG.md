@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **OpenAI/Codex adapter sent `max_tokens` → 400 on newer models; dispatch crashed with a traceback (#112).** Live consumer signal: the Codex **reviewer** step (`preferred_hosts: [codex, gemini]`) on the home-app `/fix` died with `openai.BadRequestError: 'max_tokens' is not supported with this model. Use 'max_completion_tokens'` (default model `gpt-5`). Two fixes: (1) `hosts/openai.py` now sends **`max_completion_tokens`** (the forward-compatible param; gpt-5 / o-series reject `max_tokens`) and is `client`-injectable for tests; (2) `run.py`'s dispatch wrapper now catches **any** exception (was only `RuntimeError`/`ImportError`) so an API 400 / rate-limit / network error **halts cleanly with a `--from-step` resume hint + a `RUN_END (halted)` spine event**, instead of a raw traceback (the #79 "failures halt cleanly" principle applied to host SDK errors). +1 test (151 total). Origin: the live Codex review crash mid-run.
+
 ### Added
 
 - **Step-level cockpit + first-turn heartbeat (#111).** The cockpit was run-level (in-flight showed only the *current* step); the live `/fix` run also exposed a "looks frozen" gap (the first model turn prints nothing for 1–2 min). Now: `cockpit --run <id>` renders the **full workflow plan annotated ✓done / ▶running / ⏸awaiting-you / ·pending** — folding per-step status from the spine (`step_start`/`step_end`/`gate_open`) and loading the workflow graph (`--compass-dir`, default `$COMPASS_FW/compass`) to show *pending* steps; graph-unavailable → spine-only fallback (no crash). The default cockpit's in-flight line now shows `step N/M`. Ended runs show what ran + the end reason (no phantom pending). And `run.py` prints a one-line **heartbeat** after "Dispatching…" on tool steps ("first turn can take ~1–2 min before tool activity — watch `cockpit`"). +6 tests (150 total). Origin: DRI wanted to see the whole plan + pending steps, and the live run looked hung during the first turn.

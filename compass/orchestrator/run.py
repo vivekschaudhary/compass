@@ -1054,10 +1054,21 @@ def _run_workflow(
                 allow_write=allow_write, max_tool_iterations=max_tool_iterations,
                 on_event=emit,
             )
-        except (RuntimeError, ImportError) as exc:
-            print(f"Error: {exc}", file=sys.stderr)
+        except Exception as exc:
+            # Any dispatch failure — API 400s, rate limits, network, SDK errors
+            # (#112) — halts CLEANLY with a resume hint, never a raw traceback.
+            # (KeyboardInterrupt is BaseException, so Ctrl-C still propagates.)
+            print(
+                f"Error dispatching step {step.number} ({step.agent}.{step.task}) "
+                f"to {host}: {exc}\n"
+                f"  Run halted. Fix the cause, then resume:\n"
+                f"    python3 -m compass.orchestrator.run {workflow_name} "
+                f"--from-step {step.number}"
+                + (f" --allow-write" if allow_write else ""),
+                file=sys.stderr,
+            )
             emit(ev.RUN_END, status="halted",
-                 reason=f"dispatch error at step {step.number}: {exc}")
+                 reason=f"dispatch error at step {step.number}: {type(exc).__name__}: {exc}")
             sys.exit(1)
 
         print(f"\n{'=' * 60}")
