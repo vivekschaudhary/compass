@@ -31,6 +31,7 @@ Artifacts the framework produces live in `docs/`:
 | Host | Invocation | Production-ready? |
 | ----- | ---------- | ----------------- |
 | `claude` (Claude Code) | CLI / IDE plugin; reads local files automatically; auto-loads `CLAUDE.md` | Yes |
+| `claude-code` (Claude CLI, subscription) | Orchestrator host (#120): dispatches via `claude -p` on the logged-in CLI subscription — **no `ANTHROPIC_API_KEY`, flat marginal cost**. Opt-in via `--claude-cli` / `COMPASS_CLAUDE_HOST=cli`, which remaps a step's `claude` host → `claude-code` (reviewers on codex/gemini untouched) | Yes |
 | `codex` (Codex CLI) | CLI; reads `.codex/prompts/<agent>.md` | Yes |
 | `openai` (ChatGPT / GPT API) | Custom GPT Instructions = paste agent file; API call with agent file as system prompt; manual paste | Yes — Custom GPT is the recommended path for new projects |
 | `gemini` (Google Gemini CLI) | CLI; reads `.gemini/prompts/<agent>.md` | Yes |

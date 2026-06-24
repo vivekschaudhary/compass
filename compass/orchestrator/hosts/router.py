@@ -6,6 +6,7 @@ Selection order: first host in preferred_hosts that has credentials available.
 
 Credential check per host:
   claude           → ANTHROPIC_API_KEY
+  claude-code      → the `claude` CLI on PATH (subscription login; no API key) — #120
   codex / chatgpt / openai  → OPENAI_API_KEY
   gemini           → GEMINI_API_KEY or GOOGLE_API_KEY
 
