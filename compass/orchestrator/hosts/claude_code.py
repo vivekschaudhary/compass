@@ -79,9 +79,22 @@ def _parse_result(stdout: str):
     return text, usage, cost
 
 
+def _subscription_env() -> dict:
+    """Env for the CLI with API-key vars stripped (#120). The `claude` CLI prefers
+    ANTHROPIC_API_KEY over the logged-in subscription — so leaving it set would
+    bill (and rate-limit) the metered API, defeating the entire point of this
+    host. Drop it (and the auth-token / base-url overrides) so `claude` uses the
+    subscription login. This IS the flat-cost guarantee, not a nicety."""
+    env = os.environ.copy()
+    for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
+        env.pop(k, None)
+    return env
+
+
 def _default_runner(argv, input):
     """Run the CLI, capturing stdout/stderr. Isolated so tests inject a fake."""
-    return subprocess.run(argv, input=input, capture_output=True, text=True)
+    return subprocess.run(argv, input=input, capture_output=True, text=True,
+                          env=_subscription_env())
 
 
 def _run(agent_file_path, user_message, model, project_dir, allow_write,
@@ -90,13 +103,25 @@ def _run(agent_file_path, user_message, model, project_dir, allow_write,
     runner = runner or _default_runner
     argv = _build_cli_argv(model, agent_file_path, project_dir, allow_write)
     proc = runner(argv, input=user_message)
+    out = getattr(proc, "stdout", "") or ""
     if getattr(proc, "returncode", 0) != 0:
-        err = (getattr(proc, "stderr", "") or "").strip() or "(no stderr)"
+        # The CLI reports usage-limit / auth / model errors in STDOUT (as JSON or
+        # plain text), often with an EMPTY stderr — so surface stdout, else the
+        # cause is invisible ("no stderr" tells you nothing). #120.
+        detail = (getattr(proc, "stderr", "") or "").strip()
+        if not detail and out.strip():
+            try:
+                o = json.loads(out)
+                detail = str(o.get("result") or o.get("error") or o)[:400]
+            except (ValueError, TypeError):
+                detail = out.strip()[:400]
+        detail = detail or "(no output on stdout or stderr)"
         raise RuntimeError(
-            f"claude CLI exited {proc.returncode}: {err[:300]} — is the CLI "
-            f"installed and logged in? (`claude` on PATH, run `claude` once to auth)"
+            f"claude CLI exited {proc.returncode}: {detail} — check the CLI is "
+            f"logged in and not at a usage limit (`claude` on PATH; run `claude` "
+            f"interactively once to auth / see limits)."
         )
-    text, usage, cost = _parse_result(getattr(proc, "stdout", "") or "")
+    text, usage, cost = _parse_result(out)
     # Flat-cost NOTE (no `usage` event): keeps --max-cost from false-tripping and
     # the cockpit 💰 Spend honest at $0 for subscription runs, while still showing
     # the token shape + the CLI's API-equivalent cost for transparency.

@@ -117,6 +117,27 @@ class TestDispatch(unittest.TestCase):
                                                          returncode=1),
                         on_event=lambda e: None)
 
+    def test_subscription_env_strips_api_key(self):
+        # The flat-cost guarantee: the CLI must NOT see ANTHROPIC_API_KEY, or it
+        # bills the metered API (and inherits its usage cap) instead of the sub.
+        saved = {k: os.environ.get(k) for k in
+                 ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL")}
+        try:
+            os.environ["ANTHROPIC_API_KEY"] = "sk-capped"
+            os.environ["ANTHROPIC_AUTH_TOKEN"] = "tok"
+            os.environ["ANTHROPIC_BASE_URL"] = "http://x"
+            env = cc._subscription_env()
+            self.assertNotIn("ANTHROPIC_API_KEY", env)
+            self.assertNotIn("ANTHROPIC_AUTH_TOKEN", env)
+            self.assertNotIn("ANTHROPIC_BASE_URL", env)
+            self.assertIn("PATH", env)  # the rest of the env is preserved
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
     def test_with_tools_grants_project_dir(self):
         seen = {}
 
