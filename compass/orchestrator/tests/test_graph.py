@@ -417,5 +417,36 @@ class TestCostControl(unittest.TestCase):
         self.assertIn("ok", _condense_output("ok"))   # tiny input → no crash
 
 
+class TestAsyncGate(unittest.TestCase):
+    # #118: non-interactive gate resolution (pause-and-resume enabler).
+    def test_resolve_approval_gate(self):
+        from compass.orchestrator.run import _resolve_gate
+        self.assertEqual(_resolve_gate("approve", False, None), ("approve", None))
+        self.assertEqual(_resolve_gate("reject", False, None), ("reject", None))
+        self.assertEqual(_resolve_gate("REJECT", False, None), ("reject", None))  # case-insensitive
+        self.assertEqual(_resolve_gate(None, False, None), ("pause", None))       # no decision → pause
+        self.assertEqual(_resolve_gate("bug", False, None), ("pause", None))      # route on approval gate → pause
+
+    def test_resolve_routing_gate(self):
+        from compass.orchestrator.run import _resolve_gate
+        routes = [("bug", "/fix"), ("incident", 3), ("not-an-issue", "close")]
+        self.assertEqual(_resolve_gate("bug", True, routes), ("route", "bug"))
+        self.assertEqual(_resolve_gate("INCIDENT", True, routes), ("route", "incident"))
+        self.assertEqual(_resolve_gate("nope", True, routes), ("pause", None))    # unknown label → pause
+        self.assertEqual(_resolve_gate(None, True, routes), ("pause", None))      # no decision → pause
+
+    def test_flags_parse(self):
+        # --non-interactive + --decide are accepted (argparse plumbing).
+        import argparse
+        from compass.orchestrator import run as runmod
+        # build a parser the same way main() does is internal; assert the dest names
+        # exist by parsing a tiny namespace via the module's main arg surface.
+        # Lightweight: confirm _run_workflow accepts the kwargs without error.
+        import inspect
+        sig = inspect.signature(runmod._run_workflow)
+        self.assertIn("non_interactive", sig.parameters)
+        self.assertIn("decide", sig.parameters)
+
+
 if __name__ == "__main__":
     unittest.main()

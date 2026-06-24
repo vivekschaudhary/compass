@@ -188,6 +188,24 @@ def _skip_for_route(router_number: int, target: int) -> set:
     return set(range(router_number + 1, target))
 
 
+def _resolve_gate(decide, is_routing: bool, routes=None):
+    """Non-interactive gate decision (#118). `decide` is the relayed human choice
+    (a --decide flag today, a dashboard POST later). Returns (action, label):
+      approval gate: ("approve"|"reject", None), else ("pause", None)
+      routing gate:  ("route", <matched label>) if decide matches a route, else ("pause", None)
+    The gate logic in run.py still executes — nothing here auto-decides; this only
+    maps a supplied decision to an action, or pauses when none/invalid."""
+    d = (decide or "").strip().lower()
+    if is_routing:
+        for label, _target in (routes or []):
+            if label.lower() == d:
+                return ("route", label)
+        return ("pause", None)
+    if d in ("approve", "reject"):
+        return (d, None)
+    return ("pause", None)
+
+
 def _recommended_next(output: str):
     """
     The right-sized next command a step recommended (#110), parsed from a single
@@ -666,6 +684,8 @@ def _run_workflow(
     max_tool_iterations: int = None,
     no_events: bool = False,
     max_cost: float = None,
+    non_interactive: bool = False,
+    decide: str = None,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -874,9 +894,25 @@ def _run_workflow(
         if step.is_hitl and step.routes:
             from .hitl import handle_routing_gate
             emit(ev.GATE_OPEN, step=step.number, kind="routing", title=step.title)
-            choice = handle_routing_gate(
-                step.number, step.title, step.routes, last_agent_output
-            )
+            if non_interactive:
+                # #118: don't block on input — apply --decide or pause-and-exit.
+                action, label = _resolve_gate(decide, True, step.routes)
+                decide = None  # consume — later gates this run pause
+                if action == "pause":
+                    labels = " / ".join(lbl for lbl, _ in step.routes)
+                    print(
+                        f"\n⏸ paused at routing gate (step {step.number}) — awaiting a route.\n"
+                        f"  Resume with one of [{labels}]:\n"
+                        f"    python3 -m compass.orchestrator.run {workflow_name} "
+                        f"--from-step {step.number} --non-interactive --decide <route>"
+                        + (f" --allow-write" if allow_write else "")
+                    )
+                    sys.exit(0)  # clean pause (no RUN_END → cockpit shows ⏸ awaiting)
+                choice = {"route": label, "target": dict(step.routes)[label]}
+            else:
+                choice = handle_routing_gate(
+                    step.number, step.title, step.routes, last_agent_output
+                )
             target = choice["target"]
             log_hitl(
                 project_dir=project_dir,
@@ -914,12 +950,29 @@ def _run_workflow(
         # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:
             emit(ev.GATE_OPEN, step=step.number, kind="hitl", title=step.title)
-            result = handle_hitl_gate(
-                step.number,
-                step.title,
-                last_artifact=last_artifact_path,
-                last_output=last_agent_output,
-            )
+            if non_interactive:
+                # #118: don't block on input — apply --decide or pause-and-exit.
+                action, _ = _resolve_gate(decide, False, None)
+                decide = None  # consume
+                if action == "pause":
+                    print(
+                        f"\n⏸ paused at HITL gate (step {step.number}) — awaiting your decision.\n"
+                        f"  Resume:\n"
+                        f"    python3 -m compass.orchestrator.run {workflow_name} "
+                        f"--from-step {step.number} --non-interactive --decide approve|reject"
+                        + (f" --allow-write" if allow_write else "")
+                    )
+                    sys.exit(0)  # clean pause (no RUN_END → cockpit shows ⏸ awaiting)
+                result = {"approved": action == "approve"}
+                if action == "reject":
+                    result["feedback"] = "(non-interactive reject via --decide)"
+            else:
+                result = handle_hitl_gate(
+                    step.number,
+                    step.title,
+                    last_artifact=last_artifact_path,
+                    last_output=last_agent_output,
+                )
             artifact_rel = (
                 str(last_artifact_path.relative_to(project_dir))
                 if last_artifact_path else None
@@ -1308,6 +1361,27 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        dest="non_interactive",
+        help=(
+            "Don't block on HITL gates (#118). The run pauses-and-exits at a gate "
+            "(emitting it to the cockpit's awaiting queue); resume with --from-step "
+            "N --decide <approve|reject|route>. Enables headless/CI and dashboard-"
+            "driven runs."
+        ),
+    )
+    parser.add_argument(
+        "--decide",
+        default=None,
+        metavar="approve|reject|ROUTE",
+        help=(
+            "With --non-interactive, the decision to apply at the FIRST gate the "
+            "(resumed) run reaches: approve/reject for an approval gate, or a route "
+            "label for a routing gate. Consumed once; later gates pause."
+        ),
+    )
+    parser.add_argument(
         "--max-tool-iterations",
         type=int,
         default=None,
@@ -1441,6 +1515,8 @@ def main(argv=None):
             max_tool_iterations=args.max_tool_iterations,
             no_events=args.no_events,
             max_cost=args.max_cost,
+            non_interactive=args.non_interactive,
+            decide=args.decide,
         )
         return
 
@@ -1490,6 +1566,8 @@ def main(argv=None):
             max_tool_iterations=args.max_tool_iterations,
             no_events=args.no_events,
             max_cost=args.max_cost,
+            non_interactive=args.non_interactive,
+            decide=args.decide,
         )
 
         accumulated_outputs.extend(wf_outputs)

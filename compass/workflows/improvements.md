@@ -3262,3 +3262,20 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Net effect:** "$20 by accident" → "Sonnet by default, condensed context, hard-capped per run." Honest framing kept: for interactive single-task work VS Code (flat sub) is still cheaper; the orchestrator earns its meter on cross-model review / parallel portfolio / headless / audited gates — and the **strategic follow-on is a `claude-code` host adapter** (subscription-backed dispatch), declared.
 
 **Files touched (6):** `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/events.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_events.py` (+ SETUP.md + CHANGELOG + this file). Counter: **#115, #116, #117** (one batch, three numbers). **5 of 5 → Retro #024 fires next.** The first cost-tuning of the orchestrator — built capability-first, now made cost-sane on the strongest consumer signal yet.
+
+### 2026-06-24 — async gates: non-interactive pause-and-resume (#118)
+
+**Trigger origin (Principle #19):** **the VISION + the live friction.** "Orchestrate from the dashboard" (cockpit step 3) needs runs a browser can drive, but every HITL gate blocked on terminal `input()` — so a non-terminal launcher (CI, cron, a dashboard POST) just hangs. First slice of the **dashboard-as-orchestrator arc**; also independently unblocks headless/scheduled runs.
+
+**What shipped:**
+- **`--non-interactive`** — at a gate, the run **pauses-and-exits**: emits `gate_open` (the cockpit's ⏸ awaiting signal), prints the resume command, `exit(0)` — and deliberately emits **no `RUN_END`** (so it shows *awaiting*, not *done*).
+- **`--decide <approve|reject|ROUTE>`** — the human's relayed decision applied at the **first gate** the (resumed) run reaches; consumed once, so the next gate pauses again. Resume = `--from-step N --non-interactive --decide …`.
+- **`_resolve_gate(decide, is_routing, routes)`** — pure resolver: approval → approve/reject/pause; routing → matched-route/pause. Both gate blocks branch on `non_interactive`; the interactive `handle_hitl_gate`/`handle_routing_gate` path is byte-for-byte unchanged.
+
+**The gate floor holds:** `--decide` only *relays* a decision; `run.py`'s gate logic still executes (promotion on approve, RUN_END(halted) on reject, inline-skip/hand-off on routes) — nothing auto-decides. The "I stay in control" floor is preserved, just delivered async. No daemon — reuses `--from-step` + the spine.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **171 pass** (+3: `_resolve_gate` approval + routing + pause cases; `_run_workflow` accepts the new kwargs). consistency-check CONSISTENT. Interactive path unchanged when `--non-interactive` is absent.
+
+**The arc this unlocks (declared, next slices):** **#119 action endpoints** — `--serve` cockpit gains `POST /run` (`compass-run … --non-interactive --max-cost X`) + `POST /decide` (`--from-step N --non-interactive --decide …`) → launch + approve **from the browser**; **#120 `claude-code` host** — subscription-backed dispatch so dashboard-triggered runs are flat-cost. Together = the VISION's dashboard-as-orchestrator, cost-safe.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #118. **1 of 5 before Retro #025 (fires after #122).** The keystone that turns the orchestrator from terminal-only into browser-drivable.

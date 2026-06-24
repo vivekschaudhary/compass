@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Async gates — non-interactive pause-and-resume (#118).** HITL gates used to **block on terminal `input()`**, so any run not driven by a human-at-a-terminal hung — blocking headless/CI use and (the goal) dashboard-driven orchestration. New `--non-interactive` makes a run **pause-and-exit at a gate** (it emits `gate_open` to the spine → shows under the cockpit's ⏸ awaiting; **no `RUN_END`**, exit 0 = clean pause) and **resume** with `--from-step N --non-interactive --decide <approve|reject|ROUTE>`, applying the relayed decision at that gate and continuing to the next (then pausing again). Pure `_resolve_gate` resolver (tested); the interactive `handle_hitl_gate`/`handle_routing_gate` path is untouched. The **mechanical gate floor holds** — `--decide` only *relays* the human's choice; `run.py` still executes the gate (nothing auto-decides). Reuses the existing `--from-step` + spine machinery (no daemon). +3 tests (171 total). **This is the enabler for dashboard-as-orchestrator** (VISION step 3): a browser can now launch + step a run through its gates (the action endpoints + claude-code host are the next slices).
+
 ### Changed
 
 - **Cost-control batch — orchestrator was burning ~$20 in a few runs (#115 + #116 + #117).** Root cause: every Claude step defaulted to **Opus** (~5× Sonnet), with no spend ceiling and a growing raw-context per step.
