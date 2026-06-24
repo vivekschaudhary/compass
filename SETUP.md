@@ -206,6 +206,8 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 
   **Make dashboard launches flat-cost (#120):** export `COMPASS_CLAUDE_HOST=cli` before starting the server — spawned runs inherit it, so every browser launch dispatches via your `claude` CLI subscription (no API key), reviewers excepted.
 
+  Each action **confirms before running** and **disables the buttons on submit** (#122), and a resumed gate **continues the same run** rather than forking a duplicate (#121) — so a gate clears from "awaiting" after one decision, and a stale tab gets an "already actioned" notice instead of a second run.
+
 ## What's where
 
 ```

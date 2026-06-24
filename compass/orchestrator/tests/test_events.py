@@ -406,6 +406,32 @@ class TestRunEmitsLifecycle(unittest.TestCase):
                     if v is not None:
                         os.environ[k] = v
 
+    def test_run_id_override_is_used(self):
+        # #121: a passed run_id_override is stamped on every spine event so a
+        # resumed run continues the same cockpit row (no duplicate fork).
+        from compass.orchestrator import run as runmod
+
+        repo = Path(__file__).resolve().parents[3]
+        compass_dir = repo / "compass"
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as ch:
+            os.environ["COMPASS_HOME"] = ch
+            saved = {k: os.environ.pop(k, None) for k in
+                     ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")}
+            try:
+                with self.assertRaises(SystemExit):
+                    runmod._run_workflow(
+                        "triage", Path(proj), compass_dir,
+                        context="x", run_id_override="fixed-run-id-42",
+                    )
+                events = ev.load_events(Path(ch) / "orchestrator" / "events.jsonl")
+                self.assertTrue(events)
+                self.assertTrue(all(e.get("run_id") == "fixed-run-id-42" for e in events))
+            finally:
+                os.environ.pop("COMPASS_HOME", None)
+                for k, v in saved.items():
+                    if v is not None:
+                        os.environ[k] = v
+
 
 class TestActionEndpoints(unittest.TestCase):
     """#119 — the cockpit relays browser launches/decisions to compass-run. The
@@ -458,6 +484,23 @@ class TestActionEndpoints(unittest.TestCase):
                        "decide": "approve"}, self.defaults)
         self.assertEqual(out[0], "error")
 
+    def test_decide_continues_same_run_id(self):
+        # #121: a valid run_id is threaded as --run-id so the resume continues the
+        # paused run (clears the gate) instead of forking a duplicate.
+        argv = cockpit._build_run_argv(
+            "decide", {"workflow": "triage", "project_dir": self.td, "step": "2",
+                       "decide": "bug", "run_id": "triage--no-bet--20260624T010101"},
+            self.defaults)
+        self.assertEqual(argv[argv.index("--run-id") + 1],
+                         "triage--no-bet--20260624T010101")
+
+    def test_decide_rejects_bogus_run_id(self):
+        argv = cockpit._build_run_argv(
+            "decide", {"workflow": "triage", "project_dir": self.td, "step": "2",
+                       "decide": "bug", "run_id": "../etc/passwd; rm -rf"},
+            self.defaults)
+        self.assertNotIn("--run-id", argv)  # invalid id dropped, not passed
+
     def test_render_html_actions_on_shows_forms(self):
         runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",
                        "project_dir": self.td, "ended": False, "steps": {},
@@ -490,6 +533,28 @@ class TestActionEndpoints(unittest.TestCase):
         names = cockpit._known_workflows(repo / "compass")
         self.assertIn("triage", names)
         self.assertNotIn("advance", names)
+
+    def test_render_html_actions_have_confirm_and_disable(self):
+        # #122: every action form confirms + `_act` disables all buttons on submit
+        runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",
+                       "project_dir": self.td, "ended": False, "steps": {},
+                       "open_gate": {"step": 2, "kind": "hitl", "title": "gate"}}}
+        html = cockpit.render_html(runs, actions=True, default_project_dir=self.td)
+        self.assertIn("onsubmit=", html)
+        self.assertIn("function _act", html)
+        self.assertIn("disabled=true", html)
+
+    def test_gate_already_actioned(self):
+        # open gate → not actioned; decided/ended → actioned; unknown → False
+        open_evt = [ev.make_event(ev.RUN_START, run_id="g1", workflow="triage"),
+                    ev.make_event(ev.GATE_OPEN, run_id="g1", step=2, kind="routing")]
+        self.assertFalse(cockpit._gate_already_actioned(open_evt, "g1"))
+
+        decided = open_evt + [ev.make_event(ev.GATE_DECISION, run_id="g1", step=2,
+                                            decision="bug")]
+        self.assertTrue(cockpit._gate_already_actioned(decided, "g1"))
+        self.assertFalse(cockpit._gate_already_actioned(decided, "nope"))
+        self.assertFalse(cockpit._gate_already_actioned(decided, ""))
 
 
 if __name__ == "__main__":

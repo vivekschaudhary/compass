@@ -363,27 +363,37 @@ def _decide_forms(r: dict, cdir) -> str:
     """Approve/reject buttons (HITL gate) or one button per route (routing gate),
     each a tiny POST /decide form (#119). Relays only — run.py still decides."""
     g = r["open_gate"]
+    loc = r.get("workflow") or "run"
     hid = _hidden(run_id=r.get("run_id"), workflow=r.get("workflow"),
                   project_dir=r.get("project_dir"), step=g.get("step"))
     out = []
 
-    def form(decide, label, cls=""):
+    def form(decide, label, cls="", confirm=""):
+        # #122: confirm() before acting + `_act` disables ALL buttons on submit,
+        # so a gate can't be double-fired into duplicate resumes while the page
+        # waits to refresh.
         c = f" class='{cls}'" if cls else ""
-        return (f"<form class='act' method='POST' action='/decide'>{hid}"
+        return (f"<form class='act' method='POST' action='/decide' "
+                f"onsubmit=\"return _act(this,'{_esc(confirm)}')\">{hid}"
                 f"<input type='hidden' name='decide' value='{_esc(decide)}'>"
                 f"<button{c}>{_esc(label)}</button></form>")
 
     if g.get("kind") == "routing":
         routes = _gate_routes(r.get("workflow"), g.get("step"), cdir)
         for lbl in routes:
-            out.append(form(lbl, f"{lbl} →"))
+            out.append(form(lbl, f"{lbl} →",
+                            confirm=f"Route {loc} to ‘{lbl}’? This resumes the run."))
         if not routes:  # graph unavailable — let the operator type the route
-            out.append("<form class='act' method='POST' action='/decide'>" + hid +
+            out.append("<form class='act' method='POST' action='/decide' "
+                       "onsubmit=\"return _act(this,'Resume this run with the typed route?')\">"
+                       + hid +
                        "<input name='decide' placeholder='route label'>"
                        "<button>route →</button></form>")
     else:
-        out.append(form("approve", "approve"))
-        out.append(form("reject", "reject", cls="rej"))
+        out.append(form("approve", "approve",
+                        confirm=f"Approve {loc} and continue?"))
+        out.append(form("reject", "reject", cls="rej",
+                        confirm=f"Reject {loc}? This halts the run."))
     return "".join(out)
 
 
@@ -415,7 +425,8 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     if actions:
         opts = "".join(f"<option>{_esc(w)}</option>" for w in _known_workflows(cdir))
         p.append("<div class='launch'><h2>🚀 Launch a workflow</h2>"
-                 "<form class='act' method='POST' action='/run'>"
+                 "<form class='act' method='POST' action='/run' "
+                 "onsubmit=\"return _act(this,'Launch this workflow? It runs through its gates and the cost cap.')\">"
                  f"<label>workflow</label><select name='workflow'>{opts}</select>"
                  f"<label>project dir</label><input name='project_dir' size='52' value='{_esc(default_project_dir)}'>"
                  "<label>context (optional)</label><textarea name='context'></textarea>"
@@ -475,6 +486,18 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
                  f"caching saved ~${s['saved']:.2f} ({s['saved_pct']:.0f}% of input cost)</div>")
         p.append("</div>")
 
+    if actions:
+        # #122: confirm before acting, then disable every action button so a
+        # gate/launch can't be double-fired into duplicate runs while the page
+        # waits on the redirect + meta-refresh.
+        p.append(
+            "<script>function _act(f,m){if(m&&!confirm(m))return false;"
+            "var b=document.querySelectorAll('button');"
+            "for(var i=0;i<b.length;i++){b[i].disabled=true;}"
+            "var s=document.createElement('div');s.className='ts';"
+            "s.textContent='submitting… the page will refresh.';"
+            "document.querySelector('.wrap').appendChild(s);return true;}</script>"
+        )
     p.append("</div></body></html>")
     return "".join(p)
 
@@ -491,6 +514,7 @@ def build_page(events: list, project_filter=None, limit=10, cdir=None,
 import re as _re
 
 _WORKFLOW_RE = _re.compile(r"^[a-z][a-z0-9-]+$")
+_RUN_ID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]+$")
 
 
 def _known_workflows(cdir) -> list:
@@ -540,9 +564,27 @@ def _build_run_argv(action, params, defaults):
         if not decide:
             return ("error", "missing decision")
         argv += ["--from-step", step, "--decide", decide]
+        # #121: continue the SAME run so the gate clears from ⏸ awaiting (else the
+        # resume forks a new run_id and the paused run lingers as a duplicate).
+        rid = (params.get("run_id") or "").strip()
+        if rid and _RUN_ID_RE.match(rid):
+            argv += ["--run-id", rid]
     else:
         return ("error", f"unknown action: {action!r}")
     return argv
+
+
+def _gate_already_actioned(events: list, run_id: str) -> bool:
+    """#122: True if the run exists and its gate is no longer open (already
+    decided / handed off / ended). Lets /decide tell the user "already actioned"
+    instead of spawning a second resume from a stale page. Unknown run → False
+    (let it through; the run.py gates still hold)."""
+    if not run_id:
+        return False
+    run = fold_runs(events).get(run_id)
+    if run is None:
+        return False
+    return not run.get("open_gate")
 
 
 def _render_spend(runs: list) -> str:
@@ -679,6 +721,18 @@ def _serve(events_path, cdir, project_filter, limit, port,
             n = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(n).decode("utf-8") if n else ""
             form = {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+            # #122: don't fork a duplicate resume from a stale page — if this
+            # run's gate was already decided, tell the user instead of spawning.
+            if action == "decide" and _gate_already_actioned(
+                    ev.load_events(events_path), form.get("run_id", "")):
+                self.send_response(409)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(
+                    b"<h3>Already actioned</h3><p>This gate was already decided "
+                    b"(you may have already routed it). <a href='/'>Back to the "
+                    b"cockpit</a> \xe2\x80\x94 it will show under Done / handed off.</p>")
+                return
             argv = _build_run_argv(action, form, defaults)
             if isinstance(argv, tuple) and argv[0] == "error":
                 self.send_error(400, argv[1])

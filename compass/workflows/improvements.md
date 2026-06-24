@@ -3319,3 +3319,27 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Arc complete.** Dashboard-as-orchestrator (VISION step 3) now works end-to-end and cost-safe: launch from the browser (#119) → pause at gates you approve async (#118) → all dispatched on your subscription, flat-cost (#120).
 
 **Files touched (6):** `compass/orchestrator/hosts/claude_code.py` (new, incl. the `_subscription_env` key-strip + stdout error surfacing) · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_claude_code.py` (new) · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #120. **3 of 5 before Retro #025 (fires after #122).** The orchestrator now runs on a flat subscription, not a meter — the honest answer to "else VSC is better."
+
+### 2026-06-24 — a resumed gate must continue the same run, not fork a duplicate (#121)
+
+**Trigger origin (Principle #19):** **live dashboard use.** Driving a real triage gate from the browser produced *three* `completed: handed off to /fix` rows while the original run sat stuck in ⏸ Awaiting. Root cause: `run_id` was minted fresh per invocation (`workflow--bet--timestamp`), so each `/decide` (a `--from-step` resume) started a NEW run — the paused run's `gate_open` was never cleared (nothing ever emitted its `gate_decision`/`RUN_END`), and every click spawned a duplicate.
+
+**What shipped:** a `--run-id` flag (+ `run_id_override` param) so a resume **continues the original run**. The cockpit's `/decide` threads the paused run's id through (regex-validated, `_RUN_ID_RE`); plain CLI runs still mint a fresh id. Now the resume's gate-decision + handoff land under the *same* id → it leaves ⏸ Awaiting and appears once in ✓ Done. A pure-ish change: `run_id = run_id_override or <generated>` at one site, threaded through `main()`.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **206 pass** (+3: `_build_run_argv` threads `--run-id`, rejects a bogus id; `_run_workflow` stamps `run_id_override` on every spine event). consistency-check CONSISTENT.
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #121. **4 of 5 before Retro #025 (fires after #122).** The dashboard's resume is now idempotent in identity — one gate, one run.
+
+### 2026-06-24 — dashboard action guards: confirm, disable-on-submit, already-actioned (#122)
+
+**Trigger origin (Principle #19):** **the same live incident as #121.** The duplicate `/fix` runs weren't only the run_id fork — the UI gave **no feedback** on click, so the operator clicked the route button repeatedly while the page waited to refresh. The DRI's ask, verbatim: "the UI should pop an alert before starting and disable any other buttons … should be smart enough to inform the user that they have already run fix."
+
+**What shipped (two layers):**
+- **Client (immediate):** every Launch / approve / route form `confirm()`s before acting; on submit, `_act` **disables every button on the page** (+ a "submitting…" note) so a gate can't be double-fired in the refresh window.
+- **Server (authoritative):** `POST /decide` checks `_gate_already_actioned(events, run_id)` — if the run's gate is already closed (decided / handed off / ended), it returns **409 "already actioned"** with a link back, instead of spawning a second resume. This is the "you already ran fix" awareness, reliable even from a stale tab.
+
+Together with #121 (the gate now actually clears after one decision), double-routing is closed at both ends — UX *and* correctness.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **208 pass** (+2: render_html action forms carry `onsubmit`/`_act`/`disabled`; `_gate_already_actioned` open vs decided vs unknown). consistency-check CONSISTENT.
+
+**Files touched (4):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #122. **5 of 5 — Retro #025 is now DUE (fires after #122).** The dashboard tells you what it's doing and refuses to do it twice.

@@ -695,6 +695,7 @@ def _run_workflow(
     non_interactive: bool = False,
     decide: str = None,
     claude_cli: bool = False,
+    run_id_override: str = None,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -807,7 +808,10 @@ def _run_workflow(
     # ── execution ─────────────────────────────────────────────────────────────
     from datetime import datetime as _dt
     _ts = _dt.now().strftime("%Y%m%dT%H%M%S")
-    run_id = f"{workflow_name}--{bet_id or 'no-bet'}--{_ts}"
+    # #121: a --from-step resume (e.g. the dashboard /decide) must CONTINUE the
+    # paused run, not fork a new id — otherwise the original lingers in the
+    # cockpit's ⏸ awaiting queue forever and the resume shows as a duplicate run.
+    run_id = run_id_override or f"{workflow_name}--{bet_id or 'no-bet'}--{_ts}"
 
     prior_outputs = list(initial_prior_outputs or [])
     artifact_paths = []
@@ -1400,6 +1404,16 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--run-id",
+        default=None,
+        dest="run_id",
+        help=(
+            "Continue an existing run id instead of starting a fresh one (#121). "
+            "Used by the dashboard /decide so a resumed gate clears from the "
+            "cockpit's awaiting queue rather than forking a duplicate run."
+        ),
+    )
+    parser.add_argument(
         "--decide",
         default=None,
         metavar="approve|reject|ROUTE",
@@ -1551,6 +1565,7 @@ def main(argv=None):
             non_interactive=args.non_interactive,
             decide=args.decide,
             claude_cli=claude_cli,
+            run_id_override=args.run_id,
         )
         return
 
