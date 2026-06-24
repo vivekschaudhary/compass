@@ -10,6 +10,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Dispatch-on-outcome — a refused step halts, not cascades (#125).** A step whose agent refuses (per `[refuse-escalate]`) now **halts the run** instead of letting the workflow cascade into downstream steps that also refuse (live evidence: a misrouted `/ops` run cascaded four refusals then crashed on an API limit). Refusals carry a **machine-readable sentinel** — output leading with `REFUSE:` / `[REFUSE]` / `**Refusing:**` (codified in the `refuse-escalate` canon entry); `run.py`'s `_is_refusal` matches only that leading marker (never prose that merely discusses refusing), records the refusal artifact, emits `RUN_END(halted)` with a `--from-step` resume hint, and stops. This is `[failure-direction-inversion]` applied to refusals. +3 tests (213 total).
+
+### Changed
+
+- **Branch discipline now spans the interactive surface, not just the orchestrator (#126).** #99's "write-mode work lands on a branch, never `main`" was enforced only mechanically (`_ensure_work_branch` in `run.py`) — the interactive surfaces (Claude Code via CLAUDE.md, the `engineer` agent file) never said it, so a hand-driven build/fix could mutate `main` directly. Added the rule to `CLAUDE.md` (host-runtime git rules, with the framework-repo `main` exception called out) and `engineer.md` (refusal rules, surface-independent) so every surface branches before write-mode edits. Caught in the live VS Code session where agent edits landed on `main`.
+
+### Added
+
 - **`consistency-check.py` now verifies the host list (#124).** A 4th computable check: every host the router enumerates as supported (its `Supported: …` dispatch error string — the authoritative list next to the dispatch arms) must be documented in AGENTS.md's host table. Added because Retro #025's audit caught `claude-code` missing from the table *by hand* — host-list enumerations were an un-mechanized drift class (a new host had to be remembered in code AND docs). `chatgpt` is treated as the OpenAI-family alias (`openai` row satisfies it). +2 tests (210 total).
 
 ### Changed

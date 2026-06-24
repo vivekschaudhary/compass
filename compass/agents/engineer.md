@@ -157,6 +157,7 @@ Execute an HITL-approved non-code/ops change (infra, deps, config, secrets, CI/C
 - **Do not fake data** because endpoint doesn't exist. Hand off to contract owner.
 - **Do not shortcut review under pressure.** Discipline holds always — no P0 carve-out.
 - **Do not skip `--no-verify`** unless user explicitly asks. Fix hook failures at root.
+- **Do not write to `main`/`master` directly.** Create + switch to a work branch before editing (`git switch -c <bet-id>/<slug>`), on every surface — the orchestrator enforces this via `_ensure_work_branch` (#99); interactive hosts must do it by hand (#126). Write-mode work never silently mutates `main`.
 - **Do not force-push** to `main` / `master`. Ever.
 
 ## Story → multiple PRs

@@ -3365,3 +3365,23 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **210 pass** (+2). consistency-check CONSISTENT (now reports "host list" too).
 
 **Files touched (3):** `compass/scripts/consistency-check.py` · `compass/orchestrator/tests/test_consistency.py` · `CHANGELOG.md` (+ this file). Counter: #124. **2 of 5 before Retro #026 (fires after #127).** One more retro watch-for converted from "remember to" into "the hook enforces it."
+
+### 2026-06-24 — dispatch-on-outcome: a refused step halts, not cascades (#125)
+
+**Trigger origin (Principle #19):** **live `/ops` misroute (session).** A `/ops` run dispatched to the wrong agent cascaded four refusal steps and then crashed on an API limit — the orchestrator kept dispatching after a step had already refused. The MVP-done overlay flagged this as 🟡 correctness (`dispatch-on-outcome`).
+
+**What shipped:** `run.py` now halts the run when a step's output **leads with a refusal sentinel** (`REFUSE:` / `[REFUSE]` / `**Refusing:**`). `_is_refusal` inspects only the first few lines and matches the explicit marker — never prose that merely discusses refusing (no false-positive cascade-stops). The refusal artifact is still printed/written/logged first; then `RUN_END(halted)` fires with a `--from-step` resume hint. The contract is codified in the **`refuse-escalate`** canon entry (agents that refuse lead with the sentinel) — no new pattern, just the machine-readable surface added to principle #16. This is `[failure-direction-inversion]` applied to refusals (the same pattern #127 codifies; #125 is a fresh instance).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **213 pass** (+3: leading sentinels detected; prose mentioning "refuse" not flagged; buried sentinel not flagged). consistency-check CONSISTENT.
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/framework/canon.md` (refuse-escalate) · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #125. **3 of 5 before Retro #026 (fires after #127).** A refused step now stops the run instead of dragging it through more refusals.
+
+### 2026-06-24 — branch discipline spans the interactive surface (#126)
+
+**Trigger origin (Principle #19):** **live VS Code session (session).** #99 ("write-mode work lands on a branch, never `main`") was enforced only mechanically in `run.py` (`_ensure_work_branch`) — the interactive surfaces never stated it, so a hand-driven build/fix on Claude Code mutated `main` directly. The MVP-done overlay flagged this 🟡; the session proved branch discipline lived in exactly one place.
+
+**What shipped:** the rule added to the interactive surfaces — `CLAUDE.md` host-runtime git rules (rule 4a, with the framework-repo `main` standing exception named) and `engineer.md` refusal rules (surface-independent: branch before write-mode edits on every host). Now both the orchestrator and the interactive hosts branch before write-mode work; no surface silently mutates `main`.
+
+**Verification:** consistency-check CONSISTENT; no test impact (instruction/doc change).
+
+**Files touched (3):** `CLAUDE.md` · `compass/agents/engineer.md` · `CHANGELOG.md` (+ this file). Counter: #126. **4 of 5 before Retro #026 (fires after #127).** The branch-not-main invariant is now stated where the interactive agents read it, not just where the orchestrator enforces it.

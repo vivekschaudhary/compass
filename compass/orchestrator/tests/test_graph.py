@@ -448,5 +448,38 @@ class TestAsyncGate(unittest.TestCase):
         self.assertIn("decide", sig.parameters)
 
 
+class TestRefusalDetection(unittest.TestCase):
+    """#125 dispatch-on-outcome: a leading refusal sentinel halts the run; prose
+    that merely discusses refusing does not (no false-positive cascade-stops)."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.is_refusal = runmod._is_refusal
+
+    def test_leading_sentinels_detected(self):
+        for txt in (
+            "REFUSE: this bet needs a tool not in the foundational stack.",
+            "[REFUSE] CI not green — fix tests first.",
+            "**Refusing:** design spec needed before copy.",
+            "REFUSED — the request widens an upstream decision.",
+            "## TL;DR\n\nREFUSE: this is CI work, not foundational ops.",  # within first 5 lines
+        ):
+            self.assertTrue(self.is_refusal(txt), txt)
+
+    def test_prose_mentioning_refuse_not_flagged(self):
+        for txt in (
+            "The architect may refuse if the stack deviates, but here it's fine.",
+            "Classification: bug. Proceeding — no reason to refuse.",
+            "",
+            "Here is the design. It does not refuse anything.",
+        ):
+            self.assertFalse(self.is_refusal(txt), txt)
+
+    def test_refusal_buried_deep_not_flagged(self):
+        # a sentinel past the first few lines is not a lead refusal
+        body = "\n".join(["line"] * 8 + ["REFUSE: too late to count"])
+        self.assertFalse(self.is_refusal(body))
+
+
 if __name__ == "__main__":
     unittest.main()

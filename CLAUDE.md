@@ -55,6 +55,7 @@ These preferences are runtime-shape, not role-shape — they let you execute age
 2. **Do not skip workflow steps silently.** No silent skips — declined engagements get logged as DRI decisions with rationale per `[refuse-escalate]`.
 3. **Do not amend commits** unless explicitly asked. Pre-commit hook failures mean the commit didn't happen — fix the issue, re-stage, create a NEW commit. `--amend` modifies the PREVIOUS commit and can destroy work.
 4. **Do not force-push** to `main` / `master`. Warn the user if they request it.
+   - **4a. Write-mode work lands on a branch, never `main` (#99/#126 — interactive-surface parity).** The orchestrator enforces this mechanically via `_ensure_work_branch`; interactive sessions must do it by hand. Before you edit files for a build/fix task on `main`/`master`, create + switch to a work branch (e.g. `git switch -c fix/<slug>` or `<bet-id>/<slug>`). Framework-doc edits to this repo's `main` (the Compass repo itself) are the standing exception the user has authorized; product/consumer code changes are not.
 5. **Do not skip git hooks** (`--no-verify`, `--no-gpg-sign`) unless user explicitly requests. Fix root causes, don't bypass.
 6. **Do not commit secrets** (`.env`, credentials.json, etc.).
 7. **Do not run destructive git operations** (`reset --hard`, `push --force`, `clean -f`, `branch -D`) unless user explicitly requests.

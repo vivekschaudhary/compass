@@ -63,6 +63,27 @@ def _remap_claude_cli(preferred_hosts: list) -> list:
     return ["claude-code" if h == "claude" else h for h in preferred_hosts]
 
 
+# #125 dispatch-on-outcome: a step whose agent REFUSES (per [refuse-escalate])
+# must HALT the run, not let the workflow cascade into steps that also refuse
+# (live evidence: a misrouted /ops run cascaded 4 refusals then crashed on an API
+# limit). Refusals carry a structured sentinel — a line beginning `REFUSE:` /
+# `[REFUSE]` / `**Refuse(d/ing):**` — so detection is exact, not a fuzzy scan of
+# prose that merely discusses refusing. Only the first few lines are inspected.
+_REFUSAL_RE = re.compile(
+    r"^\s*(?:\*\*|\[)?\s*REFUS(?:E|ED|ING)\b", re.IGNORECASE
+)
+
+
+def _is_refusal(result: str) -> bool:
+    """True if the agent output leads with a refusal sentinel (#125)."""
+    if not result:
+        return False
+    for line in result.strip().splitlines()[:5]:
+        if _REFUSAL_RE.match(line):
+            return True
+    return False
+
+
 def _read_agent_tools(agent_file: Path) -> list:
     """
     Parse the optional `executor_tools:` list from agent frontmatter (#87 slice 1).
@@ -1271,6 +1292,21 @@ def _run_workflow(
             "workflow": workflow_name,
             "output": result,
         })
+
+        # #125 dispatch-on-outcome: the refusal is now recorded (printed, written,
+        # logged) — halt rather than cascade into steps that would also refuse.
+        if _is_refusal(result):
+            print(
+                f"\n[refused] step {step.number} ({step.agent}.{step.task}) "
+                f"returned a refusal — halting (dispatch-on-outcome, #125). The "
+                f"refusal is recorded above; act on its escalation, then resume:\n"
+                f"  python3 -m compass.orchestrator.run {workflow_name} "
+                f"--from-step {step.number}",
+                file=sys.stderr,
+            )
+            emit(ev.RUN_END, status="halted",
+                 reason=f"agent refused at step {step.number} ({step.agent}.{step.task})")
+            sys.exit(1)
 
     if not handed_off:
         emit(ev.RUN_END, status="completed", reason="all steps complete")
