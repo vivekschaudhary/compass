@@ -55,6 +55,14 @@ def _read_preferred_hosts(agent_file: Path) -> list:
     return [h.strip() for h in ph_match.group(1).split(",")]
 
 
+def _remap_claude_cli(preferred_hosts: list) -> list:
+    """#120: route Claude steps to the subscription-backed CLI host when opted in
+    (--claude-cli / COMPASS_CLAUDE_HOST=cli). Remaps ONLY `claude` → `claude-code`;
+    reviewer hosts (codex/gemini) are untouched, preserving cross-model review
+    independence (the no-same-host-self-review principle)."""
+    return ["claude-code" if h == "claude" else h for h in preferred_hosts]
+
+
 def _read_agent_tools(agent_file: Path) -> list:
     """
     Parse the optional `executor_tools:` list from agent frontmatter (#87 slice 1).
@@ -686,6 +694,7 @@ def _run_workflow(
     max_cost: float = None,
     non_interactive: bool = False,
     decide: str = None,
+    claude_cli: bool = False,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -1090,6 +1099,8 @@ def _run_workflow(
 
         # ── host selection ───────────────────────────────────────────────────
         preferred_hosts = _read_preferred_hosts(agent_file)
+        if claude_cli:
+            preferred_hosts = _remap_claude_cli(preferred_hosts)
         host = select_host(preferred_hosts)
 
         if host is None:
@@ -1108,7 +1119,7 @@ def _run_workflow(
                 f"  preferred_hosts: {preferred_hosts}\n"
                 f"  Halting — no silent skips (AGENTS.md principle). Skipping a "
                 f"review step would mean the run ships with NO independent review.\n"
-                f"  Set the matching key ({', '.join('ANTHROPIC_API_KEY' if h == 'claude' else 'OPENAI_API_KEY' if h in ('codex', 'chatgpt') else 'GEMINI_API_KEY' for h in preferred_hosts)}), "
+                f"  Set the matching key ({', '.join('install + log into the `claude` CLI (or drop --claude-cli)' if h == 'claude-code' else 'ANTHROPIC_API_KEY' if h == 'claude' else 'OPENAI_API_KEY' if h in ('codex', 'chatgpt') else 'GEMINI_API_KEY' for h in preferred_hosts)}), "
                 f"then resume with --from-step {step.number}.\n"
                 f"  To skip explicitly instead, rerun with --skip-missing "
                 f"(the skip must be logged as a DRI Decision).",
@@ -1159,10 +1170,15 @@ def _run_workflow(
             granted = [t for t in agent_tools if t in ("read_file", "glob", "grep") or allow_write]
             mode = "read+write" if allow_write else "read-only"
             tools_note = f" (tools: {', '.join(granted)} — {mode})"
+        elif agent_tools and host == "claude-code":
+            # #120: Claude Code owns its tool loop; allow_write maps to the
+            # permission mode (bypassPermissions=edits+bash, else default=read-only).
+            mode = "bypassPermissions: edits+bash" if allow_write else "default: read-only"
+            tools_note = f" (Claude Code tools — {mode})"
         else:
             tools_note = ""
         print(f"\nDispatching to {host}{tools_note} …")
-        if agent_tools and host == "claude":
+        if agent_tools and host in ("claude", "claude-code"):
             # #111 heartbeat: a tool step's first model turn (reading the agent
             # file + reasoning) can run 1–2 min before the first tool line prints,
             # so it looks frozen. Set the expectation; the spine has live detail.
@@ -1338,6 +1354,17 @@ def main(argv=None):
         ),
     )
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--claude-cli",
+        action="store_true",
+        dest="claude_cli",
+        help=(
+            "Dispatch Claude steps via the logged-in `claude` CLI (subscription, "
+            "no ANTHROPIC_API_KEY) instead of the metered API (#120). Remaps only "
+            "the `claude` host → `claude-code`; reviewers stay on Codex/Gemini. "
+            "Equivalent to COMPASS_CLAUDE_HOST=cli (which the dashboard inherits)."
+        ),
+    )
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
         "--no-events",
@@ -1497,6 +1524,11 @@ def main(argv=None):
         else project_dir / "compass"
     )
 
+    # #120: subscription CLI host — --claude-cli flag OR COMPASS_CLAUDE_HOST=cli
+    # (the env var is how the dashboard opts in: spawned runs inherit os.environ).
+    claude_cli = args.claude_cli or os.environ.get(
+        "COMPASS_CLAUDE_HOST", "").lower() in ("cli", "claude-code")
+
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
         _run_workflow(
@@ -1518,6 +1550,7 @@ def main(argv=None):
             max_cost=args.max_cost,
             non_interactive=args.non_interactive,
             decide=args.decide,
+            claude_cli=claude_cli,
         )
         return
 
@@ -1569,6 +1602,7 @@ def main(argv=None):
             max_cost=args.max_cost,
             non_interactive=args.non_interactive,
             decide=args.decide,
+            claude_cli=claude_cli,
         )
 
         accumulated_outputs.extend(wf_outputs)

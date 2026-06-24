@@ -204,6 +204,8 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 
   Localhost-only. Browser-launched runs always go through `compass-run` with `--non-interactive` + `--max-cost`, so the gate floor and the budget cap still fire — a click can't bypass control or run away on cost.
 
+  **Make dashboard launches flat-cost (#120):** export `COMPASS_CLAUDE_HOST=cli` before starting the server — spawned runs inherit it, so every browser launch dispatches via your `claude` CLI subscription (no API key), reviewers excepted.
+
 ## What's where
 
 ```
@@ -263,6 +265,13 @@ python3 -m compass.orchestrator.run build --context "story-id: PROJ-43"
 The orchestrator selects the first host in `preferred_hosts:` that has credentials set. Dry-run with `--dry-run` to see which host each step routes to.
 
 **Model tier (cost) — Sonnet by default (#115).** Every Claude step defaults to the **economy** model (`claude-sonnet-4-6`) — Opus-by-default was ~5× the cost. Opt **up** to the frontier model two ways: per agent, add `model_tier: deep` to its frontmatter (→ Opus); per run, pass `--model claude-opus-4-8`. Override globally with `COMPASS_MODEL_CLAUDE`. **Cap spend per run with `--max-cost <USD>`** — it halts (with a resume hint) when estimated spend crosses the cap, checked on every usage event (mid-tool-loop too). Watch live spend in `cockpit` (💰 SPEND).
+
+**Flat-cost dispatch — run on your `claude` CLI subscription, not the metered API (#120).** Add `--claude-cli` (or export `COMPASS_CLAUDE_HOST=cli`) and Claude steps dispatch via your **logged-in `claude` CLI** (`claude -p`) instead of the API — **no `ANTHROPIC_API_KEY`, flat marginal cost** (the cockpit 💰 SPEND shows ~$0 for those runs). Needs the `claude` CLI installed + logged in. It remaps **only** the `claude` host → `claude-code`; reviewer steps stay on Codex/Gemini, so cross-model review independence is preserved. The env var is what the dashboard uses: export it before `cockpit --serve --allow-actions` and every browser-launched run is flat-cost too.
+
+```bash
+COMPASS_CLAUDE_HOST=cli python3 -m compass.orchestrator.run triage \
+    --project-dir . --compass-dir $COMPASS_FW/compass --context "subscriptions panel empty"
+```
 
 **To use manually** (interactive, any host):
 

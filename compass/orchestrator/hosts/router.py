@@ -13,6 +13,7 @@ If no host is available, returns None from select_host() — the caller must han
 """
 import importlib.util
 import os
+import shutil
 from typing import Optional
 
 # SDK package each host's adapter needs. A host is only selectable if BOTH its
@@ -25,6 +26,7 @@ _HOST_PACKAGE = {
     "chatgpt": "openai",
     "openai": "openai",
     "gemini": "google.generativeai",
+    "claude-code": None,  # #120: CLI host, no Python SDK → always "importable"
 }
 
 
@@ -41,6 +43,11 @@ def _adapter_importable(host: str) -> bool:
 
 
 def _has_key(host: str) -> bool:
+    if host == "claude-code":
+        # #120: subscription-backed CLI host — "ready" = the `claude` binary is
+        # on PATH (no API key). Login state can't be checked non-interactively;
+        # a not-logged-in CLI surfaces a clean error at dispatch.
+        return shutil.which("claude") is not None
     if host == "claude":
         return bool(os.environ.get("ANTHROPIC_API_KEY"))
     if host in ("codex", "chatgpt", "openai"):
@@ -148,6 +155,26 @@ def dispatch_to_host(
             max_tokens=max_tokens,
             on_event=on_event,
         )
+    elif host == "claude-code":
+        # #120: subscription-backed CLI host. CC owns its own tool loop, so we
+        # don't build/pass schemas — `tools` only decides single-shot vs the
+        # project-dir-granted (tool-capable) path. Claude model family.
+        from .claude_code import dispatch, dispatch_with_tools
+        if tools:
+            return dispatch_with_tools(
+                agent_file_path, task_name, user_message, project_dir,
+                model=model or _default_model("claude"),
+                max_tokens=max_tokens,
+                allow_write=allow_write,
+                max_iterations=max_tool_iterations or 50,
+                on_event=on_event,
+            )
+        return dispatch(
+            agent_file_path, task_name, user_message,
+            model=model or _default_model("claude"),
+            max_tokens=max_tokens,
+            on_event=on_event,
+        )
     elif host in ("codex", "chatgpt", "openai"):
         from .openai import dispatch
         return dispatch(
@@ -163,4 +190,4 @@ def dispatch_to_host(
             max_tokens=max_tokens,
         )
     else:
-        raise RuntimeError(f"Unknown host: {host!r}. Supported: claude, codex, chatgpt, openai, gemini")
+        raise RuntimeError(f"Unknown host: {host!r}. Supported: claude, claude-code, codex, chatgpt, openai, gemini")

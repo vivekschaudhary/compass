@@ -3298,3 +3298,22 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Next slice (declared):** **#120 `claude-code` host** — subscription-backed local dispatch (`claude -p`) so dashboard-launched runs are flat-cost, not metered. That makes the whole arc cost-safe for everyday use.
 
 **Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #119. **2 of 5 before Retro #025 (fires after #122).** The dashboard can now drive a full step — launch → pause at gate → approve/route → resume — from the browser.
+
+### 2026-06-24 — the `claude-code` host: subscription-backed CLI dispatch (#120)
+
+**Trigger origin (Principle #19):** **the live cost wall.** Dogfooding #119 surfaced it directly — "I don't want to use an API key, we're using the CLI." Every orchestrator host called the metered API (the "$20 by accident"), so dashboard-launched runs spent credits. #120 is the **last slice of the dashboard-as-orchestrator arc** (#118 async gates → #119 action endpoints → #120 flat-cost dispatch) — it makes the whole arc affordable for everyday use, and unblocks the deferred tier-B "click Launch and watch it run" test.
+
+**What shipped:**
+- **A fourth host, `claude-code`**, that shells out to the logged-in `claude` CLI (`claude -p --output-format json --append-system-prompt-file <agent> --model <alias>`), user message on stdin. Subscription-backed, **no `ANTHROPIC_API_KEY`, flat marginal cost.**
+- **Opt-in, two equivalent levers:** `--claude-cli` flag + `COMPASS_CLAUDE_HOST=cli` env. The env var is the dashboard lever — the #119 cockpit spawns with `env=os.environ.copy()`, so exporting it before `cockpit --serve --allow-actions` makes every browser launch flat-cost with **zero cockpit change.**
+- **Remap at the `preferred_hosts` level, before `select_host`** (`_remap_claude_cli`): `claude` → `claude-code` only. So (a) no API key needed (`_has_key("claude-code")` = `claude` on PATH), and (b) **reviewers (codex/gemini) are untouched** — cross-model review independence holds by construction.
+- **Permission parity (user-confirmed):** `--allow-write` → `--permission-mode bypassPermissions` (the API host already grants write_file + sandboxed bash under allow_write; build agents need bash for tests/git). Read-only steps → `default`. CC owns its own tool loop (we don't pass schemas — `--add-dir <project_dir>` + the mode govern it).
+- **Flat-cost accounting:** emits a NOTE (tokens + the CLI's API-equivalent cost, labeled "subscription, $0 marginal") and **no `usage` event** — so `--max-cost` can't false-trip and the cockpit 💰 Spend shows $0. **Zero changes to `events.py`/`cockpit.py`.**
+
+**Testable without the CLI:** both adapter funcs take an injectable `runner=`; pure `_build_cli_argv`/`_parse_result`/`_cli_model` are unit-tested directly, the dispatch path with a fake runner, the remap as a pure function. **No test invokes the real `claude`.**
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **202 pass** (+21: model-alias map · argv read-only vs bypassPermissions · result parsing + error paths · dispatch emits NOTE & no usage · clean-halt on non-zero exit · `_has_key`/`_family`/router routing · remap keeps reviewers off the CLI). consistency-check CONSISTENT.
+
+**Arc complete.** Dashboard-as-orchestrator (VISION step 3) now works end-to-end and cost-safe: launch from the browser (#119) → pause at gates you approve async (#118) → all dispatched on your subscription, flat-cost (#120).
+
+**Files touched (6):** `compass/orchestrator/hosts/claude_code.py` (new) · `compass/orchestrator/hosts/router.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_claude_code.py` (new) · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #120. **3 of 5 before Retro #025 (fires after #122).** The orchestrator now runs on a flat subscription, not a meter — the honest answer to "else VSC is better."
