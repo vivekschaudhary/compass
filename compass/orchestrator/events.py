@@ -154,3 +154,62 @@ def load_events(path=None) -> list:
         except json.JSONDecodeError:
             continue
     return out
+
+
+# ── pricing (#106/#116) ──────────────────────────────────────────────────────
+# Approximate Claude list prices (USD per million tokens), keyed by model-family
+# substring. Cache reads bill at 0.1× input, cache writes at 1.25× input. Prices
+# drift — a labeled estimate for at-a-glance spend + the budget cap, not billing
+# truth. Override via $COMPASS_PRICES (JSON: {"opus": [in, out], ...}). Single
+# source for the cockpit rollup (#106) and the run-time budget cap (#116).
+_PRICES = {"opus": (15.0, 75.0), "sonnet": (3.0, 15.0), "haiku": (0.80, 4.0)}
+_CACHE_READ_MULT = 0.1
+_CACHE_WRITE_MULT = 1.25
+
+
+def _prices():
+    raw = os.environ.get("COMPASS_PRICES")
+    if raw:
+        try:
+            return {**_PRICES, **{k: tuple(v) for k, v in json.loads(raw).items()}}
+        except (ValueError, TypeError):
+            pass
+    return _PRICES
+
+
+def _price_for(model: str):
+    table = _prices()
+    m = (model or "").lower()
+    for fam, price in table.items():
+        if fam in m:
+            return price
+    return table["opus"]  # default to the priciest — never under-report
+
+
+def cost_usd(usage: dict, model: str) -> float:
+    """Estimated USD for summed usage {input, output, cache_read, cache_creation}."""
+    in_price, out_price = _price_for(model)
+    return (
+        usage.get("input", 0) / 1e6 * in_price
+        + usage.get("cache_read", 0) / 1e6 * in_price * _CACHE_READ_MULT
+        + usage.get("cache_creation", 0) / 1e6 * in_price * _CACHE_WRITE_MULT
+        + usage.get("output", 0) / 1e6 * out_price
+    )
+
+
+def _full_input_cost(usage: dict, model: str) -> float:
+    """What the input would cost with NO caching (the cache-savings baseline)."""
+    in_price, _ = _price_for(model)
+    total_in = usage.get("input", 0) + usage.get("cache_read", 0) + usage.get("cache_creation", 0)
+    return total_in / 1e6 * in_price
+
+
+def cost_of_usage_event(event: dict) -> float:
+    """USD for one raw `usage` event (#116 budget cap) — maps the event's token
+    fields to the canonical usage shape and prices it."""
+    return cost_usd({
+        "input": event.get("input_tokens", 0) or 0,
+        "output": event.get("output_tokens", 0) or 0,
+        "cache_read": event.get("cache_read_input_tokens", 0) or 0,
+        "cache_creation": event.get("cache_creation_input_tokens", 0) or 0,
+    }, event.get("model"))

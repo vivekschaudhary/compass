@@ -187,54 +187,9 @@ def render_run(run: dict, graph_steps: list) -> str:
 
 
 # ── cost rollup (#106) ───────────────────────────────────────────────────────
-# Approximate Claude list prices (USD per million tokens), keyed by model-family
-# substring. Cache reads bill at 0.1× input, cache writes at 1.25× input (the
-# Anthropic prompt-cache multipliers). Prices drift — these are a labeled
-# estimate for at-a-glance spend, not billing truth. Override via $COMPASS_PRICES
-# (JSON: {"opus": [in, out], ...}) when exactness matters.
-_PRICES = {"opus": (15.0, 75.0), "sonnet": (3.0, 15.0), "haiku": (0.80, 4.0)}
-_CACHE_READ_MULT = 0.1
-_CACHE_WRITE_MULT = 1.25
-
-
-def _prices():
-    import json
-    import os
-    raw = os.environ.get("COMPASS_PRICES")
-    if raw:
-        try:
-            return {**_PRICES, **{k: tuple(v) for k, v in json.loads(raw).items()}}
-        except (ValueError, TypeError):
-            pass
-    return _PRICES
-
-
-def _price_for(model: str):
-    table = _prices()
-    m = (model or "").lower()
-    for fam, price in table.items():
-        if fam in m:
-            return price
-    return table["opus"]  # default to the priciest — never under-report
-
-
-def cost_usd(usage: dict, model: str) -> float:
-    """Estimated USD for one run's summed usage, accounting for cache pricing."""
-    in_price, out_price = _price_for(model)
-    return (
-        usage["input"] / 1e6 * in_price
-        + usage["cache_read"] / 1e6 * in_price * _CACHE_READ_MULT
-        + usage["cache_creation"] / 1e6 * in_price * _CACHE_WRITE_MULT
-        + usage["output"] / 1e6 * out_price
-    )
-
-
-def _full_input_cost(usage: dict, model: str) -> float:
-    """What the input would have cost with NO caching (all prompt tokens at full
-    input price) — the baseline the cache savings is measured against."""
-    in_price, _ = _price_for(model)
-    total_in = usage["input"] + usage["cache_read"] + usage["cache_creation"]
-    return total_in / 1e6 * in_price
+# Pricing moved to events.py (#116) so the cockpit rollup and the run-time budget
+# cap share one source. Re-exported here for back-compat.
+from .events import cost_usd, _price_for, _full_input_cost  # noqa: E402,F401
 
 
 def _has_usage(usage: dict) -> bool:

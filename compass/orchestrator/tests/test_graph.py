@@ -378,5 +378,44 @@ class TestSkipForRoute(unittest.TestCase):
         self.assertEqual(load_workflow_meta(WORKFLOWS / "ops.md")["requires_approved"], [])
 
 
+class TestCostControl(unittest.TestCase):
+    # #115/#117: model tiering + context condense (cost-control batch).
+    def test_default_model_is_sonnet_deep_is_opus(self):
+        from compass.orchestrator.hosts.router import DEFAULT_MODELS, DEEP_MODELS, deep_model
+        self.assertIn("sonnet", DEFAULT_MODELS["claude"])   # #115: cheap default
+        self.assertIn("opus", DEEP_MODELS["claude"])
+        self.assertIn("opus", deep_model("claude"))
+        self.assertIn("gpt", deep_model("codex"))           # codex → openai family
+
+    def test_read_model_tier(self):
+        import tempfile
+        from compass.orchestrator.run import _read_model_tier
+        d = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+        d.write("---\nname: engineer\nmodel_tier: deep\n---\nbody\n"); d.close()
+        p = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+        p.write("---\nname: pm\npreferred_hosts: [claude]\n---\nbody\n"); p.close()
+        try:
+            from pathlib import Path
+            self.assertEqual(_read_model_tier(Path(d.name)), "deep")
+            self.assertEqual(_read_model_tier(Path(p.name)), "")
+        finally:
+            from pathlib import Path
+            Path(d.name).unlink(); Path(p.name).unlink()
+
+    def test_condense_output_shrinks_keeps_signal(self):
+        from compass.orchestrator.run import _condense_output
+        raw = ("# Big output\n"
+               + ("a substantive filler line long enough to be a real sentence\n" * 200)
+               + "\n## Output summary\n**TL;DR** the session fix landed and tests pass\n"
+               + "**Files created/modified:** `a.ts`, `b.ts`\n")
+        out = _condense_output(raw)
+        self.assertLess(len(out), len(raw) / 3)   # much smaller context
+        self.assertIn("TL;DR", out)
+
+    def test_condense_output_fallback(self):
+        from compass.orchestrator.run import _condense_output
+        self.assertIn("ok", _condense_output("ok"))   # tiny input → no crash
+
+
 if __name__ == "__main__":
     unittest.main()

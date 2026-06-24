@@ -66,7 +66,17 @@ def select_host(preferred_hosts: list) -> Optional[str]:
 # Per-host default models. Override order: --model flag > COMPASS_MODEL_<HOST>
 # env var > these defaults. Env vars keep model pinning out of code per the
 # LLM-agnostic-scripts discipline (no SDK/model hardcoding outside hosts/).
+# Default = the economy tier (#115) — most steps don't need the frontier model,
+# and Opus-by-default was ~5× the cost (burned $20 in a few runs). Opt UP per
+# agent with `model_tier: deep`, or per run with --model.
 DEFAULT_MODELS = {
+    "claude": "claude-sonnet-4-6",
+    "openai": "gpt-5",
+    "gemini": "gemini-2.5-pro",
+}
+
+# The "deep" tier — frontier models for agents that declare `model_tier: deep`.
+DEEP_MODELS = {
     "claude": "claude-opus-4-8",
     "openai": "gpt-5",
     "gemini": "gemini-2.5-pro",
@@ -78,6 +88,20 @@ def _default_model(host_family: str) -> str:
         os.environ.get(f"COMPASS_MODEL_{host_family.upper()}")
         or DEFAULT_MODELS[host_family]
     )
+
+
+def _family(host: str) -> str:
+    """Map a selected host to its model family (codex/chatgpt/openai → openai)."""
+    if host in ("codex", "chatgpt", "openai"):
+        return "openai"
+    return "gemini" if host == "gemini" else "claude"
+
+
+def deep_model(host: str) -> str:
+    """Frontier model for a `model_tier: deep` agent (#115), given the selected
+    host. Honors a COMPASS_MODEL_<FAMILY> override if set."""
+    fam = _family(host)
+    return os.environ.get(f"COMPASS_MODEL_{fam.upper()}") or DEEP_MODELS[fam]
 
 
 def dispatch_to_host(

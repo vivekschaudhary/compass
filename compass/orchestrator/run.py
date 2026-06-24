@@ -37,6 +37,11 @@ from datetime import datetime
 # Utility helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+class BudgetExceeded(RuntimeError):
+    """Raised mid-run when accumulated spend crosses --max-cost (#116). Halts the
+    run cleanly with a resume hint instead of burning more budget."""
+
+
 def _read_preferred_hosts(agent_file: Path) -> list:
     """Parse preferred_hosts from agent file YAML frontmatter."""
     text = agent_file.read_text(encoding="utf-8")
@@ -69,6 +74,18 @@ def _read_agent_tools(agent_file: Path) -> list:
     if not t_match:
         return []
     return [t.strip() for t in t_match.group(1).split(",") if t.strip()]
+
+
+def _read_model_tier(agent_file: Path) -> str:
+    """Optional `model_tier:` frontmatter (#115). 'deep' → the frontier model
+    (Opus for Claude); absent/anything else → the economy default (Sonnet).
+    No agent ships 'deep' — opt up here when an agent needs the frontier model."""
+    text = agent_file.read_text(encoding="utf-8")
+    fm = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+    if not fm:
+        return ""
+    m = re.search(r'^model_tier:\s*([\w-]+)', fm.group(1), re.MULTILINE)
+    return (m.group(1).strip().lower() if m else "")
 
 
 def _reads_bet_catalog(agent_file: Path) -> bool:
@@ -407,20 +424,44 @@ def _load_prior_outputs_from_disk(
     return prior_outputs
 
 
+def _condense_output(text: str) -> str:
+    """Condense a prior step's output to its structured signal (#117) — TL;DR +
+    files created/modified + next-command — instead of a 3000-char raw slice.
+    Big token cut on later steps (and on Sonnet, #115). Falls back to a short
+    head slice when there's no parseable Output-summary."""
+    from .logger import parse_step_output
+    p = parse_step_output(text or "")
+    lines = []
+    if p.get("tldr"):
+        lines.append(f"TL;DR: {p['tldr']}")
+    created = p.get("files_created") or []
+    modified = p.get("files_modified") or []
+    if created:
+        lines.append("Created: " + ", ".join(created[:12]))
+    if modified:
+        lines.append("Modified: " + ", ".join(modified[:12]))
+    if p.get("next_command"):
+        lines.append(f"Next: {p['next_command']}")
+    if lines:
+        return "\n".join(lines)
+    # no structured summary — fall back to a short head slice
+    head = (text or "").strip()
+    return head[:800] + ("\n[... truncated ...]" if len(head) > 800 else "")
+
+
 def _build_user_message(task: str, user_context: str, prior_outputs: list) -> str:
-    """Build the user message for a step, prepending prior step outputs as context."""
+    """Build the user message for a step, prepending CONDENSED prior step outputs
+    as context (#117) — structured summaries, not raw dumps, to keep tokens (and
+    cost) down on multi-step runs."""
     parts = []
     if prior_outputs:
-        parts.append("## Prior step outputs (workflow context)\n")
+        parts.append("## Prior step outputs (condensed context)\n")
         for entry in prior_outputs:
             label = f"[{entry.get('workflow', '')} — " if entry.get('workflow') else "["
             parts.append(
                 f"### {label}Step {entry['step']}: {entry['agent']}.{entry['task']}]\n"
             )
-            output = entry["output"]
-            if len(output) > 3000:
-                output = output[:3000] + "\n\n[... truncated for context window ...]"
-            parts.append(output)
+            parts.append(_condense_output(entry["output"]))
             parts.append("")
         parts.append("---\n")
     parts.append(f"Execute task: **{task}**")
@@ -624,6 +665,7 @@ def _run_workflow(
     allow_write: bool = False,
     max_tool_iterations: int = None,
     no_events: bool = False,
+    max_cost: float = None,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -634,7 +676,7 @@ def _run_workflow(
     """
     from .graph import load_workflow, load_workflow_meta
     from .hitl import handle_hitl_gate
-    from .hosts.router import select_host, dispatch_to_host
+    from .hosts.router import select_host, dispatch_to_host, deep_model
     from .logger import log_step, log_hitl
     from . import events as ev
 
@@ -780,12 +822,30 @@ def _run_workflow(
     if not no_events and not dry_run:
         _sinks.append(ev.jsonl_sink())
     _fan = ev.multi_sink(*_sinks)
+    run_cost = {"usd": 0.0}  # accumulated spend this run (#116)
+
+    def _sink(event: dict):
+        """on_event sink — takes a full event dict (the convention claude.py's
+        tool loop uses). Stamps run identity, fans to terminal + jsonl, and
+        (#116) accumulates spend on `usage` events, raising BudgetExceeded when a
+        --max-cost cap is crossed (propagates out of the tool loop → clean halt).
+        Fixes #104's wiring bug: run.py previously passed an emit(type, **fields)
+        function as on_event, but the loop calls on_event(dict) — so tool/usage
+        events were mangled (never rendered, never priced)."""
+        event.setdefault("project", _project)
+        event.setdefault("run_id", run_id)
+        event.setdefault("workflow", workflow_name)
+        event.setdefault("bet_id", bet_id)
+        _fan(event)
+        if event.get("type") == ev.USAGE:
+            run_cost["usd"] += ev.cost_of_usage_event(event)
+            if max_cost and run_cost["usd"] > max_cost:
+                raise BudgetExceeded(
+                    f"run spend ~${run_cost['usd']:.2f} exceeded --max-cost ${max_cost:.2f}"
+                )
 
     def emit(type, **fields):
-        _fan(ev.make_event(
-            type, project=_project, run_id=run_id,
-            workflow=workflow_name, bet_id=bet_id, **fields
-        ))
+        _sink(ev.make_event(type, **fields))
 
     emit(ev.RUN_START, allow_write=allow_write, branch=work_branch)
 
@@ -1008,11 +1068,18 @@ def _run_workflow(
             agent_label = agent_file.relative_to(project_dir)
         except ValueError:
             agent_label = agent_file
+        # Per-step model (#115): explicit --model wins; else `model_tier: deep`
+        # → frontier model; else None → router default (Sonnet, the economy tier).
+        tier = _read_model_tier(agent_file)
+        step_model = model or (deep_model(host) if tier == "deep" else None)
+
         print(f"Agent      : {agent_label}")
         print(f"Task       : {step.task}")
         print(f"Host       : {host}  (preferred: {preferred_hosts})")
         if model:
             print(f"Model      : {model} (override)")
+        elif tier == "deep":
+            print(f"Model      : {step_model} (model_tier: deep)")
         if prior_outputs:
             print(f"Context    : {len(prior_outputs)} prior step(s) passed")
 
@@ -1049,11 +1116,22 @@ def _run_workflow(
                   "watch `python3 -m compass.orchestrator.cockpit --run <id>`)")
         try:
             result = dispatch_to_host(
-                host, str(agent_file), step.task, user_message, model=model,
+                host, str(agent_file), step.task, user_message, model=step_model,
                 tools=agent_tools or None, project_dir=project_dir,
                 allow_write=allow_write, max_tool_iterations=max_tool_iterations,
-                on_event=emit,
+                on_event=_sink,
             )
+        except BudgetExceeded as exc:
+            print(
+                f"\n💰 Budget cap reached at step {step.number}: {exc}\n"
+                f"  Run halted to protect spend. Resume with a higher cap:\n"
+                f"    python3 -m compass.orchestrator.run {workflow_name} "
+                f"--from-step {step.number} --max-cost <higher>"
+                + (f" --allow-write" if allow_write else ""),
+                file=sys.stderr,
+            )
+            emit(ev.RUN_END, status="halted", reason=str(exc))
+            sys.exit(1)
         except Exception as exc:
             # Any dispatch failure — API 400s, rate limits, network, SDK errors
             # (#112) — halts CLEANLY with a resume hint, never a raw traceback.
@@ -1101,12 +1179,15 @@ def _run_workflow(
             agent=step.agent,
             task=step.task,
             host=host,
-            model=model,
+            model=step_model,
             output=result,
             artifact_path=str(last_artifact_path.relative_to(project_dir)) if last_artifact_path else None,
         )
         emit(ev.STEP_END, step=step.number,
              gate_result=rec.get("gate_result"), output_chars=rec.get("output_chars"))
+        if run_cost["usd"] > 0:
+            print(f"[cost] run ~${run_cost['usd']:.3f}"
+                  + (f" / ${max_cost:.2f} cap" if max_cost else " (no cap — set --max-cost)"))
 
         prior_outputs.append({
             "step": step.number,
@@ -1212,6 +1293,18 @@ def main(argv=None):
             "Suppress the user-local event spine (~/.compass/orchestrator/"
             "events.jsonl) for this run. Terminal progress still prints; the "
             "portfolio cockpit just won't see this run."
+        ),
+    )
+    parser.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        dest="max_cost",
+        metavar="USD",
+        help=(
+            "Halt the run when estimated spend crosses this dollar cap (#116) — "
+            "a budget seatbelt. Checked on every usage event (mid-tool-loop too); "
+            "halts with a --from-step resume hint. Default: no cap."
         ),
     )
     parser.add_argument(
@@ -1347,6 +1440,7 @@ def main(argv=None):
             allow_write=args.allow_write,
             max_tool_iterations=args.max_tool_iterations,
             no_events=args.no_events,
+            max_cost=args.max_cost,
         )
         return
 
@@ -1395,6 +1489,7 @@ def main(argv=None):
             allow_write=args.allow_write,
             max_tool_iterations=args.max_tool_iterations,
             no_events=args.no_events,
+            max_cost=args.max_cost,
         )
 
         accumulated_outputs.extend(wf_outputs)

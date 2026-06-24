@@ -342,6 +342,35 @@ class TestHtmlCockpit(unittest.TestCase):
         self.assertEqual(rows[1][1], "pending")
 
 
+class TestBudgetPricing(unittest.TestCase):
+    # #116: pricing moved to events.py; per-event cost + budget accumulation.
+    def test_cost_of_usage_event(self):
+        e = ev.make_event(ev.USAGE, model="claude-opus-4-8",
+                          input_tokens=1_000_000, output_tokens=0,
+                          cache_read_input_tokens=0, cache_creation_input_tokens=0)
+        self.assertAlmostEqual(ev.cost_of_usage_event(e), 15.0, places=4)  # 1M opus in @ $15
+
+    def test_sonnet_cheaper_than_opus(self):
+        u = {"input": 1_000_000, "output": 1_000_000, "cache_read": 0, "cache_creation": 0}
+        opus = ev.cost_usd(u, "claude-opus-4-8")
+        sonnet = ev.cost_usd(u, "claude-sonnet-4-6")
+        self.assertLess(sonnet, opus)
+        self.assertAlmostEqual(opus / sonnet, 5.0, places=1)   # ~5× — the #115 lever
+
+    def test_budget_accumulation_crosses_cap(self):
+        events = [ev.make_event(ev.USAGE, model="claude-sonnet-4-6",
+                                input_tokens=1_000_000, output_tokens=0,
+                                cache_read_input_tokens=0, cache_creation_input_tokens=0)
+                  for _ in range(3)]                    # 3 × ($3) = $9
+        total = sum(ev.cost_of_usage_event(e) for e in events)
+        self.assertAlmostEqual(total, 9.0, places=4)
+        self.assertGreater(total, 5.0)                  # would trip a $5 --max-cost
+
+    def test_budget_exceeded_class(self):
+        from compass.orchestrator.run import BudgetExceeded
+        self.assertTrue(issubclass(BudgetExceeded, RuntimeError))
+
+
 class TestRunEmitsLifecycle(unittest.TestCase):
     """Integration: a real _run_workflow call emits RUN_START … RUN_END to the
     user-local spine, even on an early halt (no host available)."""

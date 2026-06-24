@@ -253,6 +253,8 @@ python3 -m compass.orchestrator.run build --context "story-id: PROJ-43"
 
 The orchestrator selects the first host in `preferred_hosts:` that has credentials set. Dry-run with `--dry-run` to see which host each step routes to.
 
+**Model tier (cost) — Sonnet by default (#115).** Every Claude step defaults to the **economy** model (`claude-sonnet-4-6`) — Opus-by-default was ~5× the cost. Opt **up** to the frontier model two ways: per agent, add `model_tier: deep` to its frontmatter (→ Opus); per run, pass `--model claude-opus-4-8`. Override globally with `COMPASS_MODEL_CLAUDE`. **Cap spend per run with `--max-cost <USD>`** — it halts (with a resume hint) when estimated spend crosses the cap, checked on every usage event (mid-tool-loop too). Watch live spend in `cockpit` (💰 SPEND).
+
 **To use manually** (interactive, any host):
 
 Paste any `compass/agents/<agent>.md` file into your LLM host's system-prompt slot. Agent files are self-sufficient — identity + principles + tasks + refusal rules + handoffs are all inlined.
