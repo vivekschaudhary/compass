@@ -867,7 +867,8 @@ def _run_workflow(
     def emit(type, **fields):
         _sink(ev.make_event(type, **fields))
 
-    emit(ev.RUN_START, allow_write=allow_write, branch=work_branch)
+    emit(ev.RUN_START, allow_write=allow_write, branch=work_branch,
+         project_dir=str(project_dir))  # #119: full path so the cockpit can resume any run
 
     last_artifact_path = None
     last_agent_output = ""

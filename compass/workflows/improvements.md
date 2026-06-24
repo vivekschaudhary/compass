@@ -3279,3 +3279,22 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **The arc this unlocks (declared, next slices):** **#119 action endpoints** — `--serve` cockpit gains `POST /run` (`compass-run … --non-interactive --max-cost X`) + `POST /decide` (`--from-step N --non-interactive --decide …`) → launch + approve **from the browser**; **#120 `claude-code` host** — subscription-backed dispatch so dashboard-triggered runs are flat-cost. Together = the VISION's dashboard-as-orchestrator, cost-safe.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #118. **1 of 5 before Retro #025 (fires after #122).** The keystone that turns the orchestrator from terminal-only into browser-drivable.
+
+### 2026-06-24 — action endpoints: launch + approve from the browser (#119)
+
+**Trigger origin (Principle #19):** **the VISION continued.** #118 made runs browser-drivable (pause-and-resume gates); #119 closes the loop — the dashboard can now **start** a run and **act on** its gates without a terminal. Slice 2 of 3 of the dashboard-as-orchestrator arc (after #118 async gates, before #120 claude-code host).
+
+**What shipped:**
+- **`POST /run`** — launch a workflow from the browser. The page (actions on) renders a **🚀 Launch** form: workflow `<select>` (from the `compass/workflows/*.md` allow-list, `advance` shim excluded), project-dir (prefilled with the server default), context, optional bet, an `--allow-write` checkbox.
+- **`POST /decide`** — act on a paused gate: **approve/reject** buttons for an approval gate, **one button per route label** for a routing gate (labels read from the graph; text-field fallback if the graph is unavailable).
+- **Opt-in via `--serve --allow-actions`** — plain `--serve` stays read-only (POST → 403), mirroring `--allow-write`. New server flags: `--allow-actions`, `--project-dir` (launch default), `--max-cost` (cap applied to every browser-launched run).
+- **`_build_run_argv(action, params, defaults)`** — pure arg-builder: validates the workflow against the allow-list + an existing project-dir + a numeric step, then returns the `compass-run` argv. Unit-tested without ever spawning.
+- **The spine learns the path:** `RUN_START` now carries `project_dir` (full path); `fold_runs` captures it so `/decide` can target any run.
+
+**The gate floor + cost cap hold:** the server **only relays to `compass-run`** — it never decides. It spawns via an **argv list** (`subprocess.Popen`, never `shell=True`), **always injecting `--non-interactive` + the server's `--max-cost`**, so a dashboard click can't bypass the mechanical gate floor or run away on cost. Localhost-only (`127.0.0.1`); every input validated before it reaches the argv.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **181 pass** (+10: `_build_run_argv` run/decide/reject cases · render_html actions on/off · `fold_runs` project_dir · `_known_workflows` excludes `advance`). consistency-check CONSISTENT (no count change). Read-only `--serve` default unchanged.
+
+**Next slice (declared):** **#120 `claude-code` host** — subscription-backed local dispatch (`claude -p`) so dashboard-launched runs are flat-cost, not metered. That makes the whole arc cost-safe for everyday use.
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #119. **2 of 5 before Retro #025 (fires after #122).** The dashboard can now drive a full step — launch → pause at gate → approve/route → resume — from the browser.

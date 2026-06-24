@@ -18,6 +18,7 @@ Usage:
   COMPASS_HOME=/tmp/ch python3 -m compass.orchestrator.cockpit
 """
 import argparse
+import sys
 
 from . import events as ev
 
@@ -49,6 +50,7 @@ def fold_runs(events: list) -> dict:
             "model": None,
             # step-level status (#111): {step_num: {status, title, agent, task}}
             "steps": {},
+            "project_dir": None,   # full path (#119) — lets the cockpit resume any run
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
         for k in ("project", "workflow", "bet_id"):
@@ -59,6 +61,8 @@ def fold_runs(events: list) -> dict:
         t = e.get("type")
         if t == ev.RUN_START:
             r["started"] = e.get("ts")
+            if e.get("project_dir"):
+                r["project_dir"] = e["project_dir"]
         elif t == ev.STEP_START:
             r["current_step"] = e.get("step")
             r["current_task"] = (
@@ -320,17 +324,75 @@ _HTML_CSS = """
   .done .g{color:#3fb950} .running .g{color:#58a6ff} .awaiting .g{color:#d29922} .pending .g{color:#6e7681}
   .pending{color:#8a8f98}
   .spend{color:#b8c0cc} .empty{color:#8a8f98}
+  form.act{display:inline}
+  button,input,select,textarea{font:inherit}
+  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:4px 10px;margin:4px 6px 0 0;cursor:pointer}
+  button.rej{background:#6e2630}
+  input,select,textarea{background:#0b0d11;border:1px solid #2a2e37;border-radius:6px;color:#e6e6e6;padding:4px 6px}
+  .launch{background:#161a22;border-radius:8px;padding:12px;margin:10px 0}
+  textarea{width:100%;min-height:48px;margin:4px 0}
+  label{display:block;margin:6px 0 2px;color:#8a8f98}
 """
+
+
+def _hidden(**kv) -> str:
+    return "".join(f"<input type='hidden' name='{_esc(k)}' value='{_esc(v)}'>" for k, v in kv.items() if v not in (None, ""))
 
 
 def _esc(s) -> str:
     return _htmllib.escape(str(s)) if s is not None else ""
 
 
+def _gate_routes(workflow, step, cdir) -> list:
+    """Route labels for a routing gate (#119) — so the cockpit can render one
+    button per branch. [] if the graph is unavailable or the step isn't routing."""
+    try:
+        from .graph import load_workflow
+        wf = Path(cdir) / "workflows" / f"{workflow}.md"
+        if not wf.exists():
+            return []
+        for s in load_workflow(wf):
+            if s.number == step and s.routes:
+                return [lbl for lbl, _ in s.routes]
+    except Exception:
+        pass
+    return []
+
+
+def _decide_forms(r: dict, cdir) -> str:
+    """Approve/reject buttons (HITL gate) or one button per route (routing gate),
+    each a tiny POST /decide form (#119). Relays only — run.py still decides."""
+    g = r["open_gate"]
+    hid = _hidden(run_id=r.get("run_id"), workflow=r.get("workflow"),
+                  project_dir=r.get("project_dir"), step=g.get("step"))
+    out = []
+
+    def form(decide, label, cls=""):
+        c = f" class='{cls}'" if cls else ""
+        return (f"<form class='act' method='POST' action='/decide'>{hid}"
+                f"<input type='hidden' name='decide' value='{_esc(decide)}'>"
+                f"<button{c}>{_esc(label)}</button></form>")
+
+    if g.get("kind") == "routing":
+        routes = _gate_routes(r.get("workflow"), g.get("step"), cdir)
+        for lbl in routes:
+            out.append(form(lbl, f"{lbl} →"))
+        if not routes:  # graph unavailable — let the operator type the route
+            out.append("<form class='act' method='POST' action='/decide'>" + hid +
+                       "<input name='decide' placeholder='route label'>"
+                       "<button>route →</button></form>")
+    else:
+        out.append(form("approve", "approve"))
+        out.append(form("reject", "reject", cls="rej"))
+    return "".join(out)
+
+
 def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
-                refresh=5, snapshot_ts="") -> str:
+                refresh=5, snapshot_ts="", actions=False, default_project_dir="") -> str:
     """Self-contained HTML cockpit (#113) — same data as the text view, browser layout.
-    `snapshot_ts` is passed in (no Date.now); `refresh` drives the meta auto-reload."""
+    `snapshot_ts` is passed in (no Date.now); `refresh` drives the meta auto-reload.
+    `actions` (#119) turns on the Launch form + per-gate approve/reject/route buttons
+    (POST /run, /decide); off → the page stays read-only."""
     vals = list(runs.values())
     if project_filter:
         vals = [r for r in vals if r.get("project") == project_filter]
@@ -346,7 +408,21 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     p.append(f"<style>{_HTML_CSS}</style></head><body><div class='wrap'>")
     title = "Compass Cockpit — portfolio" + (f" · {_esc(project_filter)}" if project_filter else "")
     p.append(f"<h1>{title}</h1>")
-    p.append(f"<div class='ts'>snapshot {_esc(snapshot_ts)} · auto-refresh {int(refresh)}s · read-only</div>")
+    mode = "actions enabled — launch & approve below" if actions else "read-only (start with --allow-actions to launch/approve)"
+    p.append(f"<div class='ts'>snapshot {_esc(snapshot_ts)} · auto-refresh {int(refresh)}s · {mode}</div>")
+
+    # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
+    if actions:
+        opts = "".join(f"<option>{_esc(w)}</option>" for w in _known_workflows(cdir))
+        p.append("<div class='launch'><h2>🚀 Launch a workflow</h2>"
+                 "<form class='act' method='POST' action='/run'>"
+                 f"<label>workflow</label><select name='workflow'>{opts}</select>"
+                 f"<label>project dir</label><input name='project_dir' size='52' value='{_esc(default_project_dir)}'>"
+                 "<label>context (optional)</label><textarea name='context'></textarea>"
+                 "<label>bet id (optional)</label><input name='bet'>"
+                 "<label><input type='checkbox' name='allow_write' value='1'> allow writes (--allow-write)</label>"
+                 "<div><button type='submit'>Launch →</button></div>"
+                 "</form></div>")
 
     # ⏸ Awaiting
     p.append(f"<h2>⏸ Awaiting your decision ({len(awaiting)})</h2>")
@@ -355,9 +431,10 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     for r in awaiting:
         g = r["open_gate"]
         loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
                  f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>"
-                 f"<code>{_esc(_approve_cmd(r))}</code></div>")
+                 f"{act}</div>")
 
     # ▶ In flight (+ step plan)
     p.append(f"<h2>▶ In flight ({len(in_flight)})</h2>")
@@ -403,10 +480,69 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
 
 
 def build_page(events: list, project_filter=None, limit=10, cdir=None,
-               refresh=5, snapshot_ts="") -> bytes:
+               refresh=5, snapshot_ts="", actions=False, default_project_dir="") -> bytes:
     """events → HTML bytes (what the --serve handler returns per request, #113)."""
     runs = fold_runs(events)
-    return render_html(runs, project_filter, limit, cdir, refresh, snapshot_ts).encode("utf-8")
+    return render_html(runs, project_filter, limit, cdir, refresh, snapshot_ts,
+                       actions=actions, default_project_dir=default_project_dir).encode("utf-8")
+
+
+# ── action endpoints (#119): the cockpit relays launches/decisions to compass-run ──
+import re as _re
+
+_WORKFLOW_RE = _re.compile(r"^[a-z][a-z0-9-]+$")
+
+
+def _known_workflows(cdir) -> list:
+    """Sorted workflow names from compass/workflows/*.md — the launch allow-list.
+    Excludes the deprecated `advance` shim (prints a migration table, not runnable)."""
+    try:
+        d = Path(cdir) / "workflows"
+        names = sorted(p.stem for p in d.glob("*.md") if _WORKFLOW_RE.match(p.stem))
+        return [n for n in names if n != "advance"]
+    except Exception:
+        return []
+
+
+def _build_run_argv(action, params, defaults):
+    """Pure arg-builder for POST /run and /decide (#119) — returns a compass-run
+    argv list, or ('error', msg). Spawned runs ALWAYS carry --non-interactive and
+    the server's --max-cost, so the mechanical gate floor + budget cap still fire;
+    the dashboard only relays, it can't bypass control. Pure → unit-tested."""
+    wf = (params.get("workflow") or "").strip()
+    if not _WORKFLOW_RE.match(wf) or wf not in defaults.get("known", []):
+        return ("error", f"unknown workflow: {wf!r}")
+    pdir = (params.get("project_dir") or defaults.get("project_dir") or "").strip()
+    if not pdir or not Path(pdir).is_dir():
+        return ("error", f"project dir not found: {pdir!r}")
+
+    argv = [sys.executable, "-m", "compass.orchestrator.run", wf,
+            "--project-dir", pdir, "--non-interactive"]
+    max_cost = defaults.get("max_cost")
+    if max_cost is not None:
+        argv += ["--max-cost", str(max_cost)]
+    cdir = defaults.get("compass_dir")
+    if cdir:
+        argv += ["--compass-dir", str(cdir)]
+
+    if action == "run":
+        if params.get("bet"):
+            argv += ["--bet", params["bet"].strip()]
+        if params.get("context"):
+            argv += ["--context", params["context"]]
+        if params.get("allow_write"):
+            argv += ["--allow-write"]
+    elif action == "decide":
+        step = (params.get("step") or "").strip()
+        if not step.isdigit():
+            return ("error", f"bad step: {step!r}")
+        decide = (params.get("decide") or "").strip()
+        if not decide:
+            return ("error", "missing decision")
+        argv += ["--from-step", step, "--decide", decide]
+    else:
+        return ("error", f"unknown action: {action!r}")
+    return argv
 
 
 def _render_spend(runs: list) -> str:
@@ -444,14 +580,24 @@ def main(argv=None):
     parser.add_argument("--serve", action="store_true",
                         help="Run a read-only localhost server (the live feed, #113) — re-reads the spine per request.")
     parser.add_argument("--port", type=int, default=8765, help="Port for --serve (default 8765).")
+    parser.add_argument("--allow-actions", action="store_true", dest="allow_actions",
+                        help="Enable POST /run + /decide so you can launch & approve from the browser (#119). "
+                             "Off by default (plain --serve is read-only). Spawned runs still carry "
+                             "--non-interactive + --max-cost, so the gate floor + budget cap fire.")
+    parser.add_argument("--project-dir", default=None, dest="project_dir",
+                        help="Default project dir for browser launches (#119); also prefilled in the launch form.")
+    parser.add_argument("--max-cost", type=float, default=None, dest="max_cost",
+                        help="USD cap applied to every browser-launched run (#119) — the server-level budget guard.")
     args = parser.parse_args(argv)
 
     path = args.home if args.home else None
     cdir = compass_dir(args.compass_dir)
 
-    # ── --serve: live read-only localhost feed (re-reads the spine per request) ──
+    # ── --serve: live localhost feed (read-only, or actionable with --allow-actions) ──
     if args.serve:
-        _serve(path, cdir, args.project, args.limit, args.port)
+        _serve(path, cdir, args.project, args.limit, args.port,
+               allow_actions=args.allow_actions, max_cost=args.max_cost,
+               default_project_dir=args.project_dir)
         return
 
     # ── --html: write a self-contained snapshot ──
@@ -490,12 +636,21 @@ def main(argv=None):
     print(render(runs, project_filter=args.project, limit=args.limit, cdir=cdir))
 
 
-def _serve(events_path, cdir, project_filter, limit, port):
-    """Read-only localhost HTTP server (#113) — the live cockpit feed. Each GET /
-    re-reads the spine and renders fresh HTML; the page meta-refreshes. 127.0.0.1
-    only, GET only, no writes, no file traversal."""
+def _serve(events_path, cdir, project_filter, limit, port,
+           allow_actions=False, max_cost=None, default_project_dir=None):
+    """Localhost HTTP server (#113/#119) — the live cockpit feed. Each GET /
+    re-reads the spine and renders fresh HTML; the page meta-refreshes. With
+    --allow-actions, POST /run + /decide relay to compass-run (the server only
+    spawns; run.py still gates + the --max-cost cap fires). 127.0.0.1 only;
+    no shell (argv list); inputs validated against the workflow allow-list."""
+    import os
+    import subprocess
+    import urllib.parse
     from datetime import datetime, timezone
     from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    defaults = {"known": _known_workflows(cdir), "project_dir": default_project_dir,
+                "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -505,18 +660,42 @@ def _serve(events_path, cdir, project_filter, limit, port):
             events = ev.load_events(events_path)
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             body = build_page(events, project_filter=project_filter, limit=limit,
-                              cdir=cdir, snapshot_ts=ts)
+                              cdir=cdir, snapshot_ts=ts, actions=allow_actions,
+                              default_project_dir=default_project_dir or "")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
+        def do_POST(self):
+            if not allow_actions:
+                self.send_error(403, "actions disabled (start with --allow-actions)")
+                return
+            action = {"/run": "run", "/decide": "decide"}.get(self.path)
+            if not action:
+                self.send_error(404)
+                return
+            n = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(n).decode("utf-8") if n else ""
+            form = {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+            argv = _build_run_argv(action, form, defaults)
+            if isinstance(argv, tuple) and argv[0] == "error":
+                self.send_error(400, argv[1])
+                return
+            # detached spawn — don't block the request; the run streams to the spine
+            subprocess.Popen(argv, env=os.environ.copy(),
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.end_headers()
+
         def log_message(self, *a):  # quiet
             pass
 
     httpd = HTTPServer(("127.0.0.1", port), Handler)
-    print(f"Compass cockpit live → http://127.0.0.1:{port}   (Ctrl-C to stop)")
+    mode = "actionable (launch/approve enabled)" if allow_actions else "read-only"
+    print(f"Compass cockpit live → http://127.0.0.1:{port}   [{mode}]   (Ctrl-C to stop)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

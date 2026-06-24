@@ -195,6 +195,15 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
   echo 'docs/dashboard.html' >> .gitignore
   ```
 
+- **Cockpit — the portfolio-wide orchestrator feed.** `python3 -m compass.orchestrator.cockpit --serve` runs a **read-only** localhost feed (`http://127.0.0.1:8765`) over the user-local event spine: ⏸ awaiting / ▶ in-flight (+ step plan) / ✓ done / 💰 spend, auto-refreshing. Distinct from `/dashboard` (that renders one repo's artifacts; this is portfolio-wide across every project the orchestrator has run). Add **`--allow-actions`** to make it **actionable** — launch a workflow and approve/route a paused gate **from the browser** (#119):
+
+  ```bash
+  python3 -m compass.orchestrator.cockpit --serve --allow-actions \
+      --project-dir . --max-cost 5
+  ```
+
+  Localhost-only. Browser-launched runs always go through `compass-run` with `--non-interactive` + `--max-cost`, so the gate floor and the budget cap still fire — a click can't bypass control or run away on cost.
+
 ## What's where
 
 ```

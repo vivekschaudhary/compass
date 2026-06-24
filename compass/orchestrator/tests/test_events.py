@@ -407,5 +407,90 @@ class TestRunEmitsLifecycle(unittest.TestCase):
                         os.environ[k] = v
 
 
+class TestActionEndpoints(unittest.TestCase):
+    """#119 — the cockpit relays browser launches/decisions to compass-run. The
+    arg-builder is pure (no spawn) and always injects the gate floor + cost cap."""
+
+    def setUp(self):
+        self.td = tempfile.mkdtemp()
+        self.defaults = {"known": ["triage", "build", "fix"], "project_dir": None,
+                         "max_cost": 5.0, "compass_dir": "/fw/compass"}
+
+    def test_run_argv_has_gate_floor_and_cap(self):
+        argv = cockpit._build_run_argv(
+            "run", {"workflow": "triage", "project_dir": self.td}, self.defaults)
+        self.assertEqual(argv[:4],
+                         [__import__("sys").executable, "-m", "compass.orchestrator.run", "triage"])
+        self.assertIn("--non-interactive", argv)        # gate floor still fires
+        self.assertIn("--max-cost", argv)               # budget cap still fires
+        self.assertEqual(argv[argv.index("--max-cost") + 1], "5.0")
+        self.assertNotIn("--allow-write", argv)         # off unless requested
+
+    def test_run_argv_allow_write_only_when_requested(self):
+        argv = cockpit._build_run_argv(
+            "run", {"workflow": "build", "project_dir": self.td, "allow_write": "1",
+                    "context": "ctx", "bet": "CB-7"}, self.defaults)
+        self.assertIn("--allow-write", argv)
+        self.assertEqual(argv[argv.index("--context") + 1], "ctx")
+        self.assertEqual(argv[argv.index("--bet") + 1], "CB-7")
+
+    def test_unknown_workflow_rejected(self):
+        out = cockpit._build_run_argv(
+            "run", {"workflow": "rm-rf", "project_dir": self.td}, self.defaults)
+        self.assertEqual(out[0], "error")
+
+    def test_missing_project_dir_rejected(self):
+        out = cockpit._build_run_argv(
+            "run", {"workflow": "triage", "project_dir": "/no/such/dir"}, self.defaults)
+        self.assertEqual(out[0], "error")
+
+    def test_decide_argv_resumes_at_step(self):
+        argv = cockpit._build_run_argv(
+            "decide", {"workflow": "triage", "project_dir": self.td, "step": "2",
+                       "decide": "approve"}, self.defaults)
+        self.assertEqual(argv[argv.index("--from-step") + 1], "2")
+        self.assertEqual(argv[argv.index("--decide") + 1], "approve")
+        self.assertIn("--non-interactive", argv)
+
+    def test_decide_bad_step_rejected(self):
+        out = cockpit._build_run_argv(
+            "decide", {"workflow": "triage", "project_dir": self.td, "step": "x",
+                       "decide": "approve"}, self.defaults)
+        self.assertEqual(out[0], "error")
+
+    def test_render_html_actions_on_shows_forms(self):
+        runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",
+                       "project_dir": self.td, "ended": False, "steps": {},
+                       "open_gate": {"step": 2, "kind": "hitl", "title": "gate"}}}
+        html = cockpit.render_html(runs, actions=True, default_project_dir=self.td)
+        self.assertIn("Launch a workflow", html)
+        self.assertIn("action='/run'", html)
+        self.assertIn("action='/decide'", html)
+        self.assertIn("approve</button>", html)
+
+    def test_render_html_actions_off_is_read_only(self):
+        runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",
+                       "project_dir": self.td, "ended": False, "steps": {},
+                       "open_gate": {"step": 2, "kind": "hitl", "title": "gate"}}}
+        html = cockpit.render_html(runs, actions=False)
+        self.assertNotIn("Launch a workflow", html)
+        self.assertNotIn("action='/run'", html)
+        self.assertIn("read-only", html)
+
+    def test_fold_captures_project_dir(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home",
+                          workflow="triage", project_dir="/abs/home"),
+        ]
+        runs = cockpit.fold_runs(events)
+        self.assertEqual(runs["r1"]["project_dir"], "/abs/home")
+
+    def test_known_workflows_excludes_advance(self):
+        repo = Path(__file__).resolve().parents[3]
+        names = cockpit._known_workflows(repo / "compass")
+        self.assertIn("triage", names)
+        self.assertNotIn("advance", names)
+
+
 if __name__ == "__main__":
     unittest.main()
