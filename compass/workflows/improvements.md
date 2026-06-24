@@ -3345,3 +3345,23 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **208 pass** (+2: render_html action forms carry `onsubmit`/`_act`/`disabled`; `_gate_already_actioned` open vs decided vs unknown). consistency-check CONSISTENT.
 
 **Files touched (4):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #122. **5 of 5 — Retro #025 is now DUE (fires after #122).** The dashboard tells you what it's doing and refuses to do it twice.
+
+### 2026-06-24 — refresh mvp.md to current truth (#123)
+
+**Trigger origin (Principle #19):** **post-retro MVP review (DRI-directed).** After Retro #025, the DRI asked for "the open items to consider MVP done." Grounding that surfaced `compass/framework/mvp.md` as stale — it predated the all-14-agents migration, multi-host routing, and the whole orchestrator/cockpit/dashboard arc (still listed agents as `❌ migrate`, multi-host as "deferred to beta"). Retro #018 had flagged "MVP doc refresh" as a watch-for; Retro #025's audit confirmed the drift.
+
+**What shipped:** mvp.md rewritten to current truth — the original "start sending" criteria marked **all met**; agent pack shows all 14 migrated; capabilities delivered *beyond* the original single-host alpha listed (multi-host routing, tool-using executor, async gates, cockpit, dashboard-as-orchestrator, cost controls, the flat-cost `claude-code` host); a **post-MVP roadmap table** embeds the open items, overlaid with Retro #025's watch-fors + codification candidates. Build state stays single-sourced to CHANGELOG + improvements; mvp.md is the scope map. **Declaring MVP functionally complete** is the headline — "it works" is now "it's declared done."
+
+**Verification:** consistency-check CONSISTENT; no test impact (doc change).
+
+**Files touched (3):** `compass/framework/mvp.md` · `CHANGELOG.md` (+ this file). Counter: #123. **1 of 5 before Retro #026 (fires after #127).**
+
+### 2026-06-24 — mechanize the host-list drift class in consistency-check (#124)
+
+**Trigger origin (Principle #19):** **Retro #025 watch-for #1.** The #025 audit caught `claude-code` missing from AGENTS.md's host table *by hand* — `consistency-check.py` passed because it didn't cover prose host-list enumerations. A new host had to be remembered in code AND docs; nothing computed the diff. This is the same "mechanize what the audit keeps catching" move as #93.
+
+**What shipped:** a 4th check — `check_host_list` derives the supported hosts from `router.py`'s authoritative `Supported: …` dispatch error string and verifies each is documented in AGENTS.md's host table (`chatgpt` treated as the OpenAI-family alias → satisfied by the `openai` row). Now a new host that lands in code but not docs fails the commit hook + CI. Per `[test-alongside-implementation]`: +2 tests (drift caught for an undocumented host; alias not false-flagged).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **210 pass** (+2). consistency-check CONSISTENT (now reports "host list" too).
+
+**Files touched (3):** `compass/scripts/consistency-check.py` · `compass/orchestrator/tests/test_consistency.py` · `CHANGELOG.md` (+ this file). Counter: #124. **2 of 5 before Retro #026 (fires after #127).** One more retro watch-for converted from "remember to" into "the hook enforces it."

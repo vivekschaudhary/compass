@@ -17,6 +17,10 @@ Checks (all COMPUTABLE, no human input):
      that should point to CHANGELOG.md as the single source (README, CLAUDE,
      orchestrator run.py + README). CHANGELOG / improvements / retros are
      exempt (they are the record).
+  4. Host-list — every host the router enumerates as supported (its
+     "Supported: ..." dispatch error string) is documented in AGENTS.md's host
+     table. Added after Retro #025 caught `claude-code` missing from the table
+     by hand — a new host must be added in code AND docs together.
 
 Exit 0 = consistent; exit 1 = drift (prints each problem). Importable check
 functions return a list of problem strings for testing.
@@ -94,11 +98,45 @@ def check_version_self_claims(repo_root: Path) -> list:
     return problems
 
 
+# chatgpt is an OpenAI-family alias (no own AGENTS.md row); it's documented as
+# `openai`. Any other host the router names must have its own backtick mention.
+_HOST_ALIASES = {"chatgpt": "openai"}
+
+
+def _router_supported_hosts(repo_root: Path):
+    """The host tokens from router.py's authoritative 'Supported: ...' error
+    string (kept next to the dispatch arms). None if the string moved."""
+    text = (repo_root / "compass" / "orchestrator" / "hosts" / "router.py").read_text(encoding="utf-8")
+    m = re.search(r"Supported:\s*([a-z0-9,\- ]+)", text)
+    if not m:
+        return None
+    return [h.strip() for h in m.group(1).split(",") if h.strip()]
+
+
+def check_host_list(repo_root: Path) -> list:
+    hosts = _router_supported_hosts(repo_root)
+    if hosts is None:
+        return ["router.py: could not find the 'Supported: <hosts>' enumeration "
+                "(dispatch_to_host error string) to verify the host list against."]
+    agents = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
+    problems = []
+    for h in hosts:
+        token = _HOST_ALIASES.get(h, h)
+        if f"`{token}`" not in agents:
+            problems.append(
+                f"host-list drift: router.py supports '{h}' but AGENTS.md has no "
+                f"`{token}` host entry. Add it to the Supported hosts table "
+                f"(a new host lands in code AND docs together — Retro #025)."
+            )
+    return problems
+
+
 def run_all(repo_root: Path) -> list:
     return (
         check_dispatch_graph_count(repo_root)
         + check_catalog_count(repo_root)
         + check_version_self_claims(repo_root)
+        + check_host_list(repo_root)
     )
 
 
@@ -110,7 +148,7 @@ def main(argv=None) -> int:
 
     problems = run_all(repo_root)
     if not problems:
-        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims all check out.")
+        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims, host list all check out.")
         return 0
     print(f"DRIFT FOUND ({len(problems)}):\n", file=sys.stderr)
     for p in problems:

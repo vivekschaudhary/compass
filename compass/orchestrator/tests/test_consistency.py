@@ -30,6 +30,12 @@ class TestDetectsDrift(unittest.TestCase):
         (root / "compass" / "workflows").mkdir(parents=True)
         (root / "compass" / "framework").mkdir(parents=True)
         (root / "compass" / "orchestrator").mkdir(parents=True)
+        (root / "compass" / "orchestrator" / "hosts").mkdir(parents=True)
+        # router with the authoritative supported-hosts enumeration
+        (root / "compass" / "orchestrator" / "hosts" / "router.py").write_text(
+            'raise RuntimeError("Unknown host: x. Supported: claude, claude-code, '
+            'codex, chatgpt, openai, gemini")\n', encoding="utf-8"
+        )
         # two dispatch-graph workflows
         for name in ("a", "b"):
             (root / "compass" / "workflows" / f"{name}.md").write_text(
@@ -39,10 +45,13 @@ class TestDetectsDrift(unittest.TestCase):
         (root / "compass" / "framework" / "canon.md").write_text(
             "## Compass-original patterns\n\n### one\nx\n\n### two\ny\n", encoding="utf-8"
         )
-        # AGENTS claiming the matching truths
+        # AGENTS claiming the matching truths + a host table mentioning every
+        # router-supported host (chatgpt is the openai-family alias → `openai`)
         (root / "AGENTS.md").write_text(
             "2 of 17 workflows now in dispatch-graph shape; "
-            "catalog 7 shapes / 2 patterns.\n", encoding="utf-8"
+            "catalog 7 shapes / 2 patterns.\n"
+            "Hosts: `claude` `claude-code` `codex` `openai` `gemini`\n",
+            encoding="utf-8",
         )
         (root / "README.md").write_text("orchestrator v0.4-alpha ships\n", encoding="utf-8")
         (root / "CLAUDE.md").write_text("notes\n", encoding="utf-8")
@@ -77,6 +86,22 @@ class TestDetectsDrift(unittest.TestCase):
         (root / "README.md").write_text("orchestrator v0.4-alpha-7 ships\n", encoding="utf-8")
         probs = cc.check_version_self_claims(root)
         self.assertTrue(any("hardcoded orchestrator" in p for p in probs))
+
+    def test_host_list_drift_caught(self):
+        # router gains a host the AGENTS.md table doesn't document → caught
+        root = self._mirror()
+        (root / "compass" / "orchestrator" / "hosts" / "router.py").write_text(
+            'raise RuntimeError("Unknown host: x. Supported: claude, claude-code, '
+            'codex, chatgpt, openai, gemini, frobnicate")\n', encoding="utf-8"
+        )
+        probs = cc.check_host_list(root)
+        self.assertTrue(any("host-list drift" in p and "frobnicate" in p for p in probs))
+
+    def test_host_list_alias_not_flagged(self):
+        # chatgpt is satisfied by the `openai` row — must NOT be flagged
+        root = self._mirror()
+        probs = cc.check_host_list(root)
+        self.assertEqual(probs, [])
 
 
 if __name__ == "__main__":
