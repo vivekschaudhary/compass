@@ -3385,3 +3385,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** consistency-check CONSISTENT; no test impact (instruction/doc change).
 
 **Files touched (3):** `CLAUDE.md` · `compass/agents/engineer.md` · `CHANGELOG.md` (+ this file). Counter: #126. **4 of 5 before Retro #026 (fires after #127).** The branch-not-main invariant is now stated where the interactive agents read it, not just where the orchestrator enforces it.
+
+### 2026-06-24 — codify [fail-loud-not-silent] (the overdue failure-direction pattern) (#127)
+
+**Trigger origin (Principle #19):** **DRI-gated codification (5-retro overdue candidate).** `[failure-direction-inversion]` was flagged codification-ready from Retro #020 and carried as "most overdue" through Retro #025. After closing #125 (dispatch-on-outcome — itself a fresh instance), the DRI authorized codification and **renamed it `[fail-loud-not-silent]`** for clarity.
+
+**What shipped:** new canon Compass-original **`fail-loud-not-silent`** — *when a code path can fail, default its failure direction toward a loud halt, not a silent pass.* **9th enforcement-class member; catalog 7 shapes / 23 → 24 patterns.** Three named anti-patterns: `silent-skip` · `success-on-failure` · `swallowed-error`. Codified by ~6 accumulated instances (#79 reviewer silent-skip · #97/#100 max-iter success-advance · #104/#116 mangled telemetry → $0 cost · #120 "(no stderr)" · #125 refusal cascade→halt). Distinguished from `[soft-spec-hardening]` (interpretive room) and related to `[refuse-escalate]` (#125 is this pattern applied to refusals). AGENTS.md catalog count bumped to 24 / enforcement (9); `consistency-check.py` verifies the count.
+
+**Verification:** consistency-check CONSISTENT (catalog count 24 matches); 213 tests (no test impact — canon + count edits).
+
+**Files touched (4):** `compass/framework/canon.md` · `AGENTS.md` · `compass/framework/mvp.md` · `CHANGELOG.md` (+ this file). Counter: #127. **5 of 5 — Retro #026 is now DUE (fires after #127).** The framework's longest-standing codification-ready candidate is finally canon.

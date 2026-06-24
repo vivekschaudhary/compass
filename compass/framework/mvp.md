@@ -70,7 +70,7 @@ Hardening + expansion, tracked as normal improvements. 🟡 should-have · 🟢 
 |---|---|---|
 | `dispatch-on-outcome` — a step's refusal halts, not cascades | correctness | 🟡 |
 | Branch discipline on the interactive surface (agents/CLAUDE.md, not just `run.py`) | consistency | 🟡 |
-| Codify `[failure-direction-inversion]` (most overdue) | convention | 🟡 |
+| ~~Codify `[failure-direction-inversion]`~~ → codified as `[fail-loud-not-silent]` (#127) | convention | ✅ |
 | Codify `[surface-independent-mechanism]` + `[economy-by-default]` (≥3 instances) | convention | 🟢 |
 | CLI-host tool streaming (`claude -p --output-format stream-json` → per-tool events) | cockpit polish | 🟢 |
 | OpenAI/Gemini tool-use adapters (only Claude has `dispatch_with_tools`) | host parity | 🟢 |

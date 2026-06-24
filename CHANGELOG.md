@@ -10,6 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`[fail-loud-not-silent]` codified — Compass-original #24, 9th enforcement-class member (#127).** The most-overdue codification in framework history (candidate `[failure-direction-inversion]` since Retro #020, flagged codification-ready across 5 retros). Principle: when a code path can fail, default its failure **direction** toward a loud halt, not a silent pass — a swallowed failure ships the wrong outcome as if it were right. Three named anti-patterns: `silent-skip`, `success-on-failure`, `swallowed-error`. Codified by ~6 accumulated instances across the v0.4 build (#79 reviewer skip · #97/#100 max-iter success-advance · #104/#116 mangled telemetry · #120 "(no stderr)" · #125 refusal cascade). Catalog → 7 shapes / 24 patterns; enforcement (9). Renamed from the candidate per DRI pick (clearer name). AGENTS.md catalog count updated; `consistency-check.py` verifies it.
+
 - **Dispatch-on-outcome — a refused step halts, not cascades (#125).** A step whose agent refuses (per `[refuse-escalate]`) now **halts the run** instead of letting the workflow cascade into downstream steps that also refuse (live evidence: a misrouted `/ops` run cascaded four refusals then crashed on an API limit). Refusals carry a **machine-readable sentinel** — output leading with `REFUSE:` / `[REFUSE]` / `**Refusing:**` (codified in the `refuse-escalate` canon entry); `run.py`'s `_is_refusal` matches only that leading marker (never prose that merely discusses refusing), records the refusal artifact, emits `RUN_END(halted)` with a `--from-step` resume hint, and stops. This is `[failure-direction-inversion]` applied to refusals. +3 tests (213 total).
 
 ### Changed
