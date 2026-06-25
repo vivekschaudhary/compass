@@ -3613,3 +3613,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **242 pass** (+3: `_is_merge_gate` detects "approve merge"/ignores routing+empty; `_merge_pr` present; flag parses). consistency-check CONSISTENT. `--auto-merge` in `--help`.
 
 **Files touched (5):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `compass/framework/mvp.md` (roadmap → ✅) · `CHANGELOG.md` (+ this file). Counter: #147. **The `/fix` pipeline now runs idea → triage → fix → review → approve → MERGE → deploy → changelog — end to end, hands-free on approve.** (Triggers Retro #028 under the every-10 cadence: #138–#147.)
+
+### 2026-06-25 — claude-code host-context isolation (#148)
+
+**Trigger origin (Principle #19):** **live `create-brief` (session).** The brief itself shipped real artifacts (`WLT-26/research.md` + `brief.md`, sharp PM decisions), but `delivery-manager.update-status` **refused to write `docs/status.md`** — "write permission not granted… please approve" — and printed the edits instead. Yet `pm` had written `brief.md` fine **in the same `bypassPermissions` run**. Same confabulation seen earlier (PM citing the "don't run /create-brief in the framework repo" *memory*; automation claiming "no codebase access"). Root cause found by inspecting `home-app/.claude/settings.json`: a Bash-command **allowlist with no `Write` entries** — the agent *read the consumer repo's settings (and the user's global `~/.claude` memory) and reasoned from them* even though the orchestrator passed `--permission-mode bypassPermissions`.
+
+**What shipped:** `_build_cli_argv` now passes **`--setting-sources ""`** (load none of user/project/local) on every claude-code dispatch. The agent runs as a clean unit governed only by the orchestrator's flags (`--add-dir`, `--permission-mode`, `--append-system-prompt-file`) + the agent file — no consumer-repo allowlist or user-global memory to misread. Verified the empty value runs clean and **auth (OAuth/keychain) is unaffected** (`setting-sources` ≠ credentials). This is the long-declared **host-context-isolation** fix (flagged since #120/#137).
+
+**Also surfaced (not fixed here):** the blocked `delivery-manager` step printed its block in prose and the run still reported "completed" — a `[fail-loud-not-silent]` gap (it should have led with `REFUSE:` per #139, halting via #125). Isolation should stop the confabulation at the source; if a *real* block remains, the REFUSE path covers it. Watch-for.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **243 pass** (+1: `--setting-sources ""` present in argv). consistency-check CONSISTENT. Real-CLI empty-value test rc=0 / is_error=False.
+
+**Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #148. **Retro #028 (every-10) covers #138–#147 and is now DUE** (we've reached #148); #148 opens the #029 batch (#148–#157). Agents stop inventing blocks they don't have.

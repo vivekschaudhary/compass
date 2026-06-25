@@ -55,6 +55,13 @@ class TestBuildArgv(unittest.TestCase):
         self.assertNotIn("--add-dir", argv)
         self.assertNotIn("--permission-mode", argv)
 
+    def test_isolated_from_project_user_settings(self):
+        # #148: load no settings so the consumer repo's allowlist / user memory
+        # can't make the agent confabulate a permission/context block.
+        argv = cc._build_cli_argv("claude-sonnet-4-6", "/x/agent.md")
+        i = argv.index("--setting-sources")
+        self.assertEqual(argv[i + 1], "")  # empty → load none
+
     def test_allow_write_maps_to_bypass(self):
         argv = cc._build_cli_argv("claude-opus-4-8", "/x/agent.md",
                                   project_dir="/proj", allow_write=True)

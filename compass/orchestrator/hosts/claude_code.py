@@ -70,6 +70,15 @@ def _build_cli_argv(model, agent_file_path, project_dir=None, allow_write=False)
     argv = [
         "claude", "-p",
         "--output-format", "json",
+        # #148 host-context isolation: load NONE of the user/project/local settings.
+        # The consumer repo's .claude/settings.json (a Bash-command allowlist with no
+        # Write entries) made agents CONFABULATE "writes aren't allowed here" even
+        # under bypassPermissions (a create-brief's delivery-manager refused to write
+        # docs/status.md while pm wrote brief.md fine); the user's global memory
+        # ("don't run /create-brief in the framework repo") bled in the same way. The
+        # agent runs as a clean unit governed only by the orchestrator's flags + the
+        # agent file — auth (OAuth/keychain) is unaffected by setting-sources.
+        "--setting-sources", "",
         "--append-system-prompt-file", str(agent_file_path),
         "--model", _cli_model(model),
     ]
