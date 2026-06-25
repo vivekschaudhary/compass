@@ -46,9 +46,10 @@ Artifacts the framework produces live in `docs/`:
 | ------------- | ------------- | --- |
 | `engineer`, `architect`, `enterprise-architect`, `scanner`, `automation`, `tech-writer` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold/changelog-append work; pure-chat hosts are degraded |
 | `reviewer`, `security-reviewer` | `[codex, gemini]` — explicitly EXCLUDES claude | **Independent-model review** — must be a different model than the implementer (see structural rationale below) |
-| `ux-writer`, `designer`, `delivery-manager` | `[chatgpt, claude, codex, gemini]` | Product / UX / visibility work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
+| `ux-writer`, `designer` | `[chatgpt, claude, codex, gemini]` | Product / UX work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
+| `delivery-manager` | `[claude, codex, gemini, chatgpt]` — Claude-first, ChatGPT last fallback | Visibility/status work writes files (Claude Code), so Claude-first; ChatGPT kept as a last resort |
 | `pm`, `researcher` | `[claude, codex, gemini]` — chatgpt dropped (pm v0.3.42, researcher v0.3.53) | ChatGPT dropped per `[host-preference-validation]` (2nd instance): pm underperformed + hit the 8000-char cap; researcher on ChatGPT had **no `web_search`** and **can't write the artifact** (no file tools) — so research came back half `n/a` and undelivered. Claude-first (CLI host has web + filesystem) |
-| `support` | `[chatgpt, claude, codex, gemini]` | Incident triage runs wherever the on-call is — any host |
+| `support` | `[claude, codex, gemini]` | Front-door intake/triage; needs filesystem to read the repo + bet catalog, so Claude-first (chatgpt dropped when `support.md` became the front-door router, #108) |
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent.
 

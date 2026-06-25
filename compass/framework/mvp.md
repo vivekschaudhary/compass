@@ -68,12 +68,12 @@ Hardening + expansion, tracked as normal improvements. 🟡 should-have · 🟢 
 
 | Item | Kind | Priority |
 |---|---|---|
-| `dispatch-on-outcome` — a step's refusal halts, not cascades | correctness | 🟡 |
-| Branch discipline on the interactive surface (agents/CLAUDE.md, not just `run.py`) | consistency | 🟡 |
+| ~~`dispatch-on-outcome` — a step's refusal halts, not cascades~~ (#125) | correctness | ✅ |
+| ~~Branch discipline on the interactive surface~~ (#126) + ~~branch fresh from main~~ (#143) | consistency | ✅ |
 | ~~Codify `[failure-direction-inversion]`~~ → codified as `[fail-loud-not-silent]` (#127) | convention | ✅ |
 | Codify `[surface-independent-mechanism]` + `[economy-by-default]` (≥3 instances) | convention | 🟢 |
 | CLI-host tool streaming (`claude -p --output-format stream-json` → per-tool events) | cockpit polish | 🟢 |
-| Stale-run detection + dashboard-run visibility (#129, declared) — bucket zombie in-flight runs as "⚠ stalled"; tee dashboard-run logs (not `/dev/null`); stream OpenAI/Gemini host events | cockpit reliability | 🟡 |
+| Stale-run **bucketing** + **OpenAI/Gemini event streaming** (#129 — log-capture slice ~~shipped #133~~ ✅; zombie "⚠ stalled" detection + non-Claude host events still open) | cockpit reliability | 🟡 |
 | OpenAI/Gemini tool-use adapters (only Claude has `dispatch_with_tools`) | host parity | 🟢 |
 | Worktree isolation (#102) · testable-preview canary (#101) | build hardening | 🟢 |
 | LLM-as-driver / autonomous orchestrator (DESIGN surface 3, #87) | vision | 🟢 |
