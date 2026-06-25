@@ -544,6 +544,30 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertIn("function _act", html)
         self.assertIn("disabled=true", html)
 
+    def test_step_durations_and_spinner(self):
+        # #130: done steps show start→end duration; the running step shows live
+        # elapsed; the running glyph is the spinner ◐ (CSS-animated).
+        from datetime import datetime, timezone
+        now = datetime(2026, 6, 25, 0, 5, 0, tzinfo=timezone.utc)
+        events = [
+            ev.make_event(ev.RUN_START, run_id="d1", project="p", workflow="triage"),
+            {"type": ev.STEP_START, "run_id": "d1", "step": 1, "agent": "support",
+             "task": "classify-intake", "ts": "2026-06-25T00:00:00+00:00"},
+            {"type": ev.STEP_END, "run_id": "d1", "step": 1,
+             "ts": "2026-06-25T00:00:12+00:00"},
+            {"type": ev.STEP_START, "run_id": "d1", "step": 2, "agent": "engineer",
+             "task": "triage-and-fix", "ts": "2026-06-25T00:02:00+00:00"},
+        ]
+        runs = cockpit.fold_runs(events)
+        rows, _ = cockpit._run_step_rows(runs["d1"], graph_steps=[], now=now)
+        durs = {n: dur for n, status, label, dur in rows}
+        self.assertEqual(durs[1], "12s")          # done: 00:00 → 00:12
+        self.assertEqual(durs[2], "3m00s")        # running: 00:02 → now 00:05
+        html = cockpit.render_html(runs, now=now)
+        self.assertIn("◐", html)                   # spinner glyph on the running step
+        self.assertIn("@keyframes spin", html)     # CSS animation present
+        self.assertIn("class='dur'", html)         # duration rendered
+
     def test_no_meta_refresh_uses_guarded_reload(self):
         # #128: blind meta-refresh wiped the Launch form mid-typing — replaced by
         # a JS reload that pauses on compose and skips focused fields.

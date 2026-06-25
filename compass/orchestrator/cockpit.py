@@ -19,6 +19,7 @@ Usage:
 """
 import argparse
 import sys
+from datetime import datetime, timezone
 
 from . import events as ev
 
@@ -69,13 +70,14 @@ def fold_runs(events: list) -> dict:
                 f"{e.get('agent')}.{e.get('task')}"
                 if e.get("agent") and e.get("task") else None
             )
-            r["steps"][e.get("step")] = {
-                "status": "running", "title": e.get("title"),
-                "agent": e.get("agent"), "task": e.get("task"),
-            }
+            st = r["steps"].setdefault(e.get("step"), {})
+            st.update({"status": "running", "title": e.get("title"),
+                       "agent": e.get("agent"), "task": e.get("task")})
+            st["started"] = e.get("ts")          # #130: per-step timing
         elif t == ev.STEP_END:
             st = r["steps"].setdefault(e.get("step"), {})
             st["status"] = "done"
+            st["ended"] = e.get("ts")            # #130
         elif t == ev.GATE_OPEN:
             r["open_gate"] = {"step": e.get("step"), "kind": e.get("kind"),
                               "title": e.get("title")}
@@ -86,6 +88,7 @@ def fold_runs(events: list) -> dict:
             r["open_gate"] = None
             st = r["steps"].setdefault(e.get("step"), {})
             st["status"] = "done"
+            st["ended"] = e.get("ts")            # #130
         elif t == ev.HANDOFF:
             r["open_gate"] = None
         elif t == ev.RUN_END:
@@ -142,9 +145,46 @@ def _step_label(agent, task, title) -> str:
     return title or "(step)"
 
 
-def _run_step_rows(run: dict, graph_steps: list):
+# ── per-step timing (#130) ────────────────────────────────────────────────────
+def _parse_ts(ts):
+    try:
+        return datetime.fromisoformat(ts) if ts else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _fmt_dur(secs: float) -> str:
+    secs = max(0, int(secs))
+    if secs < 60:
+        return f"{secs}s"
+    m, s = divmod(secs, 60)
+    if m < 60:
+        return f"{m}m{s:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m"
+
+
+def _step_dur_str(st: dict, now=None) -> str:
+    """Duration of a step from its spine timestamps (#130). Done → elapsed
+    start→end; running → live elapsed start→now (so a stuck step shows a growing
+    timer); unknown → ''."""
+    if not st:
+        return ""
+    started = _parse_ts(st.get("started"))
+    if not started:
+        return ""
+    ended = _parse_ts(st.get("ended"))
+    if ended:
+        return _fmt_dur((ended - started).total_seconds())
+    if now is not None:
+        return _fmt_dur((now - started).total_seconds())
+    return ""
+
+
+def _run_step_rows(run: dict, graph_steps: list, now=None):
     """Shared by the text + HTML step views (#111/#113) so they never drift.
-    Returns ([(n, status, label)], graph_available: bool)."""
+    Returns ([(n, status, label, dur)], graph_available: bool). `dur` (#130) is a
+    formatted duration string ("" when unknown)."""
     seen = run.get("steps", {})
     ended = run.get("ended")
     rows = []
@@ -158,19 +198,21 @@ def _run_step_rows(run: dict, graph_steps: list):
                 continue  # an ended run didn't run this step — not "pending"
             else:
                 status, label = "pending", _step_label(agent, task, title)
-            rows.append((n, status, label))
+            rows.append((n, status, label, _step_dur_str(st, now)))
         return rows, True
     # spine-only fallback (no graph): just the steps we saw
     for n in sorted(seen):
         st = seen[n]
-        rows.append((n, st.get("status", "running"), _step_label(st.get("agent"), st.get("task"), st.get("title"))))
+        rows.append((n, st.get("status", "running"),
+                     _step_label(st.get("agent"), st.get("task"), st.get("title")),
+                     _step_dur_str(st, now)))
     return rows, False
 
 
 def _run_status_line(run: dict, rows) -> str:
     if run.get("ended"):
         return f"{run.get('status')} — {run.get('reason') or ''}"
-    if any(s == "awaiting" for _, s, _ in rows):
+    if any(r[1] == "awaiting" for r in rows):
         return "awaiting your decision"
     return "in flight"
 
@@ -179,13 +221,14 @@ def render_run(run: dict, graph_steps: list) -> str:
     """Full annotated step plan for one run: ✓done · ▶running · ⏸awaiting · ·pending."""
     loc = " ".join(x for x in [run.get("project"), run.get("workflow"), run.get("bet_id")] if x)
     out = [f"RUN  {loc}  ({run.get('run_id')})", "=" * 60]
-    rows, has_graph = _run_step_rows(run, graph_steps)
+    rows, has_graph = _run_step_rows(run, graph_steps, now=datetime.now(timezone.utc))
     if not has_graph:
         out.append("  (workflow graph unavailable — showing observed steps only; pass --compass-dir for pending steps)")
-    for n, status, label in rows:
+    for n, status, label, dur in rows:
         glyph = _STATUS_GLYPH.get(status, "·")
         tail = "   ← awaiting your decision" if status == "awaiting" else ""
-        out.append(f"  {glyph} {n:>2}  {label}{tail}")
+        when = f"  ({dur}{'…' if status == 'running' else ''})" if dur else ""
+        out.append(f"  {glyph} {n:>2}  {label}{when}{tail}")
     out.append(f"\n  status: {_run_status_line(run, rows)}")
     return "\n".join(out)
 
@@ -321,7 +364,10 @@ _HTML_CSS = """
   code{display:block;background:#0b0d11;border:1px solid #2a2e37;border-radius:6px;padding:6px 8px;margin-top:6px;color:#b8c0cc;white-space:pre-wrap;font-size:12px}
   .steps{margin:6px 0 0;list-style:none;padding:0}
   .steps li{padding:1px 0} .g{display:inline-block;width:1.4em}
-  .done .g{color:#3fb950} .running .g{color:#58a6ff} .awaiting .g{color:#d29922} .pending .g{color:#6e7681}
+  .done .g{color:#3fb950} .awaiting .g{color:#d29922} .pending .g{color:#6e7681}
+  @keyframes spin{to{transform:rotate(1turn)}}
+  .running .g{color:#58a6ff;display:inline-block;animation:spin 1s linear infinite}
+  .dur{color:#6e7681;font-size:11px;margin-left:6px}
   .pending{color:#8a8f98}
   .spend{color:#b8c0cc} .empty{color:#8a8f98}
   form.act{display:inline}
@@ -398,11 +444,13 @@ def _decide_forms(r: dict, cdir) -> str:
 
 
 def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
-                refresh=5, snapshot_ts="", actions=False, default_project_dir="") -> str:
+                refresh=5, snapshot_ts="", actions=False, default_project_dir="",
+                now=None) -> str:
     """Self-contained HTML cockpit (#113) — same data as the text view, browser layout.
-    `snapshot_ts` is passed in (no Date.now); `refresh` drives the meta auto-reload.
+    `snapshot_ts` is passed in (no Date.now); `refresh` drives the JS reload.
     `actions` (#119) turns on the Launch form + per-gate approve/reject/route buttons
-    (POST /run, /decide); off → the page stays read-only."""
+    (POST /run, /decide); off → the page stays read-only. `now` (#130) is the current
+    UTC time for live per-step elapsed timers."""
     vals = list(runs.values())
     if project_filter:
         vals = [r for r in vals if r.get("project") == project_filter]
@@ -456,16 +504,18 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         p.append("<div class='empty'>no runs in progress</div>")
     for r in in_flight:
         loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
-        rows, _hg = _run_step_rows(r, load_graph_steps(r.get("workflow"), cdir))
+        rows, _hg = _run_step_rows(r, load_graph_steps(r.get("workflow"), cdir), now=now)
         total = len(rows) if rows else 0
         cur = r.get("current_step")
         head = f"<span class='loc'>{loc}</span>" + (f" <span class='muted'>step {cur}/{total}</span>" if cur and total else "")
         p.append(f"<div class='run'>{head}<ul class='steps'>")
-        for n, status, label in rows:
+        for n, status, label, dur in rows:
             cls = _HTML_GLYPH_CLASS.get(status, "pending")
-            glyph = _STATUS_GLYPH.get(status, "·")
+            # #130: spinning loader on the running step (CSS animates .running .g)
+            glyph = "◐" if status == "running" else _STATUS_GLYPH.get(status, "·")
             tail = " <span class='muted'>← awaiting you</span>" if status == "awaiting" else ""
-            p.append(f"<li class='{cls}'><span class='g'>{glyph}</span>{n} {_esc(label)}{tail}</li>")
+            when = f"<span class='dur'>{_esc(dur)}{'…' if status == 'running' else ''}</span>" if dur else ""
+            p.append(f"<li class='{cls}'><span class='g'>{glyph}</span>{n} {_esc(label)}{when}{tail}</li>")
         p.append("</ul></div>")
 
     # ✓ Done / halted
@@ -521,11 +571,13 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
 
 
 def build_page(events: list, project_filter=None, limit=10, cdir=None,
-               refresh=5, snapshot_ts="", actions=False, default_project_dir="") -> bytes:
+               refresh=5, snapshot_ts="", actions=False, default_project_dir="",
+               now=None) -> bytes:
     """events → HTML bytes (what the --serve handler returns per request, #113)."""
     runs = fold_runs(events)
     return render_html(runs, project_filter, limit, cdir, refresh, snapshot_ts,
-                       actions=actions, default_project_dir=default_project_dir).encode("utf-8")
+                       actions=actions, default_project_dir=default_project_dir,
+                       now=now or datetime.now(timezone.utc)).encode("utf-8")
 
 
 # ── action endpoints (#119): the cockpit relays launches/decisions to compass-run ──
@@ -668,7 +720,8 @@ def main(argv=None):
         out_path = Path(args.html) if args.html else (ev.compass_home() / "orchestrator" / "cockpit.html")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         html_doc = render_html(fold_runs(events), project_filter=args.project,
-                               limit=args.limit, cdir=cdir, snapshot_ts=ts)
+                               limit=args.limit, cdir=cdir, snapshot_ts=ts,
+                               now=datetime.now(timezone.utc))
         out_path.write_text(html_doc, encoding="utf-8")
         print(f"Wrote cockpit snapshot → {out_path}\n  open: file://{out_path}")
         print("  (snapshot is point-in-time; re-run, or use --serve for a live feed)")

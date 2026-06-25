@@ -3421,3 +3421,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** n/a — declared. No code change this entry.
 
 **Files touched (1):** `compass/workflows/improvements.md` (this entry) (+ `compass/framework/mvp.md` roadmap). Counter: #129 (declared). **Retro #026 still due (covers #123–#127).** The cockpit should make a dead run *look* dead — built when the next live session warrants it (or sooner if zombies keep confusing the feed).
+
+### 2026-06-24 — cockpit: spinning loader on the active step + per-step timing (#130)
+
+**Trigger origin (Principle #19):** **live dashboard use (DRI ask).** Watching a `/fix` run, the DRI asked for a loader on the running step ("so we know it's running") and start/end times per state. The static ▶ glyph didn't read as "in progress," and there was no sense of how long a step had been running.
+
+**What shipped:** (1) the running step renders a **CSS-animated spinner** (◐ via `@keyframes spin` on `.running .g`) — clearly "live"; (2) **per-step durations** — `fold_runs` captures `started`/`ended` from `STEP_START`/`STEP_END` (+ `GATE_DECISION`) timestamps; done steps show start→end elapsed, the running step a live `now`-`started` timer (`3m00s…`). Timing strings flow through the shared `_run_step_rows` (text `--run` + HTML stay in sync via `_step_dur_str`/`_fmt_dur`); `now` threaded through `render_html`/`build_page`. **Honest caveat noted in code + CHANGELOG:** the running timer grows even for a stalled run (no `ended`), so it shows *duration*, not *liveness* — true liveness is new spine events / #129's stale-bucketing.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **215 pass** (+1: done-step 12s, running-step live 3m00s, spinner ◐ + `@keyframes` + `.dur` in HTML). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #130. **Retro #026 still due (#123–#127).** The active step now visibly spins and times itself.

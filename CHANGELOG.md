@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cockpit: spinning loader on the active step + per-step timing (#130).** The running step now shows a **CSS-animated spinner** (◐) instead of a static glyph, so "is it actually running?" is obvious at a glance. Each step also shows its **duration**: done steps render start→end elapsed (`12s`, `3m04s`), the running step a **live elapsed timer** (`3m00s…`) computed from the spine's `STEP_START`/`STEP_END` timestamps (`fold_runs` now captures `started`/`ended` per step). Shared `_run_step_rows` carries the duration so the text (`--run`) and HTML views stay in sync; `now` threaded through `render_html`/`build_page`. (Note: the timer grows even for a stalled step — true liveness still comes from new spine events / #129's stale-bucketing.) +1 test (215 total).
+
 ### Fixed
 
 - **Cockpit auto-refresh no longer wipes the Launch form (#128).** The page used a `<meta http-equiv=refresh>` whole-page reload every 5s — which reset the context box, the workflow dropdown, and scroll/selection *mid-typing*, making the dashboard's Launch form unusable (caught in live use). Replaced with a JS reload that **pauses the instant you focus or type in the Launch form** (the timestamp line shows "paused while you compose — submit, or reload to resume") and **skips any tick while a field is focused**. The live feed still updates when you're only watching; submitting navigates away (303) and resumes the live state. +1 test; the prior meta-refresh assertion updated.
