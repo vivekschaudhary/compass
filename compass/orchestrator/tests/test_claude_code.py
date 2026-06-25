@@ -224,6 +224,26 @@ class TestRouterIntegration(unittest.TestCase):
         self.assertEqual(router._family("claude-code"), "claude")
         self.assertEqual(router.deep_model("claude-code"), router.DEEP_MODELS["claude"])
 
+    def test_claude_code_always_tool_capable(self):
+        # #141: with project_dir, claude-code uses dispatch_with_tools even when
+        # the agent declared no executor_tools (tools=None) — CC always has tools.
+        from compass.orchestrator.hosts import claude_code
+        saved = claude_code.dispatch_with_tools
+        seen = {}
+        try:
+            def fake(*a, **k):
+                seen["called"] = True
+                seen["project_dir"] = a[3] if len(a) > 3 else k.get("project_dir")
+                return "REVIEWED"
+            claude_code.dispatch_with_tools = fake
+            out = router.dispatch_to_host("claude-code", "/x/agent.md", "t", "msg",
+                                          tools=None, project_dir="/proj", allow_write=True)
+            self.assertEqual(out, "REVIEWED")
+            self.assertTrue(seen.get("called"))
+            self.assertEqual(seen.get("project_dir"), "/proj")
+        finally:
+            claude_code.dispatch_with_tools = saved
+
     def test_dispatch_routes_to_cli_module(self):
         from compass.orchestrator.hosts import claude_code
         saved = claude_code.dispatch

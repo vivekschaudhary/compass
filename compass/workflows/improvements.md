@@ -3520,3 +3520,20 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Still open (declared earlier):** a tool-capable **codex/gemini CLI host** (so the reviewer could fetch the PR itself, like the claude-code host does) — diff-injection is the pragmatic interim. And host-context isolation (the deeper reason claude-code agents drift into chat-mode).
 
 **Files touched (4):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_claude_code.py` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counters: #138 + #139. **Retro #026 still due (#123–#127).** Now the whole fix pipeline does the work — not just step 1.
+
+### 2026-06-25 — claude-code always tool-capable (#141) + live dashboard logs (#140)
+
+**Trigger origin (Principle #19):** **a 2nd live `/fix` validated #138 and exposed why #139 hadn't landed.** Results read off the on-disk artifacts (the live log was empty — see #140):
+- **#138 confirmed** — the reviewer (Codex) posted a **real structured review on the injected diff** (`Tests adequate ✗ · E2E ✗` + 4 file:line `[ISSUE]`s, incl. a genuine "sync-completion stops after the first connection → others stale" bug). Cross-model review works now.
+- **#139 hadn't fired** — step 2 (automation) still planned ("I need read access to the repo… approve the plan"). Root cause found: the router gated the tool-capable path on the agent declaring **`executor_tools:`**, which only `engineer` does. So automation/tech-writer/pm dispatched as **tool-LESS single-shots** — no cwd/add-dir/permissions/execute-directive — and couldn't touch files.
+- **#140** — the dashboard log was **0 bytes** mid-run: the spawned child block-buffered stdout (file, not tty), so nothing flushed until ~64KB/exit.
+
+**What shipped:**
+- **#141** — the `claude-code` router branch now **always uses `dispatch_with_tools`** when a `project_dir` is set (Claude Code inherently has Read/Edit/Bash; the `executor_tools:` gate is an API-host concept). Every claude-code step now runs tool-capable, in the repo, with the #139 execute directive. (`executor_tools:` still governs the metered API host.)
+- **#140** — the cockpit launches runs with **`python -u`** (unbuffered) so the captured per-run log streams live instead of dumping at the end.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **231 pass** (+1: claude-code routes to `dispatch_with_tools` with `tools=None` when `project_dir` set; the `-u` argv assertion updated). consistency-check CONSISTENT. The real test is the next live `/fix`: automation/tech-writer should now write the test/changelog on disk.
+
+**Still open (declared):** tool-capable codex/gemini CLI host (so the reviewer fetches the PR itself); host-context isolation; #129 stale-bucketing + streaming non-Claude host events.
+
+**Files touched (4):** `compass/orchestrator/hosts/router.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_claude_code.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counters: #140 + #141. **Retro #026 still due (#123–#127).** Every claude-code agent now executes in the repo, and you can watch it live.

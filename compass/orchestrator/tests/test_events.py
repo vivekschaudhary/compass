@@ -445,8 +445,9 @@ class TestActionEndpoints(unittest.TestCase):
     def test_run_argv_has_gate_floor_and_cap(self):
         argv = cockpit._build_run_argv(
             "run", {"workflow": "triage", "project_dir": self.td}, self.defaults)
-        self.assertEqual(argv[:4],
-                         [__import__("sys").executable, "-m", "compass.orchestrator.run", "triage"])
+        self.assertEqual(argv[:5],
+                         [__import__("sys").executable, "-u", "-m", "compass.orchestrator.run", "triage"])
+        self.assertIn("-u", argv)                       # #140: unbuffered → live log
         self.assertIn("--non-interactive", argv)        # gate floor still fires
         self.assertIn("--max-cost", argv)               # budget cap still fires
         self.assertEqual(argv[argv.index("--max-cost") + 1], "5.0")

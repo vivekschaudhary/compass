@@ -157,11 +157,14 @@ def dispatch_to_host(
             on_event=on_event,
         )
     elif host == "claude-code":
-        # #120: subscription-backed CLI host. CC owns its own tool loop, so we
-        # don't build/pass schemas — `tools` only decides single-shot vs the
-        # project-dir-granted (tool-capable) path. Claude model family.
-        from .claude_code import dispatch, dispatch_with_tools
-        if tools:
+        # #120/#141: subscription-backed CLI host. Claude Code ALWAYS has its own
+        # tools (Read/Edit/Bash) — so always run tool-capable + IN the repo,
+        # regardless of whether the agent declared `executor_tools:`. Gating on
+        # that field (the API-host contract) made automation/tech-writer/pm
+        # dispatch as tool-LESS single-shots → they couldn't touch files and
+        # returned plans ("I need read access") instead of executing. Claude family.
+        from .claude_code import dispatch_with_tools
+        if project_dir is not None:
             return dispatch_with_tools(
                 agent_file_path, task_name, user_message, project_dir,
                 model=model or _default_model("claude"),
@@ -170,6 +173,7 @@ def dispatch_to_host(
                 max_iterations=max_tool_iterations or 50,
                 on_event=on_event,
             )
+        from .claude_code import dispatch
         return dispatch(
             agent_file_path, task_name, user_message,
             model=model or _default_model("claude"),

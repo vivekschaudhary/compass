@@ -614,7 +614,10 @@ def _build_run_argv(action, params, defaults):
     if not pdir or not Path(pdir).is_dir():
         return ("error", f"project dir not found: {pdir!r}")
 
-    argv = [sys.executable, "-m", "compass.orchestrator.run", wf,
+    # -u (#140): unbuffered stdout/stderr so the captured per-run log (#133) is
+    # LIVE — without it the child block-buffers (output to a file, not a tty) and
+    # the log stays empty until the buffer fills (~64KB) or the run exits.
+    argv = [sys.executable, "-u", "-m", "compass.orchestrator.run", wf,
             "--project-dir", pdir, "--non-interactive"]
     max_cost = defaults.get("max_cost")
     if max_cost is not None:
