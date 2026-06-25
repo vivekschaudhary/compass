@@ -49,7 +49,10 @@ class TestBuildArgv(unittest.TestCase):
         argv = cc._build_cli_argv("claude-sonnet-4-6", "/x/agent.md")
         self.assertEqual(argv[:2], ["claude", "-p"])
         self.assertIn("--output-format", argv)
-        self.assertEqual(argv[argv.index("--output-format") + 1], "json")
+        # #152: stream-json (+ required --verbose) so the idle-timeout has a liveness
+        # signal and the run log shows live activity.
+        self.assertEqual(argv[argv.index("--output-format") + 1], "stream-json")
+        self.assertIn("--verbose", argv)
         self.assertEqual(argv[argv.index("--append-system-prompt-file") + 1], "/x/agent.md")
         self.assertEqual(argv[argv.index("--model") + 1], "sonnet")
         self.assertNotIn("--add-dir", argv)
@@ -92,6 +95,62 @@ class TestParseResult(unittest.TestCase):
     def test_missing_result_raises(self):
         with self.assertRaises(RuntimeError):
             cc._parse_result(json.dumps({"is_error": False}))
+
+
+class TestStreaming(unittest.TestCase):
+    """#152: stream-json parsing + idle-timeout config (the runner I/O itself —
+    threads/Popen — stays exercised via the fail-loud fake; the parsing is pure)."""
+
+    def test_progress_line_tool_use(self):
+        obj = {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Read", "input": {"file_path": "/a/b.md"}}]}}
+        self.assertEqual(cc._progress_line(obj), "· Read /a/b.md")
+
+    def test_progress_line_bash_uses_command(self):
+        obj = {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Bash", "input": {"command": "ls -la"}}]}}
+        self.assertIn("ls -la", cc._progress_line(obj))
+
+    def test_progress_line_text_and_skips(self):
+        say = {"type": "assistant", "message": {"content": [
+            {"type": "text", "text": "Reading the brief now"}]}}
+        self.assertEqual(cc._progress_line(say), "· Reading the brief now")
+        # non-assistant / empty events produce nothing to tee
+        self.assertIsNone(cc._progress_line({"type": "system", "subtype": "init"}))
+        self.assertIsNone(cc._progress_line({"type": "result"}))
+
+    def test_extract_result_line_picks_result_event(self):
+        lines = [
+            json.dumps({"type": "system", "subtype": "init"}),
+            json.dumps({"type": "assistant", "message": {"content": []}}),
+            json.dumps({"type": "result", "result": "done", "is_error": False,
+                        "usage": {"input_tokens": 1, "output_tokens": 2}}),
+        ]
+        res = cc._extract_result_line(lines)
+        text, _, _ = cc._parse_result(res)   # the result event feeds _parse_result unchanged
+        self.assertEqual(text, "done")
+
+    def test_extract_result_line_missing_raises(self):
+        # a stream that ends without a result event = the CLI died mid-run
+        with self.assertRaises(RuntimeError):
+            cc._extract_result_line([json.dumps({"type": "assistant"})])
+
+    def test_idle_timeout_parsing(self):
+        saved = os.environ.get("COMPASS_CLAUDE_CLI_IDLE_TIMEOUT")
+        try:
+            os.environ.pop("COMPASS_CLAUDE_CLI_IDLE_TIMEOUT", None)
+            self.assertEqual(cc._cli_idle_timeout(), cc._DEFAULT_CLI_IDLE)
+            os.environ["COMPASS_CLAUDE_CLI_IDLE_TIMEOUT"] = "60"
+            self.assertEqual(cc._cli_idle_timeout(), 60)
+            os.environ["COMPASS_CLAUDE_CLI_IDLE_TIMEOUT"] = "0"
+            self.assertIsNone(cc._cli_idle_timeout())   # 0 disables the idle guard
+            os.environ["COMPASS_CLAUDE_CLI_IDLE_TIMEOUT"] = "junk"
+            self.assertEqual(cc._cli_idle_timeout(), cc._DEFAULT_CLI_IDLE)
+        finally:
+            if saved is None:
+                os.environ.pop("COMPASS_CLAUDE_CLI_IDLE_TIMEOUT", None)
+            else:
+                os.environ["COMPASS_CLAUDE_CLI_IDLE_TIMEOUT"] = saved
 
 
 class TestDispatch(unittest.TestCase):

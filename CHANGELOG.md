@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`claude-code` host: idle-timeout + streaming, so a long step isn't mistaken for a hang (#152).** A live `create-bet-architecture` (WLT-26) **halted "hung on a dev server"** — but reproduction (with `--output-format stream-json`) proved it was **never hung**: a healthy 448s Opus drafting run that read ~10 files + thought hard, while a sibling simply ran past the **900s wall-clock cap** from #131. A wall-clock cap can't tell *stuck* from *long-but-working*, and buffered `--output-format json` left a killed run with **zero trace** of which it was. Two corrections: **(1)** the host now streams `--output-format stream-json --verbose` and tees each tool-call / text event to the run log (live in the dashboard `log ↗`) — `[observability-before-trust]` built. **(2)** the guard is now **SILENCE, not duration**: a reader-thread + queue kills the CLI only after **no output for `COMPASS_CLAUDE_CLI_IDLE_TIMEOUT` seconds** (default 300) — a true hang (dev server / interactive prompt) emits nothing and trips fast; a healthy long step streams events and never false-trips. The old wall-clock value (`COMPASS_CLAUDE_CLI_TIMEOUT`, default raised to 3600) survives as a generous backstop only. The honest failure message now names the *last activity* + both knobs instead of asserting "likely hung on a dev server." Textbook `[reproduce-before-diagnose]`. +6 tests (255 total).
+
 ### Added
 
 - **`changes ↗` — the real deliverables (PRs, files, commits) per run (#142).** `review ↗` (step artifacts) and `log ↗` (run stdout) both show the agent's *narration* and look alike; neither points to what was actually **produced**. New `GET /changes?run=<id>` shows: **PR/MR URLs** scraped from the run's artifacts (clickable), **commits** on the work branch, **files changed** (`diff --stat` vs base), and **new/untracked files** — so you can jump straight to PR #116 or see the touched files. A `changes ↗` link sits on every run card alongside review/log. +2 tests.

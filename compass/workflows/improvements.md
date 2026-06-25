@@ -3657,3 +3657,18 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **248 pass** (+1: `_CODE_WORKFLOWS` == {fix,build,ops}; doc workflows excluded). consistency-check CONSISTENT.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #151. **(#029 batch: #148–#157.)** No more stray `feat/work` branch for a brief; docs land where you commit them.
+
+### 2026-06-25 — claude-code host: idle-timeout + streaming (not a wall-clock hang guess) (#152)
+
+**Trigger origin (Principle #19):** a **live `create-bet-architecture` (WLT-26)** halted with *"hung on a dev server / interactive prompt"* — and the DRI couldn't tell if that was true, because the run left no trace.
+
+**Diagnosis (reproduced, not theorized — `[reproduce-before-diagnose]`):** re-ran the exact step with `--output-format stream-json --verbose` and watched it. It was **never hung** — a healthy **448s / 22-turn** Opus drafting run that read ~10 files (brief, research, foundation arch, the template, WLT-24/25 prior arch, the *actual* `anomaly.ts`/`budget.ts`/`YearSpread.tsx` source) and thought hard before writing a 33KB `architecture.md`. The #131 guard was a blunt **wall-clock cap** (900s); a sibling run merely ran past it. Two root faults: a wall-clock cap **can't distinguish *stuck* from *long-but-working***, and buffered `--output-format json` gives a killed run **zero observability** (`[observability-before-trust]`).
+
+**What shipped:**
+1. **Streaming.** `_build_cli_argv` → `--output-format stream-json --verbose`; `_default_runner` consumes the NDJSON via a reader-thread + queue and **tees each tool-call / text event to stdout** → the run log + dashboard `log ↗` show **live activity** (also retro-fixes the earlier "nothing in the logs" blindness). `_parse_result` reads the final `result` event unchanged (same fields).
+2. **Guard = silence, not duration.** New `_cli_idle_timeout()` (`COMPASS_CLAUDE_CLI_IDLE_TIMEOUT`, default **300s**) kills the CLI only after **no output at all** for that long — the precise signature of a hang (a command that never returns, an interactive prompt). A healthy long step streams events continuously and never trips it. The old `COMPASS_CLAUDE_CLI_TIMEOUT` (default raised 900→**3600**) survives as a generous absolute **backstop** only.
+3. **Honest failure copy.** The message now names the **last observed activity** + both knobs, instead of asserting an unverified "likely hung on a dev server" — the same `[reproduce-before-diagnose]` lesson, applied to our own error text.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **255 pass** (+6: `_progress_line` tool/text/skip, `_extract_result_line` pick + missing-raises, idle-timeout parsing, argv stream-json+verbose). consistency-check CONSISTENT. **Live smoke** through the real streaming runner: progress lines streamed, returned `WLT-26`, flat-cost NOTE emitted. The WLT-26 `architecture.md` the repro produced is a real, high-quality artifact (reused the shipped anomaly substrate, declined Recharts for the in-stack SVG pattern).
+
+**Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #152. **(#029 batch: #148–#157.)** A hang is now *silence*, not *duration* — and you can watch the step work.

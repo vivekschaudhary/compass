@@ -17,21 +17,39 @@ Two differences from the API host, by design:
 """
 import json
 import os
+import queue
 import signal
 import subprocess
+import threading
+import time
 
 from .. import events as ev
 from ..events import terminal_sink as _default_tool_event
 
-# #131: a hung `claude -p` (e.g. it started a dev server / watcher that holds the
-# output pipe, or otherwise never returns) would block the orchestrator forever —
-# the deadlock that froze a real /fix run for 15+ min. Cap it and fail loud
-# ([fail-loud-not-silent]). Default 15 min; override with COMPASS_CLAUDE_CLI_TIMEOUT
-# (seconds; 0/blank disables the cap for genuinely long steps).
-_DEFAULT_CLI_TIMEOUT = 900
+# #152: timeout discipline, corrected. The original #131 guard was a blunt
+# WALL-CLOCK cap (default 900s): kill the CLI after N seconds total. Reproduction
+# (a WLT-26 create-bet-architecture that "halted: hung on a dev server") proved
+# that wrong — the step wasn't hung at all; it was a healthy 448s Opus drafting
+# run that read ~10 files + thought hard, and a sibling run simply ran past 900s.
+# A wall-clock cap can't tell "stuck" from "long but working", and buffered
+# `--output-format json` left a killed run with ZERO trace of which it was
+# ([reproduce-before-diagnose] + [observability-before-trust]).
+#
+# The fix: stream `--output-format stream-json` and guard on SILENCE, not
+# duration. A genuinely stuck CLI (dev server holding the pipe, interactive
+# prompt) emits nothing; a long-but-healthy step emits a tool_use / text / thinking
+# event every few seconds. So the IDLE timeout (no output for N s) precisely
+# catches the hang and never false-kills honest long work. The wall-clock value
+# remains as a generous absolute BACKSTOP only (a pathological emit-forever loop).
+_DEFAULT_CLI_IDLE = 300       # 5 min of total silence ⇒ genuinely stuck
+_DEFAULT_CLI_TIMEOUT = 3600   # absolute backstop only; idle is the real guard
 
 
 def _cli_timeout():
+    """Absolute wall-clock BACKSTOP (seconds), or None to disable. Idle-timeout
+    (`_cli_idle_timeout`) is the primary guard now (#152); this only catches a
+    pathological run that keeps emitting forever. Override COMPASS_CLAUDE_CLI_TIMEOUT
+    (0/blank disables)."""
     raw = os.environ.get("COMPASS_CLAUDE_CLI_TIMEOUT")
     if raw is None or raw == "":
         return _DEFAULT_CLI_TIMEOUT
@@ -39,6 +57,21 @@ def _cli_timeout():
         n = int(raw)
     except ValueError:
         return _DEFAULT_CLI_TIMEOUT
+    return None if n <= 0 else n
+
+
+def _cli_idle_timeout():
+    """The PRIMARY guard (#152): kill the CLI if it produces NO output for this
+    many seconds — the precise signature of a hang (a command that never returns,
+    an interactive prompt). Healthy long steps stream events continuously and
+    never trip it. Override COMPASS_CLAUDE_CLI_IDLE_TIMEOUT (0/blank disables)."""
+    raw = os.environ.get("COMPASS_CLAUDE_CLI_IDLE_TIMEOUT")
+    if raw is None or raw == "":
+        return _DEFAULT_CLI_IDLE
+    try:
+        n = int(raw)
+    except ValueError:
+        return _DEFAULT_CLI_IDLE
     return None if n <= 0 else n
 
 
@@ -69,7 +102,13 @@ def _build_cli_argv(model, agent_file_path, project_dir=None, allow_write=False)
     edits needing approval are auto-denied → effectively read-only)."""
     argv = [
         "claude", "-p",
-        "--output-format", "json",
+        # #152: stream events so the run log shows live activity (a stuck step is
+        # then visible, a long-but-healthy one obviously isn't) and the idle-timeout
+        # guard has a liveness signal to watch. --verbose is required for stream-json
+        # under --print. _default_runner consumes the NDJSON; _parse_result reads the
+        # final `result` event (same fields as the old buffered json object).
+        "--output-format", "stream-json",
+        "--verbose",
         # #148 host-context isolation: load NONE of the user/project/local settings.
         # The consumer repo's .claude/settings.json (a Bash-command allowlist with no
         # Write entries) made agents CONFABULATE "writes aren't allowed here" even
@@ -119,37 +158,141 @@ def _subscription_env() -> dict:
     return env
 
 
+def _safe_json(line):
+    try:
+        o = json.loads(line)
+        return o if isinstance(o, dict) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _progress_line(obj):
+    """Pure: a human one-liner (or None to skip) for a stream-json event, teed to
+    the run log so live activity is visible (#152). Surfaces the agent's tool calls
+    and short text so the dashboard 'log ↗' shows what the step is doing — and so a
+    truly stuck step shows its LAST action before the idle-timeout kills it."""
+    t = obj.get("type")
+    if t == "assistant":
+        out = []
+        for c in obj.get("message", {}).get("content", []):
+            ct = c.get("type")
+            if ct == "tool_use":
+                inp = c.get("input", {}) or {}
+                arg = (inp.get("command") or inp.get("file_path") or inp.get("pattern")
+                       or inp.get("path") or "")
+                out.append(f"· {c.get('name')} {str(arg)[:80]}".rstrip())
+            elif ct == "text" and (c.get("text") or "").strip():
+                out.append(f"· {c['text'].strip()[:80]}")
+        return "\n".join(out) or None
+    return None
+
+
+def _extract_result_line(lines):
+    """Pure: from streamed NDJSON lines, return the final `result` event's raw JSON
+    string (what _parse_result consumes). Raises RuntimeError if absent — a stream
+    that ends without a result event means the CLI died mid-flight (#152)."""
+    for ln in reversed(lines):
+        s = ln.strip()
+        if not s:
+            continue
+        o = _safe_json(s)
+        if o is not None and o.get("type") == "result":
+            return s
+    raise RuntimeError("claude CLI stream ended without a result event "
+                       "(the process likely crashed or was killed mid-run).")
+
+
+def _kill_group(proc):
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)  # whole tree (child + spawns)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        pass
+
+
 def _default_runner(argv, input, cwd=None):
-    """Run the CLI, capturing stdout/stderr, under a timeout (#131). Isolated so
-    tests inject a fake. `cwd` (#132) makes the target repo the agent's working
-    directory so it can actually read the project's source (not just the orchestrator's
-    cwd + an --add-dir). The child runs in its own process group so a hung
-    `claude -p` AND anything it spawned (dev server, watcher) are killed together;
-    on timeout we fail loud with a RuntimeError → run.py emits RUN_END(halted) +
-    a --from-step resume hint, instead of blocking the orchestrator forever."""
-    timeout = _cli_timeout()
+    """Run the CLI, STREAMING its NDJSON output under an idle-timeout (#152, was a
+    wall-clock cap in #131). Isolated so tests inject a fake. `cwd` (#132) makes the
+    target repo the agent's working directory so it can read the project's source.
+    The child runs in its own process group so a hung `claude -p` AND anything it
+    spawned (dev server, watcher) are killed together.
+
+    Guard = SILENCE, not duration: a reader thread pushes each stdout/stderr line to
+    a queue; if no line arrives for `idle` seconds the CLI is genuinely stuck (a
+    command that never returns / an interactive prompt) → kill + fail loud. Healthy
+    long steps stream events continuously and never trip it. A generous wall-clock
+    backstop still catches a pathological emit-forever loop. Each event is teed to
+    stdout (→ the run log / dashboard) so the step's activity is observable live."""
+    idle = _cli_idle_timeout()
+    hard = _cli_timeout()
     proc = subprocess.Popen(
         argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, env=_subscription_env(), start_new_session=True, cwd=cwd,
+        text=True, env=_subscription_env(), start_new_session=True, cwd=cwd, bufsize=1,
     )
     try:
-        out, err = proc.communicate(input=input, timeout=timeout)
-    except subprocess.TimeoutExpired:
+        proc.stdin.write(input)
+        proc.stdin.close()
+    except (BrokenPipeError, ValueError):
+        pass
+
+    q = queue.Queue()
+
+    def _reader(stream, tag):
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)  # whole tree
-        except (ProcessLookupError, PermissionError):
-            pass
+            for line in iter(stream.readline, ""):
+                q.put((tag, line))
+        finally:
+            q.put((tag, None))  # EOF sentinel
+
+    threads = [threading.Thread(target=_reader, args=(proc.stdout, "out"), daemon=True),
+               threading.Thread(target=_reader, args=(proc.stderr, "err"), daemon=True)]
+    for th in threads:
+        th.start()
+
+    out_lines, err_lines, result_line = [], [], None
+    eofs, last_action = 0, "(no output yet)"
+    start = time.monotonic()
+    while eofs < 2:
         try:
-            proc.communicate(timeout=5)
-        except Exception:
-            pass
-        raise RuntimeError(
-            f"claude CLI exceeded the {timeout}s timeout and was killed — it likely "
-            f"hung on a long-running command (a dev server / watcher that never "
-            f"returns, or an interactive prompt). Re-run from this step, or raise "
-            f"COMPASS_CLAUDE_CLI_TIMEOUT (seconds; 0 disables the cap)."
-        )
-    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
+            tag, line = q.get(timeout=idle) if idle else q.get()
+        except queue.Empty:
+            _kill_group(proc)
+            raise RuntimeError(
+                f"claude CLI produced no output for {idle}s and was killed — it is "
+                f"genuinely stuck (a command that never returns, like a dev server / "
+                f"watcher, or an interactive prompt). Last activity: {last_action}. "
+                f"Re-run from this step, or raise COMPASS_CLAUDE_CLI_IDLE_TIMEOUT "
+                f"(seconds; 0 disables the idle guard)."
+            )
+        if line is None:
+            eofs += 1
+            continue
+        if tag == "out":
+            out_lines.append(line)
+            obj = _safe_json(line)
+            if obj is not None:
+                if obj.get("type") == "result":
+                    result_line = line.strip()
+                p = _progress_line(obj)
+                if p:
+                    for pl in p.splitlines():
+                        last_action = pl
+                        print(f"    {pl}", flush=True)
+        else:
+            err_lines.append(line)
+        if hard and (time.monotonic() - start) > hard:
+            _kill_group(proc)
+            raise RuntimeError(
+                f"claude CLI exceeded the {hard}s absolute backstop and was killed "
+                f"(it kept emitting but never finished). Re-run, or adjust "
+                f"COMPASS_CLAUDE_CLI_TIMEOUT (0 disables the backstop)."
+            )
+    proc.wait()
+    stdout = result_line if result_line is not None else "".join(out_lines)
+    return subprocess.CompletedProcess(argv, proc.returncode, stdout, "".join(err_lines))
 
 
 # #139: Claude Code, run headless via `claude -p`, tends to return a PLAN ("here's
