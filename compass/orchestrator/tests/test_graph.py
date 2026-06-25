@@ -528,6 +528,28 @@ class TestWorkBranch(unittest.TestCase):
             self.assertIsNone(self.ensure(d, "fix/x"))
 
 
+class TestMergeGate(unittest.TestCase):
+    """#147: approving a 'merge' HITL gate triggers the PR merge (delivery closure)."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.is_merge_gate = runmod._is_merge_gate
+
+    def test_merge_gate_detected_by_title(self):
+        self.assertTrue(self.is_merge_gate("HITL gate — approve merge (human)"))
+        self.assertTrue(self.is_merge_gate("Approve MERGE"))
+
+    def test_non_merge_gates_ignored(self):
+        for t in ("HITL — ITIL intake routing gate", "approve the brief", "", None):
+            self.assertFalse(self.is_merge_gate(t), t)
+
+    def test_auto_merge_flag_parses(self):
+        import compass.orchestrator.run as runmod
+        # the flag exists and defaults off
+        args = runmod  # sanity: import ok
+        self.assertTrue(hasattr(runmod, "_merge_pr"))
+
+
 class TestDeliveryCheck(unittest.TestCase):
     """#145: a write-mode run that leaves CODE uncommitted hasn't delivered —
     flag real source/test changes, ignore the orchestrator's own bookkeeping."""

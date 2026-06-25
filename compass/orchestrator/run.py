@@ -110,6 +110,42 @@ def _uncommitted_code(project_dir) -> list:
     return out
 
 
+def _is_merge_gate(title: str) -> bool:
+    """#147: a HITL gate whose approval should MERGE the PR (delivery closure).
+    Detected by 'merge' in the gate title (e.g. 'HITL gate — approve merge')."""
+    return "merge" in (title or "").lower()
+
+
+def _merge_pr(project_dir, branch):
+    """#147: on approval of a merge gate, merge the PR for `branch` — the delivery
+    closure (merge → the host auto-deploys on main, e.g. Vercel). Best-effort:
+    returns (ok, message), never raises into the run; falls back to manual merge."""
+    import json as _json
+    import subprocess
+
+    def gh(args):
+        try:
+            return subprocess.run(["gh", *args], cwd=str(project_dir),
+                                  capture_output=True, text=True, timeout=60)
+        except Exception:
+            return None
+
+    view = gh(["pr", "view", branch, "--json", "number,state,url"])
+    if not view or view.returncode != 0:
+        return (False, f"no open PR found for '{branch}' (gh unavailable or none) — merge manually")
+    try:
+        pr = _json.loads(view.stdout)
+    except Exception:
+        return (False, "could not read PR info — merge manually")
+    if pr.get("state") != "OPEN":
+        return (False, f"PR {pr.get('url')} is {pr.get('state', '?')}, not OPEN — nothing to merge")
+    merged = gh(["pr", "merge", str(pr["number"]), "--squash", "--delete-branch"])
+    if merged and merged.returncode == 0:
+        return (True, f"merged PR {pr['url']} (squash) — deploy follows (host auto-deploys on main)")
+    err = ((merged.stderr if merged else "") or "").strip()[:200]
+    return (False, f"merge failed for PR {pr.get('url')}: {err or 'unknown'} — check CI/conflicts, merge manually")
+
+
 def _with_review_context(user_message: str, diff: str) -> str:
     """Prepend the code-under-review diff so a tool-less reviewer can actually
     review it (#138). No-op when there's no diff."""
@@ -809,6 +845,7 @@ def _run_workflow(
     decide: str = None,
     claude_cli: bool = False,
     run_id_override: str = None,
+    auto_merge: bool = False,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -1159,6 +1196,17 @@ def _run_workflow(
             )
             emit(ev.GATE_DECISION, step=step.number, decision=decision)
             print(f"[hitl → {decision}]")
+
+            # #147 delivery closure: approving a MERGE gate actually merges the PR
+            # (→ host auto-deploys on main). Opt-in (--auto-merge); the human's
+            # approval is the authorization, so this honors the gate, doesn't bypass
+            # it. Best-effort — a failure (CI red, conflict, no gh) notes loudly and
+            # leaves the PR for a manual merge; it never turns an approval into a halt.
+            if result["approved"] and auto_merge and work_branch and _is_merge_gate(step.title):
+                ok, msg = _merge_pr(project_dir, work_branch)
+                print(f"[auto-merge{'' if ok else ' ⚠'}] {msg}")
+                emit(ev.NOTE, text=f"auto-merge: {msg}")
+
             if not result["approved"]:
                 if not no_write:
                     note_path = _write_rejection_note(
@@ -1553,6 +1601,19 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--auto-merge",
+        action="store_true",
+        dest="auto_merge",
+        help=(
+            "Delivery closure (#147): approving a 'merge' HITL gate actually runs "
+            "`gh pr merge --squash --delete-branch` on the work branch's PR (→ the "
+            "host auto-deploys on main, e.g. Vercel). Off by default (approve records "
+            "the decision; you merge manually). The human's approval is the "
+            "authorization — this honors the gate, never bypasses it. Best-effort: a "
+            "failed merge (CI red / conflict / no gh) notes loudly, doesn't halt."
+        ),
+    )
+    parser.add_argument(
         "--run-id",
         default=None,
         dest="run_id",
@@ -1691,6 +1752,10 @@ def main(argv=None):
     # (the env var is how the dashboard opts in: spawned runs inherit os.environ).
     claude_cli = args.claude_cli or os.environ.get(
         "COMPASS_CLAUDE_HOST", "").lower() in ("cli", "claude-code")
+    # #147: dashboard opts into auto-merge via env (spawned runs inherit it, like
+    # COMPASS_CLAUDE_HOST) — export COMPASS_AUTO_MERGE=1 before `cockpit --serve`.
+    auto_merge = args.auto_merge or os.environ.get(
+        "COMPASS_AUTO_MERGE", "").lower() in ("1", "true", "yes")
 
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
@@ -1715,6 +1780,7 @@ def main(argv=None):
             decide=args.decide,
             claude_cli=claude_cli,
             run_id_override=args.run_id,
+            auto_merge=auto_merge,
         )
         return
 

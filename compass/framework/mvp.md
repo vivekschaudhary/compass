@@ -74,6 +74,7 @@ Hardening + expansion, tracked as normal improvements. 🟡 should-have · 🟢 
 | Codify `[surface-independent-mechanism]` + `[economy-by-default]` (≥3 instances) | convention | 🟢 |
 | CLI-host tool streaming (`claude -p --output-format stream-json` → per-tool events) | cockpit polish | 🟢 |
 | Stale-run **bucketing** + **OpenAI/Gemini event streaming** (#129 — log-capture slice ~~shipped #133~~ ✅; zombie "⚠ stalled" detection + non-Claude host events still open) | cockpit reliability | 🟡 |
+| ~~Delivery closure — "approve merge" gate actually merges + deploys~~ (#147: `--auto-merge` / `COMPASS_AUTO_MERGE` → `gh pr merge` on approve → host auto-deploys) | delivery | ✅ |
 | OpenAI/Gemini tool-use adapters (only Claude has `dispatch_with_tools`) | host parity | 🟢 |
 | Worktree isolation (#102) · testable-preview canary (#101) | build hardening | 🟢 |
 | LLM-as-driver / autonomous orchestrator (DESIGN surface 3, #87) | vision | 🟢 |

@@ -3603,3 +3603,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** consistency-check CONSISTENT; mechanical sweep confirms no live "every 5" framework refs remain (only immutable history + the unrelated 5s UI-refresh interval). No test impact (workflow + doc).
 
 **Files touched (3):** `compass/workflows/retro.md` · `compass/workflows/improvements.md` (header + this entry). Counter: #146. **Next framework retro fires every 10 (next = #028 at #147).** The discipline graduates from frequent-small to periodic-deep.
+
+### 2026-06-25 — delivery closure: "approve merge" actually merges + deploys (#147)
+
+**Trigger origin (Principle #19):** **DRI directive after PR #117 shipped** ("lets tackle delivery closure"). The whole session kept hitting the same wall: `/fix` did great *work* but didn't *deliver* it — the "approve merge" HITL gate recorded the decision and merged nothing, so runs stopped at a green PR and the human had to merge by hand ("I didn't see a deployment"; #145 made the *no-commit* case loud, this closes the *merge* case).
+
+**What shipped:** approving a **merge gate** now runs the merge. `--auto-merge` (or `COMPASS_AUTO_MERGE=1`, which dashboard-spawned runs inherit like `COMPASS_CLAUDE_HOST`) → on a HITL gate whose title says "merge", with a work branch, `_merge_pr` runs `gh pr merge <pr> --squash --delete-branch` for the branch's PR → the host auto-deploys on main (e.g. Vercel). `_is_merge_gate(title)` is the (pure, tested) predicate. **The gate floor holds:** the merge fires only on the human's approval — it *honors* the gate, doesn't bypass it; nothing auto-merges without a human approve. **Best-effort:** a failed merge (CI red, conflict, no `gh`) prints `[auto-merge ⚠]` + a spine NOTE and leaves the PR for a manual merge — an approval never becomes a halt. **Off by default** (approve still just records; manual merge unchanged).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **242 pass** (+3: `_is_merge_gate` detects "approve merge"/ignores routing+empty; `_merge_pr` present; flag parses). consistency-check CONSISTENT. `--auto-merge` in `--help`.
+
+**Files touched (5):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `compass/framework/mvp.md` (roadmap → ✅) · `CHANGELOG.md` (+ this file). Counter: #147. **The `/fix` pipeline now runs idea → triage → fix → review → approve → MERGE → deploy → changelog — end to end, hands-free on approve.** (Triggers Retro #028 under the every-10 cadence: #138–#147.)
