@@ -84,6 +84,32 @@ def _review_diff(project_dir, max_chars: int = 50000) -> str:
     return d
 
 
+def _uncommitted_code(project_dir) -> list:
+    """#145: CODE files left uncommitted after a write-mode run — the work isn't
+    delivered (no commit → no PR → no deploy; live: a `/fix` left AccountCard.tsx
+    uncommitted with no PR, so nothing shipped). Excludes the orchestrator's own
+    bookkeeping (docs/orchestrator-runs/, docs/role-activity/, *.jsonl) so only
+    real source/test changes count. [] if not a git repo."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(project_dir), "status", "--porcelain"],
+                           capture_output=True, text=True, timeout=15)
+    except Exception:
+        return []
+    if r.returncode != 0:
+        return []
+    skip = ("docs/orchestrator-runs/", "docs/role-activity/")
+    out = []
+    for line in r.stdout.splitlines():
+        path = line[3:].strip().strip('"')
+        if not path or path.endswith(".jsonl"):
+            continue
+        if any(s in path for s in skip):
+            continue
+        out.append(path)
+    return out
+
+
 def _with_review_context(user_message: str, diff: str) -> str:
     """Prepend the code-under-review diff so a tool-less reviewer can actually
     review it (#138). No-op when there's no diff."""
@@ -1381,6 +1407,19 @@ def _run_workflow(
             emit(ev.RUN_END, status="halted",
                  reason=f"agent refused at step {step.number} ({step.agent}.{step.task})")
             sys.exit(1)
+
+    # #145: a write-mode run that did real work but left it uncommitted hasn't
+    # DELIVERED it (no commit → no PR → no deploy — the "I didn't see a deployment"
+    # gap). Fail loud at completion so the result isn't mistaken for shipped.
+    if allow_write and work_branch and not handed_off:
+        leftover = _uncommitted_code(project_dir)
+        if leftover:
+            shown = ", ".join(leftover[:5]) + ("…" if len(leftover) > 5 else "")
+            warn = (f"⚠ DELIVERY INCOMPLETE — {len(leftover)} code file(s) left "
+                    f"uncommitted ({shown}). The work is NOT delivered: no commit → "
+                    f"no PR → no deploy. Commit the change + open a PR before merge.")
+            print("\n" + warn, file=sys.stderr)
+            emit(ev.NOTE, text=warn)
 
     if not handed_off:
         emit(ev.RUN_END, status="completed", reason="all steps complete")

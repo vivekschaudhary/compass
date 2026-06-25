@@ -528,6 +528,45 @@ class TestWorkBranch(unittest.TestCase):
             self.assertIsNone(self.ensure(d, "fix/x"))
 
 
+class TestDeliveryCheck(unittest.TestCase):
+    """#145: a write-mode run that leaves CODE uncommitted hasn't delivered —
+    flag real source/test changes, ignore the orchestrator's own bookkeeping."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.uncommitted = runmod._uncommitted_code
+
+    def test_flags_code_ignores_bookkeeping(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            def g(*a):
+                return subprocess.run(["git", "-C", d, *a], capture_output=True, text=True)
+            g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+            Path(d, "seed.txt").write_text("x"); g("add", "-A"); g("commit", "-qm", "seed")
+            # an uncommitted real code file + uncommitted bookkeeping
+            Path(d, "AccountCard.tsx").write_text("// fix")
+            (Path(d, "docs", "orchestrator-runs", "fix")).mkdir(parents=True)
+            Path(d, "docs", "orchestrator-runs", "fix", "step-01.md").write_text("log")
+            Path(d, "docs", "orchestrator-runs", "runs.jsonl").write_text("{}")
+            left = self.uncommitted(d)
+            self.assertIn("AccountCard.tsx", left)
+            self.assertFalse(any("orchestrator-runs" in p for p in left))  # bookkeeping ignored
+            self.assertFalse(any(p.endswith(".jsonl") for p in left))
+
+    def test_clean_tree_returns_empty(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            def g(*a):
+                return subprocess.run(["git", "-C", d, *a], capture_output=True, text=True)
+            g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+            Path(d, "f.txt").write_text("x"); g("add", "-A"); g("commit", "-qm", "c")
+            self.assertEqual(self.uncommitted(d), [])
+
+    def test_non_git_returns_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self.uncommitted(d), [])
+
+
 class TestReviewContext(unittest.TestCase):
     """#138: the tool-less reviewer gets the branch diff injected as context."""
 

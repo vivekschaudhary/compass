@@ -3577,3 +3577,17 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** consistency-check CONSISTENT (catalog 25 matches); 236 tests (no test impact — canon + agent prose). engineer/reviewer over the *ChatGPT* cap (WARN) but neither targets chatgpt → N/A.
 
 **Files touched (5):** `compass/framework/canon.md` · `AGENTS.md` · `compass/agents/engineer.md` · `compass/agents/reviewer.md` · `CHANGELOG.md` (+ this file). Counter: #144. **Retros #027–#029 owed (#128–#143).** The deepest consumer signal of the session — a true-but-irrelevant finding that *felt* like progress is now a named, gated anti-pattern.
+
+### 2026-06-25 — /fix fails loud when work is done but not delivered (#145)
+
+**Trigger origin (Principle #19):** **live `/fix` — "I did not see a deployment."** The run produced the *correct* fix (AccountCard now shows `available`), reported "completed," but **nothing shipped** — the change was left **uncommitted with no PR**. The run *looked* successful end-to-end yet delivered nothing: no commit → no PR → no deploy. (Also surfaced: step 1 inconsistently opens a PR — it did for #116, didn't here; step 6 hit a permission-block and still "completed.")
+
+**What shipped:**
+- **Mechanical delivery check** — `run.py._uncommitted_code(project_dir)` flags real source/test files left uncommitted after a write-mode run (ignores the orchestrator's own `docs/orchestrator-runs/` + `docs/role-activity/` + `*.jsonl` bookkeeping). At completion of an `--allow-write` run it emits a loud **`⚠ DELIVERY INCOMPLETE`** print + spine NOTE. `[fail-loud-not-silent]` applied to the delivery end.
+- **`engineer.triage-and-fix` hardened** — committing the change AND opening the PR is now an explicit Work step (#9) + postcondition; uncommitted work or a missing PR = NOT done → emit `REFUSE: <delivery blocker>` rather than report success.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **239 pass** (+3: `_uncommitted_code` flags code / ignores bookkeeping; clean tree → []; non-git → []). consistency-check CONSISTENT.
+
+**Still declared (the full delivery closure):** make the **"approve merge" HITL gate actually merge the PR + trigger/await deploy** (Vercel) — today approving the gate merges nothing, and `/fix` has no deploy step (VISION Deploy/Monitor stages). Until then: the run flags incomplete delivery loudly, and the human merges (→ Vercel auto-deploys).
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/agents/engineer.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #145. **Retros #027–#029 owed.** A "successful" run that ships nothing now says so, loudly.
