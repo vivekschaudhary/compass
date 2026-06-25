@@ -6,7 +6,7 @@ Each entry: what happened → what changed → what to watch for.
 
 ## Retro cadence
 
-Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization defense via periodic pattern review). Reports — does not prescribe. Patterns surfaced feed future improvements via normal triggers.
+Retros every **10** entries (framework altitude; **changed from 5 → 10 at #146** — fewer, deeper reviews after the discipline proved durable over 26 on-time/near-on-time retros) per AGENTS.md principle #14 (soft-spec-rationalization defense via periodic pattern review). Reports — does not prescribe. Patterns surfaced feed future improvements via normal triggers.
 
 - **Retro #001** (v0.1.8 → v0.1.12): [retros/2026-05-26-retro-001-v0.1.8-to-v0.1.12.md](retros/2026-05-26-retro-001-v0.1.8-to-v0.1.12.md)
 - **Retro #002** (v0.1.13 → v0.2.2): [retros/2026-05-26-retro-002-v0.1.13-to-v0.2.2.md](retros/2026-05-26-retro-002-v0.1.13-to-v0.2.2.md)
@@ -47,7 +47,9 @@ Retros every 5 entries per AGENTS.md principle #14 (soft-spec-rationalization de
 
 - **Retro #026** (improvements #123–#127): [retros/2026-06-25-retro-026-improvements-123-to-127.md](retros/2026-06-25-retro-026-improvements-123-to-127.md) — **fired LATE at #143** (cadence slipped 4 batches during an intense live-dogfooding session — first slip since Retro #004). The "**MVP-done closure**" batch, DRI-directed (first non-~100%-consumer batch in 5): mvp.md refreshed to truth (#123) + host-list drift mechanized (#124) + dispatch-on-outcome (#125) + interactive branch discipline (#126) + **`[fail-loud-not-silent]` codified** (#127, Compass-original #24). Audit found + fixed-in-batch **5 prose drifts** (mvp.md roadmap state ×2 · AGENTS.md `support`/`delivery-manager` host tables stale vs agent files · a `log ↗` doc-vs-code claim) — consistency-check passed clean, the independent reviewer caught all 5. Codification-ready (user-gated): `[surface-independent-mechanism]` + `[economy-by-default]` (overdue) · `[host-capability-validation]` (2 acted-on instances: pm + researcher #137). Drift signals: per-agent `preferred_hosts` tables un-mechanized · retro-cadence-slip. Audit otherwise clean (CONSISTENT · 236 tests · 9 graphs).
 
-**Retros #027 (#128–#132), #028 (#133–#137), #029 (#138–#142) are OWED** — the #128–#143 live-hardening arc (claude-code host execute-not-plan/context-bleed/tool-routing, dashboard observability, branch hygiene) still needs its retros. **Next retro (#027) covers #128–#132.**
+- **Retro #027** (improvements #128–#137): [retros/2026-06-25-retro-027-improvements-128-to-137.md](retros/2026-06-25-retro-027-improvements-128-to-137.md) — **first every-10 batch** (cadence changed 5→10 at #146). The "**dashboard observability + claude-code reliability**" arc, **10/10 dogfood-driven** (6th straight ~100%-consumer): form fix (#128) · stale-detection declared (#129) · spinner+timing (#130) · host timeout (#131) · cwd-in-repo (#132) · live logs (#133) · input-deadlock fix (#134) · threaded server (#135) · review-link (#136) · researcher Claude-first (#137). The dashboard went from "works" (#025) → **"trustworthy"** (observable · un-wedgeable · un-deadlockable · runs where the code is). Audit: mechanical sweep clean, leaning on #026's independent audit of the same surface. Codification-ready: `[surface-independent-mechanism]` + `[economy-by-default]` (overdue) · `[host-capability-validation]`. New candidate `[observability-before-trust]` (3 instances).
+
+**Next retro #028 (every-10) covers #138–#147** — #138–#145 already accrued (reviewer-gets-diff · execute-not-plan · always-tool-capable · branch-fresh · `[reproduce-before-diagnose]` · delivery check — the *correctness* counterpart to #027's *observability*); fires at #147.
 
 ## Template
 
@@ -3591,3 +3593,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Still declared (the full delivery closure):** make the **"approve merge" HITL gate actually merge the PR + trigger/await deploy** (Vercel) — today approving the gate merges nothing, and `/fix` has no deploy step (VISION Deploy/Monitor stages). Until then: the run flags incomplete delivery loudly, and the human merges (→ Vercel auto-deploys).
 
 **Files touched (4):** `compass/orchestrator/run.py` · `compass/agents/engineer.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #145. **Retros #027–#029 owed.** A "successful" run that ships nothing now says so, loudly.
+
+### 2026-06-25 — retro cadence 5 → 10 at the framework altitude (#146)
+
+**Trigger origin (Principle #19):** **DRI directive** ("change the retro every 10 changes"), made while clearing the owed-retro backlog. The 5-batch cadence served its purpose — 26 retros, the discipline is muscle-memory (`[discipline-as-muscle-memory]`) — but a high-velocity live-dogfooding session (#128–#145) blew past four 5-batch horizons, so the cadence was generating overdue-counters faster than value. Fewer, deeper reviews fit the proven discipline better.
+
+**What shipped:** framework-altitude retro cadence **5 → 10** in `compass/workflows/retro.md` (altitude table + auto-fire note) and the `improvements.md` header. Project/role/workflow altitudes unchanged. Retro #027 (this session) is the **first every-10 batch** (#128–#137); #028 covers #138–#147.
+
+**Verification:** consistency-check CONSISTENT; mechanical sweep confirms no live "every 5" framework refs remain (only immutable history + the unrelated 5s UI-refresh interval). No test impact (workflow + doc).
+
+**Files touched (3):** `compass/workflows/retro.md` · `compass/workflows/improvements.md` (header + this entry). Counter: #146. **Next framework retro fires every 10 (next = #028 at #147).** The discipline graduates from frequent-small to periodic-deep.

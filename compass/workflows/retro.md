@@ -12,7 +12,7 @@ The retro **reports**, it doesn't **prescribe**. Patterns surfaced feed future i
 
 | Altitude | What it retros on | Source log | Archive path | Default cadence |
 |---|---|---|---|---|
-| `framework` | Compass framework evolution | `compass/workflows/improvements.md` | `compass/workflows/retros/<date>-retro-<NNN>-<period>.md` | Every 5 improvements |
+| `framework` | Compass framework evolution | `compass/workflows/improvements.md` | `compass/workflows/retros/<date>-retro-<NNN>-<period>.md` | Every 10 improvements (was 5 → 10 at #146 — fewer, deeper reviews) |
 | `project` | Cross-bet patterns within a consuming project | `docs/improvements.md` | `docs/retros/<NNN>-<period>.md` | Every 5 improvements (project's own) |
 | `bet` | Bet outcome + DRI log + scope drift | `docs/bets/<bet-id>/` (DRI logs + outcome) | `docs/bets/<bet-id>/retro.md` | At bet outcome transition (won / learning / inconclusive) |
 | `role` | Per-role / per-agent activity patterns | `docs/role-activity/<role>.md` | `docs/retros/role-<role>-<NNN>.md` | Every N activity entries (default ≥5) |
@@ -30,7 +30,7 @@ The retro **reports**, it doesn't **prescribe**. Patterns surfaced feed future i
   - `/retro --altitude=role --role=engineer`
   - `/retro --altitude=workflow --workflow=build`
   - `/retro --altitude=bet PROJ-42`
-- **Auto-fires** when the source log accumulates N new dated entries since the last retro at THAT altitude (framework: 5; project: 5; role/workflow: ≥5; bet: at outcome transition). No cron yet — fires manually when the next agent reading the log notices the count.
+- **Auto-fires** when the source log accumulates N new dated entries since the last retro at THAT altitude (framework: 10 (was 5, changed #146); project: 5; role/workflow: ≥5; bet: at outcome transition). No cron yet — fires manually when the next agent reading the log notices the count.
 
 ## State detection
 
