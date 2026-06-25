@@ -216,11 +216,22 @@ def _work_branch_name(workflow: str, bet_id: str, context: str) -> str:
 
 def _ensure_work_branch(project_dir, branch_name: str):
     """
-    Put write-mode work on a branch, never on main/master (#99).
+    Put write-mode work on a branch, never on main/master (#99), branched from a
+    FRESH base (#143). Returns the branch the work will run on, or None if
+    project_dir isn't a git repo.
 
-    Returns the branch the work will run on, or None if project_dir isn't a git
-    repo. If already on a non-main branch, reuses it. If on main/master, creates
-    (or checks out) branch_name. Carries any working changes along.
+    Behavior:
+      - already on `branch_name` (a resume) → reuse it
+      - `branch_name` already exists → switch to it (resume / re-run)
+      - otherwise → create `branch_name` from a fresh base (fetched `origin/main`),
+        **never stacking on whatever feature branch happens to be checked out.**
+
+    #143: the old code reused *any* current non-main branch, so a leftover branch
+    from a prior run got stacked on — carrying its (already-merged) commits into
+    the next fix's PR → merge conflicts + review scope-creep (live: PR #116
+    conflicted because an accounts fix stacked on the merged welcome-back branch).
+    Falls back to the current HEAD when there's no remote/base or the clean
+    checkout fails (e.g. a dirty tree).
     """
     import subprocess
 
@@ -233,14 +244,24 @@ def _ensure_work_branch(project_dir, branch_name: str):
     if git("rev-parse", "--is-inside-work-tree").returncode != 0:
         return None
     current = git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    if current and current not in ("main", "master"):
-        return current  # already on a work branch
-    made = git("checkout", "-b", branch_name)
-    if made.returncode == 0:
+    if current == branch_name:
+        return branch_name  # resume — already on the work branch
+    if git("rev-parse", "--verify", "--quiet", branch_name).returncode == 0:
+        # branch already exists (resume / re-run) — switch to it, don't recreate
+        return branch_name if git("checkout", branch_name).returncode == 0 else (current or None)
+    # fresh branch — base it on a clean origin/main, NOT the current (possibly
+    # leftover) branch. Fetch best-effort; fall through local refs.
+    git("fetch", "origin", "--quiet")
+    base = next(
+        (b for b in ("origin/main", "origin/master", "main", "master")
+         if git("rev-parse", "--verify", "--quiet", b).returncode == 0),
+        None,
+    )
+    if base and git("checkout", "-b", branch_name, base).returncode == 0:
         return branch_name
-    # branch may already exist — switch to it
-    switched = git("checkout", branch_name)
-    return branch_name if switched.returncode == 0 else current or None
+    # no remote/base, or the clean checkout failed (e.g. dirty tree) → current HEAD
+    made = git("checkout", "-b", branch_name)
+    return branch_name if made.returncode == 0 else (current or None)
 
 
 def _skip_for_route(router_number: int, target: int) -> set:

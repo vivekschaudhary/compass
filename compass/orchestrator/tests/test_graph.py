@@ -481,6 +481,53 @@ class TestRefusalDetection(unittest.TestCase):
         self.assertFalse(self.is_refusal(body))
 
 
+class TestWorkBranch(unittest.TestCase):
+    """#143: a fresh work branch is cut from main, never stacked on a leftover
+    feature branch (which carried already-merged commits → PR conflicts)."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.ensure = runmod._ensure_work_branch
+
+    def _repo(self):
+        import subprocess
+        self._tmp = tempfile.TemporaryDirectory()
+        d = self._tmp.name
+
+        def g(*a):
+            return subprocess.run(["git", "-C", d, *a], capture_output=True, text=True)
+        g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+        Path(d, "base.txt").write_text("base")
+        g("add", "-A"); g("commit", "-qm", "base"); g("branch", "-M", "main")
+        return d, g
+
+    def tearDown(self):
+        if hasattr(self, "_tmp"):
+            self._tmp.cleanup()
+
+    def test_branches_from_main_not_leftover(self):
+        d, g = self._repo()
+        # a leftover feature branch with its own commit, currently checked out
+        g("checkout", "-qb", "fix/old-leftover")
+        Path(d, "leftover.txt").write_text("x")
+        g("add", "-A"); g("commit", "-qm", "leftover work")
+        br = self.ensure(d, "fix/new-thing")
+        self.assertEqual(br, "fix/new-thing")
+        files = g("ls-files").stdout
+        self.assertIn("base.txt", files)
+        self.assertNotIn("leftover.txt", files)  # did NOT stack on the leftover branch
+
+    def test_reuses_existing_branch_on_resume(self):
+        d, g = self._repo()
+        g("checkout", "-qb", "fix/resume-me"); g("checkout", "-q", "main")
+        self.assertEqual(self.ensure(d, "fix/resume-me"), "fix/resume-me")
+        self.assertEqual(g("rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "fix/resume-me")
+
+    def test_non_git_dir_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(self.ensure(d, "fix/x"))
+
+
 class TestReviewContext(unittest.TestCase):
     """#138: the tool-less reviewer gets the branch diff injected as context."""
 

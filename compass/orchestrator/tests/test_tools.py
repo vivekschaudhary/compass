@@ -411,8 +411,12 @@ class TestWorkBranch(unittest.TestCase):
             self.assertEqual(
                 git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "fix/x-y"
             )
-            # already on a work branch → reuse, don't re-branch
-            self.assertEqual(_ensure_work_branch(d, "fix/other"), "fix/x-y")
+            # #143: a DIFFERENT requested branch is now cut fresh from main, not
+            # reused/stacked on the current feature branch (the old behavior that
+            # carried leftover commits into the next PR). Same name → still reused.
+            self.assertEqual(_ensure_work_branch(d, "fix/x-y"), "fix/x-y")   # resume reuses
+            git("checkout", "-q", "fix/x-y")
+            self.assertEqual(_ensure_work_branch(d, "fix/other"), "fix/other")  # new name → fresh
 
     def test_ensure_branch_non_git_returns_none(self):
         from compass.orchestrator.run import _ensure_work_branch

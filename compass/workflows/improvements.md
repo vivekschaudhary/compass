@@ -3549,3 +3549,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Validated in the same session:** a live `/fix` opened **PR #116** and the engineer printed its URL — exactly what `changes ↗` now surfaces clickable. (That run also confirmed #138: the reviewer posted 7 real findings on the injected diff, incl. catching an a11y regression from the earlier welcome-back fix; and #125: tech-writer correctly emitted `REFUSE:` because the PR wasn't merged → dispatch-on-outcome halted.)
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #142. **Retro #026 still due (#123–#127).** review = what it said · log = how it ran · changes = what it shipped.
+
+### 2026-06-25 — work branches cut fresh from main, never stacked (#143)
+
+**Trigger origin (Principle #19):** **PR #116 merge conflict (live).** The accounts-fix PR conflicted because `_ensure_work_branch` had **reused the leftover welcome-back branch** (a prior run left the repo on it), so the accounts branch carried `0371369`+`1b7ff17` — already merged to `main` under different SHAs → `SignInFlow.tsx` conflict, plus the reviewer flagged an a11y "regression" that only rode in on those stacked commits. The DRI hit the git pain head-on ("i hate git"); the conflict had to be hand-resolved via a merge commit (the repo ruleset also blocks force-push).
+
+**What shipped:** `_ensure_work_branch` no longer reuses an arbitrary current branch. It reuses the branch **only if it's the requested name** (resume / re-run); otherwise it creates the branch from a **fetched `origin/main`** (falling through `origin/master` → `main` → `master`, then current HEAD when there's no remote or the clean checkout fails). So every fix is cut from a clean base — no stacking, no inherited commits, no scope-creep in the diff the reviewer sees (#138).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **236 pass** (+3: branches from main not a leftover branch; reuses the branch on resume; non-git → None — real temp-git-repo integration tests). The pre-existing test that encoded the old reuse-any-branch behavior was updated to the #143 contract. consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_tools.py` (+ CHANGELOG + this file). Counter: #143. **Retro #026 still due (#123–#127).** No fix can stack on a stale branch again — the root cause of the PR #116 conflict.
