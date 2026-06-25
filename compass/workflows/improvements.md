@@ -3647,3 +3647,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **248 pass** (+1: code-workflow warning says "no deploy", doc-workflow doesn't). consistency-check CONSISTENT.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #150. **(#029 batch: #148–#157.)** A brief is "delivered" by committing it, not deploying it.
+
+### 2026-06-25 — doc workflows skip the code branch→PR dance (#151)
+
+**Trigger origin (Principle #19):** **live `create-brief`** cut a spurious `feat/work` branch (generic name — `--from-step 4` had no context) and stranded the brief docs on it. A brief is reviewed via its **HITL gate**, not a PR/deploy — the branch→review→merge discipline (#99/#143) is for *code*.
+
+**What shipped:** `_ensure_work_branch` is now called **only for code workflows** (`fix`/`build`/`ops`, the `_CODE_WORKFLOWS` set); doc workflows (`create-brief`/`-bet-architecture`/`-story`, `setup-*`) skip it and write on the current branch. The end-of-run delivery check now fires without a work_branch too, so docs still get the #150 "ARTIFACTS UNCOMMITTED — commit to keep it" nudge. **Auto-commit was deliberately rejected:** the orchestrator can't know precisely which files an opaque `claude -p` agent wrote, so auto-`git add` would sweep unrelated untracked files (e.g. a stale changelog from a prior run) — `[fail-loud-not-silent]` favors the explicit nudge over a risky sweep.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **248 pass** (+1: `_CODE_WORKFLOWS` == {fix,build,ops}; doc workflows excluded). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #151. **(#029 batch: #148–#157.)** No more stray `feat/work` branch for a brief; docs land where you commit them.

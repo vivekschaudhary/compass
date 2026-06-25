@@ -602,6 +602,14 @@ class TestDeliveryCheck(unittest.TestCase):
             self.assertFalse(any("orchestrator-runs" in p for p in left))  # bookkeeping ignored
             self.assertFalse(any(p.endswith(".jsonl") for p in left))
 
+    def test_code_vs_doc_workflow_split(self):
+        # #151: only code workflows cut a work branch; doc workflows skip it
+        from compass.orchestrator import run as runmod
+        self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops"})
+        for doc in ("create-brief", "create-bet-architecture", "create-story",
+                    "setup-product", "setup-foundation-architecture"):
+            self.assertNotIn(doc, runmod._CODE_WORKFLOWS)
+
     def test_delivery_warning_workflow_aware(self):
         from compass.orchestrator import run as runmod
         code = runmod._delivery_warning("fix", ["AccountCard.tsx"])

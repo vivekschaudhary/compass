@@ -1038,10 +1038,13 @@ def _run_workflow(
         context = bet_context + ("\n\n" + context if context else "")
         print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
 
-    # Write-mode work lands on a work branch, never directly on main (#99) —
-    # the framework's branch→review→merge discipline. Only when --allow-write.
+    # Write-mode CODE work lands on a work branch, never directly on main (#99) —
+    # the branch→review→merge discipline. #151: DOC workflows (create-brief/-story/
+    # -architecture, setup-*) are reviewed via their HITL gate, not a PR — they skip
+    # the work-branch dance (no spurious feat/work branch) and write on the current
+    # branch; their artifacts are committed, not deployed (the #150 message guides).
     work_branch = None
-    if allow_write:
+    if allow_write and workflow_name in _CODE_WORKFLOWS:
         bname = _work_branch_name(workflow_name, bet_id, context)
         work_branch = _ensure_work_branch(project_dir, bname)
         if work_branch:
@@ -1515,7 +1518,9 @@ def _run_workflow(
     # #145: a write-mode run that did real work but left it uncommitted hasn't
     # DELIVERED it (no commit → no PR → no deploy — the "I didn't see a deployment"
     # gap). Fail loud at completion so the result isn't mistaken for shipped.
-    if allow_write and work_branch and not handed_off:
+    # #151: fires for doc workflows too (no work_branch) — they still need the
+    # "commit the artifact" nudge even though they don't branch.
+    if allow_write and not handed_off:
         leftover = _uncommitted_code(project_dir)
         if leftover:
             warn = _delivery_warning(workflow_name, leftover)
