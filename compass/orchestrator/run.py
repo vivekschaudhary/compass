@@ -185,6 +185,39 @@ def _is_refusal(result: str) -> bool:
     return False
 
 
+# #149: a step that *ran* isn't a step that *succeeded*. Beyond the hard REFUSE:
+# sentinel (#125, which halts), agents often emit a SOFT non-completion — a plan, a
+# confabulated block, a permission claim — yet the step was still marked ✓ done.
+# These high-precision phrases (seen repeatedly in live runs) classify such output
+# as "incomplete" so the dashboard shows ✗, not ✓. Conservative by design: a normal
+# completed step doesn't contain "permission not granted" or "the plan is ready".
+_INCOMPLETE_RE = re.compile(
+    r"permission(?:s)?\s+(?:to\s+\w+\s+)?(?:is\s+)?not\s+(?:been\s+)?(?:auto-)?(?:granted|approved)"
+    r"|write\s+permission[^\n]{0,60}(?:not|grant|approve)"
+    r"|not\s+auto-approved"
+    r"|can'?t\s+access\s+the\s+(?:codebase|repo|home-app)"
+    r"|don'?t\s+have\s+(?:read|write|file)?\s*access"
+    r"|the\s+plan\s+is\s+ready"
+    r"|here'?s\s+the\s+plan"
+    r"|approve\s+the\s+[\"']?(?:exit\s+plan|plan)"
+    r"|\bblocker:\s"
+    r"|requires?\s+(?:a\s+)?permission\s+grant",
+    re.IGNORECASE,
+)
+
+
+def _classify_outcome(result: str) -> tuple:
+    """Classify a step's output as ('done', '') or ('incomplete', reason) (#149).
+    Used to mark each step ✓/✗ in the dashboard — the orchestrator confirms a step
+    *did its job*, not just that it returned. Conservative: defaults to done."""
+    if not result or not result.strip():
+        return ("incomplete", "empty output — the step produced nothing")
+    m = _INCOMPLETE_RE.search(result)
+    if m:
+        return ("incomplete", f"output signals a block/plan, not completed work (\"{m.group(0)[:40]}…\")")
+    return ("done", "")
+
+
 def _read_agent_tools(agent_file: Path) -> list:
     """
     Parse the optional `executor_tools:` list from agent frontmatter (#87 slice 1).
@@ -1426,8 +1459,13 @@ def _run_workflow(
             output=result,
             artifact_path=str(last_artifact_path.relative_to(project_dir)) if last_artifact_path else None,
         )
-        emit(ev.STEP_END, step=step.number,
+        # #149: confirm the step actually did its job (not just that it returned).
+        outcome, why = _classify_outcome(result)
+        emit(ev.STEP_END, step=step.number, outcome=outcome, outcome_reason=why,
              gate_result=rec.get("gate_result"), output_chars=rec.get("output_chars"))
+        if outcome != "done":
+            print(f"  ✗ step {step.number} ({step.agent}.{step.task}) looks "
+                  f"INCOMPLETE — {why}", file=sys.stderr)
         if run_cost["usd"] > 0:
             print(f"[cost] run ~${run_cost['usd']:.3f}"
                   + (f" / ${max_cost:.2f} cap" if max_cost else " (no cap — set --max-cost)"))

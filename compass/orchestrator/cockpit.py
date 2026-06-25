@@ -76,7 +76,10 @@ def fold_runs(events: list) -> dict:
             st["started"] = e.get("ts")          # #130: per-step timing
         elif t == ev.STEP_END:
             st = r["steps"].setdefault(e.get("step"), {})
-            st["status"] = "done"
+            # #149: a step that ran but didn't do its job (plan/block/permission
+            # confabulation) is FAILED (✗), not done (✓).
+            st["status"] = "failed" if e.get("outcome") == "incomplete" else "done"
+            st["outcome_reason"] = e.get("outcome_reason") or ""
             st["ended"] = e.get("ts")            # #130
         elif t == ev.GATE_OPEN:
             r["open_gate"] = {"step": e.get("step"), "kind": e.get("kind"),
@@ -111,7 +114,7 @@ def fold_runs(events: list) -> dict:
 import os
 from pathlib import Path
 
-_STATUS_GLYPH = {"done": "✓", "running": "▶", "awaiting": "⏸", "pending": "·"}
+_STATUS_GLYPH = {"done": "✓", "failed": "✗", "running": "▶", "awaiting": "⏸", "pending": "·"}
 
 
 def compass_dir(override=None) -> Path:
@@ -353,7 +356,7 @@ def spend_summary(runs: list):
 # ── HTML cockpit (#113) ──────────────────────────────────────────────────────
 import html as _htmllib
 
-_HTML_GLYPH_CLASS = {"done": "done", "running": "running", "awaiting": "awaiting", "pending": "pending"}
+_HTML_GLYPH_CLASS = {"done": "done", "failed": "failed", "running": "running", "awaiting": "awaiting", "pending": "pending"}
 _HTML_CSS = """
   body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
   .wrap{max-width:900px;margin:0 auto;padding:24px}
@@ -364,7 +367,7 @@ _HTML_CSS = """
   code{display:block;background:#0b0d11;border:1px solid #2a2e37;border-radius:6px;padding:6px 8px;margin-top:6px;color:#b8c0cc;white-space:pre-wrap;font-size:12px}
   .steps{margin:6px 0 0;list-style:none;padding:0}
   .steps li{padding:1px 0} .g{display:inline-block;width:1.4em}
-  .done .g{color:#3fb950} .awaiting .g{color:#d29922} .pending .g{color:#6e7681}
+  .done .g{color:#3fb950} .failed .g{color:#f85149} .failed{color:#f85149} .awaiting .g{color:#d29922} .pending .g{color:#6e7681}
   @keyframes spin{to{transform:rotate(1turn)}}
   .running .g{color:#58a6ff;display:inline-block;animation:spin 1s linear infinite}
   .dur{color:#6e7681;font-size:11px;margin-left:6px}

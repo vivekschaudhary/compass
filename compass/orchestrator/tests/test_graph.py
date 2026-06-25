@@ -528,6 +528,33 @@ class TestWorkBranch(unittest.TestCase):
             self.assertIsNone(self.ensure(d, "fix/x"))
 
 
+class TestStepOutcome(unittest.TestCase):
+    """#149: classify a step's output as done (✓) or incomplete (✗) — a step that
+    ran but produced a plan/block/permission-confabulation didn't do its job."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.classify = runmod._classify_outcome
+
+    def test_done_for_real_work(self):
+        self.assertEqual(self.classify(
+            "Done. Fixed AccountCard, all 7 tests pass, PR opened.")[0], "done")
+        self.assertEqual(self.classify(
+            "Added a permission check to the route; committed.")[0], "done")  # benign 'permission'
+
+    def test_incomplete_for_blocks_plans_empty(self):
+        for t in (
+            "Write permission to docs/status.md hasn't been granted yet for this session.",
+            "The plan is ready. Here's what it covers so you can approve.",
+            "I can't access the codebase from this session.",
+            "Blocker: write access required for docs/.",
+            "File write permissions are not auto-approved in this session.",
+            "",
+            "   \n  ",
+        ):
+            self.assertEqual(self.classify(t)[0], "incomplete", t)
+
+
 class TestMergeGate(unittest.TestCase):
     """#147: approving a 'merge' HITL gate triggers the PR merge (delivery closure)."""
 

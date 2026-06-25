@@ -3625,3 +3625,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **243 pass** (+1: `--setting-sources ""` present in argv). consistency-check CONSISTENT. Real-CLI empty-value test rc=0 / is_error=False.
 
 **Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #148. **Retro #028 (every-10) covers #138–#147 and is now DUE** (we've reached #148); #148 opens the #029 batch (#148–#157). Agents stop inventing blocks they don't have.
+
+### 2026-06-25 — per-step outcome: dashboard shows ✓ done vs ✗ failed (#149)
+
+**Trigger origin (Principle #19):** **DRI directive** — "the orchestrator's job should be to match the output from each step and confirm if it's done or not, and highlight that in the dashboard with done and failed icons (checkbox / cross)." The whole session's failure class: a step that *ran* was marked ✓ "done" even when its output was a plan, a confabulated block, or empty — so glitchy runs (the #144 wrong-fix, #145 uncommitted, #148 permission-confab) all looked all-green in the cockpit.
+
+**What shipped:** `run.py._classify_outcome(result)` → `("done","")` or `("incomplete", reason)` using high-precision incompletion signals (`_INCOMPLETE_RE`: "permission not granted" · "the plan is ready" · "can't access the codebase" · "blocker:" · empty output — the exact phrases live runs produced). `STEP_END` now carries `outcome` + `outcome_reason`; the run prints `✗ step N looks INCOMPLETE — <why>`. `fold_runs` maps `incomplete → status "failed"`; the cockpit gets a **`failed` glyph `✗`** (red `#f85149`) alongside `done ✓`, in both the text (`--run`) and HTML step views. **Conservative by design** — defaults to done; a normal completed step contains none of the signals (verified: "added a permission check" stays ✓). **v1 is heuristic; v2 = an LLM-judge against each task's declared postcondition** (the robust upgrade). Complements `[fail-loud-not-silent]` (#127) + the delivery check (#145).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **247 pass** (+4: classify done vs the 7 incompletion cases; fold incomplete→failed renders ✗ + `class='failed'`; done→✓). consistency-check CONSISTENT.
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #149. **(#029 batch: #148–#157.)** A run is now only as green as the steps that actually did their job.

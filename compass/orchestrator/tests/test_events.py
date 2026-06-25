@@ -604,6 +604,35 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertIn("function _act", html)
         self.assertIn("disabled=true", html)
 
+    def test_step_outcome_failed_renders_cross(self):
+        # #149: a STEP_END with outcome=incomplete folds to status 'failed' (✗)
+        events = [
+            ev.make_event(ev.RUN_START, run_id="x", workflow="fix", project="p",
+                          project_dir=self.td),
+            {"type": ev.STEP_START, "run_id": "x", "step": 1, "agent": "tech-writer",
+             "task": "accumulate-changelog", "ts": "2026-06-25T00:00:00+00:00"},
+            {"type": ev.STEP_END, "run_id": "x", "step": 1, "outcome": "incomplete",
+             "outcome_reason": "permission not granted", "ts": "2026-06-25T00:00:30+00:00"},
+        ]
+        runs = cockpit.fold_runs(events)
+        self.assertEqual(runs["x"]["steps"][1]["status"], "failed")
+        rows, _ = cockpit._run_step_rows(runs["x"], [])
+        self.assertTrue(any(r[1] == "failed" for r in rows))
+        html = cockpit.render_html(runs)
+        self.assertIn("✗", html)               # cross icon for the failed step
+        self.assertIn("class='failed'", html)
+
+    def test_step_outcome_done_renders_check(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="y", workflow="fix", project="p"),
+            {"type": ev.STEP_START, "run_id": "y", "step": 1, "agent": "engineer",
+             "task": "triage-and-fix", "ts": "2026-06-25T00:00:00+00:00"},
+            {"type": ev.STEP_END, "run_id": "y", "step": 1, "outcome": "done",
+             "ts": "2026-06-25T00:00:30+00:00"},
+        ]
+        runs = cockpit.fold_runs(events)
+        self.assertEqual(runs["y"]["steps"][1]["status"], "done")
+
     def test_step_durations_and_spinner(self):
         # #130: done steps show start→end duration; the running step shows live
         # elapsed; the running glyph is the spinner ◐ (CSS-animated).
