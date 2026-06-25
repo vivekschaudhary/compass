@@ -110,6 +110,32 @@ class TestDispatch(unittest.TestCase):
                     on_event=lambda e: None)
         self.assertEqual(seen["input"], "MESSAGE-BODY")
 
+    def test_cli_timeout_parsing(self):
+        # #131: default, explicit, disable (0), and garbage → default
+        saved = os.environ.get("COMPASS_CLAUDE_CLI_TIMEOUT")
+        try:
+            os.environ.pop("COMPASS_CLAUDE_CLI_TIMEOUT", None)
+            self.assertEqual(cc._cli_timeout(), cc._DEFAULT_CLI_TIMEOUT)
+            os.environ["COMPASS_CLAUDE_CLI_TIMEOUT"] = "120"
+            self.assertEqual(cc._cli_timeout(), 120)
+            os.environ["COMPASS_CLAUDE_CLI_TIMEOUT"] = "0"
+            self.assertIsNone(cc._cli_timeout())       # 0 disables the cap
+            os.environ["COMPASS_CLAUDE_CLI_TIMEOUT"] = "junk"
+            self.assertEqual(cc._cli_timeout(), cc._DEFAULT_CLI_TIMEOUT)
+        finally:
+            if saved is None:
+                os.environ.pop("COMPASS_CLAUDE_CLI_TIMEOUT", None)
+            else:
+                os.environ["COMPASS_CLAUDE_CLI_TIMEOUT"] = saved
+
+    def test_timeout_fails_loud(self):
+        # a hung CLI (runner raises, simulating the timeout kill) must surface as
+        # a clean RuntimeError, not block — [fail-loud-not-silent].
+        def hung(argv, input):
+            raise RuntimeError("claude CLI exceeded the 900s timeout and was killed")
+        with self.assertRaises(RuntimeError):
+            cc.dispatch("/x/agent.md", "t", "x", runner=hung, on_event=lambda e: None)
+
     def test_nonzero_exit_raises_clean(self):
         with self.assertRaises(RuntimeError):
             cc.dispatch("/x/agent.md", "t", "x",

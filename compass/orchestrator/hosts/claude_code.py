@@ -17,10 +17,29 @@ Two differences from the API host, by design:
 """
 import json
 import os
+import signal
 import subprocess
 
 from .. import events as ev
 from ..events import terminal_sink as _default_tool_event
+
+# #131: a hung `claude -p` (e.g. it started a dev server / watcher that holds the
+# output pipe, or otherwise never returns) would block the orchestrator forever —
+# the deadlock that froze a real /fix run for 15+ min. Cap it and fail loud
+# ([fail-loud-not-silent]). Default 15 min; override with COMPASS_CLAUDE_CLI_TIMEOUT
+# (seconds; 0/blank disables the cap for genuinely long steps).
+_DEFAULT_CLI_TIMEOUT = 900
+
+
+def _cli_timeout():
+    raw = os.environ.get("COMPASS_CLAUDE_CLI_TIMEOUT")
+    if raw is None or raw == "":
+        return _DEFAULT_CLI_TIMEOUT
+    try:
+        n = int(raw)
+    except ValueError:
+        return _DEFAULT_CLI_TIMEOUT
+    return None if n <= 0 else n
 
 
 def _cli_model(model: str) -> str:
@@ -92,9 +111,34 @@ def _subscription_env() -> dict:
 
 
 def _default_runner(argv, input):
-    """Run the CLI, capturing stdout/stderr. Isolated so tests inject a fake."""
-    return subprocess.run(argv, input=input, capture_output=True, text=True,
-                          env=_subscription_env())
+    """Run the CLI, capturing stdout/stderr, under a timeout (#131). Isolated so
+    tests inject a fake. The child runs in its own process group so a hung
+    `claude -p` AND anything it spawned (dev server, watcher) are killed together;
+    on timeout we fail loud with a RuntimeError → run.py emits RUN_END(halted) +
+    a --from-step resume hint, instead of blocking the orchestrator forever."""
+    timeout = _cli_timeout()
+    proc = subprocess.Popen(
+        argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, env=_subscription_env(), start_new_session=True,
+    )
+    try:
+        out, err = proc.communicate(input=input, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)  # whole tree
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            proc.communicate(timeout=5)
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"claude CLI exceeded the {timeout}s timeout and was killed — it likely "
+            f"hung on a long-running command (a dev server / watcher that never "
+            f"returns, or an interactive prompt). Re-run from this step, or raise "
+            f"COMPASS_CLAUDE_CLI_TIMEOUT (seconds; 0 disables the cap)."
+        )
+    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
 def _run(agent_file_path, user_message, model, project_dir, allow_write,

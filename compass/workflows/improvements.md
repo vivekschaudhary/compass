@@ -3431,3 +3431,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **215 pass** (+1: done-step 12s, running-step live 3m00s, spinner ◐ + `@keyframes` + `.dur` in HTML). consistency-check CONSISTENT.
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #130. **Retro #026 still due (#123–#127).** The active step now visibly spins and times itself.
+
+### 2026-06-24 — claude-code host: timeout so a hung `claude -p` fails loud (#131)
+
+**Trigger origin (Principle #19):** **live deadlock (session).** A real home-app `/fix` run sat "in flight" for **15+ min** at step 2 (`automation.write-e2e-tests`). Diagnosis: orchestrator process alive but **0% CPU, no `claude` child, no spine events for 21 min** — `claude -p` had hung (most likely it started a dev server / watcher that inherited and held the output pipe, so the call never returned), and the CLI host's `subprocess.run` had **no timeout** → the orchestrator blocked forever. A black-box step that can hang with no bound is exactly `[fail-loud-not-silent]`'s `silent-skip`/hang failure mode.
+
+**What shipped:** `_default_runner` now spawns the CLI via `Popen(..., start_new_session=True)` (its own process group) under `communicate(timeout=_cli_timeout())`. On `TimeoutExpired` it **`os.killpg` SIGKILLs the whole tree** (CLI + any dev server / watcher it spawned), reaps, and raises a clear `RuntimeError` → run.py's dispatch `except` emits `RUN_END(halted)` with a `--from-step` resume hint. Default **900s**; `COMPASS_CLAUDE_CLI_TIMEOUT` overrides (seconds; `0`/blank disables for genuinely long steps). Pairs with #129 (stale detection would *show* it; this *stops* it).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **217 pass** (+2: `_cli_timeout` default/explicit/disable/garbage; a hung runner surfaces as a clean `RuntimeError`, not a block). consistency-check CONSISTENT. (Real-CLI spawn not unit-tested — injectable `runner` keeps tests hermetic.)
+
+**Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #131. **Retro #026 still due (#123–#127).** A hung CLI step now halts loud in ≤15 min instead of blocking the orchestrator indefinitely.
