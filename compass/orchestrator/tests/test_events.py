@@ -572,6 +572,21 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertIsNone(cockpit._run_artifact_dir({"project_dir": None, "workflow": "x"}))
         self.assertIsNone(cockpit._run_artifact_dir({"project_dir": "/p"}))  # no workflow
 
+    def test_extract_pr_urls(self):
+        # #142: pull PR/MR URLs out of agent narration, de-duped
+        txt = ("PR #116 open: https://github.com/vivekschaudhary/home-app/pull/116\n"
+               "see also https://github.com/vivekschaudhary/home-app/pull/116 and "
+               "https://gitlab.com/g/p/merge_requests/7")
+        urls = cockpit._extract_pr_urls(txt)
+        self.assertEqual(urls, [
+            "https://github.com/vivekschaudhary/home-app/pull/116",
+            "https://gitlab.com/g/p/merge_requests/7"])
+        self.assertEqual(cockpit._extract_pr_urls(""), [])
+
+    def test_changes_link_gating(self):
+        self.assertIn("/changes?run=r1", cockpit._changes_link("r1"))
+        self.assertEqual(cockpit._changes_link(""), "")
+
     def test_awaiting_card_has_review_link(self):
         runs = {"r1": {"run_id": "triage--no-bet--20260625T1", "project": "p",
                        "workflow": "triage", "project_dir": self.td, "ended": False,

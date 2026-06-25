@@ -10,6 +10,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`changes ↗` — the real deliverables (PRs, files, commits) per run (#142).** `review ↗` (step artifacts) and `log ↗` (run stdout) both show the agent's *narration* and look alike; neither points to what was actually **produced**. New `GET /changes?run=<id>` shows: **PR/MR URLs** scraped from the run's artifacts (clickable), **commits** on the work branch, **files changed** (`diff --stat` vs base), and **new/untracked files** — so you can jump straight to PR #116 or see the touched files. A `changes ↗` link sits on every run card alongside review/log. +2 tests.
+
+### Added
+
 - **Gate cards link to the artifact for review before you decide (#136).** An awaiting gate asked you to **approve/reject blind** — no way to read what was produced. Now each ⏸ gate card has a **`review ↗`** link → `GET /doc?run=<id>` lists the run's step artifacts (`<project_dir>/docs/orchestrator-runs/<workflow>/*.md`) and renders one inline, so you read the brief/output *before* approving. Run-id + filename validated (no traversal). (Caught live: a `create-brief` gate was approved on a PM step that had actually *refused* — invisible without this.)
 
 ### Fixed

@@ -498,7 +498,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
                  f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>"
-                 f"{_doc_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}{act}</div>")
+                 f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}{act}</div>")
 
     # ▶ In flight (+ step plan)
     p.append(f"<h2>▶ In flight ({len(in_flight)})</h2>")
@@ -510,7 +510,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         total = len(rows) if rows else 0
         cur = r.get("current_step")
         head = f"<span class='loc'>{loc}</span>" + (f" <span class='muted'>step {cur}/{total}</span>" if cur and total else "")
-        head += _log_link(r.get("run_id"), actions)
+        head += _changes_link(r.get("run_id")) + _log_link(r.get("run_id"), actions)
         p.append(f"<div class='run'>{head}<ul class='steps'>")
         for n, status, label, dur in rows:
             cls = _HTML_GLYPH_CLASS.get(status, "pending")
@@ -530,7 +530,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         mark = "✓" if r.get("status") == "completed" else "■"
         p.append(f"<div class='run'>{mark} <span class='loc'>{loc}</span> "
                  f"<span class='muted'>{_esc(r.get('status'))}: {_esc(r.get('reason'))}</span>"
-                 f"{_log_link(r.get('run_id'), actions)}</div>")
+                 f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}</div>")
 
     # 💰 Spend
     s = spend_summary(vals)
@@ -666,6 +666,29 @@ def _doc_link(run_id) -> str:
     if not run_id:
         return ""
     return f"<a class='lg' href='/doc?run={_esc(run_id)}'>review ↗</a>"
+
+
+def _changes_link(run_id) -> str:
+    """A 'changes' link to /changes?run=<id> (#142) — the real DELIVERABLES (PR
+    URLs, files changed, commits), distinct from the agent narration in review/log."""
+    if not run_id:
+        return ""
+    return f"<a class='lg' href='/changes?run={_esc(run_id)}'>changes ↗</a>"
+
+
+_PR_URL_RE = _re.compile(
+    r"https?://(?:github\.com|gitlab\.com|bitbucket\.org)/[\w.\-]+/[\w.\-]+/"
+    r"(?:pull|merge_requests|pull-requests)/\d+")
+
+
+def _extract_pr_urls(text: str) -> list:
+    """De-duped PR/MR URLs found in run artifacts (#142). Agents print the PR they
+    open (e.g. 'PR #116 open: https://github.com/.../pull/116')."""
+    out = []
+    for u in _PR_URL_RE.findall(text or ""):
+        if u not in out:
+            out.append(u)
+    return out
 
 
 def _run_artifact_dir(run: dict):
@@ -875,12 +898,74 @@ def _serve(events_path, cdir, project_filter, limit, port,
             self.end_headers()
             self.wfile.write(page)
 
+        def _serve_changes(self):
+            # #142: the real DELIVERABLES — PR URLs (from artifacts) + git changes
+            # (commits / files / untracked) in the project — distinct from the
+            # agent narration in review/log.
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            rid = q.get("run", [""])[0]
+            if not rid or not _RUN_ID_RE.match(rid):
+                self.send_error(404)
+                return
+            run = fold_runs(ev.load_events(events_path)).get(rid)
+            pdir = run.get("project_dir") if run else None
+            urls, ddir = [], (_run_artifact_dir(run) if run else None)
+            if ddir and ddir.is_dir():
+                for f in sorted(ddir.glob("*.md")):
+                    for u in _extract_pr_urls(f.read_text(errors="replace")):
+                        if u not in urls:
+                            urls.append(u)
+
+            def git(*a):
+                try:
+                    return subprocess.run(["git", "-C", str(pdir), *a],
+                                          capture_output=True, text=True, timeout=20).stdout
+                except Exception:
+                    return ""
+            branch = commits = stat = untracked = ""
+            if pdir and Path(pdir).is_dir():
+                branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
+                base = next((b for b in ("origin/main", "main", "origin/master", "master")
+                             if git("rev-parse", "--verify", "--quiet", b).strip()), "")
+                if base:
+                    commits = git("log", "--oneline", f"{base}..HEAD")
+                    stat = git("diff", "--stat", f"{base}...HEAD")
+                untracked = "\n".join(l for l in git("status", "--porcelain").splitlines()
+                                      if l.startswith("??"))
+
+            def sec(title, body):
+                inner = f"<pre>{_esc(body)}</pre>" if body.strip() else "<div class='muted'>none</div>"
+                return f"<h3>{_esc(title)}</h3>{inner}"
+            pr_html = "".join(
+                f"<div><a href='{_esc(u)}' target='_blank' rel='noopener'>{_esc(u)}</a></div>"
+                for u in urls) or "<div class='muted'>none found in artifacts</div>"
+            page = (
+                "<!doctype html><meta charset='utf-8'><title>changes</title>"
+                "<style>body{background:#0f1115;color:#e6e6e6;margin:0;padding:16px;"
+                "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}a{color:#58a6ff}"
+                "h3{font-size:13px;border-bottom:1px solid #2a2e37;padding-bottom:4px;margin:18px 0 8px}"
+                ".muted{color:#8a8f98}pre{white-space:pre-wrap;background:#161a22;padding:10px;border-radius:8px}</style>"
+                f"<a href='/'>← cockpit</a> · <b>{_esc(rid)}</b> · branch <b>{_esc(branch or '?')}</b>"
+                f"<h3>Pull requests</h3>{pr_html}"
+                f"{sec('Commits on this branch', commits)}"
+                f"{sec('Files changed (diff --stat vs base)', stat)}"
+                f"{sec('New / untracked files', untracked)}"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
         def do_GET(self):
             if self.path.startswith("/log"):
                 self._serve_log()
                 return
             if self.path.startswith("/doc"):
                 self._serve_doc()
+                return
+            if self.path.startswith("/changes"):
+                self._serve_changes()
                 return
             if self.path not in ("/", "/index.html"):
                 self.send_error(404)

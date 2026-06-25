@@ -3537,3 +3537,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Still open (declared):** tool-capable codex/gemini CLI host (so the reviewer fetches the PR itself); host-context isolation; #129 stale-bucketing + streaming non-Claude host events.
 
 **Files touched (4):** `compass/orchestrator/hosts/router.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_claude_code.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counters: #140 + #141. **Retro #026 still due (#123–#127).** Every claude-code agent now executes in the repo, and you can watch it live.
+
+### 2026-06-25 — changes ↗: the real deliverables per run (#142)
+
+**Trigger origin (Principle #19):** **DRI directive at a live gate.** Reviewing an awaiting gate: "Review and log appeared but they both seem to point to the same log. Keep them as is, but also point to any files that were created — PRs, product artifacts, etc." `review ↗` (step artifacts) + `log ↗` (run stdout) both show the agent's *narration*; neither surfaces the actual output.
+
+**What shipped:** a 3rd per-run view — **`GET /changes?run=<id>`** + a **`changes ↗`** link on every card. It shows: **PR/MR URLs** scraped from the run's artifacts (`_extract_pr_urls`, clickable, de-duped), **commits** on the work branch (`git log <base>..HEAD`), **files changed** (`git diff --stat <base>...HEAD`), and **new/untracked files** (`git status --porcelain`). So you jump straight to the PR or see exactly which files the run touched, separate from the narration. Run-id validated; localhost-only.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **233 pass** (+2: `_extract_pr_urls` de-dupe across github/gitlab + empty; `_changes_link` gating). consistency-check CONSISTENT.
+
+**Validated in the same session:** a live `/fix` opened **PR #116** and the engineer printed its URL — exactly what `changes ↗` now surfaces clickable. (That run also confirmed #138: the reviewer posted 7 real findings on the injected diff, incl. catching an a11y regression from the earlier welcome-back fix; and #125: tech-writer correctly emitted `REFUSE:` because the PR wasn't merged → dispatch-on-outcome halted.)
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #142. **Retro #026 still due (#123–#127).** review = what it said · log = how it ran · changes = what it shipped.
