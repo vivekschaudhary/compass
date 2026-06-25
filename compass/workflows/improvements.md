@@ -3561,3 +3561,19 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **236 pass** (+3: branches from main not a leftover branch; reuses the branch on resume; non-git → None — real temp-git-repo integration tests). The pre-existing test that encoded the old reuse-any-branch behavior was updated to the #143 contract. consistency-check CONSISTENT.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_tools.py` (+ CHANGELOG + this file). Counter: #143. **Retro #026 still due (#123–#127).** No fix can stack on a stale branch again — the root cause of the PR #116 conflict.
+
+### 2026-06-25 — codify [reproduce-before-diagnose] + wire it into /fix (#144)
+
+**Trigger origin (Principle #19):** **DRI post-mortem on the PR #116 fix.** The run *looked* successful end-to-end but the result was glitchy: the orchestrator diagnosed a **freshness** bug ("balances stale → force a live sync") and built ~500 lines of correct machinery for a problem that didn't exist — the real fix was a **one-field UI change** (Plaid `current`, which excludes pending, → `available`, which includes the pending payroll deposit). The DRI named four process failures and mapped each to a guardrail. The single most diagnostic fact — **the delta equalled a pending transaction** — was never captured, because the orchestrator reasoned about the pipeline instead of looking at the values.
+
+**The four failures → guardrails:**
+1. **Theorized from code** → for a wrong-value bug, capture **observed value + source-of-truth + delta** from a real repro first (the delta names the cause). "Triage from the code" ≠ "theorize from the code"; the real numbers are exactly what code can't reveal.
+2. **Resolved ambiguity to the first plausible reading** (+ anchored on a true-but-irrelevant staleness defect) → **enumerate candidate causes (stale / wrong-field / wrong-calc) and kill each with evidence.**
+3. **Self-confirming test** ("the refresh event is sent" — passes whether or not the balance is ever right) → the regression test must **reproduce the user's observable symptom, not the machinery built.**
+4. **Complexity creep** (one-field bug → endpoint + polling + 120s timeout) → **proportionality check: a fix that dwarfs the symptom is a wrong-layer smell.**
+
+**What shipped:** new canon Compass-original **`reproduce-before-diagnose`** (#25, **10th enforcement member**; catalog 24→25) with the 4 named anti-patterns (`theorize-from-code` · `anchor-on-true-but-irrelevant` · `self-confirming-test` · `wrong-layer-when-fix-dwarfs-symptom`). Wired into `engineer.triage-and-fix` (gate: capture value/delta + enumerate causes; step 3 sharpened to symptom-test; step 4 proportionality stop; postcondition updated) and `reviewer.review-pr` (new step 4b: right-layer + symptom-test check → ISSUE/BLOCKER). **Distinct from `[per-surface-vertical-test]`:** both fight tests that validate the builder's assumptions instead of the user's reality, at different scopes.
+
+**Verification:** consistency-check CONSISTENT (catalog 25 matches); 236 tests (no test impact — canon + agent prose). engineer/reviewer over the *ChatGPT* cap (WARN) but neither targets chatgpt → N/A.
+
+**Files touched (5):** `compass/framework/canon.md` · `AGENTS.md` · `compass/agents/engineer.md` · `compass/agents/reviewer.md` · `CHANGELOG.md` (+ this file). Counter: #144. **Retros #027–#029 owed (#128–#143).** The deepest consumer signal of the session — a true-but-irrelevant finding that *felt* like progress is now a named, gated anti-pattern.

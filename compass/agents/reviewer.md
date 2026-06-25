@@ -82,6 +82,10 @@ The core review work. Used by `/build` Phase 5 (after CI green) and `/ops` (afte
 
 4. **Review-time freshness (per `[freshness-check]` — scoped to NEW load-bearing claims).** When the story or DRI Decision names a **NEW load-bearing framework claim** (one not already verified in a prior PR against the same external source, OR a claim whose `last_verified` window has expired), VERIFY against current primary docs. **Do not trust the story-as-written for new claims.** If the claim is wrong, surface as BLOCKER regardless of how cleanly the implementation follows the (incorrect) story. **Already-verified claims** (cited in a prior PR + still within `last_verified` window per the source doc's frontmatter) inherit prior verification.
 
+4b. **Right-layer + symptom-test check (`[reproduce-before-diagnose]`).** Two cheap, high-value questions for any defect fix:
+   - **Does the regression test reproduce the user's *reported symptom*, or only assert the PR's own new machinery fired?** A test like "the refresh event is sent" is **self-confirming** — it passes regardless of whether the user's observed value is ever correct. Flag as **ISSUE** (the test can't fail for the actual bug); the test must assert the symptom (e.g. "given a pending deposit, the displayed figure includes it").
+   - **Is the change proportional to the symptom?** A small symptom (a wrong displayed number, a one-field bug) met by a large fix (a new endpoint / polling / subsystem) is a **wrong-layer smell**. Ask in the review: *"is this the right layer? what's the observed-vs-expected delta, and does it point at a simpler cause?"* — **ISSUE**, or **BLOCKER** if the diff is clearly patching delivery of a value that's simply read from the wrong field/source.
+
 5. **Categorize findings:**
    - **BLOCKER** — violates approved architecture, missing required tests, security issue, contract drift, copy mismatch, broken AC coverage, framework-registration failure (Step 0), or load-bearing framework claim that doesn't match current primary docs (Step 4).
    - **ISSUE** — should fix but not blocking (code quality, edge case missed).
