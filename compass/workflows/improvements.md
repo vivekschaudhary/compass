@@ -3453,3 +3453,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Watch-for (logged, not fixed):** the automation agent was *blocked* (asked "which project is this file in?") but phrased it as a question, not a `REFUSE:` sentinel — so dispatch-on-outcome (#125) didn't halt and the run cascaded to step 3. Agents need to emit the sentinel when blocked; #125's reach depends on agent-file adoption.
 
 **Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #132. **Retro #026 still due (#123–#127).** The CLI agent now works in the repo it's fixing, and the cost line reads honestly as free.
+
+### 2026-06-24 — dashboard runs are observable: per-run logs in the browser (#133)
+
+**Trigger origin (Principle #19):** **DRI directive.** "Even if [the terminal run] works — the orchestrator should work from the html page as well." Launch + gate-approval already worked from the browser (#118/#119), but dashboard-spawned runs piped output to `/dev/null`, so a blocked agent or a silent (non-Claude) reviewer step was invisible from the page — you were forced back to the terminal. That's not "working from HTML."
+
+**What shipped (the log-capture slice of #129):** the cockpit now **mints the run id** for `POST /run` (matching run.py's format) — reusing the #121 `--run-id` plumbing — so it can **capture the run's stdout+stderr** to `$COMPASS_HOME/orchestrator/runs/<run_id>.log` (append, line-buffered; `/decide` resumes append to the same file). New **`GET /log?run=<id>`** serves a live, auto-refreshing tail (last 64KB); a **`log ↗`** link sits on every run card (awaiting / in-flight / done). Run-id is regex-validated (no path traversal); localhost-only; the `--run-id` arg now applies to both actions (`_build_run_argv` refactor).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **221 pass** (+3: `_run_log_path` valid/invalid/traversal + `_log_link` gating; `/run` pins `--run-id`; render shows `/log` links only in actionable mode). consistency-check CONSISTENT.
+
+**Still open from #129:** stale-run bucketing + streaming non-Claude host events (the reviewer step still has no live output of its own — but its log file now at least captures the final dispatch result/errors).
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #133. **Retro #026 still due (#123–#127).** The dashboard can now launch, watch (spinner + timing), approve, AND read what a run actually did — a complete loop from the browser.

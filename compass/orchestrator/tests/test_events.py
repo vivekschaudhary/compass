@@ -534,6 +534,33 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertIn("triage", names)
         self.assertNotIn("advance", names)
 
+    def test_run_log_path_and_link(self):
+        # #133: valid run id → a log path under runs/; invalid id → None (no traversal)
+        lp = cockpit._run_log_path("triage--no-bet--20260625T010101")
+        self.assertIsNotNone(lp)
+        self.assertTrue(str(lp).endswith("orchestrator/runs/triage--no-bet--20260625T010101.log"))
+        self.assertIsNone(cockpit._run_log_path("../../etc/passwd"))
+        self.assertIsNone(cockpit._run_log_path(""))
+        # link shown only in actionable mode
+        self.assertIn("/log?run=r1", cockpit._log_link("r1", True))
+        self.assertEqual(cockpit._log_link("r1", False), "")
+
+    def test_run_argv_pins_run_id_for_launch(self):
+        # #133: a /run with a minted run_id passes --run-id (so output → named log)
+        argv = cockpit._build_run_argv(
+            "run", {"workflow": "triage", "project_dir": self.td,
+                    "run_id": "triage--no-bet--20260625T010101"}, self.defaults)
+        self.assertEqual(argv[argv.index("--run-id") + 1], "triage--no-bet--20260625T010101")
+
+    def test_render_html_shows_log_links_in_actionable_mode(self):
+        runs = {"r1": {"run_id": "triage--no-bet--20260625T1", "project": "p",
+                       "workflow": "triage", "project_dir": self.td, "ended": True,
+                       "status": "completed", "reason": "done", "steps": {}, "open_gate": None}}
+        on = cockpit.render_html(runs, actions=True, default_project_dir=self.td)
+        off = cockpit.render_html(runs, actions=False)
+        self.assertIn("/log?run=triage--no-bet--20260625T1", on)
+        self.assertNotIn("/log?run=", off)
+
     def test_render_html_actions_have_confirm_and_disable(self):
         # #122: every action form confirms + `_act` disables all buttons on submit
         runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",

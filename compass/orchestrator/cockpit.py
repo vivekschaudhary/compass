@@ -368,6 +368,8 @@ _HTML_CSS = """
   @keyframes spin{to{transform:rotate(1turn)}}
   .running .g{color:#58a6ff;display:inline-block;animation:spin 1s linear infinite}
   .dur{color:#6e7681;font-size:11px;margin-left:6px}
+  .lg{color:#58a6ff;font-size:11px;margin-left:8px;text-decoration:none}
+  .lg:hover{text-decoration:underline}
   .pending{color:#8a8f98}
   .spend{color:#b8c0cc} .empty{color:#8a8f98}
   form.act{display:inline}
@@ -496,7 +498,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
                  f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>"
-                 f"{act}</div>")
+                 f"{_log_link(r.get('run_id'), actions)}{act}</div>")
 
     # ▶ In flight (+ step plan)
     p.append(f"<h2>▶ In flight ({len(in_flight)})</h2>")
@@ -508,6 +510,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         total = len(rows) if rows else 0
         cur = r.get("current_step")
         head = f"<span class='loc'>{loc}</span>" + (f" <span class='muted'>step {cur}/{total}</span>" if cur and total else "")
+        head += _log_link(r.get("run_id"), actions)
         p.append(f"<div class='run'>{head}<ul class='steps'>")
         for n, status, label, dur in rows:
             cls = _HTML_GLYPH_CLASS.get(status, "pending")
@@ -526,7 +529,8 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
         mark = "✓" if r.get("status") == "completed" else "■"
         p.append(f"<div class='run'>{mark} <span class='loc'>{loc}</span> "
-                 f"<span class='muted'>{_esc(r.get('status'))}: {_esc(r.get('reason'))}</span></div>")
+                 f"<span class='muted'>{_esc(r.get('status'))}: {_esc(r.get('reason'))}</span>"
+                 f"{_log_link(r.get('run_id'), actions)}</div>")
 
     # 💰 Spend
     s = spend_summary(vals)
@@ -634,14 +638,33 @@ def _build_run_argv(action, params, defaults):
         if not decide:
             return ("error", "missing decision")
         argv += ["--from-step", step, "--decide", decide]
-        # #121: continue the SAME run so the gate clears from ⏸ awaiting (else the
-        # resume forks a new run_id and the paused run lingers as a duplicate).
-        rid = (params.get("run_id") or "").strip()
-        if rid and _RUN_ID_RE.match(rid):
-            argv += ["--run-id", rid]
     else:
         return ("error", f"unknown action: {action!r}")
+    # --run-id pins the run identity for BOTH actions: /decide continues the same
+    # run so its gate clears (#121); /run uses a cockpit-minted id so its output
+    # can be captured to a named log the browser can show (#133).
+    rid = (params.get("run_id") or "").strip()
+    if rid and _RUN_ID_RE.match(rid):
+        argv += ["--run-id", rid]
     return argv
+
+
+def _log_link(run_id, actions) -> str:
+    """A 'log' link to /log?run=<id> (#133), shown only in actionable mode where
+    dashboard-launched runs capture output. 404s gracefully for terminal runs."""
+    if not actions or not run_id:
+        return ""
+    return f"<a class='lg' href='/log?run={_esc(run_id)}'>log ↗</a>"
+
+
+def _run_log_path(run_id: str):
+    """Per-run log file for dashboard-launched runs (#133):
+    $COMPASS_HOME/orchestrator/runs/<run_id>.log. None for an invalid id (no
+    path traversal). Lets the cockpit show what a run actually did, instead of
+    Popen'ing its output to /dev/null (the visibility gap behind #129)."""
+    if not run_id or not _RUN_ID_RE.match(run_id):
+        return None
+    return ev.compass_home() / "orchestrator" / "runs" / f"{run_id}.log"
 
 
 def _gate_already_actioned(events: list, run_id: str) -> bool:
@@ -766,7 +789,37 @@ def _serve(events_path, cdir, project_filter, limit, port,
                 "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None}
 
     class Handler(BaseHTTPRequestHandler):
+        def _serve_log(self):
+            # #133: show a dashboard run's captured output in the browser (last
+            # 64KB, auto-refreshing) so launches aren't a black box.
+            rid = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query).get("run", [""])[0]
+            lp = _run_log_path(rid)
+            if not lp or not lp.exists():
+                self.send_error(404, "no captured log for this run "
+                                     "(only dashboard-launched runs are logged)")
+                return
+            tail = lp.read_text(errors="replace")[-65536:]
+            page = (
+                "<!doctype html><meta charset='utf-8'><title>log</title>"
+                "<meta http-equiv='refresh' content='4'>"
+                "<style>body{background:#0f1115;color:#e6e6e6;margin:0;padding:16px;"
+                "font:12px ui-monospace,SFMono-Regular,Menlo,monospace}a{color:#58a6ff}"
+                "pre{white-space:pre-wrap;word-break:break-word}</style>"
+                f"<a href='/'>← cockpit</a> · <b>{_esc(rid)}</b> "
+                "<span style='color:#8a8f98'>(last 64KB · auto-refresh 4s)</span>"
+                f"<pre>{_esc(tail)}</pre>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
         def do_GET(self):
+            if self.path.startswith("/log"):
+                self._serve_log()
+                return
             if self.path not in ("/", "/index.html"):
                 self.send_error(404)
                 return
@@ -792,6 +845,12 @@ def _serve(events_path, cdir, project_filter, limit, port,
             n = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(n).decode("utf-8") if n else ""
             form = {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+            if action == "run":
+                # #133: mint the run id (matching run.py's format) so the run's
+                # output can be captured to a named log the browser can show.
+                wf = (form.get("workflow") or "").strip()
+                bet = (form.get("bet") or "").strip() or "no-bet"
+                form["run_id"] = f"{wf}--{bet}--{datetime.now().strftime('%Y%m%dT%H%M%S')}"
             # #122: don't fork a duplicate resume from a stale page — if this
             # run's gate was already decided, tell the user instead of spawning.
             if action == "decide" and _gate_already_actioned(
@@ -808,9 +867,19 @@ def _serve(events_path, cdir, project_filter, limit, port,
             if isinstance(argv, tuple) and argv[0] == "error":
                 self.send_error(400, argv[1])
                 return
-            # detached spawn — don't block the request; the run streams to the spine
-            subprocess.Popen(argv, env=os.environ.copy(),
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # #133: capture the run's output to a per-run log (not /dev/null) so
+            # the dashboard isn't blind. Detached spawn — don't block the request.
+            lp = _run_log_path(form.get("run_id", ""))
+            out = subprocess.DEVNULL
+            if lp:
+                lp.parent.mkdir(parents=True, exist_ok=True)
+                out = open(lp, "a", buffering=1)  # append: /decide resumes same run
+            try:
+                subprocess.Popen(argv, env=os.environ.copy(),
+                                 stdout=out, stderr=subprocess.STDOUT)
+            finally:
+                if out is not subprocess.DEVNULL:
+                    out.close()  # the child has its own dup
             self.send_response(303)
             self.send_header("Location", "/")
             self.end_headers()
