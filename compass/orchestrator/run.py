@@ -146,6 +146,24 @@ def _merge_pr(project_dir, branch):
     return (False, f"merge failed for PR {pr.get('url')}: {err or 'unknown'} — check CI/conflicts, merge manually")
 
 
+_CODE_WORKFLOWS = ("fix", "build", "ops")
+
+
+def _delivery_warning(workflow_name: str, leftover: list) -> str:
+    """#145/#150: the end-of-run 'work not delivered' warning, tailored by workflow.
+    Code workflows (fix/build/ops) ship via PR → deploy; doc workflows (create-brief
+    /-story/-architecture, setup-*) deliver the artifact itself, so 'no deploy' is
+    nonsensical — just say 'commit the artifacts'."""
+    shown = ", ".join(leftover[:5]) + ("…" if len(leftover) > 5 else "")
+    if workflow_name in _CODE_WORKFLOWS:
+        return (f"⚠ DELIVERY INCOMPLETE — {len(leftover)} code file(s) left "
+                f"uncommitted ({shown}). The work is NOT delivered: no commit → "
+                f"no PR → no deploy. Commit the change + open a PR before merge.")
+    return (f"⚠ ARTIFACTS UNCOMMITTED — {len(leftover)} file(s) written but not "
+            f"committed ({shown}). The work is on disk but unsaved — commit the "
+            f"artifact(s) (e.g. the brief / status docs) to keep it.")
+
+
 def _with_review_context(user_message: str, diff: str) -> str:
     """Prepend the code-under-review diff so a tool-less reviewer can actually
     review it (#138). No-op when there's no diff."""
@@ -1500,10 +1518,7 @@ def _run_workflow(
     if allow_write and work_branch and not handed_off:
         leftover = _uncommitted_code(project_dir)
         if leftover:
-            shown = ", ".join(leftover[:5]) + ("…" if len(leftover) > 5 else "")
-            warn = (f"⚠ DELIVERY INCOMPLETE — {len(leftover)} code file(s) left "
-                    f"uncommitted ({shown}). The work is NOT delivered: no commit → "
-                    f"no PR → no deploy. Commit the change + open a PR before merge.")
+            warn = _delivery_warning(workflow_name, leftover)
             print("\n" + warn, file=sys.stderr)
             emit(ev.NOTE, text=warn)
 

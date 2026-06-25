@@ -602,6 +602,14 @@ class TestDeliveryCheck(unittest.TestCase):
             self.assertFalse(any("orchestrator-runs" in p for p in left))  # bookkeeping ignored
             self.assertFalse(any(p.endswith(".jsonl") for p in left))
 
+    def test_delivery_warning_workflow_aware(self):
+        from compass.orchestrator import run as runmod
+        code = runmod._delivery_warning("fix", ["AccountCard.tsx"])
+        doc = runmod._delivery_warning("create-brief", ["docs/bets/WLT-26/brief.md"])
+        self.assertIn("no deploy", code)            # code workflow → PR/deploy framing
+        self.assertNotIn("no deploy", doc)          # doc workflow → no deploy framing
+        self.assertIn("commit", doc.lower())
+
     def test_clean_tree_returns_empty(self):
         import subprocess
         with tempfile.TemporaryDirectory() as d:

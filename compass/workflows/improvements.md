@@ -3635,3 +3635,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **247 pass** (+4: classify done vs the 7 incompletion cases; fold incomplete→failed renders ✗ + `class='failed'`; done→✓). consistency-check CONSISTENT.
 
 **Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #149. **(#029 batch: #148–#157.)** A run is now only as green as the steps that actually did their job.
+
+### 2026-06-25 — delivery warning is workflow-aware (#150)
+
+**Trigger origin (Principle #19):** **live `create-brief` re-run** (verifying #148). With host-isolation in place, `delivery-manager` finally **wrote `docs/status.md`** (the confabulated permission block was gone) — but the end-of-run #145 check then told a *brief* run "no commit → no PR → **no deploy**," which is nonsensical: a brief's deliverable is the doc, not a deployable. The DRI surfaced it.
+
+**What shipped:** `_delivery_warning(workflow_name, leftover)` (extracted + tested) tailors the message — code workflows (`fix`/`build`/`ops`) keep `⚠ DELIVERY INCOMPLETE … no PR → no deploy`; doc workflows (`create-brief`/`-story`/`-architecture`, `setup-*`) get `⚠ ARTIFACTS UNCOMMITTED … commit the artifact(s) to keep it`. The check still fires (uncommitted is still flagged loudly) — only the framing is right now.
+
+**Validated in the same run:** #148 confirmed (status.md written, no block) · #145 confirmed (uncommitted docs flagged) · #149 would mark step 4 ✓ (real work, no incompletion phrases).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **248 pass** (+1: code-workflow warning says "no deploy", doc-workflow doesn't). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #150. **(#029 batch: #148–#157.)** A brief is "delivered" by committing it, not deploying it.
