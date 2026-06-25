@@ -498,7 +498,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
                  f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>"
-                 f"{_log_link(r.get('run_id'), actions)}{act}</div>")
+                 f"{_doc_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}{act}</div>")
 
     # ▶ In flight (+ step plan)
     p.append(f"<h2>▶ In flight ({len(in_flight)})</h2>")
@@ -657,6 +657,24 @@ def _log_link(run_id, actions) -> str:
     return f"<a class='lg' href='/log?run={_esc(run_id)}'>log ↗</a>"
 
 
+def _doc_link(run_id) -> str:
+    """A 'review' link to /doc?run=<id> (#136) — the run's artifacts, so you can
+    read what was produced before approving/rejecting a gate."""
+    if not run_id:
+        return ""
+    return f"<a class='lg' href='/doc?run={_esc(run_id)}'>review ↗</a>"
+
+
+def _run_artifact_dir(run: dict):
+    """The dir holding a run's step artifacts (#136):
+    <project_dir>/docs/orchestrator-runs/<workflow>/. None if unknown."""
+    pdir = run.get("project_dir") if run else None
+    wf = run.get("workflow") if run else None
+    if not pdir or not wf:
+        return None
+    return Path(pdir) / "docs" / "orchestrator-runs" / wf
+
+
 def _run_log_path(run_id: str):
     """Per-run log file for dashboard-launched runs (#133):
     $COMPASS_HOME/orchestrator/runs/<run_id>.log. None for an invalid id (no
@@ -783,7 +801,7 @@ def _serve(events_path, cdir, project_filter, limit, port,
     import subprocess
     import urllib.parse
     from datetime import datetime, timezone
-    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     defaults = {"known": _known_workflows(cdir), "project_dir": default_project_dir,
                 "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None}
@@ -816,9 +834,50 @@ def _serve(events_path, cdir, project_filter, limit, port,
             self.end_headers()
             self.wfile.write(page)
 
+        def _serve_doc(self):
+            # #136: serve a run's step artifacts so you can read what was produced
+            # before approve/reject. Lists every step-*.md; renders one inline.
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            rid = q.get("run", [""])[0]
+            fname = q.get("f", [""])[0]
+            if not rid or not _RUN_ID_RE.match(rid):
+                self.send_error(404)
+                return
+            run = fold_runs(ev.load_events(events_path)).get(rid)
+            ddir = _run_artifact_dir(run) if run else None
+            files = sorted(p.name for p in ddir.glob("*.md")) if ddir and ddir.is_dir() else []
+            if not files:
+                self.send_error(404, "no artifacts for this run yet")
+                return
+            # chosen file: a validated request, else the most recent
+            target = (ddir / fname) if (fname in files) else max(
+                (ddir / f for f in files), key=lambda p: p.stat().st_mtime)
+            content = target.read_text(errors="replace")[-200000:]
+            nav = " · ".join(
+                (f"<b>{_esc(f)}</b>" if (ddir / f) == target
+                 else f"<a href='/doc?run={_esc(rid)}&f={_esc(f)}'>{_esc(f)}</a>")
+                for f in files)
+            page = (
+                "<!doctype html><meta charset='utf-8'><title>artifacts</title>"
+                "<style>body{background:#0f1115;color:#e6e6e6;margin:0;padding:16px;"
+                "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}a{color:#58a6ff}"
+                "pre{white-space:pre-wrap;word-break:break-word;background:#161a22;"
+                "padding:12px;border-radius:8px}</style>"
+                f"<a href='/'>← cockpit</a> · <b>{_esc(rid)}</b><div style='margin:10px 0'>{nav}</div>"
+                f"<pre>{_esc(content)}</pre>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
         def do_GET(self):
             if self.path.startswith("/log"):
                 self._serve_log()
+                return
+            if self.path.startswith("/doc"):
+                self._serve_doc()
                 return
             if self.path not in ("/", "/index.html"):
                 self.send_error(404)
@@ -891,7 +950,9 @@ def _serve(events_path, cdir, project_filter, limit, port,
         def log_message(self, *a):  # quiet
             pass
 
-    httpd = HTTPServer(("127.0.0.1", port), Handler)
+    # #135: threaded so a dropped/slow browser connection can't wedge the whole
+    # dashboard (single-threaded HTTPServer froze on a closed-tab half-open socket).
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     mode = "actionable (launch/approve enabled)" if allow_actions else "read-only"
     print(f"Compass cockpit live → http://127.0.0.1:{port}   [{mode}]   (Ctrl-C to stop)")
     try:

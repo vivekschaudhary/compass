@@ -561,6 +561,23 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertIn("/log?run=triage--no-bet--20260625T1", on)
         self.assertNotIn("/log?run=", off)
 
+    def test_doc_link_and_artifact_dir(self):
+        # #136: review link + artifact-dir resolution
+        self.assertIn("/doc?run=r1", cockpit._doc_link("r1"))
+        self.assertEqual(cockpit._doc_link(""), "")
+        run = {"project_dir": "/proj", "workflow": "create-brief"}
+        d = cockpit._run_artifact_dir(run)
+        self.assertTrue(str(d).endswith("/proj/docs/orchestrator-runs/create-brief"))
+        self.assertIsNone(cockpit._run_artifact_dir({"project_dir": None, "workflow": "x"}))
+        self.assertIsNone(cockpit._run_artifact_dir({"project_dir": "/p"}))  # no workflow
+
+    def test_awaiting_card_has_review_link(self):
+        runs = {"r1": {"run_id": "triage--no-bet--20260625T1", "project": "p",
+                       "workflow": "triage", "project_dir": self.td, "ended": False,
+                       "steps": {}, "open_gate": {"step": 2, "kind": "hitl", "title": "g"}}}
+        html = cockpit.render_html(runs, actions=True, default_project_dir=self.td)
+        self.assertIn("/doc?run=triage--no-bet--20260625T1", html)  # review ↗ on the gate
+
     def test_render_html_actions_have_confirm_and_disable(self):
         # #122: every action form confirms + `_act` disables all buttons on submit
         runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",

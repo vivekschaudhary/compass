@@ -10,6 +10,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Gate cards link to the artifact for review before you decide (#136).** An awaiting gate asked you to **approve/reject blind** — no way to read what was produced. Now each ⏸ gate card has a **`review ↗`** link → `GET /doc?run=<id>` lists the run's step artifacts (`<project_dir>/docs/orchestrator-runs/<workflow>/*.md`) and renders one inline, so you read the brief/output *before* approving. Run-id + filename validated (no traversal). (Caught live: a `create-brief` gate was approved on a PM step that had actually *refused* — invisible without this.)
+
+### Fixed
+
+- **Cockpit server is threaded — a dropped browser can't wedge it (#135).** The single-threaded `HTTPServer` froze ("keeps loading") when a tab closed mid-request left a half-open socket blocking its one worker. Swapped to `ThreadingHTTPServer` so each request is independent; spawned runs (detached) were never affected.
+
+### Added
+
 - **Dashboard runs are observable — per-run logs in the browser (#133).** "Launch and go blind" wasn't really working *from the page*: dashboard-spawned runs piped output to `/dev/null`, so a blocked agent or a silent reviewer step was invisible unless you went back to the terminal. Now the cockpit **mints the run id** for `/run` (and reuses it for `/decide`, #121), **captures the run's stdout+stderr** to `$COMPASS_HOME/orchestrator/runs/<run_id>.log`, and serves it at **`GET /log?run=<id>`** — a `log ↗` link on every run card (awaiting / in-flight / done) opens a live, auto-refreshing tail (last 64KB). Implements the log-capture slice of #129; localhost-only, run-id validated (no path traversal). +3 tests (221 total).
 
 - **`claude-code` host: timeout so a hung `claude -p` fails loud (#131).** A real `/fix` run **deadlocked for 15+ min** at the e2e-test step — the orchestrator alive at 0% CPU with no `claude` child, because `claude -p` had hung (likely starting a dev server / watcher that held the output pipe) and the CLI host had **no timeout**, so `subprocess.run` blocked forever. Now the host spawns the CLI in its **own process group** under a timeout (default **900s**, override `COMPASS_CLAUDE_CLI_TIMEOUT`; `0` disables); on timeout it **SIGKILLs the whole tree** (CLI + anything it spawned) and raises a clear `RuntimeError` → `run.py` emits `RUN_END(halted)` with a `--from-step` resume hint. Textbook `[fail-loud-not-silent]`; pairs with #129 (stale detection). +2 tests (217 total).

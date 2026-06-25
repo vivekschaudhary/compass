@@ -3477,3 +3477,17 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Why it mattered:** this blocked **every multi-step dashboard run** — the headline feature of the #118–#133 arc. #133's log capture is what made it a 30-second diagnosis instead of another silent 15-min hang.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #134. **Retro #026 still due (#123–#127).** Dashboard-driven multi-step workflows actually run now.
+
+### 2026-06-25 — cockpit server threaded (#135) + gate cards link to the artifact (#136)
+
+**Trigger origin (Principle #19):** **live dashboard use (session).** Two issues in one sitting: (1) closing the browser tab left the cockpit "keeps loading" — the single-threaded `HTTPServer` wedged on a half-open socket; (2) the DRI asked, reviewing an awaiting gate: "it should give me a link to the doc that was created so I can review before approve/reject." The second was then *proven necessary* — a `create-brief` gate had been approved on a `pm.draft-brief` step that had actually **refused** (output was a blocker, not a brief); invisible without a review link.
+
+**What shipped:**
+- **#135** — `HTTPServer` → **`ThreadingHTTPServer`** (one line). A dropped/slow browser connection no longer blocks the dashboard's only worker; detached runs were never affected.
+- **#136** — a **`review ↗`** link on every awaiting-gate card → **`GET /doc?run=<id>`** resolves the run's `project_dir`+`workflow` (from the spine fold), lists `docs/orchestrator-runs/<workflow>/*.md`, and renders one inline (nav links to each; validated filename, no traversal). Read the artifact, *then* approve/reject.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **226 pass** (+2: `_doc_link`/`_run_artifact_dir` resolution + gating; awaiting card carries the `/doc` link). consistency-check CONSISTENT.
+
+**Surfaced (feeds #137):** the `pm.draft-brief` refusal was caused by the **claude-code host inheriting the user's global `~/.claude` memory + CLAUDE.md** — the agent read the DRI's "don't run /create-brief in the framework repo" note + acted like generic Claude Code ("I'll use the Workflow tool") instead of the PM agent, and wrongly claimed the (present, gate-approved) foundation docs were missing. Host-context isolation is the next fix.
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counters: #135 + #136. **Retro #026 still due (#123–#127).** You can now read before you decide — and the dashboard won't freeze when you close a tab.
