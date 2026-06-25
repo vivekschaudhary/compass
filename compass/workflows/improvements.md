@@ -3465,3 +3465,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Still open from #129:** stale-run bucketing + streaming non-Claude host events (the reviewer step still has no live output of its own — but its log file now at least captures the final dispatch result/errors).
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #133. **Retro #026 still due (#123–#127).** The dashboard can now launch, watch (spinner + timing), approve, AND read what a run actually did — a complete loop from the browser.
+
+### 2026-06-24 — non-interactive runs no longer deadlock on a per-step input prompt (#134)
+
+**Trigger origin (Principle #19):** **live dashboard `create-brief` (session).** The first multi-step *dashboard* run froze at step 2 for 14 min at 0% CPU. The captured log (#133, which made this diagnosable!) showed `Enter context / input for this step. End with a line containing only '.':` — `--non-interactive` (#118) suppressed HITL gates but **not** the per-step `_collect_input` prompt, so step 2 called `input()` and blocked on a tty with no typist. The earlier `/fix` only worked because it ran in a terminal where the operator typed `.` at each prompt; the dashboard path (#119) had silently never been exercised past step 1 of a prompting workflow. A `[fail-loud-not-silent]` sibling — it blocked instead of failing.
+
+**What shipped:** `_collect_input` gains a `non_interactive` param — when set (and no inline context), it returns `""` **without prompting** (step 1 still uses `--context`; later steps get nothing, which is correct for headless). Defense-in-depth: the cockpit now spawns runs with **`stdin=subprocess.DEVNULL`**, so any future stray `input()` hits EOF (already handled → break) instead of hanging on the server's tty.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **224 pass** (+3: non-interactive empty → "" without prompt; non-interactive uses inline; inline returned regardless). consistency-check CONSISTENT.
+
+**Why it mattered:** this blocked **every multi-step dashboard run** — the headline feature of the #118–#133 arc. #133's log capture is what made it a 30-second diagnosis instead of another silent 15-min hang.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #134. **Retro #026 still due (#123–#127).** Dashboard-driven multi-step workflows actually run now.

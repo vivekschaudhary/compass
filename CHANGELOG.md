@@ -18,6 +18,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Non-interactive runs no longer deadlock on a per-step input prompt (#134).** A dashboard `create-brief` froze at step 2 for 14 min (0% CPU): `--non-interactive` (#118) suppressed *HITL gates* but **not** the per-step "Enter context / input for this step" prompt, so step 2 called `input()` and blocked on a tty no one could type into. This broke **every multi-step dashboard run**. Now `_collect_input` takes `non_interactive` and returns the inline context (the initial `--context` for step 1, nothing after) **without prompting**; the cockpit also spawns runs with **`stdin=DEVNULL`** so any stray `input()` EOFs (handled) instead of hanging. +3 tests (224 total).
+
+### Fixed
+
 - **`claude-code` host runs in the target repo + clearer $0 wording (#132).** Live `/fix` evidence: the automation agent reported it couldn't read `SignInFlow.tsx` even though the file exists in the project — because the CLI host spawned `claude -p` in the **orchestrator's** working directory (the framework repo) and only *added* the project via `--add-dir`, so the agent's primary workspace was wrong. Now the host runs the CLI with **`cwd=project_dir`** (the target repo is the agent's working directory; `--add-dir` stays as a belt-and-suspenders grant). Also reworded the flat-cost NOTE so the comparison figure can't be mistaken for a charge: **`claude-code · $0 to you (subscription) · in=… out=… · ~$0.67 if billed via API`** (was "$0 marginal … ~$0.667 on API," which read as a bill). +1 test (218 total).
 
 ### Fixed

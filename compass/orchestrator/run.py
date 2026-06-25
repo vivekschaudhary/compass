@@ -282,11 +282,17 @@ def _handoff_message(target: str, project_dir, last_artifact_path=None) -> str:
     )
 
 
-def _collect_input(step_label: str, inline_context: str = "") -> str:
-    """Return user context for a step, either inline or via interactive prompt."""
+def _collect_input(step_label: str, inline_context: str = "", non_interactive: bool = False) -> str:
+    """Return user context for a step, either inline or via interactive prompt.
+    #134: in non-interactive (headless / dashboard) runs, NEVER prompt — there's
+    no terminal to type into, so `input()` would deadlock the run forever (a
+    dashboard `create-brief` froze at step 2 for 14 min on exactly this). Use the
+    inline context (the initial --context for step 1; nothing for later steps)."""
     if inline_context:
         print(f"[context] {inline_context[:120]}{'...' if len(inline_context) > 120 else ''}")
         return inline_context
+    if non_interactive:
+        return ""
     print(
         f"\nEnter context / input for this step.\n"
         f"End with a line containing only '.':\n"
@@ -1177,7 +1183,7 @@ def _run_workflow(
         inline = context if first_step else ""
         first_step = False
 
-        user_context = _collect_input(step.title, inline)
+        user_context = _collect_input(step.title, inline, non_interactive=non_interactive)
 
         # Bet catalog (#109): agents that declare `loads_bet_catalog: true` (e.g.
         # support.classify-intake) get the existing-bets list prepended so they can

@@ -481,5 +481,25 @@ class TestRefusalDetection(unittest.TestCase):
         self.assertFalse(self.is_refusal(body))
 
 
+class TestNonInteractiveInput(unittest.TestCase):
+    """#134: a headless/dashboard run must NEVER call input() — it would deadlock
+    on a tty no one can type into (a dashboard create-brief froze 14 min on this)."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.collect = runmod._collect_input
+
+    def test_non_interactive_empty_returns_blank_without_prompt(self):
+        # if this prompted it would block/EOF the test — returning "" proves no input()
+        self.assertEqual(self.collect("step", "", non_interactive=True), "")
+
+    def test_non_interactive_uses_inline_context(self):
+        self.assertEqual(self.collect("step", "the brief ask", non_interactive=True),
+                         "the brief ask")
+
+    def test_inline_context_returned_regardless(self):
+        self.assertEqual(self.collect("step", "ctx"), "ctx")
+
+
 if __name__ == "__main__":
     unittest.main()

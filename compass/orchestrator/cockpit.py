@@ -875,7 +875,11 @@ def _serve(events_path, cdir, project_filter, limit, port,
                 lp.parent.mkdir(parents=True, exist_ok=True)
                 out = open(lp, "a", buffering=1)  # append: /decide resumes same run
             try:
+                # stdin=DEVNULL (#134): a dashboard run has no terminal — if any
+                # step still tried input() it would block on the server's tty;
+                # closed stdin makes it EOF (handled) instead of hanging.
                 subprocess.Popen(argv, env=os.environ.copy(),
+                                 stdin=subprocess.DEVNULL,
                                  stdout=out, stderr=subprocess.STDOUT)
             finally:
                 if out is not subprocess.DEVNULL:
