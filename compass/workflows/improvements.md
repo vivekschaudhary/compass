@@ -3405,3 +3405,19 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **214 pass** (+1: no `http-equiv`, has guarded `location.reload`/`paused`/`activeElement`; the prior meta-refresh assertion updated). consistency-check CONSISTENT.
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #128. **Retro #026 still due (covers #123–#127); #128 opens the next batch (1 of 5 toward Retro #027).** The dashboard's Launch form is finally typeable.
+
+### 2026-06-24 — DECLARED: stale-run detection + dashboard-run visibility (#129)
+
+**Trigger origin (Principle #19):** **live dashboard use (session).** A single launched `/fix` showed **three** runs "In flight" — two were **zombies** from earlier sessions (Jun 22 + Jun 23) that were killed mid-step (Ctrl-C / API-cap crash) and so **never emitted `RUN_END`**; the cockpit can't tell a dead process from a slow one, so they lingered as active indefinitely (one frozen at `engineer.fix-bug` for ~3 days, masquerading as the user's live run). Two sibling visibility gaps surfaced in the same session: (a) **dashboard-launched runs send stdout/stderr to `/dev/null`** (the `Popen` in `_serve`), so there's no live log for them — only the spine; (b) **the OpenAI/Gemini host adapters don't emit `on_event`**, so a reviewer step shows "running" with zero detail until it returns.
+
+**DECLARED (not built) — the fix this slice names, per `[declare-not-implement]`:**
+- **Stale bucketing in the cockpit.** `fold_runs` already has `last_ts`; render in-flight runs in two groups — **active** (recent events) vs **⚠ stalled** (no events for > a threshold, default ~30m → process likely gone) — so zombies drop out of the active list instead of impersonating live runs. Non-destructive + self-correcting (a killed run *looks* killed). A pure `_is_stale(run, now, threshold)` + a render bucket; needs `now` passed into `render_html` (today only a formatted `snapshot_ts` string is passed). This is `[fail-loud-not-silent]` applied to the cockpit: an abandoned run should *look* abandoned, not silently-active.
+- **Optional: a "close stalled" action** (the manual seed used this session — append `run_end(halted, "stale — process gone")` for in-flight runs older than the threshold; spares anything still emitting).
+- **Capture dashboard-run logs** — tee each `Popen`'d run's output to `~/.compass/orchestrator/runs/<run_id>.log` instead of `/dev/null`, surfaced from the `--run` view.
+- **Stream non-Claude host events** — give `openai.py`/`gemini_api.py` the same `on_event` usage/turn emission Claude has (pairs with the #120 CLI-host `stream-json` follow-up) so the reviewer step isn't a black box.
+
+**Manual workaround shipped this session (not committed — ad-hoc script):** a staleness sweep that appends `run_end(halted)` for any in-flight run with no events for >30m, sparing live ones. Used to clear the two home-app zombies.
+
+**Verification:** n/a — declared. No code change this entry.
+
+**Files touched (1):** `compass/workflows/improvements.md` (this entry) (+ `compass/framework/mvp.md` roadmap). Counter: #129 (declared). **Retro #026 still due (covers #123–#127).** The cockpit should make a dead run *look* dead — built when the next live session warrants it (or sooner if zombies keep confusing the feed).

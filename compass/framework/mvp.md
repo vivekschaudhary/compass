@@ -73,6 +73,7 @@ Hardening + expansion, tracked as normal improvements. 🟡 should-have · 🟢 
 | ~~Codify `[failure-direction-inversion]`~~ → codified as `[fail-loud-not-silent]` (#127) | convention | ✅ |
 | Codify `[surface-independent-mechanism]` + `[economy-by-default]` (≥3 instances) | convention | 🟢 |
 | CLI-host tool streaming (`claude -p --output-format stream-json` → per-tool events) | cockpit polish | 🟢 |
+| Stale-run detection + dashboard-run visibility (#129, declared) — bucket zombie in-flight runs as "⚠ stalled"; tee dashboard-run logs (not `/dev/null`); stream OpenAI/Gemini host events | cockpit reliability | 🟡 |
 | OpenAI/Gemini tool-use adapters (only Claude has `dispatch_with_tools`) | host parity | 🟢 |
 | Worktree isolation (#102) · testable-preview canary (#101) | build hardening | 🟢 |
 | LLM-as-driver / autonomous orchestrator (DESIGN surface 3, #87) | vision | 🟢 |
