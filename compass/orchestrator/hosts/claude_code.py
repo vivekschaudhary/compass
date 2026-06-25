@@ -143,6 +143,23 @@ def _default_runner(argv, input, cwd=None):
     return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
+# #139: Claude Code, run headless via `claude -p`, tends to return a PLAN ("here's
+# what I'd do") or wrongly claim "I can't access the codebase from this session"
+# instead of executing — even with tools + write permission (live: automation &
+# tech-writer steps planned instead of writing the test/changelog). This directive,
+# appended to tool-capable dispatches, forces execution and routes a genuine block
+# to the #125 REFUSE: sentinel (which the orchestrator halts on) rather than a plan.
+_EXECUTE_DIRECTIVE = (
+    "\n\n---\n**Orchestrator execution mode (not a chat).** You are running headless "
+    "with tools enabled (Read/Edit/Bash) and write access, in this project's working "
+    "directory. EXECUTE this task end-to-end NOW: make the actual file changes, run the "
+    "commands, and produce the artifact on disk. Do NOT return a plan, do NOT ask for "
+    "confirmation, and do NOT claim you lack access to the codebase — you are inside the "
+    "repo. If a hard precondition genuinely cannot be met, reply with a first line of "
+    "`REFUSE: <reason>` (the orchestrator halts on that) — never a vague plan."
+)
+
+
 def _run(agent_file_path, user_message, model, project_dir, allow_write,
          on_event, runner) -> str:
     emit = on_event or _default_tool_event
@@ -150,7 +167,9 @@ def _run(agent_file_path, user_message, model, project_dir, allow_write,
     argv = _build_cli_argv(model, agent_file_path, project_dir, allow_write)
     # #132: run IN the target repo so the agent can read the project's source.
     cwd = str(project_dir) if project_dir else None
-    proc = runner(argv, input=user_message, cwd=cwd)
+    # #139: tool-capable steps (project_dir set) must execute, not plan.
+    msg = user_message + _EXECUTE_DIRECTIVE if project_dir else user_message
+    proc = runner(argv, input=msg, cwd=cwd)
     out = getattr(proc, "stdout", "") or ""
     if getattr(proc, "returncode", 0) != 0:
         # The CLI reports usage-limit / auth / model errors in STDOUT (as JSON or

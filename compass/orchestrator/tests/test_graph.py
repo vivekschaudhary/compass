@@ -481,6 +481,28 @@ class TestRefusalDetection(unittest.TestCase):
         self.assertFalse(self.is_refusal(body))
 
 
+class TestReviewContext(unittest.TestCase):
+    """#138: the tool-less reviewer gets the branch diff injected as context."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.runmod = runmod
+
+    def test_with_review_context_prepends_diff(self):
+        out = self.runmod._with_review_context("REVIEW THIS", "--- a/x\n+++ b/x\n+line")
+        self.assertIn("Code under review", out)
+        self.assertIn("+line", out)
+        self.assertTrue(out.rstrip().endswith("REVIEW THIS"))
+
+    def test_with_review_context_noop_without_diff(self):
+        self.assertEqual(self.runmod._with_review_context("MSG", ""), "MSG")
+
+    def test_review_diff_graceful_on_non_git_dir(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self.runmod._review_diff(d), "")  # no git → "" not a crash
+
+
 class TestNonInteractiveInput(unittest.TestCase):
     """#134: a headless/dashboard run must NEVER call input() — it would deadlock
     on a tty no one can type into (a dashboard create-brief froze 14 min on this)."""

@@ -26,6 +26,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Tool-capable `claude-code` steps execute instead of returning a plan (#139).** Live `/fix`: step 1 (engineer) did real work + opened a PR, but steps 2 & 6 (automation/tech-writer, same host + cwd) returned *"here's the plan / I can't access the codebase from this session"* and wrote **nothing** (no e2e test, no changelog). Headless `claude -p` defaults to a planning/chat posture. The host now appends an **execution directive** to tool-capable dispatches: execute end-to-end now, make the actual changes, don't return a plan or claim missing access — and if a precondition genuinely can't be met, reply with a leading `REFUSE:` (which the orchestrator halts on, #125) rather than a vague plan. No-tools single-shot dispatches are unaffected.
+
+- **The Reviewer is given the diff to review (#138).** The reviewer runs on `codex`/`gemini` — **bare API adapters with no `gh`/filesystem/shell** — so it couldn't fetch the PR and asked the user to paste everything (cross-model review never ran). The orchestrator now fetches the **branch diff vs base** (`git diff <base>...HEAD`, capped) and injects it as `## Code under review` context for `reviewer`/`security-reviewer` steps, so the review actually happens. Graceful no-op when there's no diff / no git.
+
+### Fixed
+
 - **Non-interactive runs no longer deadlock on a per-step input prompt (#134).** A dashboard `create-brief` froze at step 2 for 14 min (0% CPU): `--non-interactive` (#118) suppressed *HITL gates* but **not** the per-step "Enter context / input for this step" prompt, so step 2 called `input()` and blocked on a tty no one could type into. This broke **every multi-step dashboard run**. Now `_collect_input` takes `non_interactive` and returns the inline context (the initial `--context` for step 1, nothing after) **without prompting**; the cockpit also spawns runs with **`stdin=DEVNULL`** so any stray `input()` EOFs (handled) instead of hanging. +3 tests (224 total).
 
 ### Fixed

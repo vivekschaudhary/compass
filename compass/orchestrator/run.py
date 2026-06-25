@@ -55,6 +55,45 @@ def _read_preferred_hosts(agent_file: Path) -> list:
     return [h.strip() for h in ph_match.group(1).split(",")]
 
 
+def _review_diff(project_dir, max_chars: int = 50000) -> str:
+    """#138: the branch diff vs its base, for the Reviewer. The reviewer runs on
+    codex/gemini — bare API adapters with NO tools (no gh/filesystem/shell), so it
+    cannot fetch the PR itself (live: Codex asked the user to paste the diff). The
+    orchestrator fetches it and injects it as context. Returns '' if unavailable."""
+    import subprocess
+    d = ""
+    for base in ("origin/main", "main", "origin/master", "master"):
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(project_dir), "diff", f"{base}...HEAD"],
+                capture_output=True, text=True, timeout=30)
+        except Exception:
+            continue
+        if r.returncode == 0 and r.stdout.strip():
+            d = r.stdout
+            break
+    if not d:  # fallback: uncommitted working-tree changes
+        try:
+            r = subprocess.run(["git", "-C", str(project_dir), "diff", "HEAD"],
+                               capture_output=True, text=True, timeout=30)
+            d = r.stdout if r.returncode == 0 else ""
+        except Exception:
+            d = ""
+    if len(d) > max_chars:
+        d = d[:max_chars] + "\n…[diff truncated]"
+    return d
+
+
+def _with_review_context(user_message: str, diff: str) -> str:
+    """Prepend the code-under-review diff so a tool-less reviewer can actually
+    review it (#138). No-op when there's no diff."""
+    if not diff:
+        return user_message
+    return ("## Code under review — `git diff` of the work branch vs its base\n"
+            "(You have no repo/PR tool access on this host; review THIS diff.)\n\n"
+            f"```diff\n{diff}\n```\n\n---\n\n" + user_message)
+
+
 def _remap_claude_cli(preferred_hosts: list) -> list:
     """#120: route Claude steps to the subscription-backed CLI host when opted in
     (--claude-cli / COMPASS_CLAUDE_HOST=cli). Remaps ONLY `claude` → `claude-code`;
@@ -1184,6 +1223,14 @@ def _run_workflow(
         first_step = False
 
         user_context = _collect_input(step.title, inline, non_interactive=non_interactive)
+
+        # #138: the Reviewer runs on a tool-less host (codex/gemini) and can't fetch
+        # the PR/diff itself — inject the branch diff so it has something to review.
+        if step.agent in ("reviewer", "security-reviewer"):
+            diff = _review_diff(project_dir)
+            if diff:
+                user_context = _with_review_context(user_context, diff)
+                print("[review] injected branch diff as context (reviewer host has no repo tools)")
 
         # Bet catalog (#109): agents that declare `loads_bet_catalog: true` (e.g.
         # support.classify-intake) get the existing-bets list prepended so they can

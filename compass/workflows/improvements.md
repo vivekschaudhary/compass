@@ -3503,3 +3503,20 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** 226 tests pass (no test change — frontmatter + docs); consistency-check CONSISTENT; `_remap_claude_cli(['claude','codex','gemini'])` → `['claude-code','codex','gemini']` confirms researcher dispatches to the subscription CLI under `--claude-cli`.
 
 **Files touched (3):** `compass/agents/researcher.md` · `AGENTS.md` · `CHANGELOG.md` (+ this file). Counter: #137. **Retro #026 still due (#123–#127).** Research defaults to a host that can actually browse and write.
+
+### 2026-06-25 — execute-not-plan (#139) + reviewer gets the diff (#138)
+
+**Trigger origin (Principle #19):** **a full live dashboard `/fix`** (accounts-balance bug). It exposed that only the *implementer* step truly worked; the scaffolding around it didn't:
+- **Step 1 (engineer)** found a real root cause (Plaid `accountsGet` cached → `accountsBalanceGet` live), committed it on a clean branch, and **opened PR #116** — fully autonomous, correct.
+- **Steps 2 & 6 (automation, tech-writer)** — same `claude-code` host + cwd — returned *"here's the plan / I can't access the codebase from this session"* and wrote **nothing** (verified: no e2e spec, no changelog on disk). Headless `claude -p` defaults to a planning/chat posture.
+- **Step 3 (reviewer on codex)** couldn't review — the openai/gemini adapters are **bare API (no `gh`/filesystem/shell)**, so Codex asked the user to paste the diff. Cross-model review never ran.
+
+**What shipped:**
+- **#139 execute-not-plan.** `claude_code._run` appends an `_EXECUTE_DIRECTIVE` to tool-capable dispatches (project_dir set): execute end-to-end now, make the real changes, don't return a plan or claim missing access, and route a genuine block to a leading `REFUSE:` (halted by #125) instead of a vague plan. No-tools single-shots unaffected.
+- **#138 reviewer gets the diff.** `run.py` fetches the branch diff (`git diff <base>...HEAD`, base ∈ origin/main·main·origin/master·master, capped 50KB, working-tree fallback) and injects it as `## Code under review` context for `reviewer`/`security-reviewer` steps — so the tool-less reviewer has the actual changes to review. Pure `_with_review_context` (tested); `_review_diff` graceful on non-git dirs.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **230 pass** (+4: execute-directive on tool steps only + REFUSE routing; `_with_review_context` prepend/no-op; `_review_diff` graceful). consistency-check CONSISTENT.
+
+**Still open (declared earlier):** a tool-capable **codex/gemini CLI host** (so the reviewer could fetch the PR itself, like the claude-code host does) — diff-injection is the pragmatic interim. And host-context isolation (the deeper reason claude-code agents drift into chat-mode).
+
+**Files touched (4):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_claude_code.py` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counters: #138 + #139. **Retro #026 still due (#123–#127).** Now the whole fix pipeline does the work — not just step 1.

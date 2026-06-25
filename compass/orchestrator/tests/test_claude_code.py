@@ -143,6 +143,22 @@ class TestDispatch(unittest.TestCase):
                                                          returncode=1),
                         on_event=lambda e: None)
 
+    def test_execute_directive_on_tool_steps_only(self):
+        # #139: tool-capable dispatch (project_dir) appends the execute directive;
+        # a no-tools single-shot does not.
+        seen = {}
+
+        def runner(argv, input, cwd=None):
+            seen.setdefault("inputs", []).append(input)
+            return _Proc(stdout=_ok_json())
+        cc.dispatch_with_tools("/x/agent.md", "t", "MSG", "/proj",
+                               allow_write=True, runner=runner, on_event=lambda e: None)
+        cc.dispatch("/x/agent.md", "t", "MSG", runner=runner, on_event=lambda e: None)
+        tool_input, plain_input = seen["inputs"]
+        self.assertIn("Orchestrator execution mode", tool_input)
+        self.assertIn("REFUSE:", tool_input)          # routes a genuine block to the sentinel
+        self.assertNotIn("Orchestrator execution mode", plain_input)
+
     def test_subscription_env_strips_api_key(self):
         # The flat-cost guarantee: the CLI must NOT see ANTHROPIC_API_KEY, or it
         # bills the metered API (and inherits its usage cap) instead of the sub.
