@@ -16,6 +16,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`claude-code` host runs in the target repo + clearer $0 wording (#132).** Live `/fix` evidence: the automation agent reported it couldn't read `SignInFlow.tsx` even though the file exists in the project — because the CLI host spawned `claude -p` in the **orchestrator's** working directory (the framework repo) and only *added* the project via `--add-dir`, so the agent's primary workspace was wrong. Now the host runs the CLI with **`cwd=project_dir`** (the target repo is the agent's working directory; `--add-dir` stays as a belt-and-suspenders grant). Also reworded the flat-cost NOTE so the comparison figure can't be mistaken for a charge: **`claude-code · $0 to you (subscription) · in=… out=… · ~$0.67 if billed via API`** (was "$0 marginal … ~$0.667 on API," which read as a bill). +1 test (218 total).
+
+### Fixed
+
 - **Cockpit auto-refresh no longer wipes the Launch form (#128).** The page used a `<meta http-equiv=refresh>` whole-page reload every 5s — which reset the context box, the workflow dropdown, and scroll/selection *mid-typing*, making the dashboard's Launch form unusable (caught in live use). Replaced with a JS reload that **pauses the instant you focus or type in the Launch form** (the timestamp line shows "paused while you compose — submit, or reload to resume") and **skips any tick while a field is focused**. The live feed still updates when you're only watching; submitting navigates away (303) and resumes the live state. +1 test; the prior meta-refresh assertion updated.
 
 ### Added

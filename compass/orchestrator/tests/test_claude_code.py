@@ -91,7 +91,7 @@ class TestDispatch(unittest.TestCase):
     def test_returns_text_and_emits_flatcost_note_no_usage(self):
         events = []
         out = cc.dispatch("/x/agent.md", "t", "do the thing",
-                          runner=lambda argv, input: _Proc(stdout=_ok_json("done")),
+                          runner=lambda argv, input, cwd=None: _Proc(stdout=_ok_json("done")),
                           on_event=events.append)
         self.assertEqual(out, "done")
         types = [e["type"] for e in events]
@@ -103,7 +103,7 @@ class TestDispatch(unittest.TestCase):
     def test_passes_user_message_on_stdin(self):
         seen = {}
 
-        def runner(argv, input):
+        def runner(argv, input, cwd=None):
             seen["input"] = input
             return _Proc(stdout=_ok_json())
         cc.dispatch("/x/agent.md", "t", "MESSAGE-BODY", runner=runner,
@@ -131,7 +131,7 @@ class TestDispatch(unittest.TestCase):
     def test_timeout_fails_loud(self):
         # a hung CLI (runner raises, simulating the timeout kill) must surface as
         # a clean RuntimeError, not block — [fail-loud-not-silent].
-        def hung(argv, input):
+        def hung(argv, input, cwd=None):
             raise RuntimeError("claude CLI exceeded the 900s timeout and was killed")
         with self.assertRaises(RuntimeError):
             cc.dispatch("/x/agent.md", "t", "x", runner=hung, on_event=lambda e: None)
@@ -139,7 +139,7 @@ class TestDispatch(unittest.TestCase):
     def test_nonzero_exit_raises_clean(self):
         with self.assertRaises(RuntimeError):
             cc.dispatch("/x/agent.md", "t", "x",
-                        runner=lambda argv, input: _Proc(stderr="not logged in",
+                        runner=lambda argv, input, cwd=None: _Proc(stderr="not logged in",
                                                          returncode=1),
                         on_event=lambda e: None)
 
@@ -167,8 +167,9 @@ class TestDispatch(unittest.TestCase):
     def test_with_tools_grants_project_dir(self):
         seen = {}
 
-        def runner(argv, input):
+        def runner(argv, input, cwd=None):
             seen["argv"] = argv
+            seen["cwd"] = cwd
             return _Proc(stdout=_ok_json())
         cc.dispatch_with_tools("/x/agent.md", "t", "x", "/proj",
                                allow_write=True, runner=runner,
@@ -176,6 +177,17 @@ class TestDispatch(unittest.TestCase):
         self.assertIn("--add-dir", seen["argv"])
         self.assertEqual(seen["argv"][seen["argv"].index("--permission-mode") + 1],
                          "bypassPermissions")
+        self.assertEqual(seen["cwd"], "/proj")   # #132: runs IN the target repo
+
+    def test_note_wording_unambiguous(self):
+        # #132: the NOTE must read as $0 to the user, not a charge
+        events = []
+        cc.dispatch("/x/agent.md", "t", "x",
+                    runner=lambda argv, input, cwd=None: _Proc(stdout=_ok_json(cost=0.67)),
+                    on_event=events.append)
+        note = next(e for e in events if e["type"] == ev.NOTE)["text"]
+        self.assertIn("$0 to you", note)
+        self.assertIn("if billed via API", note)
 
 
 class TestRouterIntegration(unittest.TestCase):

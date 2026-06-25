@@ -3441,3 +3441,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **217 pass** (+2: `_cli_timeout` default/explicit/disable/garbage; a hung runner surfaces as a clean `RuntimeError`, not a block). consistency-check CONSISTENT. (Real-CLI spawn not unit-tested — injectable `runner` keeps tests hermetic.)
 
 **Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #131. **Retro #026 still due (#123–#127).** A hung CLI step now halts loud in ≤15 min instead of blocking the orchestrator indefinitely.
+
+### 2026-06-24 — claude-code host: run in the target repo + clearer $0 wording (#132)
+
+**Trigger origin (Principle #19):** **live `/fix` (session).** Resuming the home-app fix, the automation agent reported it couldn't read `SignInFlow.tsx` ("only the stories docs subdirectory is in my allowed paths") — yet the file exists at `home-app/app/sign-in/SignInFlow.tsx`. Root cause: the CLI host spawned `claude -p` in the **orchestrator's cwd** (the framework repo, where the command was run) and only *added* the project via `--add-dir`, so the agent's primary workspace was the wrong repo. Separately, the DRI flagged the flat-cost NOTE — `~$0.667 on API` next to "$0 marginal" read as a charge.
+
+**What shipped:** (1) the host now runs the CLI with **`cwd=project_dir`** (`_default_runner` gains a `cwd` param; `_run` passes the project dir) so the agent works *inside* the target repo and can read its source; `--add-dir` stays as a redundant grant. (2) Reworded the NOTE → **`claude-code · $0 to you (subscription) · in=… out=… · ~$0.67 if billed via API`** — "$0 to you" is the actual cost, the comparison is explicitly "if billed via API," so it can't be misread as a bill.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **218 pass** (+1: cwd == project_dir for tool steps; NOTE says "$0 to you" + "if billed via API"; runner fakes updated for the `cwd` kwarg). consistency-check CONSISTENT.
+
+**Watch-for (logged, not fixed):** the automation agent was *blocked* (asked "which project is this file in?") but phrased it as a question, not a `REFUSE:` sentinel — so dispatch-on-outcome (#125) didn't halt and the run cascaded to step 3. Agents need to emit the sentinel when blocked; #125's reach depends on agent-file adoption.
+
+**Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #132. **Retro #026 still due (#123–#127).** The CLI agent now works in the repo it's fixing, and the cost line reads honestly as free.

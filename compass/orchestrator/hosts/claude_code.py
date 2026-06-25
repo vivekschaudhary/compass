@@ -110,16 +110,18 @@ def _subscription_env() -> dict:
     return env
 
 
-def _default_runner(argv, input):
+def _default_runner(argv, input, cwd=None):
     """Run the CLI, capturing stdout/stderr, under a timeout (#131). Isolated so
-    tests inject a fake. The child runs in its own process group so a hung
+    tests inject a fake. `cwd` (#132) makes the target repo the agent's working
+    directory so it can actually read the project's source (not just the orchestrator's
+    cwd + an --add-dir). The child runs in its own process group so a hung
     `claude -p` AND anything it spawned (dev server, watcher) are killed together;
     on timeout we fail loud with a RuntimeError → run.py emits RUN_END(halted) +
     a --from-step resume hint, instead of blocking the orchestrator forever."""
     timeout = _cli_timeout()
     proc = subprocess.Popen(
         argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, env=_subscription_env(), start_new_session=True,
+        text=True, env=_subscription_env(), start_new_session=True, cwd=cwd,
     )
     try:
         out, err = proc.communicate(input=input, timeout=timeout)
@@ -146,7 +148,9 @@ def _run(agent_file_path, user_message, model, project_dir, allow_write,
     emit = on_event or _default_tool_event
     runner = runner or _default_runner
     argv = _build_cli_argv(model, agent_file_path, project_dir, allow_write)
-    proc = runner(argv, input=user_message)
+    # #132: run IN the target repo so the agent can read the project's source.
+    cwd = str(project_dir) if project_dir else None
+    proc = runner(argv, input=user_message, cwd=cwd)
     out = getattr(proc, "stdout", "") or ""
     if getattr(proc, "returncode", 0) != 0:
         # The CLI reports usage-limit / auth / model errors in STDOUT (as JSON or
@@ -167,13 +171,14 @@ def _run(agent_file_path, user_message, model, project_dir, allow_write,
         )
     text, usage, cost = _parse_result(out)
     # Flat-cost NOTE (no `usage` event): keeps --max-cost from false-tripping and
-    # the cockpit 💰 Spend honest at $0 for subscription runs, while still showing
-    # the token shape + the CLI's API-equivalent cost for transparency.
+    # the cockpit 💰 Spend honest at $0 for subscription runs. #132: word it so the
+    # comparison figure can't be mistaken for a charge — "$0 to you" is the actual
+    # cost; "if billed via API" is the would-have-cost on the metered API.
     inp = usage.get("input_tokens", 0)
     out = usage.get("output_tokens", 0)
-    cost_str = f" · ~${cost:.3f} on API" if isinstance(cost, (int, float)) else ""
+    cmp_str = f" · ~${cost:.2f} if billed via API" if isinstance(cost, (int, float)) else ""
     emit({"type": ev.NOTE,
-          "text": f"claude-code (subscription, $0 marginal): in={inp} out={out}{cost_str}"})
+          "text": f"claude-code · $0 to you (subscription) · in={inp} out={out}{cmp_str}"})
     return text
 
 
