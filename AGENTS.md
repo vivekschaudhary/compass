@@ -46,8 +46,8 @@ Artifacts the framework produces live in `docs/`:
 | ------------- | ------------- | --- |
 | `engineer`, `architect`, `enterprise-architect`, `scanner`, `automation`, `tech-writer` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold/changelog-append work; pure-chat hosts are degraded |
 | `reviewer`, `security-reviewer` | `[codex, gemini]` — explicitly EXCLUDES claude | **Independent-model review** — must be a different model than the implementer (see structural rationale below) |
-| `researcher`, `ux-writer`, `designer`, `delivery-manager` | `[chatgpt, claude, codex, gemini]` | Product / research / UX / visibility work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
-| `pm` | `[claude, codex, gemini]` — chatgpt dropped (v0.3.42) | ChatGPT dropped per `[host-preference-validation]` (consumer-signal evidence ChatGPT underperformed on pm output) + it blocked a self-sufficient `decompose-bet-to-story` task under the 8000-char ChatGPT cap. Claude-first |
+| `ux-writer`, `designer`, `delivery-manager` | `[chatgpt, claude, codex, gemini]` | Product / UX / visibility work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
+| `pm`, `researcher` | `[claude, codex, gemini]` — chatgpt dropped (pm v0.3.42, researcher v0.3.53) | ChatGPT dropped per `[host-preference-validation]` (2nd instance): pm underperformed + hit the 8000-char cap; researcher on ChatGPT had **no `web_search`** and **can't write the artifact** (no file tools) — so research came back half `n/a` and undelivered. Claude-first (CLI host has web + filesystem) |
 | `support` | `[chatgpt, claude, codex, gemini]` | Incident triage runs wherever the on-call is — any host |
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent.

@@ -1,10 +1,10 @@
 ---
 name: researcher
-preferred_hosts: [chatgpt, claude, codex, gemini]
+preferred_hosts: [claude, codex, gemini]
 required_tools: [text_input, web_search]
 optional_tools: [github_write_artifact, mcp_jira, mcp_linear, mcp_sentry, mcp_analytics]
 participates_in_workflows: [setup-product, create-bet-portfolio, create-brief, create-bet-architecture]
-version: 0.3.21
+version: 0.3.53
 ---
 
 # Agent: Researcher

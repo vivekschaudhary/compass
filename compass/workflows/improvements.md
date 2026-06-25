@@ -3491,3 +3491,15 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Surfaced (feeds #137):** the `pm.draft-brief` refusal was caused by the **claude-code host inheriting the user's global `~/.claude` memory + CLAUDE.md** — the agent read the DRI's "don't run /create-brief in the framework repo" note + acted like generic Claude Code ("I'll use the Workflow tool") instead of the PM agent, and wrongly claimed the (present, gate-approved) foundation docs were missing. Host-context isolation is the next fix.
 
 **Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counters: #135 + #136. **Retro #026 still due (#123–#127).** You can now read before you decide — and the dashboard won't freeze when you close a tab.
+
+### 2026-06-25 — researcher is Claude-first; ChatGPT dropped (#137)
+
+**Trigger origin (Principle #19):** **live `create-brief` + DRI directive.** Step 1 (`researcher`) ran on ChatGPT (its `preferred_hosts` was chatgpt-first) and came back degraded: **no `web_search`** (host lacked it → User-pain / Competitive / Quantitative categories all `n/a`) and **no file write** (ChatGPT host has no tools → it pasted `research.md` into chat instead of saving it to disk). DRI: "by default lets make research part of claude as well." This is the **2nd instance of `[host-preference-validation]`** — `pm` was flipped Claude-first in v0.3.42 for the same class of reason (ChatGPT underperformed + hit the 8000-char cap).
+
+**What shipped:** `researcher.md` `preferred_hosts: [chatgpt, claude, codex, gemini]` → **`[claude, codex, gemini]`** (v0.3.53). Research now runs where it has web + filesystem; under `--claude-cli` it's flat-cost on the subscription. AGENTS.md host-preference table updated (researcher joins pm in the Claude-first row; rationale records both instances).
+
+**Pattern status:** `[host-preference-validation]` now has **2 acted-on instances** (pm v0.3.42, researcher v0.3.53). The principle — *validate a host actually has the capabilities an agent's tasks require before defaulting to it; consumer evidence overrides the generic "ChatGPT for product/browse" prior* — is candidate-ready for canon, but **not codified this batch** (reports, doesn't prescribe; surface at the next retro).
+
+**Verification:** 226 tests pass (no test change — frontmatter + docs); consistency-check CONSISTENT; `_remap_claude_cli(['claude','codex','gemini'])` → `['claude-code','codex','gemini']` confirms researcher dispatches to the subscription CLI under `--claude-cli`.
+
+**Files touched (3):** `compass/agents/researcher.md` · `AGENTS.md` · `CHANGELOG.md` (+ this file). Counter: #137. **Retro #026 still due (#123–#127).** Research defaults to a host that can actually browse and write.

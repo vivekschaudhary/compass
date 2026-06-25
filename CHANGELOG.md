@@ -52,6 +52,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`researcher` is Claude-first — ChatGPT dropped from its `preferred_hosts` (#137).** Live evidence (2nd instance of `[host-preference-validation]`, after `pm` in v0.3.42): a `create-brief` researcher step ran on **ChatGPT with no `web_search`** (half the 6 categories came back `n/a`) and **couldn't write the artifact** (ChatGPT host has no file tools — it pasted `research.md` into chat instead of saving it). `researcher.md` `preferred_hosts: [chatgpt, claude, codex, gemini]` → `[claude, codex, gemini]` (v0.3.53), so research runs where it has web + filesystem — and flat-cost on the subscription under `--claude-cli`. AGENTS.md host table updated.
+
 - **`compass/framework/mvp.md` refreshed to current truth (#123).** The MVP tracker predated the all-14-agents migration, multi-host routing, and the entire orchestrator/cockpit/dashboard arc — it still showed agents as `❌ migrate` and multi-host as "deferred to beta" (Retro #018 flagged the refresh; Retro #025's audit confirmed it). Rewritten: the original "start sending" criteria are marked **all met**; the agent pack shows all 14 migrated; shipped-beyond-alpha capabilities (multi-host, tool-using executor, async gates, cockpit, dashboard-as-orchestrator, cost controls, the flat-cost `claude-code` host) are listed; and a **post-MVP roadmap table** embeds the open items (overlaid with Retro #025's watch-fors + codification candidates). Build state still single-sourced to CHANGELOG + improvements; this file is the scope map.
 
 ### Added
