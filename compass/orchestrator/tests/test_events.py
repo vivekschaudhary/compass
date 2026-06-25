@@ -303,7 +303,7 @@ class TestHtmlCockpit(unittest.TestCase):
     def test_render_html_has_sections_and_data(self):
         out = cockpit.render_html(cockpit.fold_runs(self._events()), snapshot_ts="2026-06-23")
         self.assertIn("<!doctype html>", out)
-        self.assertIn("http-equiv='refresh'", out)          # auto-reload
+        self.assertIn("location.reload", out)               # auto-reload (JS, #128 — not meta-refresh)
         self.assertIn("Awaiting your decision", out)
         self.assertIn("In flight", out)
         self.assertIn("Done", out)
@@ -543,6 +543,19 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertIn("onsubmit=", html)
         self.assertIn("function _act", html)
         self.assertIn("disabled=true", html)
+
+    def test_no_meta_refresh_uses_guarded_reload(self):
+        # #128: blind meta-refresh wiped the Launch form mid-typing — replaced by
+        # a JS reload that pauses on compose and skips focused fields.
+        runs = {"r1": {"run_id": "r1", "project": "p", "workflow": "triage",
+                       "project_dir": self.td, "ended": False, "steps": {},
+                       "open_gate": None}}
+        for actions in (True, False):
+            html = cockpit.render_html(runs, actions=actions, default_project_dir=self.td)
+            self.assertNotIn("http-equiv", html)        # no whole-page meta refresh
+            self.assertIn("location.reload", html)       # JS reload instead
+            self.assertIn("paused", html)                # pauses while composing
+            self.assertIn("activeElement", html)         # never reloads a focused field
 
     def test_gate_already_actioned(self):
         # open gate → not actioned; decided/ended → actioned; unknown → False

@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cockpit auto-refresh no longer wipes the Launch form (#128).** The page used a `<meta http-equiv=refresh>` whole-page reload every 5s — which reset the context box, the workflow dropdown, and scroll/selection *mid-typing*, making the dashboard's Launch form unusable (caught in live use). Replaced with a JS reload that **pauses the instant you focus or type in the Launch form** (the timestamp line shows "paused while you compose — submit, or reload to resume") and **skips any tick while a field is focused**. The live feed still updates when you're only watching; submitting navigates away (303) and resumes the live state. +1 test; the prior meta-refresh assertion updated.
+
 ### Added
 
 - **`[fail-loud-not-silent]` codified — Compass-original #24, 9th enforcement-class member (#127).** The most-overdue codification in framework history (candidate `[failure-direction-inversion]` since Retro #020, flagged codification-ready across 5 retros). Principle: when a code path can fail, default its failure **direction** toward a loud halt, not a silent pass — a swallowed failure ships the wrong outcome as if it were right. Three named anti-patterns: `silent-skip`, `success-on-failure`, `swallowed-error`. Codified by ~6 accumulated instances across the v0.4 build (#79 reviewer skip · #97/#100 max-iter success-advance · #104/#116 mangled telemetry · #120 "(no stderr)" · #125 refusal cascade). Catalog → 7 shapes / 24 patterns; enforcement (9). Renamed from the candidate per DRI pick (clearer name). AGENTS.md catalog count updated; `consistency-check.py` verifies it.

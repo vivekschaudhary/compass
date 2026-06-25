@@ -413,13 +413,16 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
 
     p = []
     p.append("<!doctype html><html><head><meta charset='utf-8'>")
-    p.append(f"<meta http-equiv='refresh' content='{int(refresh)}'>")
+    # #128: NO `<meta http-equiv=refresh>` — a blind whole-page reload wiped the
+    # Launch form mid-typing (context box + dropdown reset every interval). A
+    # JS reload replaces it: it pauses the moment you touch the Launch form and
+    # never reloads while any field is focused (see the script near </body>).
     p.append("<title>Compass Cockpit</title>")
     p.append(f"<style>{_HTML_CSS}</style></head><body><div class='wrap'>")
     title = "Compass Cockpit — portfolio" + (f" · {_esc(project_filter)}" if project_filter else "")
     p.append(f"<h1>{title}</h1>")
     mode = "actions enabled — launch & approve below" if actions else "read-only (start with --allow-actions to launch/approve)"
-    p.append(f"<div class='ts'>snapshot {_esc(snapshot_ts)} · auto-refresh {int(refresh)}s · {mode}</div>")
+    p.append(f"<div class='ts' id='ts'>snapshot {_esc(snapshot_ts)} · auto-refresh {int(refresh)}s (pauses while you type) · {mode}</div>")
 
     # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
     if actions:
@@ -489,7 +492,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     if actions:
         # #122: confirm before acting, then disable every action button so a
         # gate/launch can't be double-fired into duplicate runs while the page
-        # waits on the redirect + meta-refresh.
+        # waits on the redirect + refresh.
         p.append(
             "<script>function _act(f,m){if(m&&!confirm(m))return false;"
             "var b=document.querySelectorAll('button');"
@@ -498,6 +501,21 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
             "s.textContent='submitting… the page will refresh.';"
             "document.querySelector('.wrap').appendChild(s);return true;}</script>"
         )
+    # #128: JS auto-reload that never clobbers input. Pauses the instant you focus
+    # or type in the Launch form (composing a launch), and skips any tick while a
+    # field is focused — so the live feed keeps updating when you're just watching,
+    # but your typing/selection is never wiped. Submitting navigates away (303),
+    # which resumes the live state on the next page.
+    p.append(
+        "<script>(function(){var paused=false;var ms=%d;"
+        "var lf=document.querySelector('.launch');"
+        "function pause(){if(paused)return;paused=true;var t=document.getElementById('ts');"
+        "if(t)t.textContent='auto-refresh paused while you compose — submit, or reload to resume.';}"
+        "if(lf){lf.addEventListener('focusin',pause);lf.addEventListener('input',pause);}"
+        "setInterval(function(){if(paused)return;var a=document.activeElement;"
+        "if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;location.reload();},ms);"
+        "})();</script>" % (int(refresh) * 1000)
+    )
     p.append("</div></body></html>")
     return "".join(p)
 

@@ -3395,3 +3395,13 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** consistency-check CONSISTENT (catalog count 24 matches); 213 tests (no test impact — canon + count edits).
 
 **Files touched (4):** `compass/framework/canon.md` · `AGENTS.md` · `compass/framework/mvp.md` · `CHANGELOG.md` (+ this file). Counter: #127. **5 of 5 — Retro #026 is now DUE (fires after #127).** The framework's longest-standing codification-ready candidate is finally canon.
+
+### 2026-06-24 — cockpit auto-refresh no longer wipes the Launch form (#128)
+
+**Trigger origin (Principle #19):** **live dashboard use (session).** The first real attempt to *compose* a launch from the dashboard was unusable: the `<meta http-equiv=refresh>` whole-page reload (every 5s) reset the context box, the workflow dropdown, and scroll/selection mid-typing. A live feed and an input form can't coexist under blind meta-refresh — a #119/#122 gap exposed only by typing into the form rather than just clicking gate buttons.
+
+**What shipped:** removed the meta-refresh; replaced with a JS reload that **pauses the instant you focus/type in the Launch form** (the `#ts` line announces "paused while you compose — submit, or reload to resume") and **skips any tick while a field is focused** (`activeElement` guard). Watching-only still auto-refreshes live; submitting navigates away (303) and the next page resumes the live state. No server change — pure render_html.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **214 pass** (+1: no `http-equiv`, has guarded `location.reload`/`paused`/`activeElement`; the prior meta-refresh assertion updated). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #128. **Retro #026 still due (covers #123–#127); #128 opens the next batch (1 of 5 toward Retro #027).** The dashboard's Launch form is finally typeable.
