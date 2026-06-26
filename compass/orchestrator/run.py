@@ -181,6 +181,24 @@ def _merge_pr(project_dir, branch):
 
 _CODE_WORKFLOWS = ("fix", "build", "ops")
 
+# #159: workflows whose WHOLE JOB is to author a doc artifact (brief, story,
+# foundation/portfolio/architecture docs), reviewed via their HITL gate — not a PR.
+# They are USELESS read-only: with allow_write=False the claude-code host runs
+# `claude -p --permission-mode default`, so every agent file-write hangs on a
+# permission prompt no headless UI can answer (the live create-brief that authored
+# WLT-27 then landed NOTHING in docs/bets/). So they default to write-enabled —
+# unlike _CODE_WORKFLOWS, which keep explicit --allow-write for branch/PR discipline.
+_AUTHORING_WORKFLOWS = (
+    "setup-product", "setup-foundation-architecture", "create-bet-portfolio",
+    "create-brief", "create-bet-architecture", "create-story",
+)
+
+
+def _resolve_allow_write(workflow_name: str, allow_write: bool) -> bool:
+    """#159: authoring workflows default to write-enabled (useless read-only). Code
+    workflows keep the caller's explicit choice (the branch→PR lane stays opt-in)."""
+    return True if workflow_name in _AUTHORING_WORKFLOWS else allow_write
+
 
 def _delivery_warning(workflow_name: str, leftover: list) -> str:
     """#145/#150: the end-of-run 'work not delivered' warning, tailored by workflow.
@@ -260,7 +278,17 @@ _INCOMPLETE_RE = re.compile(
     r"|here'?s\s+the\s+plan"
     r"|approve\s+the\s+[\"']?(?:exit\s+plan|plan)"
     r"|\bblocker:\s"
-    r"|requires?\s+(?:a\s+)?permission\s+grant",
+    r"|requires?\s+(?:a\s+)?permission\s+grant"
+    # #159: the no-TTY write-block class the live create-brief hit — the agent
+    # narrates "please click Allow" / "waiting on permission approval" / "the
+    # permission dialog should be appearing" instead of writing. High-precision:
+    # a completed step never asks the operator to approve a write dialog.
+    r"|click\s+[\"']?allow[\"']?"
+    r"|permission\s+dialog"
+    r"|(?:waiting|pending|blocked)\s+on[^\n]{0,40}(?:permission|approval)"
+    r"|(?:awaiting|pending)[^\n]{0,30}(?:permission|approval)"
+    r"|approve\s+(?:the\s+|both\s+|two\s+)?(?:file\s+)?writes?\b"
+    r"|please\s+approve[^\n]{0,30}(?:write|file|dialog|prompt)",
     re.IGNORECASE,
 )
 
@@ -1034,6 +1062,14 @@ def _run_workflow(
         )
         sys.exit(1)
 
+    # #159: authoring workflows write artifacts as their whole job — default them to
+    # write-enabled so a dashboard launch without the "allow writes" checkbox still
+    # lands the brief/story instead of silently permission-blocking every write.
+    if _resolve_allow_write(workflow_name, allow_write) and not allow_write:
+        allow_write = True
+        print(f"[{workflow_name}: authoring workflow → write-enabled by default "
+              f"(#159 — artifacts can't be produced read-only)]")
+
     # ── requirement gate (#70 redesign) ──────────────────────────────────────
     # A workflow's frontmatter may declare `requires_approved:` artifact paths.
     # PASS per path: approved hitl.jsonl record OR `status: approved`
@@ -1212,6 +1248,7 @@ def _run_workflow(
     first_step = True
     skipped = set()  # steps in a not-taken branch (#96 conditional dispatch)
     handed_off = False  # set when a #103 cross-workflow hand-off ends the run early
+    incomplete_steps = []  # #159: steps that returned but didn't do their job
 
     for step in steps:
         if only_step is not None and step.number != only_step:
@@ -1626,6 +1663,7 @@ def _run_workflow(
         emit(ev.STEP_END, step=step.number, outcome=outcome, outcome_reason=why,
              gate_result=rec.get("gate_result"), output_chars=rec.get("output_chars"))
         if outcome != "done":
+            incomplete_steps.append((step.number, step.agent, step.task, why))
             print(f"  ✗ step {step.number} ({step.agent}.{step.task}) looks "
                   f"INCOMPLETE — {why}", file=sys.stderr)
         if run_cost["usd"] > 0:
@@ -1667,6 +1705,20 @@ def _run_workflow(
             warn = _delivery_warning(workflow_name, leftover)
             print("\n" + warn, file=sys.stderr)
             emit(ev.NOTE, text=warn)
+
+    # #159: an authoring workflow whose whole job is to write a doc artifact must
+    # FAIL LOUD if a step produced no real work (permission-blocked / plan-only) —
+    # otherwise the run reports "completed" while docs/bets/ stays empty (the live
+    # create-brief that "worked" but landed no WLT-27 brief). [fail-loud-not-silent].
+    if workflow_name in _AUTHORING_WORKFLOWS and incomplete_steps and not handed_off:
+        names = ", ".join(f"step {n} ({a}.{t})" for n, a, t, _ in incomplete_steps)
+        warn = (f"⚠ AUTHORING INCOMPLETE — {workflow_name} reported done but "
+                f"{len(incomplete_steps)} step(s) did NOT produce their artifact "
+                f"({names}). The doc was NOT written — check write permission "
+                f"(authoring workflows are write-enabled by default since #159; if "
+                f"you see permission-dialog narration, the host couldn't write).")
+        print("\n" + warn, file=sys.stderr)
+        emit(ev.NOTE, text=warn)
 
     if not handed_off:
         emit(ev.RUN_END, status="completed", reason="all steps complete")

@@ -555,6 +555,58 @@ class TestStepOutcome(unittest.TestCase):
         ):
             self.assertEqual(self.classify(t)[0], "incomplete", t)
 
+    def test_incomplete_for_no_tty_write_block(self):
+        # #159: the exact phrasings the live create-brief emitted when a write was
+        # permission-blocked in headless `claude -p` (steps 1-2 slipped through the
+        # old regex and were marked ✓ — these must classify ✗).
+        for t in (
+            "The permission dialog for the file write should be appearing — please click \"Allow\".",
+            "Both files are fully authored and waiting on two permission dialogs — please approve both writes.",
+            "The research.md write is waiting on permission approval.",
+            "The docs/status.md write permission dialog has appeared 4 times and has not been approved.",
+            "please approve the next dialog the file will land",
+        ):
+            self.assertEqual(self.classify(t)[0], "incomplete", t)
+
+    def test_done_not_falsely_tripped_by_159(self):
+        # the broadened regex must not flag normal completed work
+        for t in (
+            "Brief written to docs/bets/WLT-27/brief.md. Awaiting human review at the HITL gate.",
+            "Done — added an allow-list to the route and committed.",
+            "Wrote the story; the designer will pick up the UI slice next.",
+        ):
+            self.assertEqual(self.classify(t)[0], "done", t)
+
+
+class TestAllowWriteResolution(unittest.TestCase):
+    """#159: authoring workflows are useless read-only → default write-enabled;
+    code workflows keep the caller's explicit choice (branch/PR lane stays opt-in)."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.resolve = runmod._resolve_allow_write
+        self.runmod = runmod
+
+    def test_authoring_workflows_default_on(self):
+        for wf in ("create-brief", "create-story", "create-bet-architecture",
+                   "setup-product", "setup-foundation-architecture",
+                   "create-bet-portfolio"):
+            self.assertTrue(self.resolve(wf, False), wf)   # forced on even when caller said False
+            self.assertTrue(self.resolve(wf, True), wf)
+            self.assertIn(wf, self.runmod._AUTHORING_WORKFLOWS)
+
+    def test_code_workflows_keep_caller_choice(self):
+        for wf in ("build", "fix", "ops"):
+            self.assertFalse(self.resolve(wf, False), wf)  # opt-in preserved
+            self.assertTrue(self.resolve(wf, True), wf)
+            self.assertNotIn(wf, self.runmod._AUTHORING_WORKFLOWS)
+
+    def test_authoring_and_code_sets_are_disjoint(self):
+        self.assertEqual(
+            set(self.runmod._AUTHORING_WORKFLOWS) & set(self.runmod._CODE_WORKFLOWS),
+            set(),
+        )
+
 
 class TestMergeGate(unittest.TestCase):
     """#147: approving a 'merge' HITL gate triggers the PR merge (delivery closure)."""

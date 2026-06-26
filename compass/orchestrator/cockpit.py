@@ -534,7 +534,8 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
                  f"<label>project dir</label><input name='project_dir' size='52' value='{_esc(default_project_dir)}'>"
                  "<label>context (optional)</label><textarea name='context'></textarea>"
                  "<label>bet id (optional)</label><input name='bet'>"
-                 "<label><input type='checkbox' name='allow_write' value='1'> allow writes (--allow-write)</label>"
+                 "<label><input type='checkbox' name='allow_write' value='1'> allow writes (--allow-write) "
+                 "<small>— authoring workflows (create-brief/-story, setup-*) write by default (#159); needed for build/fix/ops</small></label>"
                  "<div><button type='submit'>Launch →</button></div>"
                  "</form></div>")
 
