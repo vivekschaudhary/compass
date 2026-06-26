@@ -82,7 +82,7 @@ _To be filled by Support._
 
 ## Stories
 
-_Decomposed one at a time via `/create-story`. Each lives under `stories/<story-id>/`._
+_Decomposed into the full story set (the complete backlog) via `/create-story`. Each lives under `stories/<story-id>/`; built one at a time via `/build`._
 
 ## Scan summary
 

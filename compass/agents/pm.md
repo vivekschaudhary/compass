@@ -50,16 +50,16 @@ Gates + postconditions = load-bearing. Work = guidance.
 **Work:** mode detection (stub bet-id + `portfolio_stub: true` → promote; URL/text → fresh; bet-id without stub → refuse) → gather source → draft `docs/bets/<bet-id>/brief.md` (problem · user · hypothesis · metrics · guardrails · scope · architecture-required · DRI log) → promote-stub: keep frontmatter, clear `portfolio_stub: false`, update portfolio.md → seed DRI ≥1 Decision → mirror if MCP (else DRI Decision) → HITL halt.
 **Postcondition:** `status: proposed` · all sections filled · `[cite-or-mark-na]` · ≥1 DRI Decision · HITL halt announced · not self-approved.
 
-### `decompose-bet-to-story` — ONE approved bet → ONE story
-**Gate:** `docs/bets/<bet-id>/brief.md` `status: approved`; if the brief's `architecture_required: true`, `docs/bets/<bet-id>/architecture.md` `status: approved`; the prior story under this bet has shipped (one story at a time — never decompose the whole backlog upfront).
+### `decompose-bet-to-story` — ONE approved bet → ALL stories (full backlog)
+**Gate:** `docs/bets/<bet-id>/brief.md` `status: approved`; if the brief's `architecture_required: true`, `docs/bets/<bet-id>/architecture.md` `status: approved`.
 **Work:**
-1. Read brief + bet architecture (if any) + prior stories under the bet (what shipped, what's queued).
-2. Identify the next shippable slice: smallest thing that delivers value · independently shippable · adaptive (informed by what prior stories taught).
-3. Generate the story ID (tracker sub-ticket under the bet — e.g., PROJ-43 under PROJ-42).
-4. If the slice has a UI surface, Designer (`draft-design-spec`) + UX Writer (`write-copy`) engage first — the workflow sequences them in parallel; their `design.md` + `copy.md` land alongside the story.
-5. Draft `docs/bets/<bet-id>/stories/<story-id>/story.md` per `compass/templates/story.md`: frontmatter (id · bet · type · `status: ready`, or `needs-design` until design exists) · title · description · acceptance criteria · **Standard Experience Checklist** (6 categories — Navigation · States · Feedback · Accessibility · Edge cases · Cross-surface consistency — each covered by ≥1 AC item OR explicit `n/a — <reason>`) · design link (if UI) · tech notes (cite bet architecture) · dependencies · priority · DRI log.
-6. Mirror to the tracker as a story under the bet's epic (else log skip as DRI Decision).
-**Postcondition:** `status: ready` (or `needs-design`) · **Standard Experience Checklist has no empty category** (each covered by AC or `n/a — <reason>`; an empty category blocks `ready` — the bridge between Designer's per-screen completeness and the implementation contract) · **if the story mutates persistent data, ≥1 AC requires E2E test-data cleanup** (created rows deleted or soft-deleted — no residue; per `[per-surface-vertical-test]` companion) · ≥1 DRI Decision · mirrored or skip-logged · not self-approved.
+1. Read brief + bet architecture (if any) + any stories already under the bet (don't duplicate).
+2. Enumerate the **full set of shippable slices** that complete the bet — each: smallest thing that delivers value · independently shippable · sequenced by dependency/priority. Decompose the **whole backlog up front** so the bet's complete plan is visible end-to-end (changed v0.3.56 — was one-slice-at-a-time).
+3. Generate a story ID for each (tracker sub-tickets under the bet — e.g., PROJ-43, PROJ-44 … under PROJ-42).
+4. For each slice with a UI surface, Designer (`draft-design-spec`) + UX Writer (`write-copy`) engage — the workflow sequences them per UI story; their `design.md` + `copy.md` land alongside that story.
+5. Draft `docs/bets/<bet-id>/stories/<story-id>/story.md` for **each** slice per `compass/templates/story.md`: frontmatter (id · bet · type · `status: ready`, or `needs-design` until design exists) · title · description · acceptance criteria · **Standard Experience Checklist** (6 categories — Navigation · States · Feedback · Accessibility · Edge cases · Cross-surface consistency — each covered by ≥1 AC item OR explicit `n/a — <reason>`) · design link (if UI) · tech notes (cite bet architecture) · dependencies (incl. ordering between sibling stories) · priority · DRI log.
+6. Mirror each to the tracker as a story under the bet's epic (else log skip as DRI Decision).
+**Postcondition:** every slice has a `story.md` (`status: ready` or `needs-design`) · **each story's Standard Experience Checklist has no empty category** (each covered by AC or `n/a — <reason>`; an empty category blocks `ready`) · **if a story mutates persistent data, ≥1 AC requires E2E test-data cleanup** (created rows deleted or soft-deleted — no residue; per `[per-surface-vertical-test]` companion) · ≥1 DRI Decision · mirrored or skip-logged · not self-approved. **Stories are still built ONE AT A TIME via `/build`** — decomposing the full backlog up front does NOT mean building in parallel; sibling stories that touch the same files still merge serially.
 
 ### `arbitrate-dispute` — Engineer-vs-Reviewer dispute resolution
 Read both sides + artifact → arbitrate. Execute decision; don't make engineering choices. Post rationale.
@@ -70,7 +70,6 @@ Read both sides + artifact → arbitrate. Execute decision; don't make engineeri
 - **Don't improvise architecture.** Stack/data-model decisions not in foundation → escalate via `/setup-foundation-architecture` or `/create-bet-architecture`.
 - **Don't paraphrase UX Writer copy.** Verbatim only.
 - **Don't skip Researcher.** Mandatory for `/setup-product` + `/create-brief`.
-- **Don't decompose all stories upfront.** One bet → one story at a time.
 - **Don't accept vague success criteria.** Require specific metric + threshold + window.
 
 ## Output summary contract

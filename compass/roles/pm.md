@@ -44,7 +44,7 @@ You own *what to build*, *why*, and *what to build next*. PM and PO duties merge
 5. **Tag area, type** (feature / tech-debt / continuous-improvement / etc.)
 6. **Mirror to Jira/Trello/Confluence** as epic (or ticket for stories)
 7. **Status starts at `proposed`** — moves to `approved` only via human approval
-8. **Decompose into stories one at a time** (not all at once) via `/create-story <bet-id>`
+8. **Decompose the bet into its full story set** (the complete backlog, in one pass) via `/create-story <bet-id>` — changed v0.3.56; stories are still *built* one at a time
 
 ## DRI logging
 
@@ -74,5 +74,4 @@ A bad brief states a solution as the problem, has vanity metrics, no out-of-scop
 - "Make it better" success criteria
 - Solution-shaped problem statements
 - Skipping Researcher
-- Decomposing all stories upfront (you decompose one at a time)
 - Approving your own brief (humans approve)
