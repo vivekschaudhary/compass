@@ -33,6 +33,7 @@ Artifacts the framework produces live in `docs/`:
 | `claude` (Claude Code) | CLI / IDE plugin; reads local files automatically; auto-loads `CLAUDE.md` | Yes |
 | `claude-code` (Claude CLI, subscription) | Orchestrator host (#120): dispatches via `claude -p` on the logged-in CLI subscription — **no `ANTHROPIC_API_KEY`, flat marginal cost**. Opt-in via `--claude-cli` / `COMPASS_CLAUDE_HOST=cli`, which remaps a step's `claude` host → `claude-code` (reviewers on codex/gemini untouched) | Yes |
 | `codex` (Codex CLI) | CLI; reads `.codex/prompts/<agent>.md` | Yes |
+| `codex-cli` (Codex CLI, subscription) | Orchestrator host (#155): dispatches via `codex exec` on the logged-in CLI subscription — **no `OPENAI_API_KEY`, flat marginal cost**. Opt-in via `--codex-cli` / `COMPASS_CODEX_HOST=cli`, which remaps a step's `codex` host → `codex-cli`. This makes the **Reviewer** (`[codex, gemini]`) reachable for a CLI-only operator with no API key — `codex ≠ claude`, so review independence holds | Yes |
 | `openai` (ChatGPT / GPT API) | Custom GPT Instructions = paste agent file; API call with agent file as system prompt; manual paste | Yes — Custom GPT is the recommended path for new projects |
 | `gemini` (Google Gemini CLI) | CLI; reads `.gemini/prompts/<agent>.md` | Yes |
 | `deepseek` | DeepSeek API | API mature |

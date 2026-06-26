@@ -182,6 +182,14 @@ def _remap_claude_cli(preferred_hosts: list) -> list:
     return ["claude-code" if h == "claude" else h for h in preferred_hosts]
 
 
+def _remap_codex_cli(preferred_hosts: list) -> list:
+    """#155: route Codex steps to the subscription-backed Codex CLI host when opted in
+    (--codex-cli / COMPASS_CODEX_HOST=cli). Remaps ONLY `codex` → `codex-cli`. This is
+    what makes the REVIEWER (preferred_hosts [codex, gemini]) reachable for a CLI-only
+    operator with no API key — codex ≠ claude, so review independence is preserved."""
+    return ["codex-cli" if h == "codex" else h for h in preferred_hosts]
+
+
 # #125 dispatch-on-outcome: a step whose agent REFUSES (per [refuse-escalate])
 # must HALT the run, not let the workflow cascade into steps that also refuse
 # (live evidence: a misrouted /ops run cascaded 4 refusals then crashed on an API
@@ -938,6 +946,7 @@ def _run_workflow(
     non_interactive: bool = False,
     decide: str = None,
     claude_cli: bool = False,
+    codex_cli: bool = False,
     run_id_override: str = None,
     auto_merge: bool = False,
 ) -> tuple:
@@ -1375,6 +1384,8 @@ def _run_workflow(
         preferred_hosts = _read_preferred_hosts(agent_file)
         if claude_cli:
             preferred_hosts = _remap_claude_cli(preferred_hosts)
+        if codex_cli:
+            preferred_hosts = _remap_codex_cli(preferred_hosts)
         host = select_host(preferred_hosts)
 
         if host is None:
@@ -1679,6 +1690,18 @@ def main(argv=None):
             "Equivalent to COMPASS_CLAUDE_HOST=cli (which the dashboard inherits)."
         ),
     )
+    parser.add_argument(
+        "--codex-cli",
+        action="store_true",
+        dest="codex_cli",
+        help=(
+            "Dispatch Codex steps via the logged-in `codex` CLI (subscription, no "
+            "OPENAI_API_KEY) instead of the metered API (#155). Remaps only the "
+            "`codex` host → `codex-cli` — this is what makes the REVIEWER reachable "
+            "for a CLI-only operator (codex ≠ claude → review independence holds). "
+            "Equivalent to COMPASS_CODEX_HOST=cli (which the dashboard inherits)."
+        ),
+    )
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
         "--no-events",
@@ -1865,6 +1888,10 @@ def main(argv=None):
     # (the env var is how the dashboard opts in: spawned runs inherit os.environ).
     claude_cli = args.claude_cli or os.environ.get(
         "COMPASS_CLAUDE_HOST", "").lower() in ("cli", "claude-code")
+    # #155: same opt-in shape for the Codex CLI host (makes the reviewer reachable
+    # for a CLI-only operator) — --codex-cli flag OR COMPASS_CODEX_HOST=cli.
+    codex_cli = args.codex_cli or os.environ.get(
+        "COMPASS_CODEX_HOST", "").lower() in ("cli", "codex-cli")
     # #147: dashboard opts into auto-merge via env (spawned runs inherit it, like
     # COMPASS_CLAUDE_HOST) — export COMPASS_AUTO_MERGE=1 before `cockpit --serve`.
     auto_merge = args.auto_merge or os.environ.get(
@@ -1892,6 +1919,7 @@ def main(argv=None):
             non_interactive=args.non_interactive,
             decide=args.decide,
             claude_cli=claude_cli,
+            codex_cli=codex_cli,
             run_id_override=args.run_id,
             auto_merge=auto_merge,
         )
@@ -1946,6 +1974,7 @@ def main(argv=None):
             non_interactive=args.non_interactive,
             decide=args.decide,
             claude_cli=claude_cli,
+            codex_cli=codex_cli,
         )
 
         accumulated_outputs.extend(wf_outputs)

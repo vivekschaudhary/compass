@@ -28,6 +28,7 @@ _HOST_PACKAGE = {
     "openai": "openai",
     "gemini": "google.generativeai",
     "claude-code": None,  # #120: CLI host, no Python SDK → always "importable"
+    "codex-cli": None,    # #155: Codex CLI host (reviewer on the operator's sub)
 }
 
 
@@ -49,6 +50,9 @@ def _has_key(host: str) -> bool:
         # on PATH (no API key). Login state can't be checked non-interactively;
         # a not-logged-in CLI surfaces a clean error at dispatch.
         return shutil.which("claude") is not None
+    if host == "codex-cli":
+        # #155: same shape for the Codex CLI — ready = `codex` on PATH (no API key).
+        return shutil.which("codex") is not None
     if host == "claude":
         return bool(os.environ.get("ANTHROPIC_API_KEY"))
     if host in ("codex", "chatgpt", "openai"):
@@ -100,7 +104,7 @@ def _default_model(host_family: str) -> str:
 
 def _family(host: str) -> str:
     """Map a selected host to its model family (codex/chatgpt/openai → openai)."""
-    if host in ("codex", "chatgpt", "openai"):
+    if host in ("codex", "chatgpt", "openai", "codex-cli"):
         return "openai"
     return "gemini" if host == "gemini" else "claude"
 
@@ -177,6 +181,26 @@ def dispatch_to_host(
         return dispatch(
             agent_file_path, task_name, user_message,
             model=model or _default_model("claude"),
+            max_tokens=max_tokens,
+            on_event=on_event,
+        )
+    elif host == "codex-cli":
+        # #155: subscription-backed Codex CLI. Like claude-code, codex owns its own
+        # shell/file loop — always tool-capable + IN the repo when project_dir is set
+        # (the reviewer needs to run gh + read the diff). Openai family.
+        from .codex_cli import dispatch_with_tools, dispatch
+        if project_dir is not None:
+            return dispatch_with_tools(
+                agent_file_path, task_name, user_message, project_dir,
+                model=model or _default_model("openai"),
+                max_tokens=max_tokens,
+                allow_write=allow_write,
+                max_iterations=max_tool_iterations or 50,
+                on_event=on_event,
+            )
+        return dispatch(
+            agent_file_path, task_name, user_message,
+            model=model or _default_model("openai"),
             max_tokens=max_tokens,
             on_event=on_event,
         )

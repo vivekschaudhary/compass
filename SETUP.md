@@ -275,6 +275,13 @@ COMPASS_CLAUDE_HOST=cli python3 -m compass.orchestrator.run triage \
     --project-dir . --compass-dir $COMPASS_FW/compass --context "subscriptions panel empty"
 ```
 
+**Reviewer on your Codex subscription — flat-cost, no API key (#155).** The Reviewer (and Security Reviewer) declare `preferred_hosts: [codex, gemini]` so the reviewer is never the same model as the implementer. If you're CLI-only (no `OPENAI_API_KEY`), add `--codex-cli` (or export `COMPASS_CODEX_HOST=cli`) and `codex` steps dispatch via your **logged-in `codex` CLI** (`codex exec`) — `codex ≠ claude`, so review independence holds. Needs the `codex` CLI installed + logged in. Combine both env vars before `cockpit --serve --allow-actions` for a fully subscription-backed loop (implementer on `claude`, reviewer on `codex`, both flat-cost):
+
+```bash
+COMPASS_CLAUDE_HOST=cli COMPASS_CODEX_HOST=cli python3 -m compass.orchestrator.cockpit \
+    --serve --allow-actions --project-dir . --compass-dir $COMPASS_FW/compass
+```
+
 **To use manually** (interactive, any host):
 
 Paste any `compass/agents/<agent>.md` file into your LLM host's system-prompt slot. Agent files are self-sufficient — identity + principles + tasks + refusal rules + handoffs are all inlined.
