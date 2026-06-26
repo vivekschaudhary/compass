@@ -1137,6 +1137,9 @@ def _run_workflow(
         _sink(ev.make_event(type, **fields))
 
     emit(ev.RUN_START, allow_write=allow_write, branch=work_branch,
+         # #156: record the run's host MODE so a dashboard /decide resume can carry it
+         # forward (reuse the subscription CLI hosts, not silently fall back to the API).
+         claude_cli=claude_cli, codex_cli=codex_cli,
          project_dir=str(project_dir))  # #119: full path so the cockpit can resume any run
 
     last_artifact_path = None

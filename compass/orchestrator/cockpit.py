@@ -46,6 +46,9 @@ def fold_runs(events: list) -> dict:
             "started": None, "ended": False, "status": None, "reason": None,
             "current_step": None, "current_task": None, "open_gate": None,
             "last_ts": None,
+            # #156: run mode (from run_start) so a /decide resume reuses bet + write
+            # perm + the subscription CLI hosts instead of dropping them.
+            "allow_write": False, "claude_cli": False, "codex_cli": False,
             # cost rollup (#106): summed token usage from `usage` events.
             "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0},
             "model": None,
@@ -64,6 +67,9 @@ def fold_runs(events: list) -> dict:
             r["started"] = e.get("ts")
             if e.get("project_dir"):
                 r["project_dir"] = e["project_dir"]
+            for k in ("allow_write", "claude_cli", "codex_cli"):   # #156: run mode
+                if e.get(k) is not None:
+                    r[k] = e.get(k)
         elif t == ev.STEP_START:
             r["current_step"] = e.get("step")
             r["current_task"] = (
@@ -277,6 +283,15 @@ def _approve_cmd(run: dict) -> str:
         parts.append(f"--run-id {run['run_id']}")   # load-bearing: closes THIS gate
     if gate and gate.get("step"):
         parts.append(f"--from-step {gate['step']}")
+    # #156: a copy-paste command runs in a fresh shell with none of the cockpit's env,
+    # so carry the run's mode explicitly — else a write-mode / subscription-CLI run
+    # resumes read-only on the metered API.
+    if run.get("allow_write"):
+        parts.append("--allow-write")
+    if run.get("claude_cli"):
+        parts.append("--claude-cli")
+    if run.get("codex_cli"):
+        parts.append("--codex-cli")
     parts.append("--non-interactive --decide approve")
     return " ".join(parts) + "   (or --decide reject)"
 
@@ -440,8 +455,15 @@ def _decide_forms(r: dict, cdir) -> str:
     each a tiny POST /decide form (#119). Relays only — run.py still decides."""
     g = r["open_gate"]
     loc = r.get("workflow") or "run"
+    # #156: carry bet + the run's mode so the resume resolves the requirement gate
+    # (bet-scoped) and reuses write perm + the subscription CLI hosts. _hidden drops
+    # empty values, so an absent bet / read-only / API run just omits them.
     hid = _hidden(run_id=r.get("run_id"), workflow=r.get("workflow"),
-                  project_dir=r.get("project_dir"), step=g.get("step"))
+                  project_dir=r.get("project_dir"), step=g.get("step"),
+                  bet=r.get("bet_id"),
+                  allow_write="1" if r.get("allow_write") else "",
+                  claude_cli="1" if r.get("claude_cli") else "",
+                  codex_cli="1" if r.get("codex_cli") else "")
     out = []
 
     def form(decide, label, cls="", confirm=""):
@@ -659,12 +681,8 @@ def _build_run_argv(action, params, defaults):
         argv += ["--compass-dir", str(cdir)]
 
     if action == "run":
-        if params.get("bet"):
-            argv += ["--bet", params["bet"].strip()]
         if params.get("context"):
             argv += ["--context", params["context"]]
-        if params.get("allow_write"):
-            argv += ["--allow-write"]
     elif action == "decide":
         step = (params.get("step") or "").strip()
         if not step.isdigit():
@@ -675,6 +693,23 @@ def _build_run_argv(action, params, defaults):
         argv += ["--from-step", step, "--decide", decide]
     else:
         return ("error", f"unknown action: {action!r}")
+
+    # #156: these apply to BOTH actions. A /decide that DROPS --bet was the
+    # "I approved but nothing happened" bug: a bet-scoped resume (build /
+    # create-story / create-bet-architecture) can't resolve `docs/bets/<bet-id>/...`,
+    # so the requirement gate exits 3 BEFORE the gate step — no decision recorded.
+    # --allow-write + --claude-cli/--codex-cli carry the run's ORIGINAL mode
+    # (recovered from the spine via run_start) so the resume keeps write perms and
+    # the subscription CLI hosts instead of silently falling back to the metered API.
+    if params.get("bet"):
+        argv += ["--bet", params["bet"].strip()]
+    if params.get("allow_write"):
+        argv += ["--allow-write"]
+    if params.get("claude_cli"):
+        argv += ["--claude-cli"]
+    if params.get("codex_cli"):
+        argv += ["--codex-cli"]
+
     # --run-id pins the run identity for BOTH actions: /decide continues the same
     # run so its gate clears (#121); /run uses a cockpit-minted id so its output
     # can be captured to a named log the browser can show (#133).

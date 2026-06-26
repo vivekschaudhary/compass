@@ -529,6 +529,59 @@ class TestActionEndpoints(unittest.TestCase):
             self.defaults)
         self.assertNotIn("--run-id", argv)  # invalid id dropped, not passed
 
+    def test_decide_carries_bet_and_mode(self):
+        # #156: THE fix — a bet-scoped resume must pass --bet (else the requirement
+        # gate exits 3 before the gate step = "approved but nothing happened"), and
+        # carry the run's write perm + subscription CLI hosts.
+        argv = cockpit._build_run_argv(
+            "decide", {"workflow": "build", "project_dir": self.td, "step": "6",
+                       "decide": "approve", "bet": "WLT-26",
+                       "allow_write": "1", "claude_cli": "1", "codex_cli": "1"},
+            self.defaults)
+        self.assertEqual(argv[argv.index("--bet") + 1], "WLT-26")
+        self.assertIn("--allow-write", argv)
+        self.assertIn("--claude-cli", argv)
+        self.assertIn("--codex-cli", argv)
+
+    def test_decide_omits_mode_when_absent(self):
+        # a read-only / API / bet-less run carries none of them (no false flags)
+        argv = cockpit._build_run_argv(
+            "decide", {"workflow": "triage", "project_dir": self.td, "step": "2",
+                       "decide": "approve"}, self.defaults)
+        for f in ("--bet", "--allow-write", "--claude-cli", "--codex-cli"):
+            self.assertNotIn(f, argv)
+
+    def test_run_still_carries_bet_and_writes(self):
+        # the /run path keeps --bet + --allow-write after the shared-block refactor
+        argv = cockpit._build_run_argv(
+            "run", {"workflow": "build", "project_dir": self.td, "bet": "WLT-26",
+                    "allow_write": "1", "context": "build it"}, self.defaults)
+        self.assertEqual(argv[argv.index("--bet") + 1], "WLT-26")
+        self.assertIn("--allow-write", argv)
+        self.assertEqual(argv[argv.index("--context") + 1], "build it")
+
+    def test_fold_captures_run_mode(self):
+        # #156: run mode comes off run_start so a /decide resume can reuse it
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", workflow="build", bet_id="WLT-26",
+                          allow_write=True, codex_cli=True, claude_cli=True),
+            ev.make_event(ev.GATE_OPEN, run_id="r1", step=6, kind="hitl", title="merge"),
+        ]
+        r = cockpit.fold_runs(events)["r1"]
+        self.assertTrue(r["allow_write"])
+        self.assertTrue(r["codex_cli"])
+        self.assertTrue(r["claude_cli"])
+
+    def test_decide_form_includes_bet_hidden_field(self):
+        # the BUTTON path (HTML form) must carry bet — the actual bug surface
+        runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "build",
+                       "bet_id": "WLT-26", "project_dir": self.td, "ended": False,
+                       "steps": {}, "allow_write": True, "codex_cli": True,
+                       "open_gate": {"step": 6, "kind": "hitl", "title": "merge"}}}
+        html = cockpit.render_html(runs, actions=True, default_project_dir=self.td)
+        self.assertIn("name='bet' value='WLT-26'", html)
+        self.assertIn("name='codex_cli'", html)
+
     def test_render_html_actions_on_shows_forms(self):
         runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "triage",
                        "project_dir": self.td, "ended": False, "steps": {},
