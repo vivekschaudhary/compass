@@ -116,6 +116,39 @@ def _is_merge_gate(title: str) -> bool:
     return "merge" in (title or "").lower()
 
 
+def _open_pr_url(project_dir, branch):
+    """#157: best-effort URL of the open PR for `branch` (so a merge gate can point
+    the operator at it). Returns the URL or None — never raises into the run."""
+    if not branch:
+        return None
+    import json as _json
+    import subprocess
+    try:
+        r = subprocess.run(["gh", "pr", "view", branch, "--json", "url,state"],
+                           cwd=str(project_dir), capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        o = _json.loads(r.stdout)
+        return o.get("url") if o.get("state") == "OPEN" else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _merge_next_steps(pr_url, bet_id) -> str:
+    """#157: the explicit next-step block printed when a MERGE gate is approved but
+    NOT auto-merged — so the operator isn't left at '[handle manually]' with no idea
+    what to do (the live gap: gate cleared, run 'completed', nothing shipped)."""
+    pr = f"merge the PR — {pr_url}" if pr_url else "merge the PR on your host"
+    nxt = f"/create-story {bet_id}" if bet_id else "/create-story <bet> for the next slice"
+    return (f"\n✅ Approved — your turn to ship:\n"
+            f"   1. {pr}\n"
+            f"   2. Then cut the next slice: {nxt}\n"
+            f"   (Set COMPASS_AUTO_MERGE=1 to have approval merge for you.)")
+
+
 def _merge_pr(project_dir, branch):
     """#147: on approval of a merge gate, merge the PR for `branch` — the delivery
     closure (merge → the host auto-deploys on main, e.g. Vercel). Best-effort:
@@ -333,6 +366,26 @@ def _work_branch_name(workflow: str, bet_id: str, context: str) -> str:
     ctx = re.sub(r"^\s*(bug|incident|enhancement|change)\s*:\s*", "", context or "", flags=re.IGNORECASE)
     slug = _slug(ctx)
     return f"{typ}/{bet_id}-{slug}" if bet_id else f"{typ}/{slug}"
+
+
+def _prior_run_branch(run_id):
+    """#157: on a `--from-step` resume, recover the branch the ORIGINAL run recorded
+    in its `run_start` (event spine), so the resume reuses it instead of cutting a
+    NEW branch from the resume's input. The live bug: a dashboard merge-gate resume
+    re-ran the branch logic with the bet-context blob as `context`, producing a
+    garbage branch `feat/WLT-26-bet-context-wlt-26-briefmd-----id`. Returns the
+    recorded branch name, or None (no spine / no branch recorded)."""
+    if not run_id:
+        return None
+    try:
+        from . import events as _ev
+        for e in reversed(_ev.load_events()):
+            if (e.get("run_id") == run_id and e.get("type") == _ev.RUN_START
+                    and e.get("branch")):
+                return e["branch"]
+    except Exception:
+        return None
+    return None
 
 
 def _ensure_work_branch(project_dir, branch_name: str):
@@ -1097,10 +1150,22 @@ def _run_workflow(
     # branch; their artifacts are committed, not deployed (the #150 message guides).
     work_branch = None
     if allow_write and workflow_name in _CODE_WORKFLOWS:
-        bname = _work_branch_name(workflow_name, bet_id, context)
-        work_branch = _ensure_work_branch(project_dir, bname)
-        if work_branch:
-            print(f"[branch] write-mode work on '{work_branch}' (not main) — open a PR + merge after review")
+        if from_step is not None:
+            # #157: a resume must REUSE the original run's branch (recorded in the
+            # spine), never regenerate a name from the input — a dashboard merge-gate
+            # resume passed the bet-context blob as `context` and cut a garbage branch
+            # (`feat/WLT-26-bet-context-…`), stranding the work + confusing delivery.
+            work_branch = _prior_run_branch(run_id)
+            if work_branch:
+                _ensure_work_branch(project_dir, work_branch)  # checkout the existing branch
+                print(f"[branch] resumed on '{work_branch}' (reused from the original run)")
+            else:
+                print("[branch] resume — no recorded branch; staying on the current branch")
+        else:
+            bname = _work_branch_name(workflow_name, bet_id, context)
+            work_branch = _ensure_work_branch(project_dir, bname)
+            if work_branch:
+                print(f"[branch] write-mode work on '{work_branch}' (not main) — open a PR + merge after review")
 
     # Event spine (#104): one emit per run, stamping project/run_id/workflow onto
     # every event and fanning to the terminal + the user-local events.jsonl
@@ -1327,6 +1392,13 @@ def _run_workflow(
                 ok, msg = _merge_pr(project_dir, work_branch)
                 print(f"[auto-merge{'' if ok else ' ⚠'}] {msg}")
                 emit(ev.NOTE, text=f"auto-merge: {msg}")
+            elif result["approved"] and _is_merge_gate(step.title) and not auto_merge:
+                # #157: no auto-merge → don't leave the operator at "[handle manually]"
+                # with no idea what to do. Spell out the next step (merge the PR, then
+                # the next story) and point at the actual PR when we can find it.
+                steps_msg = _merge_next_steps(_open_pr_url(project_dir, work_branch), bet_id)
+                print(steps_msg)
+                emit(ev.NOTE, text="merge gate approved — next: merge the PR, then /create-story")
 
             if not result["approved"]:
                 if not no_write:

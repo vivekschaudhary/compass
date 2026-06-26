@@ -3728,3 +3728,17 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **290 pass** (+5: decide carries bet+mode, decide omits them when absent, run still carries bet+writes after the refactor, fold captures run mode, the HTML form has the `bet` hidden field). consistency-check CONSISTENT.
 
 **Files touched (5):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #156. **(#029 batch: #148–#157.)** A gate you can't approve from the surface isn't surface-independent — the button has to carry everything the run needs to continue.
+
+### 2026-06-25 — resume reuses the run's branch + merge gate names the next step (#157)
+
+**Trigger origin (Principle #19):** the first end-to-end `/build` reached the merge gate; approving it (now that #156 made approve *work*) left the DRI with *"the message is gone but no next steps"* — and a junk branch + stranded files in the repo.
+
+**Two bugs, reproduced from the spine + the run log:**
+1. **Spurious branch on resume.** The dashboard merge-gate `/decide` resumed `--from-step 6 --allow-write`; the work-branch block re-ran with the **bet-context blob as `context`** and cut `feat/WLT-26-bet-context-wlt-26-briefmd-----id`, stranding the e2e tests in the working tree and confusing the delivery check. Fix: on resume (`from_step is not None`), recover the **original run's branch** from the spine — `_prior_run_branch(run_id)` reads `run_start.branch` (recorded since #156/#147) — and check it out; never regenerate a name. Fresh runs are unchanged.
+2. **Merge gate gave no next step.** Approval cleared the gate, then steps 7/8 printed `[workflow-level step — no agent dispatch; handle manually]` and the run "completed" — with a misfiring `⚠ DELIVERY INCOMPLETE` (the work was in an open PR). Nothing told the operator to merge. Fix: when a merge gate is approved and `auto_merge` is off, print `_merge_next_steps(pr_url, bet_id)` — *"1. merge the PR — <url>  2. then /create-story <bet>  (set COMPASS_AUTO_MERGE=1 to automate)."* `_open_pr_url` finds the PR best-effort.
+
+**Validated against the live run:** this `/build WLT-26-1` is exactly what broke — and after merging PR #118 (one lint fix: an unused `CategorySpendChart` type import the engineer left, which failed CI's `no-unused-vars` and blocked the merge), **WLT-26-1 shipped to `main`**: the first fully-orchestrated, cross-model (claude implements → codex reviews → PM arbitrates), subscription-only story.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **293 pass** (+3: `_prior_run_branch` recovers from a fake spine + degrades; `_merge_next_steps` names the PR/bet + degrades). consistency-check CONSISTENT.
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #157. **(#029 batch: #148–#157 — batch COMPLETE; Retro #029 due next.)** Known follow-up: the `⚠ DELIVERY INCOMPLETE` warning still misfires when an open PR exists (it says "no PR → no deploy") — soften it to recognize the PR. The stranded WLT-26-1 e2e tests (`e2e/dashboard-spend.spec.ts`) remain uncommitted for a follow-up PR (the DRI chose "merge as-is").

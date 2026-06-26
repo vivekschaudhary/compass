@@ -4,6 +4,7 @@ The HITL detection tests exist because a human gate that silently parses as a
 "workflow-level step" (and is therefore skipped) is the worst failure mode the
 parser has: the run proceeds without the approval the workflow promised.
 """
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -728,6 +729,48 @@ class TestSelfApprovalGuard(unittest.TestCase):
     def test_missing_file_is_noop(self):
         self.assertIsNone(self.revert(Path("/nonexistent/x.md")))
         self.assertIsNone(self.revert(None))
+
+
+class TestResumeBranchAndMergeSteps(unittest.TestCase):
+    """#157: a resume must reuse the original run's branch (not cut a garbage one),
+    and an approved merge gate must spell out the next step."""
+
+    def test_prior_run_branch_recovers_from_spine(self):
+        import json as _json
+        from compass.orchestrator.run import _prior_run_branch
+        with tempfile.TemporaryDirectory() as home:
+            ep = Path(home) / "orchestrator"
+            ep.mkdir(parents=True)
+            (ep / "events.jsonl").write_text("\n".join([
+                _json.dumps({"run_id": "build--WLT-26--X", "type": "run_start",
+                             "branch": "feat/WLT-26-1-category-spend-chart"}),
+                _json.dumps({"run_id": "build--WLT-26--X", "type": "gate_open", "step": 6}),
+            ]) + "\n", encoding="utf-8")
+            saved = os.environ.get("COMPASS_HOME")
+            os.environ["COMPASS_HOME"] = home
+            try:
+                self.assertEqual(_prior_run_branch("build--WLT-26--X"),
+                                 "feat/WLT-26-1-category-spend-chart")
+                self.assertIsNone(_prior_run_branch("no-such-run"))
+                self.assertIsNone(_prior_run_branch(None))
+            finally:
+                if saved is None:
+                    os.environ.pop("COMPASS_HOME", None)
+                else:
+                    os.environ["COMPASS_HOME"] = saved
+
+    def test_merge_next_steps_names_pr_and_bet(self):
+        from compass.orchestrator.run import _merge_next_steps
+        msg = _merge_next_steps("https://github.com/x/y/pull/118", "WLT-26")
+        self.assertIn("https://github.com/x/y/pull/118", msg)
+        self.assertIn("/create-story WLT-26", msg)
+        self.assertIn("COMPASS_AUTO_MERGE", msg)   # tells them how to automate it
+
+    def test_merge_next_steps_degrades_without_pr(self):
+        from compass.orchestrator.run import _merge_next_steps
+        msg = _merge_next_steps(None, None)
+        self.assertIn("merge the PR", msg)
+        self.assertIn("<bet>", msg)
 
 
 class TestResumeHint(unittest.TestCase):
