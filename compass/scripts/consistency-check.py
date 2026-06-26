@@ -37,6 +37,7 @@ VERSION_SELF_CLAIM_FILES = [
     "CLAUDE.md",
     "compass/orchestrator/run.py",
     "compass/orchestrator/README.md",
+    "compass/orchestrator/__init__.py",  # Retro #029 audit: stale alpha-0 slipped the scan
 ]
 
 

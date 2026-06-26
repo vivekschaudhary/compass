@@ -219,4 +219,4 @@ def dispatch_to_host(
             max_tokens=max_tokens,
         )
     else:
-        raise RuntimeError(f"Unknown host: {host!r}. Supported: claude, claude-code, codex, chatgpt, openai, gemini")
+        raise RuntimeError(f"Unknown host: {host!r}. Supported: claude, claude-code, codex, codex-cli, chatgpt, openai, gemini")
