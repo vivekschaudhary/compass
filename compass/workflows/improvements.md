@@ -3688,3 +3688,19 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **260 pass** (+5: revert approved→proposed, case-insensitive `Approved`, `ready`, leaves `proposed` untouched, missing-file no-op; + directive carries "NEVER self-approve"). consistency-check CONSISTENT.
 
 **Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #153. **(#029 batch: #148–#157.)** A gate the agent can sign for itself isn't a gate.
+
+### 2026-06-25 — awaiting gates observable + safely resumable (#154)
+
+**Trigger origin (Principle #19):** the DRI: *"there is an awaiting decision stuck not moving — I stepped out and therefore couldn't see it."* A `create-story` HITL gate (`create-story--WLT-26--20260625T150901`, step 4) had been **awaiting ~6h** with no signal.
+
+**Two real defects found (reproduce-before-diagnose — folded the spine, didn't guess):**
+1. **The resume hint omitted `--run-id`.** A paused gate's printed CLI hint was `--from-step N --non-interactive --decide approve` — no `--run-id`. Following it via CLI mints a **new** run_id, so the closing `gate_decision`/`run_end` never attach to the original run and its gate stays `⏸ awaiting` **forever**. (The dashboard avoids this — #121 reuses the minted id — but the orchestrator literally printed the trap.) The cockpit's copy-paste `_approve_cmd` had the same gap *and* emitted a bare `--approve` with no PATH arg (a no-op bridge call). **I hit this trap myself mid-fix** — resumed a run_id I'd truncated in my own diagnostic (`rid[-30:]` ate the `create-` prefix), spawning a phantom run while the real gate stayed open. That *is* the bug: an easy-to-mis-key resume with no safety net.
+2. **No staleness signal.** The cockpit showed `⏸` with no indication a gate had been waiting 6 hours — exactly the "stepped out, couldn't see it" blind spot.
+
+**What shipped:**
+- `_resume_hint(...)` (run.py, used by both the HITL + routing pause prints) and cockpit `_approve_cmd` now emit `--run-id <id> --project-dir <dir> --from-step N --non-interactive --decide …` — the same gate-closing shape the dashboard button uses (#121). `_approve_cmd` uses the spine-captured `project_dir` (#119) so it's actually runnable.
+- The fold records each gate's open `ts`; `_gate_age_str` renders **`awaiting 6h02m`** in both the text and HTML cockpit, and the awaiting list is sorted **oldest-first** (the one you most likely forgot).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **265 pass** (+8: resume-hint carries run-id/project-dir/allow-write/route-placeholder; `_approve_cmd` run-id + real project_dir + no bare `--approve`; `_gate_age_str` formats + degrades; fold captures gate ts; HTML shows `--decide approve`/`--run-id`). consistency-check CONSISTENT. The actual stuck gate was cleared by resuming the correct full run_id.
+
+**Files touched (5):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_events.py` · `CHANGELOG.md` (+ this file). Counter: #154. **(#029 batch: #148–#157.)** A gate that can silently orphan — or hide how long it's waited — isn't a gate you can trust to step away from.

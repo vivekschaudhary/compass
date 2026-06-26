@@ -436,6 +436,21 @@ def _revert_self_approval(artifact_path):
     return status
 
 
+def _resume_hint(workflow_name, step_num, run_id, project_dir, allow_write, decide):
+    """#154: the copy-paste CLI line to resume a paused gate. `--run-id` is
+    load-bearing — without it a CLI resume mints a NEW run_id and the ORIGINAL gate
+    stays '⏸ awaiting' in the cockpit forever (a real trap: the printed hint used to
+    omit it, so following it orphaned the gate; the dashboard avoids this by reusing
+    the id via #121). `--project-dir` is included so the resume targets the right
+    repo, not the cwd."""
+    cmd = (f"    python3 -m compass.orchestrator.run {workflow_name} "
+           f"--project-dir {project_dir} --run-id {run_id} "
+           f"--from-step {step_num} --non-interactive --decide {decide}")
+    if allow_write:
+        cmd += " --allow-write"
+    return cmd
+
+
 def _recommended_next(output: str):
     """
     The right-sized next command a step recommended (#110), parsed from a single
@@ -1149,9 +1164,8 @@ def _run_workflow(
                     print(
                         f"\n⏸ paused at routing gate (step {step.number}) — awaiting a route.\n"
                         f"  Resume with one of [{labels}]:\n"
-                        f"    python3 -m compass.orchestrator.run {workflow_name} "
-                        f"--from-step {step.number} --non-interactive --decide <route>"
-                        + (f" --allow-write" if allow_write else "")
+                        + _resume_hint(workflow_name, step.number, run_id,
+                                       project_dir, allow_write, "<route>")
                     )
                     sys.exit(0)  # clean pause (no RUN_END → cockpit shows ⏸ awaiting)
                 choice = {"route": label, "target": dict(step.routes)[label]}
@@ -1218,9 +1232,8 @@ def _run_workflow(
                     print(
                         f"\n⏸ paused at HITL gate (step {step.number}) — awaiting your decision.\n"
                         f"  Resume:\n"
-                        f"    python3 -m compass.orchestrator.run {workflow_name} "
-                        f"--from-step {step.number} --non-interactive --decide approve|reject"
-                        + (f" --allow-write" if allow_write else "")
+                        + _resume_hint(workflow_name, step.number, run_id,
+                                       project_dir, allow_write, "approve|reject")
                     )
                     sys.exit(0)  # clean pause (no RUN_END → cockpit shows ⏸ awaiting)
                 result = {"approved": action == "approve"}

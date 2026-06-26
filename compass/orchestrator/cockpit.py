@@ -83,7 +83,7 @@ def fold_runs(events: list) -> dict:
             st["ended"] = e.get("ts")            # #130
         elif t == ev.GATE_OPEN:
             r["open_gate"] = {"step": e.get("step"), "kind": e.get("kind"),
-                              "title": e.get("title")}
+                              "title": e.get("title"), "ts": e.get("ts")}
             st = r["steps"].setdefault(e.get("step"), {})
             st["status"] = "awaiting"
             st.setdefault("title", e.get("title"))
@@ -246,19 +246,39 @@ def _has_usage(usage: dict) -> bool:
     return any(usage.get(k) for k in ("input", "output", "cache_read", "cache_creation"))
 
 
+def _gate_age_str(open_gate: dict, now) -> str:
+    """#154: how long a gate has been awaiting — so a 'stuck, I stepped out' gate is
+    visible at a glance instead of an undated ⏸. '' if no timestamp / now."""
+    ts = (open_gate or {}).get("ts")
+    then = _parse_ts(ts)
+    if then is None or now is None:
+        return ""
+    return _fmt_dur((now - then).total_seconds())
+
+
 def _approve_cmd(run: dict) -> str:
-    """The copy-paste command to act on an open gate (v1 actionable surface)."""
+    """The copy-paste command to act on an open gate (v1 actionable surface).
+
+    #154: this MUST be a real resume that closes the gate. The old form emitted bare
+    `--approve` (which needs a PATH arg it never supplied) and — critically — no
+    `--run-id`, so running it minted a NEW run and left the original gate 'awaiting'
+    forever. We now emit `--run-id <id> --from-step N --non-interactive --decide
+    approve` (the same shape the dashboard button uses via #121), with the real
+    project_dir when the spine captured it (#119)."""
     gate = run["open_gate"]
+    pdir = run.get("project_dir") or f"<{run.get('project') or 'project'}-dir>"
     parts = [
         "python3 -m compass.orchestrator.run", run.get("workflow") or "<workflow>",
-        f"--project-dir <{run.get('project') or 'project'}-dir>",
+        f"--project-dir {pdir}",
     ]
     if run.get("bet_id"):
         parts.append(f"--bet {run['bet_id']}")
+    if run.get("run_id"):
+        parts.append(f"--run-id {run['run_id']}")   # load-bearing: closes THIS gate
     if gate and gate.get("step"):
         parts.append(f"--from-step {gate['step']}")
-    base = " ".join(parts)
-    return f"{base} --approve   (or --reject)"
+    parts.append("--non-interactive --decide approve")
+    return " ".join(parts) + "   (or --decide reject)"
 
 
 def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -> str:
@@ -283,13 +303,18 @@ def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -
     out.append("COMPASS COCKPIT — portfolio" + (f"  [project: {project_filter}]" if project_filter else ""))
     out.append("=" * 60)
 
+    _now = datetime.now(timezone.utc)
     out.append(f"\n⏸ AWAITING YOUR DECISION ({len(awaiting)})")
     if not awaiting:
         out.append("  (nothing waiting on you)")
+    # oldest gate first — the one you most likely forgot while stepped out (#154)
+    awaiting.sort(key=lambda r: (r.get("open_gate") or {}).get("ts") or "")
     for r in awaiting:
         g = r["open_gate"]
         loc = " ".join(x for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
-        out.append(f"  • {loc}  step {g.get('step')} — {g.get('title') or g.get('kind')}")
+        age = _gate_age_str(g, _now)
+        age_str = f"  (awaiting {age})" if age else ""
+        out.append(f"  • {loc}  step {g.get('step')} — {g.get('title') or g.get('kind')}{age_str}")
         out.append(f"      {_approve_cmd(r)}")
 
     out.append(f"\n▶ IN FLIGHT ({len(in_flight)})")
@@ -495,12 +520,16 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     p.append(f"<h2>⏸ Awaiting your decision ({len(awaiting)})</h2>")
     if not awaiting:
         p.append("<div class='empty'>nothing waiting on you</div>")
+    # oldest gate first — the one you most likely forgot while stepped out (#154)
+    awaiting.sort(key=lambda r: (r.get("open_gate") or {}).get("ts") or "")
     for r in awaiting:
         g = r["open_gate"]
         loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
         act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
+        age = _gate_age_str(g, now)
+        age_html = f" <span class='dur'>awaiting {_esc(age)}</span>" if age else ""
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
-                 f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>"
+                 f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>{age_html}"
                  f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}{act}</div>")
 
     # ▶ In flight (+ step plan)

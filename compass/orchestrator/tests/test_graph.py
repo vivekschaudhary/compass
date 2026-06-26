@@ -730,5 +730,32 @@ class TestSelfApprovalGuard(unittest.TestCase):
         self.assertIsNone(self.revert(None))
 
 
+class TestResumeHint(unittest.TestCase):
+    """#154: the gate-pause resume hint must carry --run-id (else a CLI resume mints a
+    new run_id and the original gate stays awaiting forever) + --project-dir."""
+
+    def setUp(self):
+        from compass.orchestrator.run import _resume_hint
+        self.hint = _resume_hint
+
+    def test_includes_run_id_and_project_dir(self):
+        h = self.hint("create-story", 4, "create-story--WLT-26--X",
+                      "/repos/home", False, "approve|reject")
+        self.assertIn("--run-id create-story--WLT-26--X", h)   # the load-bearing bit
+        self.assertIn("--project-dir /repos/home", h)
+        self.assertIn("--from-step 4", h)
+        self.assertIn("--decide approve|reject", h)
+        self.assertIn("--non-interactive", h)
+        self.assertNotIn("--allow-write", h)                  # not requested
+
+    def test_allow_write_appended_when_set(self):
+        h = self.hint("fix", 6, "fix--X", "/r", True, "approve|reject")
+        self.assertIn("--allow-write", h)
+
+    def test_routing_decide_placeholder(self):
+        h = self.hint("triage", 2, "triage--X", "/r", False, "<route>")
+        self.assertIn("--decide <route>", h)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -147,7 +147,8 @@ class TestCockpitFold(unittest.TestCase):
 
     def test_approve_command_well_formed(self):
         events = [
-            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="build", bet_id="CB-7"),
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="build",
+                          bet_id="CB-7", project_dir="/repos/home"),
             ev.make_event(ev.GATE_OPEN, run_id="r1", step=6, kind="hitl", title="review gate"),
         ]
         runs = cockpit.fold_runs(events)
@@ -155,7 +156,32 @@ class TestCockpitFold(unittest.TestCase):
         self.assertIn("compass.orchestrator.run build", cmd)
         self.assertIn("--bet CB-7", cmd)
         self.assertIn("--from-step 6", cmd)
-        self.assertIn("--approve", cmd)
+        self.assertIn("--decide approve", cmd)
+        # #154: the copy-paste MUST carry --run-id (else the resume orphans this gate)
+        # and the real captured project_dir, so it actually runs + closes THIS gate.
+        self.assertIn("--run-id r1", cmd)
+        self.assertIn("--project-dir /repos/home", cmd)
+        self.assertNotIn(" --approve ", f" {cmd} ")   # the old bare bridge is gone
+
+    def test_gate_age_rendered(self):
+        # #154: a gate carries its open ts so the cockpit can show how long it's
+        # been awaiting — the "I stepped out and couldn't see it" signal.
+        from datetime import datetime, timezone, timedelta
+        opened = datetime(2026, 6, 25, 22, 13, 42, tzinfo=timezone.utc)
+        gate = {"step": 4, "kind": "hitl", "title": "g", "ts": opened.isoformat()}
+        now = opened + timedelta(hours=6, minutes=2)
+        self.assertEqual(cockpit._gate_age_str(gate, now), "6h02m")
+        # no ts / no now → no age (graceful)
+        self.assertEqual(cockpit._gate_age_str({"step": 4}, now), "")
+        self.assertEqual(cockpit._gate_age_str(gate, None), "")
+
+    def test_fold_captures_gate_ts(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", workflow="create-story"),
+            ev.make_event(ev.GATE_OPEN, run_id="r1", step=4, kind="hitl", title="g"),
+        ]
+        runs = cockpit.fold_runs(events)
+        self.assertIsNotNone(runs["r1"]["open_gate"].get("ts"))  # ts threaded for age
 
 
 class TestCostRollup(unittest.TestCase):
@@ -309,7 +335,8 @@ class TestHtmlCockpit(unittest.TestCase):
         self.assertIn("Done", out)
         self.assertIn("CB-7", out)                           # an in-flight run
         self.assertIn("all steps complete", out)             # a done run's reason
-        self.assertIn("--approve", out)                      # the awaiting run's command
+        self.assertIn("--decide approve", out)               # awaiting run's resume cmd (#154)
+        self.assertIn("--run-id r1", out)                    # carries the run id so it closes THIS gate
 
     def test_render_html_escapes(self):
         events = [
