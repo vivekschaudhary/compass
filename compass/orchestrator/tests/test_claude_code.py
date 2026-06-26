@@ -223,6 +223,9 @@ class TestDispatch(unittest.TestCase):
         tool_input, plain_input = seen["inputs"]
         self.assertIn("Orchestrator execution mode", tool_input)
         self.assertIn("REFUSE:", tool_input)          # routes a genuine block to the sentinel
+        # #153: the directive must carve out gate discipline — 'finish now' can't mean
+        # 'self-approve'. (The mechanical guard in run.py is the backstop; this is the prompt.)
+        self.assertIn("NEVER self-approve", tool_input)
         self.assertNotIn("Orchestrator execution mode", plain_input)
 
     def test_subscription_env_strips_api_key(self):

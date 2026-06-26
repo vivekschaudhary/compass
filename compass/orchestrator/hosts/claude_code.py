@@ -308,7 +308,16 @@ _EXECUTE_DIRECTIVE = (
     "commands, and produce the artifact on disk. Do NOT return a plan, do NOT ask for "
     "confirmation, and do NOT claim you lack access to the codebase — you are inside the "
     "repo. If a hard precondition genuinely cannot be met, reply with a first line of "
-    "`REFUSE: <reason>` (the orchestrator halts on that) — never a vague plan."
+    "`REFUSE: <reason>` (the orchestrator halts on that) — never a vague plan.\n\n"
+    # #153: 'end-to-end' means complete the WORK, not approve it. The headless push to
+    # 'finish now' was making doc agents over-execute and self-approve (an architecture
+    # written with status: Approved before the HITL gate) — a Principle #16 violation.
+    "**Respect your task's gates and postconditions exactly.** If your agent task says "
+    "to set a draft status (e.g. `status: proposed`) and halt at a HITL gate, do EXACTLY "
+    "that — set the draft status and stop. NEVER self-approve: do not set `status: "
+    "approved`/`ready`/`accepted` on a gated artifact. Approval is the human's decision "
+    "at the gate, not yours. 'End-to-end' = the work is done and the draft is on disk, "
+    "NOT that you signed off on it."
 )
 
 

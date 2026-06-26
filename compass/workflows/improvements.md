@@ -3672,3 +3672,19 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **255 pass** (+6: `_progress_line` tool/text/skip, `_extract_result_line` pick + missing-raises, idle-timeout parsing, argv stream-json+verbose). consistency-check CONSISTENT. **Live smoke** through the real streaming runner: progress lines streamed, returned `WLT-26`, flat-cost NOTE emitted. The WLT-26 `architecture.md` the repro produced is a real, high-quality artifact (reused the shipped anomaly substrate, declined Recharts for the in-stack SVG pattern).
 
 **Files touched (3):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #152. **(#029 batch: #148–#157.)** A hang is now *silence*, not *duration* — and you can watch the step work.
+
+### 2026-06-25 — agents can't self-approve a gated artifact (HITL enforced mechanically) (#153)
+
+**Trigger origin (Principle #19):** the DRI asked *"shouldn't every doc-approval / HITL spot show up as ⏸ Awaiting decision?"* — and checking it surfaced a defect: the WLT-26 architecture #152 produced had **`status: Approved`**. The headless architect **self-approved its own doc** before the human gate.
+
+**Root cause:** `compass/agents/architect.md` says "never self-approve" / "set `status: proposed`, halt at HITL" **four separate times** — and the agent ignored all of them. The #139 `_EXECUTE_DIRECTIVE` ("EXECUTE end-to-end NOW, don't ask for confirmation, don't return a plan") created a directive conflict the agent resolved by *over-executing*: it "finished" the task by flipping status to approved. Prompt discipline alone doesn't hold a load-bearing gate.
+
+**What shipped (two layers):**
+1. **Prompt:** the execute directive now carves out gate discipline — *"'end-to-end' means complete the WORK, not approve it; respect your task's draft-status + HITL-halt exactly; NEVER set `status: approved`/`ready`/`accepted` on a gated artifact — approval is the human's decision at the gate."*
+2. **Mechanism (the real fix — `[fail-loud-not-silent]`):** `_revert_self_approval(artifact_path)` runs at every HITL gate with an `artifact_target`. If the artifact's frontmatter already claims an approved state (`_GATE_APPROVED_STATES = {approved, ready, accepted}`, **case-insensitive** — catches the literal `Approved` failure), it **reverts to `proposed`**, prints `⚠ self-approval reverted (#153)`, and emits a spine NOTE. The gate is now a genuine human decision regardless of what the agent wrote.
+
+**Note on the gate mechanism itself:** verified correct end-to-end — every `is_hitl` step emits `GATE_OPEN`, pauses with no `RUN_END` (clean `sys.exit(0)`), the cockpit fold sets `open_gate` + status `awaiting`, and renders the **⏸ AWAITING YOUR DECISION** queue. The DRI hadn't seen it for WLT-26 only because the run died at Step 1 (the #152 timeout) before reaching the Step 2 architecture gate. So #153 isn't "the gate was missing" — it's "the gate could be pre-empted by a self-approving agent."
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **260 pass** (+5: revert approved→proposed, case-insensitive `Approved`, `ready`, leaves `proposed` untouched, missing-file no-op; + directive carries "NEVER self-approve"). consistency-check CONSISTENT.
+
+**Files touched (4):** `compass/orchestrator/run.py` · `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_graph.py` · `compass/orchestrator/tests/test_claude_code.py` · `CHANGELOG.md` (+ this file). Counter: #153. **(#029 batch: #148–#157.)** A gate the agent can sign for itself isn't a gate.

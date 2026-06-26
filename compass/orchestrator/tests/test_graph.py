@@ -674,5 +674,61 @@ class TestNonInteractiveInput(unittest.TestCase):
         self.assertEqual(self.collect("step", "ctx"), "ctx")
 
 
+class TestSelfApprovalGuard(unittest.TestCase):
+    """#153: an agent must not self-approve a gated artifact (Principle #16). The
+    headless execute directive could push a doc agent to flip its own status to
+    approved before the HITL gate (live: a WLT-26 architecture `status: Approved`).
+    `_revert_self_approval` is the mechanical backstop at the gate."""
+
+    def setUp(self):
+        from compass.orchestrator.run import _revert_self_approval
+        self.revert = _revert_self_approval
+
+    def _write(self, status):
+        f = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+        f.write(f"---\nid: X\nstatus: {status}\n---\n\n# Doc\n")
+        f.close()
+        return Path(f.name)
+
+    def test_reverts_approved_to_proposed(self):
+        p = self._write("approved")
+        try:
+            self.assertEqual(self.revert(p), "approved")          # reports reverted-from
+            from compass.orchestrator.connector import read_frontmatter_status
+            self.assertEqual(read_frontmatter_status(p), "proposed")
+        finally:
+            p.unlink()
+
+    def test_case_insensitive_catches_capital_approved(self):
+        # the exact live failure: the agent wrote `status: Approved`
+        p = self._write("Approved")
+        try:
+            self.assertEqual(self.revert(p), "Approved")
+            from compass.orchestrator.connector import read_frontmatter_status
+            self.assertEqual(read_frontmatter_status(p), "proposed")
+        finally:
+            p.unlink()
+
+    def test_reverts_ready_too(self):
+        p = self._write("ready")          # story gate's approved state
+        try:
+            self.assertEqual(self.revert(p), "ready")
+        finally:
+            p.unlink()
+
+    def test_leaves_proposed_untouched(self):
+        p = self._write("proposed")
+        try:
+            self.assertIsNone(self.revert(p))     # nothing to revert
+            from compass.orchestrator.connector import read_frontmatter_status
+            self.assertEqual(read_frontmatter_status(p), "proposed")
+        finally:
+            p.unlink()
+
+    def test_missing_file_is_noop(self):
+        self.assertIsNone(self.revert(Path("/nonexistent/x.md")))
+        self.assertIsNone(self.revert(None))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -408,6 +408,34 @@ def _resolve_gate(decide, is_routing: bool, routes=None):
     return ("pause", None)
 
 
+_GATE_APPROVED_STATES = {"approved", "ready", "accepted"}
+
+
+def _revert_self_approval(artifact_path):
+    """#153: an agent must NOT self-approve a gated artifact — approval is the
+    human's decision at the HITL gate (Principle #16, [refuse-escalate]). The
+    headless execute directive (#139) could push a doc agent to over-execute and
+    flip its own status to approved/ready (live: a WLT-26 architecture written
+    `status: Approved` before its gate). Prompt discipline alone didn't hold (the
+    agent ignored four explicit 'never self-approve' lines), so this is the
+    mechanical backstop: at the gate, if the artifact already claims an approved
+    state, revert it to `proposed` so the human actually decides. Case-insensitive
+    (catches `Approved`). Returns the reverted-from status if it reset, else None."""
+    if artifact_path is None or not artifact_path.exists():
+        return None
+    from .connector import read_frontmatter_status, set_frontmatter_status
+    status = read_frontmatter_status(artifact_path)
+    if status.lower() not in _GATE_APPROVED_STATES:
+        return None
+    try:
+        content = artifact_path.read_text(encoding="utf-8")
+        artifact_path.write_text(
+            set_frontmatter_status(content, "proposed"), encoding="utf-8")
+    except OSError:
+        return None
+    return status
+
+
 def _recommended_next(output: str):
     """
     The right-sized next command a step recommended (#110), parsed from a single
@@ -1168,6 +1196,20 @@ def _run_workflow(
         # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:
             emit(ev.GATE_OPEN, step=step.number, kind="hitl", title=step.title)
+            # #153: backstop the no-self-approve rule mechanically — if the prior
+            # step's agent already marked the gated artifact approved, revert to
+            # `proposed` so this gate is a real human decision, not a rubber stamp.
+            if step.artifact_target and last_artifact_path:
+                reverted = _revert_self_approval(last_artifact_path)
+                if reverted:
+                    print(
+                        f"⚠ self-approval reverted (#153): the agent set "
+                        f"`status: {reverted}` on {last_artifact_path.name} BEFORE this "
+                        f"gate — reset to `proposed`. Approval is your decision here "
+                        f"(Principle #16)."
+                    )
+                    emit(ev.NOTE, text=(f"self-approval reverted ({reverted}→proposed) "
+                                        f"on step {step.number} [#153]"))
             if non_interactive:
                 # #118: don't block on input — apply --decide or pause-and-exit.
                 action, _ = _resolve_gate(decide, False, None)
