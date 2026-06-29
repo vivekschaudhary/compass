@@ -42,6 +42,7 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
 - Brief is `status: approved`
 - If `architecture_required: true` on the bet, bet architecture is `status: approved`
 - Story has AC, design link (if UI), tech notes, dependencies, priority
+- **Design/copy dependencies are human-delivered (#171).** If this feature story's `dependencies:` include a `design` or `copy` story, each MUST be `status: ready` (the human designer/writer delivered the Figma/strings). If any is still `needs-design`/`needs-copy` → **stop and refuse**, naming it: *"Blocked: story `<feature-id>` depends on `<design-id>` (needs-design) — a human designer must deliver the Figma into its `## Design deliverable (human)` section and flip it to `ready` before this builds."* Do NOT build UI off an unspecified/undelivered design, and do NOT invent the design or copy yourself.
 - If anything missing → stop. Do not improvise. Flag to PM.
 
 **Work outline:**

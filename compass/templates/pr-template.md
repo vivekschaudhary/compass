@@ -12,8 +12,8 @@ Canonical PR template content. Copied to .github/PULL_REQUEST_TEMPLATE.md
 - Bet: `docs/bets/<bet-id>/brief.md`
 - Architecture: `docs/bets/<bet-id>/architecture.md` (if exists)
 - Story: `docs/bets/<bet-id>/stories/<story-id>/story.md`
-- Design: `docs/bets/<bet-id>/stories/<story-id>/design.md` (if UI)
-- Copy: `docs/bets/<bet-id>/stories/<story-id>/copy.md` (if UI)
+- Design story: `docs/bets/<bet-id>/stories/<design-story-id>/story.md` (if UI — the human-delivered Figma in its `## Design deliverable (human)` section)
+- Copy story: `docs/bets/<bet-id>/stories/<copy-story-id>/story.md` (if UI — the human-written strings in its `## Copy deliverable (human)` section)
 - Ticket: <Jira/Linear link>
 
 ## Changes per area

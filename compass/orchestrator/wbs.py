@@ -15,6 +15,9 @@ from . import events as ev
 from .cockpit import fold_runs
 
 _SHIPPED = {"shipped", "won", "merged"}
+# #171: a design/copy story sits here until a HUMAN delivers the Figma/strings and
+# flips it to `ready`. A feature story that depends on one is BLOCKED until then.
+_PENDING_HUMAN = {"needs-design", "needs-copy"}
 
 
 def _frontmatter(path) -> dict:
@@ -120,16 +123,37 @@ def build_wbs(project_dir, with_conformance: bool = False) -> dict:
         if b["status"] == "proposed" and not runs:
             node_attn.append({"level": "amber", "reason": "not started"})
 
-        # stories
-        stories = []
-        for sf in sorted((b["dir"] / "stories").glob("*/story.md")) if (b["dir"] / "stories").exists() else []:
+        # stories — read each, then resolve cross-story dependencies (#171: a feature
+        # story blocked by an un-delivered design/copy story; design/copy stories
+        # awaiting human delivery) so the tower surfaces them under manage-by-exception.
+        sdir = b["dir"] / "stories"
+        story_nodes = []
+        for sf in sorted(sdir.glob("*/story.md")) if sdir.exists() else []:
             sfm = _frontmatter(sf)
-            stories.append({
+            story_nodes.append({
                 "id": sfm.get("id") or sf.parent.name,
                 "status": sfm.get("status") or "unknown",
                 "type": sfm.get("type"),
+                "owner": sfm.get("owner"),
+                "dependencies": _list(sfm.get("dependencies")),
                 "jira_key": sfm.get("jira_key"),
             })
+        story_status = {s["id"]: s["status"] for s in story_nodes}
+
+        stories = []
+        for s in story_nodes:
+            # blocked = a dependency that's a design/copy story still awaiting a human
+            blockers = [d for d in s["dependencies"]
+                        if story_status.get(d, "unknown") in _PENDING_HUMAN]
+            if blockers:
+                reason = (f"story {s['id']} blocked by "
+                          + ", ".join(f"{d} ({story_status.get(d, 'unknown')})" for d in blockers))
+                node_attn.append({"level": "red", "reason": reason})
+            elif s["owner"] == "human" and s["status"] in _PENDING_HUMAN:
+                node_attn.append({"level": "amber",
+                                  "reason": f"{s.get('type') or 'design/copy'} story {s['id']} "
+                                            f"awaiting human delivery ({s['status']})"})
+            stories.append({**s, "blocked_by": blockers})
 
         conformance = None
         if with_conformance:
@@ -186,6 +210,9 @@ def render_wbs(wbs: dict) -> str:
                      f"  ({b['story_count']} stories){conf}")
         for st in b.get("stories", []):
             ptr = f" → {st['jira_key']}" if st.get("jira_key") else ""
-            lines.append(f"      - {st['id']} [{st['status']}]{ptr}")
+            tag = f" ({st['type']}, human)" if st.get("owner") == "human" else (
+                f" ({st['type']})" if st.get("type") and st.get("type") != "story" else "")
+            blocked = f"  ⛔ blocked by {', '.join(st['blocked_by'])}" if st.get("blocked_by") else ""
+            lines.append(f"      - {st['id']} [{st['status']}]{tag}{ptr}{blocked}")
     lines.append("")
     return "\n".join(lines)

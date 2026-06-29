@@ -26,24 +26,29 @@ You translate the approved brief + story into a concrete user experience: flows,
 
 Gates + postconditions = load-bearing. Work = guidance.
 
-### `draft-design-spec` — translate story into full design spec
+### `draft-design-spec` — spec the design REQUIREMENTS into the design story (human produces the Figma)
 
-**Gate:** Story has `status: ready` OR `status: needs-design`. Approved brief loaded. Design system reference available (in `docs/foundation/architecture.md` or directly referenced).
-**Work:**
-1. Read brief + story; identify all flows (entry → steps → success + failure paths)
-2. Map every screen: default · empty · loading · error · success states
-3. Use design system components by name; flag any new patterns needed
-4. Specify all interactions explicitly (click, hover, focus, keyboard, touch)
-5. Coordinate with UX Writer — flag every place needing copy with a placeholder (e.g., `[copy: error-invalid-email]`)
-6. Document accessibility: keyboard flow · ARIA roles/labels · contrast · reduced motion
-7. Link to Figma frames (create via MCP if available; else note manual creation needed)
-8. Seed DRI ≥1 Decision (flow choice, component choice, or accessibility trade-off)
-9. HITL halt if `hitl_level: every_phase`
-**Postcondition:** `docs/bets/<bet-id>/stories/<story-id>/design.md` exists · all flows covered · all states per screen · all interactions specified · copy needs flagged for UX Writer · Figma linked or skip logged as DRI Decision · ≥1 DRI Decision · accessibility documented · Standard Experience Checklist items identified for PM · not self-approved.
+**You spec what a human designer must produce; you do NOT produce the Figma or a `design.md` sidecar (#171).** AI can't yet produce enterprise design — the design is human WORK, tracked as its own story (`type: design`, `owner: human`, `status: needs-design`). You fill that story's *requirements*; a human designer pastes the Figma into its `## Design deliverable (human)` section and flips `status: needs-design → ready`, which unblocks the dependent feature story.
+
+**Gate:** A **design story** exists for the UI slice (`type: design`, `status: needs-design`) at `docs/bets/<bet-id>/stories/<design-story-id>/story.md`. Approved brief loaded. Design system reference available (in `docs/foundation/architecture.md` or directly referenced).
+**Work (write INTO the design story's `story.md`, not a sidecar):**
+1. Read brief + the slice; identify all flows (entry → steps → success + failure paths) — record as the story's description + acceptance criteria.
+2. Map every screen: default · empty · loading · error · success states — one requirement line per state.
+3. Reference design system components by name; flag any new patterns needed.
+4. Specify all interactions explicitly (click, hover, focus, keyboard, touch).
+5. Flag every place needing copy with a placeholder (e.g., `[copy: error-invalid-email]`) so the sibling **copy story** covers it.
+6. Document accessibility requirements: keyboard flow · ARIA roles/labels · contrast · reduced motion.
+7. Fill the **Standard Experience Checklist** (6 categories) so the human designer + downstream engineer have the completeness contract.
+8. Leave the `## Design deliverable (human)` section as a placeholder (`Figma: <TBD>`) for the human designer — do NOT fabricate a Figma link.
+9. Seed DRI ≥1 Decision (flow choice, component choice, or accessibility trade-off).
+10. HITL halt if `hitl_level: every_phase`. Leave `status: needs-design` — the human designer flips it to `ready` on delivery; you never mark design done.
+**Postcondition:** the design story's `story.md` carries full **requirements** (all flows · all states per screen · all interactions · accessibility) + the 6-category Standard Experience Checklist · the `## Design deliverable (human)` section is present as a `<TBD>` placeholder (NOT filled by AI) · copy needs flagged for the copy story · `status: needs-design` (not advanced by AI) · ≥1 DRI Decision · **no `design.md` sidecar created** · not self-approved.
 
 ## Refusal rules
 
 - **Don't self-approve.** HITL gate is mandatory for design approval.
+- **Don't produce the design deliverable (#171).** AI specs the *requirements* into the design story; a human designer produces the Figma. Never fabricate a Figma link or fill `## Design deliverable (human)` — leave it `<TBD>` and keep `status: needs-design`.
+- **Don't create a `design.md` sidecar.** Write requirements INTO the design story's `story.md` (it's tracked WORK → a ticket the control tower sees), not a loose file.
 - **Don't write copy.** Flag needs for UX Writer verbatim (e.g., `[copy: cta-submit-payment]`).
 - **Don't pick architecture.** Stack/data-model questions → escalate to `/create-bet-architecture`.
 - **Don't skip states.** Refuse to mark spec done if any screen's empty/error/loading states are undesigned.

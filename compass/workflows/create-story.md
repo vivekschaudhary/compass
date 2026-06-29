@@ -4,7 +4,7 @@ status: active
 owner: pm
 auto_invokes: []
 invoked_by: [manual]
-version: 0.3.56
+version: 0.3.57
 requires_approved: [docs/bets/<bet-id>/brief.md]
 ---
 
@@ -18,7 +18,7 @@ requires_approved: [docs/bets/<bet-id>/brief.md]
 
 ## Purpose
 
-PM decomposes an approved bet into its **full set** of shippable stories in one pass — the complete backlog, sequenced by dependency/priority, so the bet's plan is visible end-to-end. Designer + UX Writer engage per UI story. (Changed v0.3.56 — was one-story-at-a-time; see migration note.) **Stories are still built one at a time via `/build`** — full-backlog *planning*, serial *building* (sibling stories that touch the same files still merge serially).
+PM decomposes an approved bet into its **full set** of shippable stories in one pass — the complete backlog, sequenced by dependency/priority, so the bet's plan is visible end-to-end. **A UI slice becomes a trio (#171): a `design` story + a `copy` story (both `owner: human`) + the `feature` story that depends on them.** Designer + UX Writer **spec the requirements into** the design/copy stories — they do NOT produce the Figma or the final copy (humans do); there are no `design.md`/`copy.md` sidecars. (Changed v0.3.57; see migration note.) Feature stories **build independently** via `/build <story-id>` (#172 scopes a build to one story — a bet's stories can develop in parallel on their own branches), but a UI feature stays blocked until its design + copy stories are human-delivered (`status: ready`).
 
 ## Architectural shape (v0.3.42)
 
@@ -32,9 +32,9 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/pm.md` — Task `decompose-bet-to-story` (enumerates the full slice set, drafts a story.md per slice, owns the Standard Experience Checklist gate)
-- `compass/agents/designer.md` — Task `draft-design-spec` (per UI story in the set)
-- `compass/agents/ux-writer.md` — Task `write-copy` (per UI story in the set; consumes the design spec's copy placeholders)
+- `compass/agents/pm.md` — Task `decompose-bet-to-story` (enumerates the full slice set; for a UI slice drafts the design + copy + feature trio; owns the Standard Experience Checklist gate)
+- `compass/agents/designer.md` — Task `draft-design-spec` (per UI slice — specs design **requirements** INTO the `design` story; human produces the Figma)
+- `compass/agents/ux-writer.md` — Task `write-copy` (per UI slice — specs the **copy-slot inventory** INTO the `copy` story; human writes the strings)
 - `compass/agents/delivery-manager.md` — Task `update-status`
 
 ## Dispatch graph
@@ -44,54 +44,63 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 **Dispatches:** PM agent
 **Task definition:** `compass/agents/pm.md` → Task `decompose-bet-to-story`
 **Input:** `docs/bets/<bet-id>/brief.md` · bet architecture (if any) · any stories already under the bet · `compass/templates/story.md`
-**What it covers:** confirm gate (brief approved; arch approved if required) → **enumerate the full set of shippable slices** (each smallest valuable · independent · sequenced by dependency/priority) → generate a story ID per slice → flag each UI slice for the Designer + UX Writer steps → draft `docs/bets/<bet-id>/stories/<story-id>/story.md` **for each slice** per the template with the **Standard Experience Checklist** (6 categories, each AC-covered or `n/a — <reason>`) → mirror each to tracker.
-**Output:** a `story.md` per slice — the bet's full backlog — each `status: ready` (or `needs-design` if a UI design isn't drafted yet)
+**What it covers:** confirm gate (brief approved; arch approved if required) → **enumerate the full set of shippable slices** (each smallest valuable · independent · sequenced by dependency/priority) → generate a story ID per slice → **for each UI slice, create the design + copy + feature trio** (design + copy = `owner: human`, `status: needs-design`/`needs-copy`; the feature story's `dependencies:` name them, `status: needs-design` until they're delivered); non-UI slice → a single feature story (`type: story`, `status: ready`) → draft each `docs/bets/<bet-id>/stories/<story-id>/story.md` per the template with the **Standard Experience Checklist** (6 categories, each AC-covered or `n/a — <reason>`) → mirror each to tracker.
+**Output:** the bet's full backlog — a feature `story.md` per slice (UI slices also get a `design` + `copy` story), each with the correct `type`/`owner`/`status`
 
-### Step 2. `designer.draft-design-spec` (Designer agent owns) — per UI story in the set
+### Step 2. `designer.draft-design-spec` (Designer agent owns) — per UI slice (into the `design` story)
 
-**Dispatches:** Designer agent (once per story with a UI surface; skip non-UI stories)
+**Dispatches:** Designer agent (once per UI slice; skip non-UI slices)
 **Task definition:** `compass/agents/designer.md` → Task `draft-design-spec`
-**What it covers:** all flows (entry → steps → success + failure) · every screen's default/empty/loading/error/success states · design-system components by name · interactions · accessibility · copy placeholders for UX Writer · Figma links. Runs in parallel with Step 3.
-**Output:** `docs/bets/<bet-id>/stories/<story-id>/design.md`
+**What it covers:** writes the design **requirements** INTO the slice's `design` story (`type: design`) — all flows (entry → steps → success + failure) · every screen's default/empty/loading/error/success states · design-system components by name · interactions · accessibility · copy placeholders for the copy story · the Standard Experience Checklist. Leaves `## Design deliverable (human)` as a `<TBD>` Figma placeholder and `status: needs-design` — a **human designer** produces the Figma. Runs in parallel with Step 3. **No `design.md` sidecar.**
+**Output:** the `design` story's `story.md` carries full design requirements + an unfilled `## Design deliverable (human)` section
 
-### Step 3. `ux-writer.write-copy` (UX Writer agent owns) — per UI story in the set
+### Step 3. `ux-writer.write-copy` (UX Writer agent owns) — per UI slice (into the `copy` story)
 
-**Dispatches:** UX Writer agent (once per story with a UI surface; skip non-UI stories)
+**Dispatches:** UX Writer agent (once per UI slice; skip non-UI slices)
 **Task definition:** `compass/agents/ux-writer.md` → Task `write-copy`
-**What it covers:** fill every copy placeholder from the design spec — labels · buttons · errors (typed: network/validation/server/permissions/unknown) · empty states · helper text · notifications · confirmations. Coordinates with Designer on character limits. Runs in parallel with Step 2.
-**Output:** `docs/bets/<bet-id>/stories/<story-id>/copy.md`
+**What it covers:** writes the **copy-slot inventory** INTO the slice's `copy` story (`type: copy`) — every slot (labels · buttons · errors that must be typed: network/validation/server/permissions/unknown · empty states needing why + next-action · helper text · notifications · confirmations) with its context/constraint, leaving each **Final copy (human)** cell `<TBD>` for a **human writer**. Keeps `status: needs-copy`. Runs in parallel with Step 2. **No `copy.md` sidecar.**
+**Output:** the `copy` story's `story.md` carries the full copy-slot inventory in `## Copy deliverable (human)` with strings left `<TBD>`
 
 ### Step 4. **HITL gate** (human — only when `hitl_level: every_phase`)
 
 **Dispatches:** HUMAN (not an agent)
 **Artifact target:** docs/bets/<bet-id>/stories/<story-id>/story.md
-**What it covers:** under `every_phase`, human reviews the **backlog** (each story's AC complete; Standard Experience Checklist has no empty category; design + copy present for UI stories; slice sequencing/dependencies sane). Approve → stories promote to `status: ready` (frontmatter flip / `--approve` CLI; the orchestrator's single-artifact promotion targets the path above — **batch-promoting the whole set on one approval is a known follow-up**, see migration note). Under lighter `hitl_level`, stories auto-advance to `ready` once the checklist gate passes — no human stop. **Per Principle #16:** PM must NOT self-approve when the gate applies.
+**What it covers:** under `every_phase`, human reviews the **backlog** (each story's AC complete; Standard Experience Checklist has no empty category; each UI slice has its design + copy + feature trio with the feature's `dependencies:` wired; slice sequencing/dependencies sane). Approve → **feature** stories promote to `status: ready` (frontmatter flip / `--approve` CLI; single-artifact promotion targets the path above — **batch-promoting the set is a known follow-up**, see migration note). **Design + copy stories stay `needs-design`/`needs-copy`** — a human designer/writer delivers the Figma/strings and flips them to `ready`, which unblocks the dependent feature. Under lighter `hitl_level`, feature stories auto-advance once the checklist gate passes. **Per Principle #16:** PM must NOT self-approve when the gate applies.
 
 ### Step 5. `delivery-manager.update-status` (Delivery Manager agent owns)
 
 **Dispatches:** Delivery Manager agent
 **Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`
-**What it covers:** record the new stories (the bet's backlog) in `docs/status.md`; surface next recommended command (`/build <story-id>` for the first slice by dependency order).
+**What it covers:** record the new stories (the bet's backlog) in `docs/status.md`; surface next recommended command (`/build <feature-story-id>` for the first slice by dependency order — note that a UI feature is blocked until its design + copy stories are human-delivered).
 
 ## Workflow-level verification (final GATE)
 
-- [ ] (Step 1) **every slice** has a `docs/bets/<bet-id>/stories/<story-id>/story.md`; frontmatter id · bet · type · status
-- [ ] (Step 1) Acceptance criteria present in each story
+- [ ] (Step 1) **every slice** has its story(ies); frontmatter id · bet · **type** (`story`/`design`/`copy`) · **owner** (`agent`/`human`) · status
+- [ ] (Step 1) **each UI slice has the design + copy + feature trio** — the feature story's `dependencies:` name its design + copy story ids; design/copy carry `owner: human`
+- [ ] (Step 1) Acceptance criteria present in each feature story
 - [ ] (Step 1) **Standard Experience Checklist: no empty category** in each story — each of the 6 (Navigation · States · Feedback · Accessibility · Edge cases · Cross-surface consistency) covered by ≥1 AC OR `n/a — <reason>` (Principle #15; empty category blocks `status: ready`)
-- [ ] (Steps 2-3) For each UI story: `design.md` + `copy.md` exist alongside it; story links the design
+- [ ] (Step 2) each `design` story carries full design **requirements** + an unfilled `## Design deliverable (human)` (`<TBD>` Figma), `status: needs-design` — **no `design.md` sidecar**
+- [ ] (Step 3) each `copy` story carries the **copy-slot inventory** in `## Copy deliverable (human)` with strings `<TBD>`, `status: needs-copy` — **no `copy.md` sidecar**
 - [ ] (Step 1) ≥1 DRI Decision · each story mirrored or skip-logged · sibling dependencies/ordering noted
 - [ ] No duplicate slices (re-run adds only newly-discovered stories)
 - [ ] Principle #16: not self-approved when `every_phase` gate applies
 
 ## Output summary contract
 
-**TL;DR** (3 lines) · **Files created** (story.md, +design.md/copy.md if UI) · **Next recommended command** (`/build <story-id>`) · **Open questions/risks**.
+**TL;DR** (3 lines) · **Files created** (a `story.md` per story — feature, plus a `design` + `copy` story for each UI slice) · **Next recommended command** (`/build <feature-story-id>`) · **Open questions/risks** (incl. which UI features are blocked awaiting human design/copy delivery).
 
 ## Notes
 
-**Anti-patterns:** a story that reaches `ready` with an empty Standard Experience Checklist category (the aura-app missing-back-button class of failure) · paraphrasing UX Writer copy · skipping Designer/UX Writer on a UI story · duplicating a slice already drafted under the bet · drafting overlapping slices with no dependency ordering (sets up sibling merge conflicts at build — note ordering instead). *(Removed v0.3.56: "decomposing the whole backlog upfront" — that's now the intended behavior.)*
+**Anti-patterns:** a story that reaches `ready` with an empty Standard Experience Checklist category (the aura-app missing-back-button class of failure) · **AI filling a design/copy deliverable** (fabricating a Figma link, or writing the `Final copy (human)` strings — those are human WORK; AI specs the requirements only, #171) · **a `design.md`/`copy.md` sidecar** instead of a tracked design/copy story · a UI feature story missing `dependencies:` on its design + copy stories · skipping Designer/UX Writer on a UI slice · duplicating a slice already drafted under the bet · drafting overlapping slices with no dependency ordering (sets up sibling merge conflicts at build — note ordering instead).
 
-**Edge cases:** non-UI stories → Steps 2-3 skipped for those (straight to `ready`) · `hitl_level` lighter than `every_phase` → Step 4 auto-advances · re-run on a bet that already has stories → add only newly-discovered slices, don't duplicate · the backlog is planned all at once, but **built one story at a time** via `/build` (sibling stories touching the same files merge serially).
+**Edge cases:** non-UI slice → Steps 2-3 skipped, single feature story straight to `ready` · `hitl_level` lighter than `every_phase` → Step 4 auto-advances feature stories (design/copy still wait on human delivery) · re-run on a bet that already has stories → add only newly-discovered slices, don't duplicate · feature stories **build independently** via `/build <story-id>` (#172), but a UI feature is blocked until its design + copy stories are human-delivered (`status: ready`); sibling stories touching the same files still merge serially.
+
+### Migration (v0.3.56 → v0.3.57) — design & copy become human-owned stories, not sidecar files
+
+- **What changed:** a UI slice now decomposes into a **trio** — a `design` story + a `copy` story (both `owner: human`) + the `feature` story that `depends_on` them — instead of a single story with `design.md` + `copy.md` sidecars. Designer/UX Writer now **spec the requirements INTO** the design/copy stories (design: flows·screens·states·a11y + the Standard Experience Checklist; copy: the slot inventory + constraints); a **human** produces the Figma / writes the strings into the story's `## … deliverable (human)` section and flips `needs-design`/`needs-copy` → `ready`.
+- **Why (DRI):** if it's work, it belongs on the board — a tracked story (→ Jira ticket → WBS → conformance → audit), not a loose file the control tower can't see. And AI can't yet produce enterprise design/copy: it decomposes + specs; humans deliver.
+- **What did NOT change:** the Standard Experience Checklist gate; the connector still routes every `story.md` to ticketing (design/copy/feature all become tickets, no connector change). Feature stories build via `/build` (now story-scoped, #172).
+- **Forward-only:** in-flight bets decomposed under v0.3.56 used the sidecar model; re-running `/create-story` after this lands produces the trio shape. The rejected alternative ("AI generates the design/copy") stays rejected — humans own those deliverables.
 
 ### Migration (v0.3.42 → v0.3.56) — one-story-at-a-time → full-backlog decomposition
 
