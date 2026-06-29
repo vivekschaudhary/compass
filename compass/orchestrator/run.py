@@ -2023,6 +2023,14 @@ def main(argv=None):
         help="Format for --export-audit (json | md). Default json.",
     )
     parser.add_argument(
+        "--controls",
+        dest="controls",
+        default=None,
+        help="Path to a control framework (controls.md) for --export-audit "
+             "conformance mapping. Auto-discovered from docs/bets/<bet>/controls.md "
+             "or docs/controls.md if omitted.",
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -2074,7 +2082,8 @@ def main(argv=None):
             print_hitl_table(project_dir)
         if args.export_audit:
             from .logger import build_audit, format_audit_markdown
-            audit = build_audit(project_dir, bet_id=args.bet, run_id=args.run_id)
+            audit = build_audit(project_dir, bet_id=args.bet, run_id=args.run_id,
+                                controls_path=args.controls)
             if args.audit_format == "md":
                 print(format_audit_markdown(audit))
             else:

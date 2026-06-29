@@ -364,5 +364,90 @@ class TestGovernanceAudit(unittest.TestCase):
         self.assertIn("engineer.implement-story", md)
 
 
+class TestSowConformance(unittest.TestCase):
+    """#2b: hand-authored control framework + controls→evidence conformance mapping."""
+
+    CONTROLS = (
+        "# Control framework\n\n"
+        "## CTRL-1 — Independent cross-model code review\n- category: governance\n- check: cross-model-review\n\n"
+        "## CTRL-2 — Human approval gate\n- category: governance\n- check: human-approval\n\n"
+        "## CTRL-3 — Security review\n- category: security\n- check: security-review\n\n"
+        "## CTRL-5 — Data residency\n- category: compliance\n- check: manual\n- attest: pending\n"
+    )
+
+    def setUp(self):
+        self.project_dir = Path(tempfile.mkdtemp())
+        self.home = tempfile.mkdtemp()
+        self._old_home = os.environ.get("COMPASS_HOME")
+        os.environ["COMPASS_HOME"] = self.home
+
+    def tearDown(self):
+        if self._old_home is None:
+            os.environ.pop("COMPASS_HOME", None)
+        else:
+            os.environ["COMPASS_HOME"] = self._old_home
+
+    def _write_controls(self, body):
+        p = self.project_dir / "docs" / "controls.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body, encoding="utf-8")
+        return p
+
+    def test_parse_controls(self):
+        from compass.orchestrator.logger import parse_controls
+        controls = parse_controls(self._write_controls(self.CONTROLS))
+        self.assertEqual([c["id"] for c in controls], ["CTRL-1", "CTRL-2", "CTRL-3", "CTRL-5"])
+        self.assertEqual(controls[0]["check"], "cross-model-review")
+        self.assertEqual(controls[0]["category"], "governance")
+        self.assertEqual(controls[0]["title"], "Independent cross-model code review")
+        self.assertEqual(controls[3]["attest"], "pending")
+
+    def test_evaluate_conformance_statuses(self):
+        from compass.orchestrator.logger import log_step, log_hitl, build_audit
+        log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
+                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 host="claude", model="claude-opus", output=FAKE_OUTPUT)
+        log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
+                 bet_id="CB-4", step=3, agent="reviewer", task="review-pr",
+                 host="codex", model="gpt-5", output=FAKE_OUTPUT)
+        log_hitl(project_dir=self.project_dir, run_id="b1", workflow="build",
+                 bet_id="CB-4", step=6, artifact_path=None, decision="approved", actor="md@x.com")
+        self._write_controls(self.CONTROLS)
+        conf = build_audit(self.project_dir, bet_id="CB-4")["conformance"]
+        by_id = {c["id"]: c["status"] for c in conf["controls"]}
+        self.assertEqual(by_id["CTRL-1"], "met")      # cross-model independent
+        self.assertEqual(by_id["CTRL-2"], "met")      # human approved
+        self.assertEqual(by_id["CTRL-3"], "unmet")    # no security-review step
+        self.assertEqual(by_id["CTRL-5"], "at-risk")  # manual, pending
+        self.assertFalse(conf["conformant"])
+
+    def test_manual_attest_met(self):
+        from compass.orchestrator.logger import log_step, build_audit
+        self._write_controls("## CTRL-9 — Manual\n- check: manual\n- attest: met\n")
+        log_step(project_dir=self.project_dir, run_id="m1", workflow="build",
+                 bet_id="CB-1", step=1, agent="engineer", task="t",
+                 host="claude", model=None, output=FAKE_OUTPUT)
+        conf = build_audit(self.project_dir, bet_id="CB-1")["conformance"]
+        self.assertEqual(conf["controls"][0]["status"], "met")
+        self.assertTrue(conf["conformant"])
+
+    def test_conformance_in_markdown(self):
+        from compass.orchestrator.logger import log_step, build_audit, format_audit_markdown
+        self._write_controls(self.CONTROLS)
+        log_step(project_dir=self.project_dir, run_id="x1", workflow="build",
+                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 host="claude", model="claude-opus", output=FAKE_OUTPUT)
+        md = format_audit_markdown(build_audit(self.project_dir, bet_id="CB-4"))
+        self.assertIn("SOW-conformance", md)
+        self.assertIn("CTRL-1", md)
+
+    def test_no_controls_no_conformance(self):
+        from compass.orchestrator.logger import log_step, build_audit
+        log_step(project_dir=self.project_dir, run_id="n1", workflow="build",
+                 bet_id="CB-4", step=1, agent="engineer", task="t",
+                 host="claude", model=None, output=FAKE_OUTPUT)
+        self.assertNotIn("conformance", build_audit(self.project_dir, bet_id="CB-4"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
