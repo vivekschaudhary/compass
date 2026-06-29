@@ -285,8 +285,8 @@ _INCOMPLETE_RE = re.compile(
     # a completed step never asks the operator to approve a write dialog.
     r"|click\s+[\"']?allow[\"']?"
     r"|permission\s+dialog"
-    r"|(?:waiting|pending|blocked)\s+on[^\n]{0,40}(?:permission|approval)"
-    r"|(?:awaiting|pending)[^\n]{0,30}(?:permission|approval)"
+    r"|(?:waiting|pending|blocked)\s+on[^\n]{0,40}permission"
+    r"|(?:awaiting|pending)[^\n]{0,30}permission"
     r"|approve\s+(?:the\s+|both\s+|two\s+)?(?:file\s+)?writes?\b"
     r"|please\s+approve[^\n]{0,30}(?:write|file|dialog|prompt)",
     re.IGNORECASE,
@@ -1314,7 +1314,11 @@ def _run_workflow(
          project_dir=str(project_dir))  # #119: full path so the cockpit can resume any run
 
     last_artifact_path = None
-    last_agent_output = ""
+    # On a --from-step resume the prior agent step was loaded from disk (not re-run),
+    # so seed last_agent_output from it — else a gate-resume can't promote/flip the
+    # artifact ("no prior step output to promote"). _promote_artifact still reads the
+    # on-disk artifact for the actual content.
+    last_agent_output = prior_outputs[-1].get("output", "") if prior_outputs else ""
     first_step = True
     skipped = set()  # steps in a not-taken branch (#96 conditional dispatch)
     handed_off = False  # set when a #103 cross-workflow hand-off ends the run early
