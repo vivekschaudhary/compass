@@ -213,3 +213,60 @@ def cost_of_usage_event(event: dict) -> float:
         "cache_read": event.get("cache_read_input_tokens", 0) or 0,
         "cache_creation": event.get("cache_creation_input_tokens", 0) or 0,
     }, event.get("model"))
+
+
+# ── coherence floor: stale-run detection + auto-halt (#5) ────────────────────
+# An in-flight run (run_start, no run_end) whose process was killed/abandoned never
+# emits run_end — so it shows "in flight" forever and the board lies. Detection =
+# no activity for > COMPASS_STALE_TIMEOUT seconds; the reaper emits RUN_END(halted)
+# so the spine reflects reality ("the board can't lie"). [fail-loud-not-silent].
+
+def stale_timeout() -> int:
+    """Seconds of no activity after which an in-flight run is considered abandoned.
+    Override via $COMPASS_STALE_TIMEOUT (default 1800 = 30 min)."""
+    try:
+        return int(os.environ.get("COMPASS_STALE_TIMEOUT", "1800"))
+    except ValueError:
+        return 1800
+
+
+def _parse_ts(ts):
+    try:
+        return datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return None
+
+
+def run_age_seconds(run: dict, now):
+    """Seconds since a run's last activity (last_ts, else started). None if unknown."""
+    ts = _parse_ts(run.get("last_ts") or run.get("started"))
+    return None if ts is None else (now - ts).total_seconds()
+
+
+def is_stale(run: dict, now, threshold: int) -> bool:
+    """An in-flight run (started, not ended) with no activity for > threshold seconds."""
+    if not run.get("started") or run.get("ended"):
+        return False
+    age = run_age_seconds(run, now)
+    return age is not None and age > threshold
+
+
+def halt_stale_runs(now=None, threshold=None, sink=None, events=None) -> list:
+    """Reap zombies: emit RUN_END(halted) for every in-flight run with no activity for
+    > threshold seconds, so it stops showing in-flight forever. Idempotent (ended runs
+    are skipped). `now` / `threshold` / `sink` / `events` are injectable for tests.
+    Returns the list of halted run_ids."""
+    from .cockpit import fold_runs  # local import — cockpit imports events (avoid cycle)
+    now = now or datetime.now(timezone.utc)
+    threshold = stale_timeout() if threshold is None else threshold
+    sink = sink or jsonl_sink()
+    halted = []
+    for r in fold_runs(events if events is not None else load_events()).values():
+        if is_stale(r, now, threshold):
+            age = int(run_age_seconds(r, now))
+            sink(make_event(
+                RUN_END, run_id=r["run_id"], project=r.get("project"),
+                workflow=r.get("workflow"), bet_id=r.get("bet_id"), status="halted",
+                reason=f"stale — no activity for {age}s (auto-halt)"))
+            halted.append(r["run_id"])
+    return halted

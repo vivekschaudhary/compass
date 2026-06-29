@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from compass.orchestrator import events as ev
@@ -761,6 +762,52 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertTrue(cockpit._gate_already_actioned(decided, "g1"))
         self.assertFalse(cockpit._gate_already_actioned(decided, "nope"))
         self.assertFalse(cockpit._gate_already_actioned(decided, ""))
+
+
+class TestStaleRuns(unittest.TestCase):
+    """#5 coherence floor: detect + auto-halt abandoned in-flight runs so the board
+    can't show a zombie forever."""
+
+    NOW = datetime.fromisoformat("2026-06-28T12:00:00+00:00")
+    OLD = "2026-06-28T10:00:00+00:00"      # 2h ago
+    RECENT = "2026-06-28T11:59:30+00:00"   # 30s ago
+
+    def test_is_stale(self):
+        self.assertTrue(ev.is_stale({"started": "x", "ended": False, "last_ts": self.OLD},
+                                    self.NOW, 100))
+        self.assertFalse(ev.is_stale({"started": "x", "ended": False, "last_ts": self.RECENT},
+                                     self.NOW, 100))
+        self.assertFalse(ev.is_stale({"started": "x", "ended": True, "last_ts": self.OLD},
+                                     self.NOW, 100))  # ended → not stale
+        self.assertFalse(ev.is_stale({"started": None}, self.NOW, 100))  # never started
+
+    def test_halt_stale_runs_reaps_only_stale(self):
+        events = [
+            {"run_id": "stale", "type": ev.RUN_START, "ts": self.OLD,
+             "workflow": "build", "bet_id": "CB-1"},
+            {"run_id": "ended", "type": ev.RUN_START, "ts": self.OLD},
+            {"run_id": "ended", "type": ev.RUN_END, "ts": self.OLD, "status": "completed"},
+            {"run_id": "fresh", "type": ev.RUN_START, "ts": self.RECENT},
+        ]
+        emitted = []
+        halted = ev.halt_stale_runs(now=self.NOW, threshold=100,
+                                    sink=emitted.append, events=events)
+        self.assertEqual(halted, ["stale"])
+        self.assertEqual(emitted[0]["type"], ev.RUN_END)
+        self.assertEqual(emitted[0]["status"], "halted")
+        self.assertEqual(emitted[0]["run_id"], "stale")
+        self.assertIn("stale", emitted[0]["reason"])
+
+    def test_halt_stale_runs_idempotent(self):
+        events = [{"run_id": "z", "type": ev.RUN_START, "ts": self.OLD}]
+        self.assertEqual(
+            ev.halt_stale_runs(now=self.NOW, threshold=100, sink=lambda e: None, events=events),
+            ["z"])
+        # once the halt event is in the spine, a re-run finds it ended → no-op
+        events.append({"run_id": "z", "type": ev.RUN_END, "ts": self.OLD, "status": "halted"})
+        self.assertEqual(
+            ev.halt_stale_runs(now=self.NOW, threshold=100, sink=lambda e: None, events=events),
+            [])
 
 
 if __name__ == "__main__":

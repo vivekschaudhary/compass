@@ -3854,4 +3854,20 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **330 pass** (+6: hierarchy + story pointers · blocked-by-dep red · shipped green/no-attention · proposed→not-started · awaiting-gate from the spine · render sections). consistency-check CONSISTENT. CLI smoke-test green.
 
-**Files touched (4):** `compass/orchestrator/wbs.py` (new) · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_wbs.py` (new) (+ CHANGELOG + this file). Counter: #164. **(#030 batch: #158–#164 of #158–#167.)** On branch `mvp/exec-wbs-view` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). Follow-up: render the WBS in the cockpit HTML alongside the per-run view. Next MVP capability: **#5** (coherence floor — stale-run auto-halt) — the last one.
+**Files touched (4):** `compass/orchestrator/wbs.py` (new) · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_wbs.py` (new) (+ CHANGELOG + this file). Counter: #164. **(#030 batch: #158–#164 of #158–#167.)** Merged via PR #6. Follow-up: render the WBS in the cockpit HTML.
+
+### 2026-06-28 — coherence floor: stale-run auto-halt (#165)
+
+**Trigger origin (MVP plan + live dogfood):** capability #5, the last — the "the board can't lie" trust floor. During the dogfood a killed/abandoned run showed in-flight forever and had to be hand-stamped halted twice (#129 was declared-not-built). A control tower that shows a zombie is worse than a status deck, so this is the precondition for the whole MVP being trustworthy.
+
+**What shipped (in `events.py`).**
+- **`is_stale(run, now, threshold)`** — an in-flight run (run_start, no run_end) with no spine activity for > threshold seconds. `stale_timeout()` reads `$COMPASS_STALE_TIMEOUT` (default 1800s).
+- **`halt_stale_runs(now=, threshold=, sink=, events=)`** — reaps zombies: folds the spine, emits `RUN_END(halted, reason="stale — no activity for Ns (auto-halt)")` for each stale in-flight run, idempotently (ended runs are skipped, so a second pass is a no-op). All four args injectable → fully unit-tested without real time or a real spine.
+- **WBS marks stalled** — `build_wbs` flags stale in-flight runs **red** under manage-by-exception (read-time, non-destructive).
+- **CLI** — `--reap-stale` halts on demand; **`--wbs` auto-reaps before rendering** (the tower self-heals when you look — the cockpit-as-supervisor behavior from the D1 architecture decision).
+
+**Why it completes the floor.** Combined with the already-shipped gate-no-TTY-safety + authoring-write-default (#159), the orchestrator no longer lets a run silently lie about its state: a write workflow can't report done having written nothing, a gate can't auto-reject in the dark, and a killed run can't masquerade as in-flight. Ground truth holds.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **333 pass** (+3: is_stale across in-flight/fresh/ended/never-started · halt reaps only the stale one with a proper RUN_END(halted) · idempotent re-run). consistency-check CONSISTENT. Smoke-test: a zombie run_start → `--reap-stale` → 1 halted + the halt event in the spine.
+
+**Files touched (4):** `compass/orchestrator/events.py` · `compass/orchestrator/wbs.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #165. **(#030 batch: #158–#165 of #158–#167.)** On branch `mvp/coherence-floor` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). **🎯 The control-tower MVP is now feature-complete: capabilities #1–#5 (improvements #160–#165) — stack-agnostic core · SOW-conformance audit · Jira/Confluence projection · exec WBS view · coherence floor.** Remaining before the pilot: the **.NET de-risk** (deferred to the real POC env) + the noted follow-ups (status→Jira-transition map · drift detection · cockpit-HTML WBS · bet→epic linking · automated `/ingest-sow`). Batch #030 nears the retro trigger (#167).
