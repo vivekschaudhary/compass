@@ -1590,7 +1590,8 @@ def _run_workflow(
          # #156: record the run's host MODE so a dashboard /decide resume can carry it
          # forward (reuse the subscription CLI hosts, not silently fall back to the API).
          claude_cli=claude_cli, codex_cli=codex_cli,
-         project_dir=str(project_dir))  # #119: full path so the cockpit can resume any run
+         project_dir=str(project_dir),  # #119: full path so the cockpit can resume any run
+         compass_dir=str(compass_dir))  # #178: so the copy-paste approve targets the right framework dir
 
     last_artifact_path = None
     # On a --from-step resume the prior agent step was loaded from disk (not re-run),

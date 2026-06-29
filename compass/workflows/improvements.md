@@ -4050,4 +4050,14 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **371 pass** (+1: the actionable page's `_act` sets `window.__cpause` and the reload tick honors it; the old per-closure `if(paused)return` is gone). consistency-check CONSISTENT.
 
-**Files touched (2):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #177. **(#031 batch: #168–#177 of #168–#177 — batch complete; Retro #031 due, plus the still-owed Retro #030 for #158–#167.)** On branch `fix/cockpit-approve-refresh-race` → PR; cross-model review (Codex/Gemini, not Claude).
+**Files touched (2):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #177. **(#031 batch: #168–#177 of #168–#177 — batch complete; Retro #031 due, plus the still-owed Retro #030 for #158–#167.)** On branch `fix/cockpit-approve-refresh-race` → PR #19, merged. Cross-model review (Codex/Gemini, not Claude).
+
+### 2026-06-29 — copy-paste approve command carries --compass-dir (#178)
+
+**Trigger origin (live consumer signal).** Handing the DRI a manual CLI approve to dodge the #177 browser refresh race, I noticed the dashboard's own copy-paste command (`_approve_cmd`) emits `--project-dir` but **not `--compass-dir`**. Run as-is, it falls back to `<project>/compass` — home-app's stale vendored copy — instead of the framework dir the run actually launched with (`/Volumes/VivekSSD/apps/compass/compass`), so a hand-run approve would resume against the wrong framework.
+
+**Fix.** The run now records `compass_dir` on its `run_start` event (alongside `project_dir`, #119); `fold_runs` captures it and `_approve_cmd` emits `--compass-dir <dir>`. The copy-paste approve/reject is now self-contained and targets the same framework the dashboard used. (The dashboard's own spawn already passed `--compass-dir` via its defaults; this closes the *manual* path.)
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **371 pass** (the approve-command test now asserts `--compass-dir` is present). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #178. **(#032 batch opens: #178–#187.)** On branch `fix/approve-cmd-compass-dir` → PR; cross-model review (Codex/Gemini, not Claude).
