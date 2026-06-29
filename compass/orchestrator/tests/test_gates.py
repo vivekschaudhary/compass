@@ -17,10 +17,12 @@ from compass.orchestrator.connector import (
     set_frontmatter_status,
 )
 from compass.orchestrator.graph import load_workflow, load_workflow_meta
+import subprocess
+
 from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
     _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
-    _story_dependencies, _story_human_deliverable_blockers,
+    _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
 )
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
@@ -403,6 +405,60 @@ class TestStoryScoping(unittest.TestCase):
     def test_no_dependencies_never_blocks(self):
         self._set("WLT-27-1", type="story", owner="agent", status="ready", dependencies="[]")
         self.assertEqual(_story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1"), [])
+
+
+class TestWorkBranchIsolation(unittest.TestCase):
+    """#173: a build branch must start from a CLEAN fresh base, never silently stack on
+    the previous build's branch — the cause of cumulative, conflicting story PRs (a
+    story's PR contained sibling stories' commits because builds branched off the prior
+    dirty tree instead of main)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        self._git("init", "-q", "-b", "main")
+        self._git("config", "user.email", "t@t")
+        self._git("config", "user.name", "t")
+        (self.repo / "base.txt").write_text("base\n", encoding="utf-8")
+        self._git("add", "-A"); self._git("commit", "-qm", "base")
+        # a prior-build branch carrying its OWN commit — the thing we must NOT stack on
+        self._git("checkout", "-qb", "feat/prev-story")
+        (self.repo / "prev.txt").write_text("prev story work\n", encoding="utf-8")
+        self._git("add", "-A"); self._git("commit", "-qm", "prev story")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _git(self, *a):
+        return subprocess.run(["git", "-C", str(self.repo), *a],
+                              capture_output=True, text=True)
+
+    def test_clean_tree_branches_off_main_not_current(self):
+        # on feat/prev-story, clean tree → new branch comes off main, no prev.txt
+        b = _ensure_work_branch(self.repo, "feat/new-story")
+        self.assertEqual(b, "feat/new-story")
+        self.assertFalse((self.repo / "prev.txt").exists())  # did NOT stack on prev
+
+    def test_dirty_tree_stashes_and_starts_clean(self):
+        # uncommitted change to prev.txt (committed on feat/prev-story, ABSENT on main)
+        # blocks the clean checkout — old code then stacked on feat/prev-story; now it
+        # stashes the residue and branches clean off main.
+        (self.repo / "prev.txt").write_text("uncommitted residue\n", encoding="utf-8")
+        b = _ensure_work_branch(self.repo, "feat/clean-story")
+        self.assertEqual(b, "feat/clean-story")
+        self.assertEqual((self.repo / "base.txt").read_text(encoding="utf-8"), "base\n")  # off main
+        self.assertFalse((self.repo / "prev.txt").exists())            # NOT stacked on prev
+        self.assertIn("stash@{0}", self._git("stash", "list").stdout)  # residue preserved, recoverable
+
+    def test_branch_name_uses_clean_context_not_blob(self):
+        # the #173 naming half: a build with no user context yields a clean name, never a
+        # slug of the loaded bet/story blob (`feat/WLT-27-bet-context-wlt-27-briefmd-…`).
+        self.assertEqual(_work_branch_name("build", "WLT-27-2", ""), "feat/WLT-27-2-work")
+        blobby = "## Bet context — WLT-27\n\n### brief.md\n---\nid: WLT-27\n"
+        self.assertNotIn("bet-context", _work_branch_name("build", "WLT-27-2", "fix login bug"))
+        # and a real user context still slugs cleanly
+        self.assertEqual(_work_branch_name("build", "WLT-27-2", "fix login bug"),
+                         "feat/WLT-27-2-fix-login-bug")
 
 
 if __name__ == "__main__":
