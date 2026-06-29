@@ -549,7 +549,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
                  "<label>bet or story id (optional)</label><input name='bet' placeholder='WLT-27 (bet) or WLT-27-1 (one story)'>"
                  "<small>a story id (e.g. WLT-27-1) scopes /build to that one story — parallel story builds (#172)</small>"
                  "<label><input type='checkbox' name='allow_write' value='1'> allow writes (--allow-write) "
-                 "<small>— authoring workflows (create-brief/-story, setup-*) write by default (#159); needed for build/fix/ops</small></label>"
+                 "<small>— optional: producing workflows (create-*/setup-*/build/fix/ops) write by default (#179). Tick only to force write on a non-producing workflow.</small></label>"
                  "<div><button type='submit'>Launch →</button></div>"
                  "</form></div>")
 

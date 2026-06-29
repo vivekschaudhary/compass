@@ -183,21 +183,27 @@ _CODE_WORKFLOWS = ("fix", "build", "ops")
 
 # #159: workflows whose WHOLE JOB is to author a doc artifact (brief, story,
 # foundation/portfolio/architecture docs), reviewed via their HITL gate — not a PR.
-# They are USELESS read-only: with allow_write=False the claude-code host runs
-# `claude -p --permission-mode default`, so every agent file-write hangs on a
-# permission prompt no headless UI can answer (the live create-brief that authored
-# WLT-27 then landed NOTHING in docs/bets/). So they default to write-enabled —
-# unlike _CODE_WORKFLOWS, which keep explicit --allow-write for branch/PR discipline.
 _AUTHORING_WORKFLOWS = (
     "setup-product", "setup-foundation-architecture", "create-bet-portfolio",
     "create-brief", "create-bet-architecture", "create-story",
 )
 
+# #179: every PRODUCING workflow — authoring (docs) OR code (build/fix/ops) — needs to
+# write, so write is the DEFAULT, not an opt-in. A producing workflow run read-only is
+# useless: the claude-code host runs read-only, so every file-write hangs on a
+# permission prompt no headless UI can answer → the agent burns the turn and goes red
+# (live: WLT-27-5/6 builds launched without the checkbox → engineer wrote nothing). The
+# old opt-in for code workflows was pure friction — the branch-never-main discipline
+# (#99) already protects `main`, so the checkbox guarded nothing. `--dry-run` is the
+# explicit read-only override; read-only reporting workflows (status/dashboard/…) just
+# never request write and aren't listed here.
+_WRITE_BY_DEFAULT = _AUTHORING_WORKFLOWS + _CODE_WORKFLOWS
+
 
 def _resolve_allow_write(workflow_name: str, allow_write: bool) -> bool:
-    """#159: authoring workflows default to write-enabled (useless read-only). Code
-    workflows keep the caller's explicit choice (the branch→PR lane stays opt-in)."""
-    return True if workflow_name in _AUTHORING_WORKFLOWS else allow_write
+    """#179: a producing workflow (authoring or code) writes by default; everything
+    else keeps the caller's choice. Extends #159 (authoring-only) to build/fix/ops."""
+    return True if workflow_name in _WRITE_BY_DEFAULT else allow_write
 
 
 def _delivery_warning(workflow_name: str, leftover: list) -> str:
@@ -1337,8 +1343,9 @@ def _run_workflow(
     # lands the brief/story instead of silently permission-blocking every write.
     if _resolve_allow_write(workflow_name, allow_write) and not allow_write:
         allow_write = True
-        print(f"[{workflow_name}: authoring workflow → write-enabled by default "
-              f"(#159 — artifacts can't be produced read-only)]")
+        print(f"[{workflow_name}: producing workflow → write-enabled by default "
+              f"(#179 — a doc/code workflow can't produce anything read-only; "
+              f"use --dry-run for a read-only pass)]")
 
     # ── requirement gate (#70 redesign) ──────────────────────────────────────
     # A workflow's frontmatter may declare `requires_approved:` artifact paths.
@@ -2090,7 +2097,7 @@ def _run_workflow(
         warn = (f"⚠ AUTHORING INCOMPLETE — {workflow_name} reported done but "
                 f"{len(incomplete_steps)} step(s) did NOT produce their artifact "
                 f"({names}). The doc was NOT written — check write permission "
-                f"(authoring workflows are write-enabled by default since #159; if "
+                f"(producing workflows are write-enabled by default since #179; if "
                 f"you see permission-dialog narration, the host couldn't write).")
         print("\n" + warn, file=sys.stderr)
         emit(ev.NOTE, text=warn)
