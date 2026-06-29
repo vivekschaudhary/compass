@@ -488,6 +488,51 @@ def _ensure_work_branch(project_dir, branch_name: str):
     return current or None
 
 
+def _worktree_root(project_dir) -> Path:
+    """#174: where isolated build worktrees live — under ~/.compass (OUTSIDE the repo),
+    namespaced by project label, so concurrent story builds never share a working tree."""
+    from . import events as _ev
+    return _ev.compass_home() / "worktrees" / _ev.project_label(project_dir)
+
+
+def _ensure_work_worktree(project_dir, branch_name: str):
+    """#174: create (or reuse) a git WORKTREE on `branch_name`, based on a fresh
+    origin/main, at a path outside the repo. Returns the worktree Path, or None if
+    project_dir isn't a git repo or the worktree can't be created (the caller then
+    falls back to the single-tree `_ensure_work_branch`). Unlike `_ensure_work_branch`
+    — which switches the ONE working tree, so two builds in flight collide on the
+    shared index (#173's stacking) — a worktree gives each build its own checkout, so
+    genuinely *parallel* story builds are isolated. The worktree shares the repo's .git
+    (commits land in the same object store), so `gh pr create` from it works unchanged.
+    """
+    import subprocess
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(project_dir), *args],
+                              capture_output=True, text=True)
+
+    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
+        return None
+    wt = _worktree_root(project_dir) / branch_name.replace("/", "__")
+    # already present (resume / re-run) → reuse the existing checkout
+    if wt.exists():
+        return wt
+    wt.parent.mkdir(parents=True, exist_ok=True)
+    git("fetch", "origin", "--quiet")  # best-effort
+    base = next(
+        (b for b in ("origin/main", "origin/master", "main", "master")
+         if git("rev-parse", "--verify", "--quiet", b).returncode == 0),
+        None,
+    )
+    if git("rev-parse", "--verify", "--quiet", branch_name).returncode == 0:
+        add = git("worktree", "add", str(wt), branch_name)   # branch exists → attach
+    elif base:
+        add = git("worktree", "add", "-b", branch_name, str(wt), base)  # fresh off base
+    else:
+        add = git("worktree", "add", "-b", branch_name, str(wt))  # no base → current HEAD
+    return wt if add.returncode == 0 else None
+
+
 def _skip_for_route(router_number: int, target: int) -> set:
     """
     Steps to skip when a routing gate (#96) chooses `target`.
@@ -1425,6 +1470,32 @@ def _run_workflow(
     # -architecture, setup-*) are reviewed via their HITL gate, not a PR — they skip
     # the work-branch dance (no spurious feat/work branch) and write on the current
     # branch; their artifacts are committed, not deployed (the #150 message guides).
+    # #174: exec_dir is WHERE the host edits/commits — the canonical project_dir by
+    # default, or an isolated git worktree when --worktree is on. Telemetry, gates, and
+    # artifact reads always stay on project_dir; only the host's cwd moves.
+    exec_dir = project_dir
+
+    def _place_work(branch_name, *, resume=False):
+        """Put the work on `branch_name` in an isolated git WORKTREE and return
+        (branch, exec_dir). This is the DEFAULT (#174 — standard per-unit-of-work
+        isolation: each story build gets its own checkout branched off main, so builds
+        never share the one working tree → genuinely parallel). Falls back to the
+        single tree (#173 stash-isolated) only when a worktree can't be created (not a
+        git repo, git too old, etc.) — automatic resilience, not a knob."""
+        wt = _ensure_work_worktree(project_dir, branch_name)
+        if wt:
+            print(f"[worktree] {'resumed' if resume else 'isolated'} build in {wt} on "
+                  f"'{branch_name}' — branched off main, parallel-safe "
+                  f"(remove with `git worktree remove`)")
+            return branch_name, wt
+        placed = _ensure_work_branch(project_dir, branch_name)
+        if placed and not resume:
+            print(f"[branch] write-mode work on '{placed}' (single tree — worktree "
+                  f"unavailable) — open a PR + merge after review")
+        elif placed:
+            print(f"[branch] resumed on '{placed}' (single tree)")
+        return placed, project_dir
+
     work_branch = None
     if allow_write and workflow_name in _CODE_WORKFLOWS:
         if from_step is not None:
@@ -1434,8 +1505,7 @@ def _run_workflow(
             # (`feat/WLT-26-bet-context-…`), stranding the work + confusing delivery.
             work_branch = _prior_run_branch(run_id)
             if work_branch:
-                _ensure_work_branch(project_dir, work_branch)  # checkout the existing branch
-                print(f"[branch] resumed on '{work_branch}' (reused from the original run)")
+                work_branch, exec_dir = _place_work(work_branch, resume=True)
             else:
                 print("[branch] resume — no recorded branch; staying on the current branch")
         else:
@@ -1443,9 +1513,7 @@ def _run_workflow(
             # so multiple stories of one bet can build in parallel without colliding
             # on a single feat/<bet>-… branch.
             bname = _work_branch_name(workflow_name, story_id or bet_id, user_context)
-            work_branch = _ensure_work_branch(project_dir, bname)
-            if work_branch:
-                print(f"[branch] write-mode work on '{work_branch}' (not main) — open a PR + merge after review")
+            work_branch, exec_dir = _place_work(bname)
 
     # Event spine (#104): one emit per run, stamping project/run_id/workflow onto
     # every event and fanning to the terminal + the user-local events.jsonl
@@ -1863,7 +1931,7 @@ def _run_workflow(
         try:
             result = dispatch_to_host(
                 host, str(agent_file), step.task, user_message, model=step_model,
-                tools=agent_tools or None, project_dir=project_dir,
+                tools=agent_tools or None, project_dir=exec_dir,  # #174: worktree when isolated
                 allow_write=allow_write, max_tool_iterations=max_tool_iterations,
                 on_event=_sink,
             )

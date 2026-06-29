@@ -3998,4 +3998,18 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **362 pass** (+3: `TestWorkBranchIsolation` — clean tree branches off main not the current branch; a dirty tree stashes + starts clean off main with the residue preserved on the stash; branch name uses clean context, never the blob). consistency-check CONSISTENT.
 
-**Files touched (2):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #173. **(#031 batch: #168–#173 of #168–#177.)** On branch `fix/build-branch-isolation` → PR; cross-model review (Codex/Gemini, not Claude).
+**Files touched (2):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #173. **(#031 batch: #168–#173 of #168–#177.)** On branch `fix/build-branch-isolation` → PR #15, merged. Cross-model review (Codex/Gemini, not Claude).
+
+### 2026-06-29 — builds run in an isolated git worktree by default (#174)
+
+**Trigger origin (DRI direction).** #173 fixed *sequential* stacking, and I started building worktree isolation behind an opt-in `--worktree` flag. The DRI cut through it: *"why are we adding flags — for each story pulling from main and working on it is standard devops, no?"* Correct. Per-unit-of-work isolation is the standard, not a knob. The flag was over-engineering; isolation should just be how builds work.
+
+**The gap #173 left.** #173 stops a *dirty tree* from making a build stack on the previous branch (it stashes + branches off main). But the orchestrator shares **one local working tree**, so two builds *in flight at once* still race the shared index — the #172 goal ("multiple stories developing at a time") wasn't actually safe. In standard devops each job gets its own checkout (a fresh clone / ephemeral runner); the local equivalent is a **git worktree per build**.
+
+**Fix — worktree-per-build as the DEFAULT.** Every write-mode build/fix now runs in its own `git worktree` branched off fresh `main`, under `~/.compass/worktrees/<project>/<branch>` (outside the repo). `_ensure_work_worktree` creates/reattaches it; `_run_workflow` routes **only the host's working dir** (`exec_dir`) to the worktree, while telemetry (spine + per-project runs), the requirement/design-copy gates, and artifact reads stay on the canonical `project_dir`. `gh pr view/merge` key off the branch + remote, so they're worktree-agnostic (the worktree shares the repo's `.git`, commits land in the same object store). No flag: automatic fallback to the single tree (#173 stash-isolated) only when a worktree can't be made (not a git repo, ancient git). A resume reattaches to the existing worktree.
+
+**Honest scope.** Worktrees accumulate under `~/.compass/worktrees/` — cleanup is manual for now (`git worktree remove` / `git worktree prune`); **auto-removal of a merged/unchanged build's worktree** is the follow-up. Two #173 follow-ups still stand: gitignore/relocate per-project telemetry, and keep doc artifacts out of code PRs (the engineer's `git add -A`).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **366 pass** (+4: `TestWorktreeIsolation` — creates a worktree off main on its own branch; two stories get independent worktrees and edits don't cross; resume reuses the existing worktree; a non-git dir returns None → single-tree fallback). consistency-check CONSISTENT. `--worktree` flag confirmed absent (it's the default).
+
+**Files touched (2):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #174. **(#031 batch: #168–#174 of #168–#177.)** On branch `feat/worktree-isolation` → PR; cross-model review (Codex/Gemini, not Claude).

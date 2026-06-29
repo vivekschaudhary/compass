@@ -19,10 +19,13 @@ from compass.orchestrator.connector import (
 from compass.orchestrator.graph import load_workflow, load_workflow_meta
 import subprocess
 
+import os
+
 from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
     _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
+    _ensure_work_worktree,
 )
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
@@ -459,6 +462,62 @@ class TestWorkBranchIsolation(unittest.TestCase):
         # and a real user context still slugs cleanly
         self.assertEqual(_work_branch_name("build", "WLT-27-2", "fix login bug"),
                          "feat/WLT-27-2-fix-login-bug")
+
+
+class TestWorktreeIsolation(unittest.TestCase):
+    """#174: by default each build runs in its own git WORKTREE branched off main, so
+    parallel story builds get independent checkouts and never share the one working
+    tree (the root of #173's stacking)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._home = tempfile.TemporaryDirectory()
+        self._old = os.environ.get("COMPASS_HOME")
+        os.environ["COMPASS_HOME"] = self._home.name
+        self.repo = Path(self._tmp.name)
+        self._git("init", "-q", "-b", "main")
+        self._git("config", "user.email", "t@t")
+        self._git("config", "user.name", "t")
+        (self.repo / "base.txt").write_text("base\n", encoding="utf-8")
+        self._git("add", "-A"); self._git("commit", "-qm", "base")
+
+    def tearDown(self):
+        # remove worktrees before temp cleanup so git doesn't choke on the link dirs
+        self._git("worktree", "prune")
+        os.environ.pop("COMPASS_HOME", None) if self._old is None \
+            else os.environ.__setitem__("COMPASS_HOME", self._old)
+        self._tmp.cleanup(); self._home.cleanup()
+
+    def _git(self, *a):
+        return subprocess.run(["git", "-C", str(self.repo), *a],
+                              capture_output=True, text=True)
+
+    def test_creates_worktree_off_main(self):
+        wt = _ensure_work_worktree(self.repo, "feat/WLT-27-2-work")
+        self.assertIsNotNone(wt)
+        self.assertTrue(Path(wt).is_dir())
+        self.assertNotEqual(Path(wt).resolve(), self.repo.resolve())   # separate checkout
+        self.assertTrue((Path(wt) / "base.txt").exists())              # branched off main
+        # the worktree is on its own branch
+        head = subprocess.run(["git", "-C", str(wt), "rev-parse", "--abbrev-ref", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual(head, "feat/WLT-27-2-work")
+
+    def test_two_stories_get_independent_worktrees(self):
+        a = _ensure_work_worktree(self.repo, "feat/WLT-27-2-a")
+        b = _ensure_work_worktree(self.repo, "feat/WLT-27-3-b")
+        self.assertNotEqual(Path(a).resolve(), Path(b).resolve())      # parallel-safe
+        # edits in one don't touch the other
+        (Path(a) / "a.txt").write_text("A\n", encoding="utf-8")
+        self.assertFalse((Path(b) / "a.txt").exists())
+
+    def test_reuse_existing_worktree_on_resume(self):
+        first = _ensure_work_worktree(self.repo, "feat/WLT-27-2-resume")
+        again = _ensure_work_worktree(self.repo, "feat/WLT-27-2-resume")
+        self.assertEqual(Path(first).resolve(), Path(again).resolve())
+
+    def test_non_git_dir_returns_none(self):
+        self.assertIsNone(_ensure_work_worktree(Path(self._home.name), "feat/x"))
 
 
 if __name__ == "__main__":
