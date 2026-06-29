@@ -105,9 +105,12 @@ def confluence_push(auth, space, title, body, page_id=None, transport=None):
                "Accept": "application/json"}
     storage = {"storage": {"value": _storage(body), "representation": "storage"}}
     if page_id:
-        _, vresp = transport(
+        vstatus, vresp = transport(
             "GET", f"{auth['base_url']}/wiki/rest/api/content/{page_id}?expand=version",
             headers, None)
+        if vstatus != 200:  # [Codex review] don't mask a 401/404/429 as a version-2 PUT
+            return {"pointer": page_id, "url": None, "action": "updated",
+                    "ok": False, "response": vresp}
         ver = (vresp.get("version") or {}).get("number", 1) + 1
         status, resp = transport(
             "PUT", f"{auth['base_url']}/wiki/rest/api/content/{page_id}", headers,

@@ -1413,14 +1413,23 @@ def _run_workflow(
             # team sees the story/doc in Jira/Confluence immediately (in its draft
             # status), not only after approval. Approval re-projects as approved
             # (idempotent via the stored pointer). Fires even when the gate then pauses.
-            if (step.artifact_target and not no_write and last_agent_output
+            # [Codex review] Guarded twice so an UNAPPROVED draft never lands in the
+            # canonical filesystem: (1) only when the agent ALREADY wrote the canonical
+            # file (we never fabricate it from step output pre-approval — that stays
+            # approval-gated); (2) only for EXTERNAL connectors (jira/confluence), so a
+            # filesystem-only setup is unchanged.
+            if (step.artifact_target and not no_write
                     and not ("<bet-id>" in step.artifact_target and not bet_id)):
                 _draft_rel = step.artifact_target.replace("<bet-id>", bet_id or "")
-                _draft_label = _promote_artifact(project_dir, compass_dir, _draft_rel,
-                                                 last_agent_output, run_id, status=None,
-                                                 no_write=no_write)
-                if _draft_label and "fallback" not in _draft_label:
-                    print(f"[projected draft → {_draft_rel} via {_draft_label}]")
+                from .connector import resolve_connector_for_artifact
+                if ((project_dir / _draft_rel).exists()
+                        and resolve_connector_for_artifact(
+                            _draft_rel, project_dir, compass_dir) != "filesystem"):
+                    _draft_label = _promote_artifact(project_dir, compass_dir, _draft_rel,
+                                                     last_agent_output, run_id, status=None,
+                                                     no_write=no_write)
+                    if _draft_label and "fallback" not in _draft_label:
+                        print(f"[projected draft → {_draft_rel} via {_draft_label}]")
 
             if non_interactive:
                 # #118: don't block on input — apply --decide or pause-and-exit.

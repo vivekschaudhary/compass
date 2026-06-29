@@ -34,10 +34,14 @@ def _frontmatter(path) -> dict:
 
 
 def _list(val) -> list:
-    """Parse a frontmatter list value (`[A, B]` or `A, B`) into a list of ids."""
+    """Parse a frontmatter list value into a list of ids. Handles the inline-flow
+    forms the brief template uses — `[A, B]`, `["A", 'B']`, `A, B` — stripping
+    brackets and quotes. (Block-style YAML lists aren't supported by the single-line
+    frontmatter reader; the template uses inline flow.)"""
     if not val:
         return []
-    return [x.strip() for x in val.strip("[]").split(",") if x.strip()]
+    return [x.strip().strip("\"'") for x in val.strip().strip("[]").split(",")
+            if x.strip().strip("\"'")]
 
 
 def _title(path, fallback) -> str:

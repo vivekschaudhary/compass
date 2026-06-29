@@ -74,6 +74,13 @@ class TestWbs(unittest.TestCase):
         self.assertEqual(cb3["open_gates"], 1)
         self.assertTrue(any("awaiting gate" in a["reason"] for a in cb3["attention"]))
 
+    def test_list_parses_bracketed_and_quoted(self):
+        # [Codex review] inline-flow forms incl. quotes
+        self.assertEqual(wbs._list("[CB-1, CB-2]"), ["CB-1", "CB-2"])
+        self.assertEqual(wbs._list("[\"CB-1\", 'CB-2']"), ["CB-1", "CB-2"])
+        self.assertEqual(wbs._list("[]"), [])
+        self.assertEqual(wbs._list(None), [])
+
     def test_render_contains_sections(self):
         _bet(self.project, "CB-1", "proposed", stories=[("CB-1-1", "ready")])
         out = wbs.render_wbs(wbs.build_wbs(self.project))
