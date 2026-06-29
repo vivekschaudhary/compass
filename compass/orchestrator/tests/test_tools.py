@@ -4,9 +4,15 @@ Covers the security-critical sandbox (path-escape refusal), the read tools,
 the tool dispatch, the dispatch_with_tools loop (with a fake client — no
 network), and run.py's executor_tools frontmatter parse.
 """
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+
+# Host SDKs are OPTIONAL (honest degradation when a host's package is absent). CI
+# runs a bare env with no LLM SDKs, so SDK-dependent host-readiness assertions skip
+# there rather than false-fail — the same posture the framework takes at runtime.
+_HAS_ANTHROPIC = importlib.util.find_spec("anthropic") is not None
 
 from compass.orchestrator.hosts import tools
 from compass.orchestrator.hosts.claude import dispatch_with_tools
@@ -352,9 +358,11 @@ class TestHostSelection(unittest.TestCase):
 
     def test_adapter_importable(self):
         from compass.orchestrator.hosts.router import _adapter_importable
-        self.assertTrue(_adapter_importable("claude"))    # anthropic installed
         self.assertTrue(_adapter_importable("unknown"))   # no mapping → pass-through
+        if _HAS_ANTHROPIC:
+            self.assertTrue(_adapter_importable("claude"))  # anthropic present → importable
 
+    @unittest.skipUnless(_HAS_ANTHROPIC, "anthropic SDK not installed (bare CI env)")
     def test_select_host_ready_needs_key_and_pkg(self):
         import os
         from compass.orchestrator.hosts import router
