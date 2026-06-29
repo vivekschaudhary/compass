@@ -3943,3 +3943,20 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **341 pass** (+2: argv includes `--include-partial-messages`; `_progress_line` ignores a partial `stream_event` so the log isn't flooded). consistency-check CONSISTENT. End-to-end proof is the DRI's next architecture run completing without the idle false-kill.
 
 **Files touched (2):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` (+ CHANGELOG + this file). Counter: #170. **(#031 batch: #168–#170 of #168–#177.)** On branch `fix/idle-partial-stream` → PR; cross-model review (Codex/Gemini, not Claude).
+
+### 2026-06-29 — story-scoped build: `/build <story-id>` runs ONE story so stories build in parallel (#172)
+
+**Trigger origin (live consumer signal):** the DRI launched `/build WLT-27-1` from the dashboard and it "looked hung." It wasn't — `build` was **bet-scoped only**, so the orchestrator read `WLT-27-1` as a *bet* id and the requirement gate looked for `docs/bets/WLT-27-1/brief.md`, which never existed → instant halt (`✗ no approval found`), a sub-second exit that left the board showing nothing running. The DRI's intent was the opposite of a bug to merely guard against: *"yes please pass story id, so we can have multiple instances of stories developing at a time."* A bet decomposes into N stories; each should build independently, in parallel, on its own branch.
+
+**Fix — story scope is now first-class.** A story id (e.g. `WLT-27-1`) passed via the new `--story` flag **or auto-detected when typed into `--bet`** (the dashboard's single id field) now:
+- **Resolves its parent bet** (`_resolve_bet_for_story`) — filesystem-authoritative (`docs/bets/*/stories/<id>/story.md`), falling back to stripping the trailing `-<n>` — so the **requirement gate checks the bet brief** (`docs/bets/WLT-27/brief.md` ✓), not a phantom story brief. This kills the "looks hung" instant-halt.
+- **Loads focused single-story context** (`_load_story_context`): the parent bet's brief + architecture + the **full target story**, with an explicit *"implement ONLY this story"* instruction — a parallel build can't wander into a sibling story's scope (the sibling's text is deliberately excluded).
+- **Branches on the story id** (`feat/<story-id>-<slug>`) and **keys the run id / per-run log on the story** — so two stories of one bet build concurrently without colliding on a single `feat/<bet>-…` branch or run identity.
+
+Auto-detection (`_is_story_id`) keeps the dashboard launch form unchanged in shape: type a bet id → whole-bet build (unchanged); type a story id → story-scoped build. `_build_run_argv` stays pure (no FS) — the FS-dependent resolution lives in `run.py`'s `main()` where it belongs. The connector regex already routes every story to Jira, so projection is unaffected.
+
+**Honest scope:** this scopes *which* story an engineer builds; it does not yet enforce design/copy-dependency gating (that's #171, in flight) or parallel-branch *merge* orchestration (each story still opens its own PR → review → merge, as today). The bet-scoped `/build <bet>` path is untouched.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **349 pass** (+8: `TestStoryScoping` — bet resolution from FS + fallback + unresolvable; story-id-vs-bet-id detection; focused-context includes target/bet & excludes sibling; story-keyed branch). consistency-check CONSISTENT. End-to-end dry-run proof: `--bet WLT-27-1` resolves to `WLT-27` and the gate passes on `docs/bets/WLT-27/brief.md` (no halt).
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #172. **(#031 batch: #168–#170, #172 of #168–#177 — #171 design/copy-as-stories interleaving.)** On branch `feat/build-by-story-id` → PR; cross-model review (Codex/Gemini, not Claude).
