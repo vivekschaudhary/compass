@@ -160,6 +160,30 @@ def parse_step_output(output: str) -> dict:
 # Logger — append a run record to runs.jsonl
 # ─────────────────────────────────────────────────────────────────────────────
 
+_RUNS_GITIGNORE = (
+    "# Compass orchestrator run state — telemetry (runs/hitl jsonl) + per-run step\n"
+    "# artifacts. Local, NOT committed: the durable event spine lives in ~/.compass,\n"
+    "# and committing this dir perpetually dirties the working tree, which breaks\n"
+    "# build-branch isolation and sweeps telemetry into code PRs (#175). Reads (audit,\n"
+    "# cockpit, WBS) work on the on-disk files regardless of git-tracking.\n"
+    "*\n"
+    "!.gitignore\n"
+)
+
+
+def ensure_runs_dir(project_dir: Path) -> Path:
+    """#175: create docs/orchestrator-runs/ and drop a .gitignore so orchestrator run
+    state (jsonl telemetry + step-*.md artifacts) stays OUT of git — it dirtied the
+    tree every run (defeating fresh-base branch isolation) and got swept into code PRs
+    by the engineer's `git add -A`. Idempotent; returns the runs dir."""
+    runs_dir = Path(project_dir) / "docs" / "orchestrator-runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    gitignore = runs_dir / ".gitignore"
+    if not gitignore.exists():
+        gitignore.write_text(_RUNS_GITIGNORE, encoding="utf-8")
+    return runs_dir
+
+
 def log_step(
     project_dir: Path,
     run_id: str,
@@ -193,8 +217,7 @@ def log_step(
         **parsed,
     }
 
-    log_path = project_dir / "docs" / "orchestrator-runs" / "runs.jsonl"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path = ensure_runs_dir(project_dir) / "runs.jsonl"
 
     with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -357,8 +380,7 @@ def log_hitl(
         "canonical_path": canonical_path,
     }
 
-    log_path = project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path = ensure_runs_dir(project_dir) / "hitl.jsonl"
 
     with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")

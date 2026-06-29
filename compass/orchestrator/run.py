@@ -533,6 +533,39 @@ def _ensure_work_worktree(project_dir, branch_name: str):
     return wt if add.returncode == 0 else None
 
 
+def prune_worktrees(project_dir) -> list:
+    """#175: housekeeping — remove finished (CLEAN) compass-managed build worktrees so
+    they don't accumulate under ~/.compass/worktrees/. A worktree with uncommitted
+    changes (an in-flight build) is KEPT; a clean one (work committed + pushed, or
+    paused at a gate) is removed — a resume recreates it from the branch. Runs
+    `git worktree prune` to clear admin entries for already-gone dirs. Returns the list
+    of removed paths. Best-effort; never raises."""
+    import subprocess
+
+    def git(*args, cwd=None):
+        return subprocess.run(["git", "-C", str(cwd or project_dir), *args],
+                              capture_output=True, text=True)
+
+    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
+        return []
+    # resolve to dodge the macOS /var↔/private/var symlink (git emits the realpath)
+    root = str(_worktree_root(project_dir).resolve())
+    removed = []
+    listing = git("worktree", "list", "--porcelain").stdout
+    paths = [ln[len("worktree "):] for ln in listing.splitlines()
+             if ln.startswith("worktree ")]
+    for p in paths:
+        if not str(Path(p).resolve()).startswith(root):
+            continue  # only OUR build worktrees, never the main checkout
+        dirty = git("status", "--porcelain", cwd=p).stdout.strip()
+        if dirty:
+            continue  # in-flight build — leave it
+        if git("worktree", "remove", p).returncode == 0:
+            removed.append(p)
+    git("worktree", "prune")
+    return removed
+
+
 def _skip_for_route(router_number: int, target: int) -> set:
     """
     Steps to skip when a routing gate (#96) chooses `target`.
@@ -687,7 +720,8 @@ def _write_artifact(
     agent: str, task: str, content: str,
 ) -> Path:
     """Write step output to docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md."""
-    run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
+    from .logger import ensure_runs_dir
+    run_dir = ensure_runs_dir(project_dir) / workflow  # #175: drops the .gitignore
     run_dir.mkdir(parents=True, exist_ok=True)
     out_file = run_dir / f"step-{step_num:02d}-{agent}-{task}.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -703,7 +737,8 @@ def _write_rejection_note(
     project_dir: Path, workflow: str, step_num: int, feedback: str,
 ) -> Path:
     """Write a HITL rejection note alongside the step artifact."""
-    run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
+    from .logger import ensure_runs_dir
+    run_dir = ensure_runs_dir(project_dir) / workflow  # #175: drops the .gitignore
     run_dir.mkdir(parents=True, exist_ok=True)
     note_file = run_dir / f"step-{step_num:02d}-hitl-rejected.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2337,6 +2372,14 @@ def main(argv=None):
              "they stop showing in-flight forever; then exit.",
     )
     parser.add_argument(
+        "--prune-worktrees",
+        action="store_true",
+        dest="prune_worktrees",
+        help="Housekeeping (#175): remove finished (clean) build worktrees under "
+             "~/.compass/worktrees/ so they don't pile up; in-flight (dirty) ones are "
+             "kept. Then exit. (--project-dir selects the repo.)",
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -2377,7 +2420,8 @@ def main(argv=None):
         sys.exit(code)
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
-    if args.log or args.dri or args.hitl_log or args.export_audit or args.wbs or args.reap_stale:
+    if (args.log or args.dri or args.hitl_log or args.export_audit or args.wbs
+            or args.reap_stale or args.prune_worktrees):
         from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
         if args.reap_stale:
@@ -2385,6 +2429,10 @@ def main(argv=None):
             reaped = halt_stale_runs()
             print(f"halted {len(reaped)} stale run(s)"
                   + (": " + ", ".join(reaped) if reaped else ""))
+        if args.prune_worktrees:
+            removed = prune_worktrees(project_dir)
+            print(f"removed {len(removed)} finished worktree(s)"
+                  + (": " + ", ".join(removed) if removed else ""))
         if args.wbs:
             from .wbs import build_wbs, render_wbs
             from .events import halt_stale_runs
