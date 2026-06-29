@@ -25,8 +25,9 @@ from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
     _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
-    _ensure_work_worktree,
+    _ensure_work_worktree, prune_worktrees,
 )
+from compass.orchestrator.logger import ensure_runs_dir, log_step
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
 WORKFLOWS = COMPASS_DIR / "workflows"
@@ -518,6 +519,42 @@ class TestWorktreeIsolation(unittest.TestCase):
 
     def test_non_git_dir_returns_none(self):
         self.assertIsNone(_ensure_work_worktree(Path(self._home.name), "feat/x"))
+
+    def test_prune_removes_clean_keeps_dirty(self):
+        clean = _ensure_work_worktree(self.repo, "feat/done")
+        dirty = _ensure_work_worktree(self.repo, "feat/inflight")
+        (Path(dirty) / "wip.txt").write_text("uncommitted\n", encoding="utf-8")  # in-flight
+        removed = prune_worktrees(self.repo)
+        self.assertEqual(len(removed), 1)        # exactly the clean one
+        self.assertFalse(Path(clean).exists())   # finished worktree removed
+        self.assertTrue(Path(dirty).exists())    # in-flight worktree kept
+
+
+class TestTelemetryGitignore(unittest.TestCase):
+    """#175: orchestrator run state (jsonl telemetry + step artifacts) must stay OUT of
+    git — it dirtied the tree every run (defeating fresh-base isolation) and got swept
+    into code PRs by the engineer's `git add -A`."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.project = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_ensure_runs_dir_writes_gitignore(self):
+        d = ensure_runs_dir(self.project)
+        gi = (d / ".gitignore").read_text(encoding="utf-8")
+        self.assertEqual(d, self.project / "docs" / "orchestrator-runs")
+        self.assertIn("*", gi)
+        self.assertIn("!.gitignore", gi)
+
+    def test_log_step_creates_gitignore(self):
+        log_step(self.project, "run1", "build", "WLT-27", 1, "engineer",
+                 "implement-story", "claude-code", None, "**TL;DR** did the thing\n")
+        gi = self.project / "docs" / "orchestrator-runs" / ".gitignore"
+        self.assertTrue(gi.exists())                                  # telemetry self-ignores
+        self.assertTrue((self.project / "docs" / "orchestrator-runs" / "runs.jsonl").exists())
 
 
 if __name__ == "__main__":
