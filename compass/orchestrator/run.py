@@ -977,6 +977,65 @@ def _load_bet_context(project_dir: Path, bet_id: str) -> str:
     return "\n".join(parts)
 
 
+def _resolve_bet_for_story(project_dir: Path, story_id: str):
+    """#172: map a story id (e.g. WLT-27-1) to its parent bet so a story-scoped
+    build/fix can run. Authoritative source is the filesystem — the bet whose
+    `docs/bets/<bet>/stories/<story_id>/story.md` exists. Falls back to stripping
+    the trailing `-<n>` segment (WLT-27-1 → WLT-27) when the dir isn't found yet
+    (e.g. a dry-run before stories exist). Returns the bet id, or None if neither
+    resolves."""
+    if not story_id:
+        return None
+    bets_dir = project_dir / "docs" / "bets"
+    if bets_dir.is_dir():
+        for story_md in bets_dir.glob(f"*/stories/{story_id}/story.md"):
+            # docs/bets/<bet>/stories/<story_id>/story.md → parent bet is 3 up
+            return story_md.parent.parent.parent.name
+    # Fallback: strip the trailing numeric story segment.
+    m = re.match(r"^(.*)-\d+$", story_id)
+    return m.group(1) if m else None
+
+
+def _is_story_id(project_dir: Path, candidate: str) -> bool:
+    """#172: True if `candidate` names a story (a `docs/bets/*/stories/<candidate>/`
+    dir exists) rather than a bet (`docs/bets/<candidate>/`). Lets a single id field
+    (the dashboard's, or `--bet`) accept either — a story id auto-resolves to its
+    parent bet + story scope instead of failing the requirement gate on a bet brief
+    that never existed (the WLT-27-1 'looks hung' bug)."""
+    if not candidate:
+        return False
+    bets_dir = project_dir / "docs" / "bets"
+    if (bets_dir / candidate).is_dir():
+        return False  # it's a bet
+    return any(bets_dir.glob(f"*/stories/{candidate}/story.md"))
+
+
+def _load_story_context(project_dir: Path, bet_id: str, story_id: str) -> str:
+    """#172: focused context for a story-scoped build — the parent bet's brief +
+    architecture (the load-bearing decisions) plus the FULL target story, with an
+    explicit instruction to implement ONLY this story. Distinct from
+    _load_bet_context (which summarizes every story for whole-bet work): a parallel
+    story build must not wander into sibling stories' scope."""
+    bet_dir = project_dir / "docs" / "bets" / bet_id
+    parts = [f"## Build scope — story {story_id} (bet {bet_id})\n",
+             f"**Implement ONLY story {story_id}.** Other stories in this bet are "
+             f"out of scope for this run — they build in their own runs/branches.\n"]
+    for artifact_name in ("brief.md", "architecture.md"):
+        artifact = bet_dir / artifact_name
+        if artifact.exists():
+            parts.append(f"### bet {artifact_name}\n\n{artifact.read_text(encoding='utf-8')}\n")
+    story_md = bet_dir / "stories" / story_id / "story.md"
+    if story_md.exists():
+        parts.append(f"### story {story_id}\n\n{story_md.read_text(encoding='utf-8')}\n")
+    else:
+        parts.append(f"### story {story_id}\n\n(No story.md on disk at "
+                     f"docs/bets/{bet_id}/stories/{story_id}/ — run /create-story first.)\n")
+    project_md = project_dir / "PROJECT.md"
+    if project_md.exists():
+        parts.append(f"### PROJECT.md\n\n{project_md.read_text(encoding='utf-8')}\n")
+    return "\n".join(parts)
+
+
 def _resolve_compass_file(compass_dir: Path, project_dir: Path, rel_path: str):
     """Override resolution (stack-agnostic core): a project overrides any
     Compass-shipped file (stack profile, and later templates/workflows) WITHOUT
@@ -1068,6 +1127,7 @@ def _run_workflow(
     compass_dir: Path,
     context: str = "",
     bet_id: str = None,
+    story_id: str = None,
     full_project: bool = False,
     model: str = None,
     no_write: bool = False,
@@ -1209,7 +1269,10 @@ def _run_workflow(
     # #121: a --from-step resume (e.g. the dashboard /decide) must CONTINUE the
     # paused run, not fork a new id — otherwise the original lingers in the
     # cockpit's ⏸ awaiting queue forever and the resume shows as a duplicate run.
-    run_id = run_id_override or f"{workflow_name}--{bet_id or 'no-bet'}--{_ts}"
+    # #172: a story-scoped run keys its identity on the story (parallel story
+    # builds get distinct run ids / logs / branches), falling back to the bet.
+    _scope_id = story_id or bet_id
+    run_id = run_id_override or f"{workflow_name}--{_scope_id or 'no-bet'}--{_ts}"
     actor = default_actor(project_dir)  # who launched this run — the audit-trail identity
 
     prior_outputs = list(initial_prior_outputs or [])
@@ -1230,8 +1293,16 @@ def _run_workflow(
         context = fp_context + ("\n\n" + context if context else "")
         print(f"[full-project] Loaded foundation + portfolio context from {project_dir}/docs/")
 
-    # --bet: load existing bet artifacts as initial context
-    if bet_id:
+    # --story: focused single-story context (#172) — only the target story + the
+    # parent bet's brief/architecture, so a parallel story build stays in scope.
+    # Falls through to whole-bet context when no story scope is set.
+    if story_id and bet_id:
+        story_context = _load_story_context(project_dir, bet_id, story_id)
+        context = story_context + ("\n\n" + context if context else "")
+        print(f"[story] Scoped to {story_id} (bet {bet_id}) — "
+              f"docs/bets/{bet_id}/stories/{story_id}/")
+    elif bet_id:
+        # --bet: load existing bet artifacts as initial context
         bet_context = _load_bet_context(project_dir, bet_id)
         context = bet_context + ("\n\n" + context if context else "")
         print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
@@ -1268,7 +1339,10 @@ def _run_workflow(
             else:
                 print("[branch] resume — no recorded branch; staying on the current branch")
         else:
-            bname = _work_branch_name(workflow_name, bet_id, context)
+            # #172: a story-scoped build branches on the story id (feat/<story>-…)
+            # so multiple stories of one bet can build in parallel without colliding
+            # on a single feat/<bet>-… branch.
+            bname = _work_branch_name(workflow_name, story_id or bet_id, context)
             work_branch = _ensure_work_branch(project_dir, bname)
             if work_branch:
                 print(f"[branch] write-mode work on '{work_branch}' (not main) — open a PR + merge after review")
@@ -1296,6 +1370,8 @@ def _run_workflow(
         event.setdefault("run_id", run_id)
         event.setdefault("workflow", workflow_name)
         event.setdefault("bet_id", bet_id)
+        if story_id:
+            event.setdefault("story_id", story_id)
         _fan(event)
         if event.get("type") == ev.USAGE:
             run_cost["usd"] += ev.cost_of_usage_event(event)
@@ -1890,6 +1966,17 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--story",
+        default=None,
+        metavar="ID",
+        help=(
+            "Story ID to build (e.g., WLT-27-1). Scopes a build/fix to ONE story "
+            "and auto-resolves its parent bet for the requirement gate, so multiple "
+            "stories of a bet can build in parallel on their own branches. A story "
+            "id passed to --bet is auto-detected and routed here (#172)."
+        ),
+    )
+    parser.add_argument(
         "--full-project",
         action="store_true",
         dest="full_project",
@@ -2178,6 +2265,22 @@ def main(argv=None):
     auto_merge = args.auto_merge or os.environ.get(
         "COMPASS_AUTO_MERGE", "").lower() in ("1", "true", "yes")
 
+    # #172: story-scoped build/fix. A story id may arrive via --story OR be typed
+    # into --bet (the dashboard's single id field) — auto-detect the latter so
+    # `/build WLT-27-1` resolves the parent bet for the requirement gate instead
+    # of halting on a docs/bets/WLT-27-1/brief.md that never existed (the "looks
+    # hung" bug). Resolve the parent bet; --bet always carries the BET id downstream.
+    story_id = args.story
+    if not story_id and args.bet and _is_story_id(project_dir, args.bet):
+        story_id = args.bet
+        args.bet = None
+    if story_id and not args.bet:
+        args.bet = _resolve_bet_for_story(project_dir, story_id)
+        if not args.bet:
+            parser.error(
+                f"--story {story_id}: could not resolve a parent bet "
+                f"(no docs/bets/*/stories/{story_id}/ and no <bet>-<n> pattern).")
+
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
         _run_workflow(
@@ -2186,6 +2289,7 @@ def main(argv=None):
             compass_dir=compass_dir,
             context=args.context,
             bet_id=args.bet,
+            story_id=story_id,
             full_project=args.full_project,
             model=args.model,
             no_write=args.no_write,
@@ -2240,6 +2344,7 @@ def main(argv=None):
             compass_dir=compass_dir,
             context=next_context,
             bet_id=args.bet if idx == 0 else None,
+            story_id=story_id if idx == 0 else None,
             full_project=args.full_project,
             model=args.model,
             no_write=args.no_write,

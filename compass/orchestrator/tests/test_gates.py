@@ -17,7 +17,10 @@ from compass.orchestrator.connector import (
     set_frontmatter_status,
 )
 from compass.orchestrator.graph import load_workflow, load_workflow_meta
-from compass.orchestrator.run import _manual_hitl_decision, _requirement_met, _promote_artifact
+from compass.orchestrator.run import (
+    _manual_hitl_decision, _requirement_met, _promote_artifact,
+    _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
+)
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
 WORKFLOWS = COMPASS_DIR / "workflows"
@@ -301,6 +304,64 @@ class TestPromoteArtifact(unittest.TestCase):
         self.assertIsNone(_promote_artifact(project, project / "compass", "docs/x.md",
                                             "x", "r", no_write=True))
         self.assertFalse((project / "docs/x.md").exists())
+
+
+class TestStoryScoping(unittest.TestCase):
+    """#172: story-scoped build — a story id resolves to its parent bet (so the
+    requirement gate checks the bet brief, not a nonexistent story brief), loads
+    focused single-story context, and branches on the story id for parallel builds."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.project = Path(self._tmp.name)
+        # docs/bets/WLT-27/{brief.md,architecture.md} + stories/WLT-27-1, -2
+        bet = self.project / "docs" / "bets" / "WLT-27"
+        (bet / "stories" / "WLT-27-1").mkdir(parents=True)
+        (bet / "stories" / "WLT-27-2").mkdir(parents=True)
+        (bet / "brief.md").write_text("---\nid: WLT-27\nstatus: approved\n---\n# Bet\n", encoding="utf-8")
+        (bet / "architecture.md").write_text("---\nstatus: approved\n---\n# Arch\n", encoding="utf-8")
+        (bet / "stories" / "WLT-27-1" / "story.md").write_text(
+            "---\nid: WLT-27-1\nstatus: ready\n---\n# Manual account form\nBuild the form.\n", encoding="utf-8")
+        (bet / "stories" / "WLT-27-2" / "story.md").write_text(
+            "---\nid: WLT-27-2\n---\n# CSV wizard\nSibling story — out of scope.\n", encoding="utf-8")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_resolve_bet_from_filesystem(self):
+        self.assertEqual(_resolve_bet_for_story(self.project, "WLT-27-1"), "WLT-27")
+
+    def test_resolve_bet_fallback_strips_segment(self):
+        # No dir on disk yet (e.g. dry-run before stories exist) → strip trailing -<n>.
+        self.assertEqual(_resolve_bet_for_story(self.project, "CB-9-3"), "CB-9")
+
+    def test_resolve_bet_unresolvable(self):
+        self.assertIsNone(_resolve_bet_for_story(self.project, "noseparator"))
+
+    def test_is_story_id_true_for_story(self):
+        self.assertTrue(_is_story_id(self.project, "WLT-27-1"))
+
+    def test_is_story_id_false_for_bet(self):
+        # A bet dir exists → it's a bet, not a story (even though it has a dash).
+        self.assertFalse(_is_story_id(self.project, "WLT-27"))
+
+    def test_is_story_id_false_for_unknown(self):
+        self.assertFalse(_is_story_id(self.project, "WLT-99-1"))
+
+    def test_story_context_is_focused(self):
+        ctx = _load_story_context(self.project, "WLT-27", "WLT-27-1")
+        self.assertIn("Implement ONLY story WLT-27-1", ctx)
+        self.assertIn("Manual account form", ctx)   # the target story
+        self.assertIn("# Bet", ctx)                  # parent bet brief
+        self.assertIn("# Arch", ctx)                 # parent bet architecture
+        self.assertNotIn("CSV wizard", ctx)          # sibling story stays out of scope
+
+    def test_branch_name_keyed_on_story(self):
+        # Parallel story builds get distinct branches (feat/<story>-…), not one feat/<bet>-….
+        b1 = _work_branch_name("build", "WLT-27-1", "manual account form")
+        b2 = _work_branch_name("build", "WLT-27-2", "csv wizard")
+        self.assertTrue(b1.startswith("feat/WLT-27-1-"))
+        self.assertNotEqual(b1, b2)
 
 
 if __name__ == "__main__":

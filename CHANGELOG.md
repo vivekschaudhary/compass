@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Story-scoped build — `/build <story-id>` runs ONE story so a bet's stories build in parallel (#172).** `build` was bet-scoped only, so a dashboard `/build WLT-27-1` read `WLT-27-1` as a *bet* and halted the requirement gate on a `docs/bets/WLT-27-1/brief.md` that never existed (a sub-second exit that "looked hung"). Now a story id — via the new `--story` flag, or **auto-detected** when typed into `--bet` (the dashboard's single id field) — **resolves its parent bet** (filesystem-authoritative, fallback strips the trailing `-<n>`) so the gate checks the **bet brief**, loads **focused single-story context** (parent brief + architecture + the full target story, *"implement ONLY this story"* — siblings excluded), and **branches + keys the run id on the story** (`feat/<story-id>-…`) so multiple stories of one bet build concurrently without colliding. Bet-scoped `/build <bet>` is unchanged. +8 tests (349), CONSISTENT.
+
 ### Fixed
 
 - **Idle guard no longer false-kills a working compose turn — stream partial messages (#170).** The #152 idle-timeout watches stdout silence, but the `claude` CLI **buffers a single long turn** — e.g. the architect composing a 12-section architecture *after* 40+ exploration reads — emitting nothing until the turn completes. So a *working* step looked idle and was killed at 300s (live: `create-bet-architecture` for WLT-27 died mid-draft, "no output for 300s," right after the last `Read`). Added **`--include-partial-messages`** to the claude-code host: token-level deltas now stream during generation, so the idle guard sees continuous activity and only trips on a **true** hang (zero deltas). `_progress_line` ignores the partial chunks (they reset the timer without flooding the log); `_parse_result` still reads the final `result` event unchanged. The default 300s window is now sufficient even for the heaviest draft turns. +2 tests (341), CONSISTENT.
