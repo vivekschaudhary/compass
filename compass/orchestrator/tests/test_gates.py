@@ -188,9 +188,14 @@ class TestPromotionHelpers(unittest.TestCase):
             label = push_artifact(project, "docs/a/b.md", "content\n", "filesystem")
             self.assertEqual(label, "filesystem")
             self.assertEqual((project / "docs/a/b.md").read_text(), "content\n")
+            # confluence with no creds → honest 'not configured' fallback (still cached)
             label = push_artifact(project, "docs/c.md", "x\n", "confluence")
-            self.assertEqual(label, "filesystem fallback — confluence not implemented")
+            self.assertIn("filesystem fallback — confluence not configured", label)
             self.assertTrue((project / "docs/c.md").exists())
+            # an unrecognized backend still degrades honestly
+            label = push_artifact(project, "docs/d.md", "y\n", "notion")
+            self.assertEqual(label, "filesystem fallback — notion not implemented")
+            self.assertTrue((project / "docs/d.md").exists())
 
     def test_read_frontmatter_status(self):
         with tempfile.TemporaryDirectory() as d:
