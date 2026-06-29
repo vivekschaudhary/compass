@@ -4026,4 +4026,16 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **369 pass** (+3: `ensure_runs_dir` writes the `.gitignore`; `log_step` creates it on first telemetry write; `prune_worktrees` removes a clean worktree + keeps a dirty one). consistency-check CONSISTENT.
 
-**Files touched (3):** `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #175. **(#031 batch: #168–#175 of #168–#177.)** On branch `chore/post-worktree-cleanup` → PR; cross-model review (Codex/Gemini, not Claude).
+**Files touched (3):** `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #175. **(#031 batch: #168–#175 of #168–#177.)** On branch `chore/post-worktree-cleanup` → PR #17, merged. Cross-model review (Codex/Gemini, not Claude).
+
+### 2026-06-29 — dashboard shows the story id for a story-scoped build (#176)
+
+**Trigger origin (live consumer signal).** Watching two parallel builds in the browser, the DRI spotted: the run card read `home-app · build · WLT-27 step 1/8` — the parent **bet**, not the story being built. *"build says WLT-27 not the story id."* The run log confirmed everything underneath was correct (`[story] Scoped to WLT-27-2`, `[worktree] isolated build in …/feat__WLT-27-2-work`, building in parallel with WLT-27-3) — so #172/#174 were working live; only the **label** was wrong.
+
+**Root cause.** #172 emits `story_id` on every event, but the cockpit's `fold_runs` only captured `bet_id`, and all seven run-card labels rendered `r.get("bet_id")`. So a story-scoped run displayed its parent bet.
+
+**Fix.** `fold_runs` now captures `story_id`; a `_scope_label(run)` helper returns the story id when present, else the bet id, and drives every run-card label (the per-run header, in-flight/done/awaiting rows, HTML surface). `bet_id` is deliberately untouched in the resume/`--bet` command path — the requirement gate resolves `docs/bets/<bet-id>/…` against the parent, so the displayed scope and the resume scope are correctly different. Cosmetic only; no behavior change to the build.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **370 pass** (+1: `fold_runs` keeps `story_id`; `_scope_label` prefers story then bet). Live-confirmed: the WLT-27-2 / WLT-27-3 in-flight runs now label `WLT-27-2` / `WLT-27-3`. consistency-check CONSISTENT.
+
+**Files touched (2):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #176. **(#031 batch: #168–#176 of #168–#177.)** On branch `fix/cockpit-story-label` → PR; cross-model review (Codex/Gemini, not Claude).

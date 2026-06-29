@@ -43,6 +43,7 @@ def fold_runs(events: list) -> dict:
             "project": e.get("project"),
             "workflow": e.get("workflow"),
             "bet_id": e.get("bet_id"),
+            "story_id": e.get("story_id"),   # #172/#176: story-scoped build label
             "started": None, "ended": False, "status": None, "reason": None,
             "current_step": None, "current_task": None, "open_gate": None,
             "last_ts": None,
@@ -57,7 +58,7 @@ def fold_runs(events: list) -> dict:
             "project_dir": None,   # full path (#119) — lets the cockpit resume any run
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
-        for k in ("project", "workflow", "bet_id"):
+        for k in ("project", "workflow", "bet_id", "story_id"):
             if e.get(k) is not None:
                 r[k] = e[k]
         r["last_ts"] = e.get("ts") or r["last_ts"]
@@ -114,6 +115,13 @@ def fold_runs(events: list) -> dict:
             if e.get("model"):
                 r["model"] = e["model"]
     return runs
+
+
+def _scope_label(r) -> str:
+    """#176: the id to SHOW for a run — the story id for a story-scoped build
+    (`/build WLT-27-2`), else the bet id. The displayed scope matches what the run
+    actually built; `bet_id` stays the parent for resume/--bet (the requirement gate)."""
+    return r.get("story_id") or r.get("bet_id")
 
 
 # ── step-level view (#111) ───────────────────────────────────────────────────
@@ -228,7 +236,7 @@ def _run_status_line(run: dict, rows) -> str:
 
 def render_run(run: dict, graph_steps: list) -> str:
     """Full annotated step plan for one run: ✓done · ▶running · ⏸awaiting · ·pending."""
-    loc = " ".join(x for x in [run.get("project"), run.get("workflow"), run.get("bet_id")] if x)
+    loc = " ".join(x for x in [run.get("project"), run.get("workflow"), _scope_label(run)] if x)
     out = [f"RUN  {loc}  ({run.get('run_id')})", "=" * 60]
     rows, has_graph = _run_step_rows(run, graph_steps, now=datetime.now(timezone.utc))
     if not has_graph:
@@ -326,7 +334,7 @@ def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -
     awaiting.sort(key=lambda r: (r.get("open_gate") or {}).get("ts") or "")
     for r in awaiting:
         g = r["open_gate"]
-        loc = " ".join(x for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        loc = " ".join(x for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
         age = _gate_age_str(g, _now)
         age_str = f"  (awaiting {age})" if age else ""
         out.append(f"  • {loc}  step {g.get('step')} — {g.get('title') or g.get('kind')}{age_str}")
@@ -336,7 +344,7 @@ def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -
     if not in_flight:
         out.append("  (no runs in progress)")
     for r in in_flight:
-        loc = " ".join(x for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        loc = " ".join(x for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
         total = _total_steps(r.get("workflow"))
         if r.get("current_step"):
             where = f"step {r['current_step']}" + (f"/{total}" if total else "")
@@ -350,7 +358,7 @@ def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -
     if not done:
         out.append("  (none yet)")
     for r in shown:
-        loc = " ".join(x for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        loc = " ".join(x for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
         mark = "✓" if r.get("status") == "completed" else "■"
         out.append(f"  {mark} {loc}  {r.get('status')}: {r.get('reason') or ''}")
 
@@ -548,7 +556,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     awaiting.sort(key=lambda r: (r.get("open_gate") or {}).get("ts") or "")
     for r in awaiting:
         g = r["open_gate"]
-        loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
         act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
         age = _gate_age_str(g, now)
         age_html = f" <span class='dur'>awaiting {_esc(age)}</span>" if age else ""
@@ -561,7 +569,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     if not in_flight:
         p.append("<div class='empty'>no runs in progress</div>")
     for r in in_flight:
-        loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
         rows, _hg = _run_step_rows(r, load_graph_steps(r.get("workflow"), cdir), now=now)
         total = len(rows) if rows else 0
         cur = r.get("current_step")
@@ -582,7 +590,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     if not done:
         p.append("<div class='empty'>none yet</div>")
     for r in done:
-        loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), r.get("bet_id")] if x)
+        loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
         mark = "✓" if r.get("status") == "completed" else "■"
         p.append(f"<div class='run'>{mark} <span class='loc'>{loc}</span> "
                  f"<span class='muted'>{_esc(r.get('status'))}: {_esc(r.get('reason'))}</span>"
