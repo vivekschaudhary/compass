@@ -977,6 +977,43 @@ def _load_bet_context(project_dir: Path, bet_id: str) -> str:
     return "\n".join(parts)
 
 
+def _resolve_compass_file(compass_dir: Path, project_dir: Path, rel_path: str):
+    """Override resolution (stack-agnostic core): a project overrides any
+    Compass-shipped file (stack profile, and later templates/workflows) WITHOUT
+    forking by placing it under `<project>/compass-overrides/<rel_path>`. Returns the
+    project override if present, else the Compass default, else None. 'Opinionated
+    defaults, fully overridable' — the same resolver extends to templates/workflows."""
+    override = project_dir / "compass-overrides" / rel_path
+    if override.exists():
+        return override
+    default = compass_dir / rel_path
+    return default if default.exists() else None
+
+
+def _read_stack_from_config(compass_dir: Path):
+    """Read the `stack:` field from compass/config.yaml — selects which stack profile
+    (`compass/stacks/<stack>.md`) is injected into the delivery agents. None if unset
+    (agents run stack-neutral). The stack is pluggable config, never hardcoded in an
+    agent file."""
+    config_file = compass_dir / "config.yaml"
+    if not config_file.exists():
+        return None
+    m = re.search(r'^stack:\s*([^\s#]+)', config_file.read_text(encoding="utf-8"),
+                  re.MULTILINE)
+    return m.group(1).strip() if m else None
+
+
+def _load_stack_context(compass_dir: Path, project_dir: Path, stack: str) -> str:
+    """Load the active stack profile as agent context. Agents carry stack-neutral
+    methodology; the profile supplies the stack's build/test commands, runtime-artifact
+    paths, and framework runtime contracts the agents verify. Override-resolved.
+    Returns '' if no profile file is found for `stack`."""
+    profile = _resolve_compass_file(compass_dir, project_dir, f"stacks/{stack}.md")
+    if profile is None:
+        return ""
+    return f"## Active stack profile — {stack}\n\n{profile.read_text(encoding='utf-8')}\n"
+
+
 def _cross_workflow_context(workflow_name: str, prior_outputs: list, artifact_paths: list) -> str:
     """
     Build a context summary to pass from the end of one workflow into the
@@ -1178,6 +1215,19 @@ def _run_workflow(
         bet_context = _load_bet_context(project_dir, bet_id)
         context = bet_context + ("\n\n" + context if context else "")
         print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
+
+    # Stack profile (stack-agnostic core): the delivery agents stay stack-neutral and
+    # read the project's build/test/runtime contracts from a pluggable profile selected
+    # by config.yaml `stack:` (override-resolved). Loaded once here; injected per
+    # delivery step below. No `stack:` (or no profile) → agents run stack-neutral.
+    stack = _read_stack_from_config(compass_dir)
+    stack_profile_text = _load_stack_context(compass_dir, project_dir, stack) if stack else ""
+    if stack and stack_profile_text:
+        print(f"[stack] Loaded stack profile '{stack}'")
+    elif stack:
+        print(f"[stack] config declares stack '{stack}' but no profile found "
+              f"(compass/stacks/{stack}.md or compass-overrides/stacks/) — agents run "
+              f"stack-neutral", file=sys.stderr)
 
     # Write-mode CODE work lands on a work branch, never directly on main (#99) —
     # the branch→review→merge discipline. #151: DOC workflows (create-brief/-story/
@@ -1567,6 +1617,15 @@ def _run_workflow(
             if catalog:
                 user_context = catalog + "\n" + user_context
                 print("[bet-catalog] injected existing-bets list for right-sizing")
+
+        # Stack profile (stack-agnostic core): delivery agents read the project's
+        # stack-specific contracts from the pluggable profile instead of hardcoding
+        # them. Inject for the agents that act on code.
+        if stack_profile_text and step.agent in (
+            "engineer", "reviewer", "security-reviewer", "automation"
+        ):
+            user_context = stack_profile_text + "\n" + user_context
+            print(f"[stack] injected '{stack}' profile for {step.agent}")
 
         user_message = _build_user_message(step.task, user_context, prior_outputs)
 
