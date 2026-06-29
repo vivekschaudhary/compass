@@ -137,6 +137,15 @@ tool_assignments:
   tech_writer:              claude    # defaults.tech-writes
   delivery_manager:         claude    # defaults.product — renamed from project_manager in v0.3.15 (block deprecated for v0.4 removal anyway)
 
+# ─── Technology stack (selects the delivery agents' stack profile) ─────
+# The delivery agents (engineer / reviewer / automation) are STACK-AGNOSTIC: they
+# carry the standardized methodology, and read the stack-specific build/test commands,
+# runtime-artifact paths, and framework runtime contracts from a pluggable profile at
+# compass/stacks/<stack>.md (injected into their context at dispatch). Shipped profiles:
+# nextjs-ts · dotnet-blazor. Override a shipped profile or add your own WITHOUT forking
+# via <project>/compass-overrides/stacks/<stack>.md. Unset → agents run stack-neutral.
+# stack: nextjs-ts        # uncomment and set to your project's stack
+
 # ─── Connectors (MCP) ─────────────────────────────────────────────────
 # Wire these up in .mcp.json. The framework references them by name here.
 connectors:

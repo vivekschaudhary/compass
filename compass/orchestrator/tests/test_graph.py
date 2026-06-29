@@ -608,6 +608,67 @@ class TestAllowWriteResolution(unittest.TestCase):
         )
 
 
+class TestStackProfile(unittest.TestCase):
+    """Stack-agnostic core: the stack is a pluggable profile selected by config.yaml
+    `stack:`, injected into delivery agents, and overridable per project without
+    forking. Agents carry methodology; the profile carries the stack."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.runmod = runmod
+
+    def test_read_stack_from_config(self):
+        with tempfile.TemporaryDirectory() as d:
+            compass = Path(d, "compass"); compass.mkdir()
+            cfg = compass / "config.yaml"
+            # unset → None
+            cfg.write_text("connectors:\n  docs: confluence\n")
+            self.assertIsNone(self.runmod._read_stack_from_config(compass))
+            # set → value, inline comment stripped
+            cfg.write_text("stack: dotnet-blazor   # the POC\nconnectors:\n  docs: confluence\n")
+            self.assertEqual(self.runmod._read_stack_from_config(compass), "dotnet-blazor")
+            # nested/indented `stack:` does NOT match (top-level only)
+            cfg.write_text("conventions:\n  stack: nope\n")
+            self.assertIsNone(self.runmod._read_stack_from_config(compass))
+            # no config file → None
+            self.assertIsNone(self.runmod._read_stack_from_config(Path(d, "absent")))
+
+    def test_resolve_compass_file_override_wins(self):
+        with tempfile.TemporaryDirectory() as d:
+            project = Path(d)
+            compass = project / "compass"; (compass / "stacks").mkdir(parents=True)
+            (compass / "stacks" / "nextjs-ts.md").write_text("DEFAULT")
+            # default resolves when no override
+            r = self.runmod._resolve_compass_file(compass, project, "stacks/nextjs-ts.md")
+            self.assertEqual(r.read_text(), "DEFAULT")
+            # project override wins (no forking)
+            ov = project / "compass-overrides" / "stacks"; ov.mkdir(parents=True)
+            (ov / "nextjs-ts.md").write_text("OVERRIDE")
+            r = self.runmod._resolve_compass_file(compass, project, "stacks/nextjs-ts.md")
+            self.assertEqual(r.read_text(), "OVERRIDE")
+            # neither → None
+            self.assertIsNone(
+                self.runmod._resolve_compass_file(compass, project, "stacks/missing.md"))
+
+    def test_load_stack_context(self):
+        with tempfile.TemporaryDirectory() as d:
+            project = Path(d)
+            compass = project / "compass"; (compass / "stacks").mkdir(parents=True)
+            (compass / "stacks" / "dotnet-blazor.md").write_text(
+                "# Stack profile: .NET + Blazor\nproduction build: dotnet build -c Release")
+            ctx = self.runmod._load_stack_context(compass, project, "dotnet-blazor")
+            self.assertIn("Active stack profile — dotnet-blazor", ctx)
+            self.assertIn("dotnet build -c Release", ctx)
+            # unknown stack → '' (agents run stack-neutral)
+            self.assertEqual(self.runmod._load_stack_context(compass, project, "nope"), "")
+
+    def test_shipped_reference_profiles_exist(self):
+        # the two reference profiles ship with the framework (the sample's defaults)
+        stacks = Path(__file__).resolve().parents[2] / "stacks"
+        self.assertTrue((stacks / "nextjs-ts.md").exists(), "nextjs-ts profile missing")
+        self.assertTrue((stacks / "dotnet-blazor.md").exists(), "dotnet-blazor profile missing")
+
+
 class TestMergeGate(unittest.TestCase):
     """#147: approving a 'merge' HITL gate triggers the PR merge (delivery closure)."""
 
