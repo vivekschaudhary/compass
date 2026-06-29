@@ -1,0 +1,11 @@
+{
+  "permissions": {
+     "defaultMode": "plan",
+    "allow": [
+      "Edit(/.claude/skills/status/**)",
+      "Edit(/.claude/skills/plan/**)",
+      "Bash(awk '/^## \\\\[0\\\\.3\\\\.15\\\\]/,/^## \\\\[0\\\\.3\\\\.14\\\\]/' CHANGELOG.md)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}

@@ -6,38 +6,40 @@
 
 ## Why I built this
 
-Enterprises and consultancies run delivery on **status theater** — RAG decks that read green until they're abruptly red, Jira boards anyone can drag to "done," a program that looks fine in the monthly steering review and is on fire by month three. The flaw is structural: the *report* is divorced from the *work*. A status assembled by hand is one you can shade, delay, or simply get wrong — so the people who most need the truth are the last to get it.
+Enterprises and consultancies run delivery on **status theater**. RAG decks that read green until they're abruptly red, Jira boards anyone can drag to "done," a program that looks fine in the monthly steering review and is on fire by month three. The flaw is structural: the _report_ is divorced from the _work_. A status assembled by hand is one you can shade, delay, or simply get wrong — so the people who most need the truth are the last to get it.
 
-**Compass inverts it.** Don't *report on* delivery — *run it on the platform*, and let the truth fall out as a byproduct of doing the work.
+**Compass inverts it.** Don't _report on_ delivery — _run it on the platform_, and let the truth fall out as a byproduct of doing the work.
 
-Compass is a **multi-model delivery control tower**. The work — briefs, architecture, stories, builds, cross-model reviews, gated merges — **runs *on* the platform**. So transparency isn't a status report you ask for; it's a **byproduct of execution**. The board can't lie, because the board *is* the work.
+**Why this is possible now:** a platform can only ever _report on_ work that happens somewhere else — in people's heads, their IDEs, the meeting room — which is exactly why status theater was, until recently, the best anyone could do. Now that AI agents do the delivery itself — briefs, architecture, code, reviews — the work genuinely _runs on the platform_: the doing and the telling become one act. The control tower isn't a better dashboard; it's what becomes possible once those two collapse into one.
 
-That one property is the whole idea: a delivery exec opens one screen and knows the **ground truth** of every program — what's done, what's stuck, what decided what, what it cost, where the risk is — without asking anyone for a status, and without anyone being able to game it. And because the work runs on the platform, the tower can **prove every control the engagement must hit was met, with evidence** — governance and conformance as a *byproduct of execution*, not a report assembled after the fact.
+Compass is a **multi-model delivery control tower**. The work — briefs, architecture, stories, builds, cross-model reviews, gated merges — **runs _on_ the platform**. So transparency isn't a status report you ask for; it's a **byproduct of execution**. The board can't lie, because the board _is_ the work.
+
+That one property is the whole idea: a delivery exec opens one screen and knows the **ground truth** of every program — what's done, what's stuck, what decided what, what it cost, where the risk is — without asking anyone for a status, and without anyone being able to game it. And because the work runs on the platform, the tower can **prove every control the engagement must hit was met, with evidence** — governance and conformance as a _byproduct of execution_, not a report assembled after the fact.
 
 ## Why a control tower (and not the tools you already have)
 
-| | What it shows you | The catch |
-|---|---|---|
-| **Status decks / delivery dashboards** | Reports *about* work done elsewhere | Self-reported proxies — gameable, and late |
-| **AI coding assistants** | Do the work | Reveal nothing org-wide; no governance |
-| **Compass** | **Does the work *and* reveals it** | The status report can't lie — the orchestrator *is* the work |
+|                                        | What it shows you                   | The catch                                                    |
+| -------------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
+| **Status decks / delivery dashboards** | Reports _about_ work done elsewhere | Self-reported proxies — gameable, and late                   |
+| **AI coding assistants**               | Do the work                         | Reveal nothing org-wide; no governance                       |
+| **Compass**                            | **Does the work _and_ reveals it**  | The status report can't lie — the orchestrator _is_ the work |
 
 This changes the executive conversation from **monthly, reactive status reporting → proactive management-by-exception**: spend time only on the programs that need help, caught at week 1, not month 3. For consultancies and outsourcers, the same transparency becomes a **client trust** lever — the black box becomes glass.
 
-And it's **vendor-neutral**: Claude implements, Codex/Gemini review, no lab lock-in — a property the model labs structurally won't build. Your canonical record is plain markdown + an append-only ledger in a git repo you can clone any time: **system of record *and* zero lock-in.**
+And it's **vendor-neutral**: Claude implements, Codex/Gemini review, no lab lock-in — a property the model labs structurally won't build. Your canonical record is plain markdown + an append-only ledger in a git repo you can clone any time: **system of record _and_ zero lock-in.**
 
 ## Why the ground truth is trustworthy (the discipline layer)
 
-A control tower is only as good as the truthfulness of its state. AI speed without discipline is faster chaos — the dominant failure mode is **soft-spec rationalization** (the agent finds a plausible path, fills gaps with assumptions, skips the uncomfortable questions, and produces output that *looks* complete but isn't). Compass is the structural enforcement that makes the board's status real:
+A control tower is only as good as the truthfulness of its state. AI speed without discipline is faster chaos — the dominant failure mode is **soft-spec rationalization** (the agent finds a plausible path, fills gaps with assumptions, skips the uncomfortable questions, and produces output that _looks_ complete but isn't). Compass is the structural enforcement that makes the board's status real:
 
 - **Every phase has a gate** with explicit postconditions — gates don't pass on vibes.
 - **HITL stops halt the flow.** Runs pause for explicit approval at each checkpoint; the agent **cannot self-approve** (enforced mechanically, not just by prompt).
-- **Refusal rules live in the agent files.** The agent refuses to proceed when conditions aren't met because the refusal is *defined in its task*, not because it was asked nicely.
+- **Refusal rules live in the agent files.** The agent refuses to proceed when conditions aren't met because the refusal is _defined in its task_, not because it was asked nicely.
 - **Cross-model review independence.** The reviewer is never the same model as the implementer — enforced at the agent-frontmatter level.
 - **Every decision is logged.** DRI (Decision / Risk / Issue) logs create an audit trail across every bet, phase, and agent. "Why did we do it this way?" always has an answer.
-- **No silent skips.** Skipped steps are logged as DRI Decisions with rationale. The framework says *no* for you when the pressure is on to cut corners.
+- **No silent skips.** Skipped steps are logged as DRI Decisions with rationale. The framework says _no_ for you when the pressure is on to cut corners.
 
-OKRs give you the goals. Compass gives you the discipline to execute them honestly — and the transparency to *prove* it.
+OKRs give you the goals. Compass gives you the discipline to execute them honestly — and the transparency to _prove_ it.
 
 ## What Compass is
 
@@ -50,19 +52,19 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 - **Agents own tasks; workflows sequence agents.** 14 agent files in `compass/agents/` (**all 14 migrated** as of v0.3.36). Each is self-sufficient: identity + inlined principles + tools + task definitions (gate/work/postcondition) + refusal rules + handoffs. Workflow files in `compass/workflows/` are **thin dispatch graphs** that sequence `<agent>.<task>` references — methodology lives in the agent task definitions, not the workflow.
 - **Surface-independent by design.** Each agent declares `preferred_hosts: [...]` in its own frontmatter. **The orchestrator (v0.4-alpha) walks dispatch graphs and dispatches each step to its preferred host automatically** — Engineer → Claude, Reviewer → OpenAI or Gemini — preserving cross-model independence structurally. (Caveat: if no reviewer host is reachable, the reviewer step **halts the run** rather than shipping without independent review — set a key, run a subscription CLI host, or pass `--skip-missing` for an explicit, DRI-logged skip.) Run via `python3 -m compass.orchestrator.run <workflow>`, or use any host interactively.
 - **Cost-flat on subscriptions.** Dispatch Claude steps via your logged-in `claude` CLI and Codex steps via your `codex` CLI (`--claude-cli` / `--codex-cli`) — no metered API keys; the cross-model reviewer runs on your Codex subscription.
-- **Decisions, Risks, Issues** logged at every stage (DRI logs) — the audit trail *is* a byproduct, not extra work.
+- **Decisions, Risks, Issues** logged at every stage (DRI logs) — the audit trail _is_ a byproduct, not extra work.
 - **Retros are fractal** (`[fractal-retro]`, canon v0.3.17). The same `/retro` shape applies at every altitude — role · workflow · bet · project · org · framework — with bottom-up consolidation; patterns promote to canon.
-- **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — producing *findings, not failures* (severity + confidence + location + reason + fix). Owners decide; the scanner informs.
+- **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — producing _findings, not failures_ (severity + confidence + location + reason + fix). Owners decide; the scanner informs.
 
 ## What's shipped (the Control Tower)
 
 The control-tower capabilities are built and on `main` — early alpha, but real and tested:
 
 - **The delivery spine** — dispatch-graph workflows → per-role agents → HITL gates → **cross-model gated review** → merge. Plus a live **cockpit**: portfolio view of runs, awaiting gates (with age), per-step ✓/✗, live logs, cost, one-tap approve/reject. An append-only **event spine** is the orchestration-state + audit ledger.
-- **Stack-agnostic core** — agents carry the *methodology*; the stack is a pluggable profile (`compass/stacks/<stack>.md`). A project/engagement overrides templates, workflows, or stack **without forking** — *opinionated defaults, fully overridable*.
+- **Stack-agnostic core** — agents carry the _methodology_; the stack is a pluggable profile (`compass/stacks/<stack>.md`). A project/engagement overrides templates, workflows, or stack **without forking** — _opinionated defaults, fully overridable_.
 - **Governed-delivery audit** — actor identity (who ran / who approved), a **cross-model-independence verdict** (the reviewer was a different model than the implementer), and the full Decision/Risk/Issue trail — exportable (`--export-audit`).
-- **Conformance to a control framework** — a control set (`controls.md`) maps each control → the delivery evidence that satisfies it → **met / at-risk / unmet**. *Prove every control was met — the audit can't lie, because it's drawn from the actual run.*
-- **Canonical store + one-way projection** — deliverables are canonical *on Compass* (plain markdown + an append-only ledger), then projected — idempotently, on draft creation and on approval — to your tracker and your docs space. Your tools stay in sync; Compass stays the source of truth.
+- **Conformance to a control framework** — a control set (`controls.md`) maps each control → the delivery evidence that satisfies it → **met / at-risk / unmet**. _Prove every control was met — the audit can't lie, because it's drawn from the actual run._
+- **Canonical store + one-way projection** — deliverables are canonical _on Compass_ (plain markdown + an append-only ledger), then projected — idempotently, on draft creation and on approval — to your tracker and your docs space. Your tools stay in sync; Compass stays the source of truth.
 - **Exec control-tower view** (`--wbs`) — the live **program → bet → story** Work Breakdown Structure with ground-truth status, **manage-by-exception** (awaiting / stalled / blocked / conformance gaps), and the conformance rollup.
 - **Coherence floor** — stale-run auto-halt, no silent write-failures, self-approval guards: a killed run can't show in-flight forever, and a write that wrote nothing can't report success.
 - **Cost-flat on subscriptions** — dispatch via your logged-in CLIs, no metered keys.
@@ -73,22 +75,23 @@ The control-tower capabilities are built and on `main` — early alpha, but real
 
 Compass maps directly onto an OKR planning cycle. The bet IS the initiative; the portfolio IS the quarterly initiative list.
 
-| OKR concept | Compass equivalent |
-|---|---|
-| Objective | `docs/foundation/product.md` → Vision / North-star |
-| Key Result | `product.md` → OKRs section + `architecture.md` → fitness functions |
-| Initiative | Bet (`docs/bets/<bet-id>/brief.md`) |
-| Sprint work | Story set (`docs/bets/<bet-id>/stories/`) |
-| OKR check-in | `/status` → delivery manager → `docs/status.md` |
-| Quarter retro | `/retro --altitude=project` |
+| OKR concept   | Compass equivalent                                                  |
+| ------------- | ------------------------------------------------------------------- |
+| Objective     | `docs/foundation/product.md` → Vision / North-star                  |
+| Key Result    | `product.md` → OKRs section + `architecture.md` → fitness functions |
+| Initiative    | Bet (`docs/bets/<bet-id>/brief.md`)                                 |
+| Sprint work   | Story set (`docs/bets/<bet-id>/stories/`)                           |
+| OKR check-in  | `/status` → delivery manager → `docs/status.md`                     |
+| Quarter retro | `/retro --altitude=project`                                         |
 
 **Ceremonies:**
+
 - **OKR planning** → `/setup-product` (O + KRs at foundation) + `/create-bet-portfolio` (map KRs → bets; dependency graph = sprint sequencing)
 - **Weekly check-in** → `/status` produces the check-in content automatically
 - **Bet execution** → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build`
 - **Quarter retro** → `/retro` at project altitude consolidates all bet outcomes
 
-**Traceability closes the OKR → PR gap.** Each bet hypothesis traces to a specific OKR line in `product.md`. Stories trace to the bet. PRs trace to stories. The chain from OKR → shipped PR is explicit and auditable — no more "which work moved which KR?" *(This traceability chain is exactly what the control-tower view renders live.)*
+**Traceability closes the OKR → PR gap.** Each bet hypothesis traces to a specific OKR line in `product.md`. Stories trace to the bet. PRs trace to stories. The chain from OKR → shipped PR is explicit and auditable — no more "which work moved which KR?" _(This traceability chain is exactly what the control-tower view renders live.)_
 
 **Schema addition for OKR orgs:** add `drives_kr: [KR-2.1, KR-3.4]` + `okr_cycle: Q3-2026` to `brief.md` frontmatter. `/status` then produces a KR-progress table. **Multi-team OKRs:** each team runs its own Compass project; cross-team KR patterns surface via `/retro --altitude=org`.
 
