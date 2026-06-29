@@ -1010,6 +1010,58 @@ def _is_story_id(project_dir: Path, candidate: str) -> bool:
     return any(bets_dir.glob(f"*/stories/{candidate}/story.md"))
 
 
+def _story_dependencies(content: str) -> list:
+    """Parse a story's `dependencies:` frontmatter into a list of story ids. Handles
+    both the inline-flow form (`[A, B]` / `A, B`) and block-style `  - A` lines, and
+    drops template placeholders (`<other story id>`). Returns [] if none."""
+    fm = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    if not fm:
+        return []
+    block = fm.group(1)
+    m = re.search(r"^dependencies[ \t]*:[ \t]*(.*(?:\n[ \t]+-.*)*)$", block, re.MULTILINE)
+    if not m:
+        return []
+    raw = m.group(1)
+    items = []
+    inline, _, rest = raw.partition("\n")
+    for x in inline.strip().strip("[]").split(","):
+        items.append(x)
+    for line in rest.splitlines():
+        lm = re.match(r"^[ \t]+-\s*(.*)$", line)
+        if lm:
+            items.append(lm.group(1))
+    return [x.strip().strip("\"'") for x in items
+            if x.strip().strip("\"'") and not x.strip().startswith("<")]
+
+
+def _story_human_deliverable_blockers(project_dir: Path, bet_id: str, story_id: str) -> list:
+    """#171: the 'always block' design/copy gate. Returns a list of
+    (dep_id, dep_type, dep_status) for each of the target story's dependencies that is
+    a **design/copy story not yet `ready`** (i.e. a human hasn't delivered the Figma/
+    copy). Empty list → nothing blocking. Only design/copy-TYPE deps block — a plain
+    feature-ordering dependency does NOT — so stories predating #171 are never
+    false-blocked. Missing/unreadable files are skipped (fail-open per dep)."""
+    from .connector import _frontmatter_field
+    if not (bet_id and story_id):
+        return []
+    stories = project_dir / "docs" / "bets" / bet_id / "stories"
+    try:
+        content = (stories / story_id / "story.md").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    blockers = []
+    for dep in _story_dependencies(content):
+        try:
+            dcontent = (stories / dep / "story.md").read_text(encoding="utf-8")
+        except OSError:
+            continue
+        dtype = _frontmatter_field(dcontent, "type")
+        dstatus = _frontmatter_field(dcontent, "status")
+        if dtype in ("design", "copy") and dstatus != "ready":
+            blockers.append((dep, dtype, dstatus))
+    return blockers
+
+
 def _load_story_context(project_dir: Path, bet_id: str, story_id: str) -> str:
     """#172: focused context for a story-scoped build — the parent bet's brief +
     architecture (the load-bearing decisions) plus the FULL target story, with an
@@ -1223,6 +1275,26 @@ def _run_workflow(
             )
             sys.exit(3)
         if unmet and dry_run:
+            print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
+
+    # ── design/copy gate (#171) — mechanical 'always block' for a story-scoped build ─
+    # A UI feature must NOT build until its design/copy dependencies are HUMAN-delivered
+    # (status: ready). Enforced mechanically here (not just in the engineer agent's
+    # instructions) so the HITL deliverable is load-bearing, like #153's gates. Only
+    # design/copy-TYPE deps block — a plain feature-ordering dependency never does, so
+    # old-shape stories that predate #171 are never false-blocked.
+    if story_id and workflow_name in _CODE_WORKFLOWS:
+        blockers = _story_human_deliverable_blockers(project_dir, bet_id, story_id)
+        if blockers:
+            print(f"\nDesign/copy gate — {story_id} is blocked by un-delivered human deliverables:")
+            for dep, dtype, dstatus in blockers:
+                print(f"  ⛔ {dep} ({dtype}, status: {dstatus}) — a human must deliver it and flip status → ready")
+            if not dry_run:
+                print("\nError: build blocked — a human designer/writer must deliver the Figma/copy "
+                      "into the listed story(ies) and flip them to `status: ready` before this UI "
+                      "feature can build. Halting — design/copy gates are load-bearing (#171).",
+                      file=sys.stderr)
+                sys.exit(3)
             print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
 
     # ── dry-run ──────────────────────────────────────────────────────────────

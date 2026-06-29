@@ -20,6 +20,7 @@ from compass.orchestrator.graph import load_workflow, load_workflow_meta
 from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
     _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
+    _story_dependencies, _story_human_deliverable_blockers,
 )
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
@@ -362,6 +363,46 @@ class TestStoryScoping(unittest.TestCase):
         b2 = _work_branch_name("build", "WLT-27-2", "csv wizard")
         self.assertTrue(b1.startswith("feat/WLT-27-1-"))
         self.assertNotEqual(b1, b2)
+
+    # ── #171 mechanical design/copy gate ──────────────────────────────────────
+    def _set(self, story_id, **fm):
+        p = self.project / "docs" / "bets" / "WLT-27" / "stories" / story_id / "story.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        body = "".join(f"{k.replace('_', '')}: {v}\n" for k, v in fm.items())
+        p.write_text(f"---\nid: {story_id}\n{body}---\n# {story_id}\n", encoding="utf-8")
+
+    def test_dependencies_inline_and_block_forms(self):
+        self.assertEqual(_story_dependencies("---\ndependencies: [A, B]\n---\n"), ["A", "B"])
+        self.assertEqual(_story_dependencies("---\ndependencies:\n  - A\n  - B\n---\n"), ["A", "B"])
+        self.assertEqual(_story_dependencies("---\ndependencies:\n  - <other story id>\n---\n"), [])
+        self.assertEqual(_story_dependencies("---\nid: x\n---\n"), [])
+
+    def test_blocked_when_design_dep_not_ready(self):
+        self._set("WLT-27-2", type="design", owner="human", status="needs-design")
+        self._set("WLT-27-3", type="copy", owner="human", status="needs-copy")
+        self._set("WLT-27-1", type="story", owner="agent", status="needs-design",
+                  dependencies="[WLT-27-2, WLT-27-3]")
+        blockers = _story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1")
+        self.assertEqual({b[0] for b in blockers}, {"WLT-27-2", "WLT-27-3"})
+
+    def test_unblocked_when_design_and_copy_ready(self):
+        self._set("WLT-27-2", type="design", owner="human", status="ready")
+        self._set("WLT-27-3", type="copy", owner="human", status="ready")
+        self._set("WLT-27-1", type="story", owner="agent", status="ready",
+                  dependencies="[WLT-27-2, WLT-27-3]")
+        self.assertEqual(_story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1"), [])
+
+    def test_feature_ordering_dep_does_not_block(self):
+        # An old-shape feature→feature dependency (type: story) must NOT be treated as a
+        # human deliverable even if its own status is needs-design — no false block (#171).
+        self._set("WLT-27-2", type="story", owner="agent", status="needs-design")
+        self._set("WLT-27-1", type="story", owner="agent", status="ready",
+                  dependencies="[WLT-27-2]")
+        self.assertEqual(_story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1"), [])
+
+    def test_no_dependencies_never_blocks(self):
+        self._set("WLT-27-1", type="story", owner="agent", status="ready", dependencies="[]")
+        self.assertEqual(_story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1"), [])
 
 
 if __name__ == "__main__":
