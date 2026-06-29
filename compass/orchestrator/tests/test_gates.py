@@ -17,7 +17,7 @@ from compass.orchestrator.connector import (
     set_frontmatter_status,
 )
 from compass.orchestrator.graph import load_workflow, load_workflow_meta
-from compass.orchestrator.run import _manual_hitl_decision, _requirement_met
+from compass.orchestrator.run import _manual_hitl_decision, _requirement_met, _promote_artifact
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
 WORKFLOWS = COMPASS_DIR / "workflows"
@@ -253,6 +253,54 @@ class TestManualBridge(unittest.TestCase):
     def test_path_outside_project_errors(self):
         code = _manual_hitl_decision(self.project, "/etc/hosts", "approved", None, None)
         self.assertEqual(code, 2)
+
+
+class TestPromoteArtifact(unittest.TestCase):
+    """#project-on-create: the shared promote/project helper — projects the draft on
+    gate arrival (status as-is) and re-projects on approval (status approved), reading
+    the on-disk artifact so the distribution pointer survives (idempotent)."""
+
+    def _project(self):
+        return Path(tempfile.mkdtemp())
+
+    def test_reads_ondisk_preserves_pointer(self):
+        project = self._project()
+        rel = "docs/bets/CB-1/stories/CB-1-1/story.md"
+        target = project / rel
+        target.parent.mkdir(parents=True)
+        target.write_text("---\nid: CB-1-1\nstatus: proposed\njira_key: PROJ-7\n---\n# Story\n",
+                          encoding="utf-8")
+        label = _promote_artifact(project, project / "compass", rel, "FALLBACK-OUTPUT",
+                                  "run1", status="approved")
+        written = target.read_text(encoding="utf-8")
+        self.assertIn("jira_key: PROJ-7", written)       # pointer read from disk, not lost
+        self.assertIn("status: approved", written)       # flipped on approval
+        self.assertNotIn("FALLBACK-OUTPUT", written)     # on-disk used, not the step output
+        self.assertEqual(label, "filesystem")            # no creds → filesystem cache
+
+    def test_status_none_projects_draft_asis(self):
+        project = self._project()
+        rel = "docs/bets/CB-2/stories/CB-2-1/story.md"
+        (project / rel).parent.mkdir(parents=True)
+        (project / rel).write_text("---\nid: CB-2-1\nstatus: proposed\n---\n# S\n", encoding="utf-8")
+        _promote_artifact(project, project / "compass", rel, "FB", "run1", status=None)
+        self.assertIn("status: proposed", (project / rel).read_text(encoding="utf-8"))  # unchanged
+
+    def test_falls_back_to_step_output(self):
+        project = self._project()
+        rel = "docs/x.md"
+        _promote_artifact(project, project / "compass", rel,
+                          "# Title\nbody\n## Output summary\nmeta", "r", status="approved")
+        written = (project / rel).read_text(encoding="utf-8")
+        self.assertIn("# Title", written)
+        self.assertNotIn("Output summary", written)      # body extracted from the output
+        self.assertIn("status: approved", written)
+
+    def test_no_write_returns_none(self):
+        project = self._project()
+        self.assertIsNone(_promote_artifact(project, project / "compass", "docs/x.md",
+                                            "x", "r", no_write=True))
+        self.assertFalse((project / "docs/x.md").exists())
 
 
 if __name__ == "__main__":

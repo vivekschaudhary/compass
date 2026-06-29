@@ -1039,6 +1039,25 @@ def _cross_workflow_context(workflow_name: str, prior_outputs: list, artifact_pa
     return "\n".join(lines)
 
 
+def _promote_artifact(project_dir, compass_dir, canonical_rel, fallback_output,
+                      run_id, status=None, no_write=False):
+    """Write the canonical artifact + project it to its system of record (Jira/
+    Confluence). Reads the on-disk artifact when present (so the stored distribution
+    pointer is reused → an idempotent update, not a duplicate); else falls back to the
+    step output. `status` forces a frontmatter status (e.g. 'approved'); None projects
+    the draft as-is. Returns the connector label, or None in no-write mode."""
+    from .connector import (extract_artifact_body, push_artifact,
+                            resolve_connector_for_artifact, set_frontmatter_status)
+    if no_write:
+        return None
+    target = project_dir / canonical_rel
+    base = (target.read_text(encoding="utf-8") if target.exists()
+            else extract_artifact_body(fallback_output))
+    content = set_frontmatter_status(base, status, run_id) if status else base
+    return push_artifact(project_dir, canonical_rel, content,
+                         resolve_connector_for_artifact(canonical_rel, project_dir, compass_dir))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Core workflow runner — returns (prior_outputs, artifact_paths)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1389,6 +1408,20 @@ def _run_workflow(
                     )
                     emit(ev.NOTE, text=(f"self-approval reverted ({reverted}→proposed) "
                                         f"on step {step.number} [#153]"))
+
+            # Project the DRAFT to its system of record on ARRIVAL at the gate — the
+            # team sees the story/doc in Jira/Confluence immediately (in its draft
+            # status), not only after approval. Approval re-projects as approved
+            # (idempotent via the stored pointer). Fires even when the gate then pauses.
+            if (step.artifact_target and not no_write and last_agent_output
+                    and not ("<bet-id>" in step.artifact_target and not bet_id)):
+                _draft_rel = step.artifact_target.replace("<bet-id>", bet_id or "")
+                _draft_label = _promote_artifact(project_dir, compass_dir, _draft_rel,
+                                                 last_agent_output, run_id, status=None,
+                                                 no_write=no_write)
+                if _draft_label and "fallback" not in _draft_label:
+                    print(f"[projected draft → {_draft_rel} via {_draft_label}]")
+
             if non_interactive:
                 # #118: don't block on input — apply --decide or pause-and-exit.
                 action, _ = _resolve_gate(decide, False, None)
@@ -1417,16 +1450,11 @@ def _run_workflow(
             )
             decision = "approved" if result["approved"] else "rejected"
 
-            # Promotion (#70): approval is the write trigger — push the gated
-            # draft to its canonical path with status: approved.
+            # Promotion (#70): approval flips status → approved and RE-projects the
+            # artifact (idempotent update of the same Jira issue / Confluence page that
+            # the draft projection above already created — the pointer is on disk).
             canonical_rel = connector_label = None
             if result["approved"] and step.artifact_target:
-                from .connector import (
-                    extract_artifact_body,
-                    push_artifact,
-                    resolve_connector_for_artifact,
-                    set_frontmatter_status,
-                )
                 if "<bet-id>" in step.artifact_target and not bet_id:
                     print(
                         f"Warning: cannot promote — artifact target "
@@ -1441,19 +1469,13 @@ def _run_workflow(
                     )
                 else:
                     canonical_rel = step.artifact_target.replace("<bet-id>", bet_id or "")
-                    content = set_frontmatter_status(
-                        extract_artifact_body(last_agent_output), "approved", run_id
-                    )
                     if no_write:
                         print(f"[no-write: would promote → {canonical_rel}]")
                         canonical_rel = None
                     else:
-                        connector_label = push_artifact(
-                            project_dir,
-                            canonical_rel,
-                            content,
-                            resolve_connector_for_artifact(canonical_rel, project_dir, compass_dir),
-                        )
+                        connector_label = _promote_artifact(
+                            project_dir, compass_dir, canonical_rel, last_agent_output,
+                            run_id, status="approved", no_write=no_write)
                         print(f"[promoted → {canonical_rel} via {connector_label}]")
 
             log_hitl(
