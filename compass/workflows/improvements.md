@@ -3928,4 +3928,18 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Verification:** local full run **341 pass** (SDK present → both run). Simulated the bare-CI env (hid `anthropic` via `find_spec`) → `TestHostSelection`: **0 failures, 1 skipped**. consistency-check CONSISTENT. No production-code change — test-only.
 
-**Files touched (2):** `compass/orchestrator/tests/test_tools.py` (+ CHANGELOG + this file). Counter: #169. **(#031 batch: #168–#169 of #168–#177.)** On branch `fix/ci-honest-skips` → PR — and this is the one that should turn the CI check **green** for the first time this session. Follow-up watch-for: other host-SDK-dependent tests (openai/gemini) should get the same `skipUnless` treatment if they ever hard-fail in a bare env.
+**Files touched (2):** `compass/orchestrator/tests/test_tools.py` (+ CHANGELOG + this file). Counter: #169. **(#031 batch: #168–#169 of #168–#177.)** Merged via PR #11 — first **green** CI of the session (main's CI now passes). Follow-up watch-for: other host-SDK-dependent tests (openai/gemini) should get the same `skipUnless` treatment if they ever hard-fail in a bare env.
+
+### 2026-06-29 — idle guard no longer false-kills a working compose turn: stream partial messages (#170)
+
+**Trigger origin (live consumer signal):** the DRI ran `create-bet-architecture` for WLT-27 (a cross-cutting bet) on home-app. The architect did **40+ exploration reads/greps** (correct, deep grounding — dedup, currency, the spend pipeline), then went silent and was killed: *"claude CLI produced no output for 300s … Last activity: Read …/aggregation/index.ts."* It wasn't hung — it had finished exploring and was **composing the 12-section architecture doc in one long generation turn**, which emits nothing to stdout until it completes. The #152 idle guard (silence = hang) can't tell "quietly generating" from "stuck."
+
+**The DRI's question — "can the orchestrator check the run is working and not let it fail?"** Yes, and the clean answer is to make the work *visible* rather than guess at silence: the **stream IS the liveness signal** — make it fine-grained.
+
+**Fix.** Added **`--include-partial-messages`** to the claude-code CLI argv (verified the flag exists: `claude --help` → "Include partial message chunks … only works with --output-format=stream-json", which the host already uses). Now a long turn streams token-level deltas → stdout has continuous activity → the idle guard's `q.get(timeout=idle)` keeps resetting → it only fires on a **true** hang (zero deltas at all). `_progress_line` returns `None` for the partial `stream_event` chunks, so they reset the timer **without flooding the run log**; `_extract_result_line` / `_parse_result` still read the final `result` event unchanged. The default 300s window is now sufficient even for the heaviest draft turns (no more `=900` env bump needed).
+
+**Honest scope:** this removes the *false-kill* (a working run won't die); it does NOT make runs un-failable (a real hang, API error, or bad output must still halt — fail-loud). Backstops already in place: the run is **resumable** (`--from-step`), and a genuine idle-kill still names the last activity. A future resilience layer (auto-retry once on a real idle-kill) is the next candidate if transient hangs recur.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **341 pass** (+2: argv includes `--include-partial-messages`; `_progress_line` ignores a partial `stream_event` so the log isn't flooded). consistency-check CONSISTENT. End-to-end proof is the DRI's next architecture run completing without the idle false-kill.
+
+**Files touched (2):** `compass/orchestrator/hosts/claude_code.py` · `compass/orchestrator/tests/test_claude_code.py` (+ CHANGELOG + this file). Counter: #170. **(#031 batch: #168–#170 of #168–#177.)** On branch `fix/idle-partial-stream` → PR; cross-model review (Codex/Gemini, not Claude).

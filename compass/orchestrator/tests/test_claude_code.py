@@ -53,6 +53,9 @@ class TestBuildArgv(unittest.TestCase):
         # signal and the run log shows live activity.
         self.assertEqual(argv[argv.index("--output-format") + 1], "stream-json")
         self.assertIn("--verbose", argv)
+        # #170: partial chunks stream token deltas so a long compose turn isn't silent
+        # (else the idle guard false-kills the architect mid-draft).
+        self.assertIn("--include-partial-messages", argv)
         self.assertEqual(argv[argv.index("--append-system-prompt-file") + 1], "/x/agent.md")
         self.assertEqual(argv[argv.index("--model") + 1], "sonnet")
         self.assertNotIn("--add-dir", argv)
@@ -118,6 +121,9 @@ class TestStreaming(unittest.TestCase):
         # non-assistant / empty events produce nothing to tee
         self.assertIsNone(cc._progress_line({"type": "system", "subtype": "init"}))
         self.assertIsNone(cc._progress_line({"type": "result"}))
+        # #170: partial-message chunks reset the idle timer but must NOT flood the log
+        self.assertIsNone(cc._progress_line({"type": "stream_event",
+                                             "event": {"type": "content_block_delta"}}))
 
     def test_extract_result_line_picks_result_event(self):
         lines = [
