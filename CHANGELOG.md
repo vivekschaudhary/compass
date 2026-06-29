@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dashboard shows the story id for a story-scoped build, not the parent bet (#176).** A `/build WLT-27-2` run card read `build · WLT-27` (the parent bet) — the run spine already carried `story_id` (#172), but `fold_runs` didn't capture it and every label rendered `bet_id`. `fold_runs` now keeps `story_id`, and a `_scope_label(run)` helper (story id when present, else bet id) drives all run-card labels. `bet_id` stays the parent for the resume/`--bet` command (the requirement gate needs it). Cosmetic only — the build itself was already correctly story-scoped + worktree-isolated. +1 test (370), CONSISTENT.
+
 ### Changed
 
 - **Post-worktree cleanup: telemetry stays out of git + worktree pruning (#175).** Two follow-ups to #173/#174. **(1)** The orchestrator now drops a `.gitignore` into `docs/orchestrator-runs/` (via `logger.ensure_runs_dir`, used at every telemetry + step-artifact write) so run state (runs/hitl jsonl + `step-*.md`) stays **untracked** — it was rewritten every run, perpetually dirtying the tree (the root trigger behind #173's branch-stacking) and getting swept into code PRs by the engineer's `git add -A`. Reads (audit, cockpit, WBS) work on the on-disk files regardless of git-tracking. **(2)** `prune_worktrees()` + `--prune-worktrees` housekeeping removes **finished (clean)** build worktrees under `~/.compass/worktrees/` so they don't accumulate; an in-flight (dirty) worktree is kept, and a resume recreates a pruned one from its branch. +3 tests (369), CONSISTENT. *(One-time: existing projects with telemetry already committed — e.g. home-app — need `git rm --cached docs/orchestrator-runs/*.jsonl` once.)*

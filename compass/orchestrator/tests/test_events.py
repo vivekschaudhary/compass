@@ -184,6 +184,19 @@ class TestCockpitFold(unittest.TestCase):
         runs = cockpit.fold_runs(events)
         self.assertIsNotNone(runs["r1"]["open_gate"].get("ts"))  # ts threaded for age
 
+    def test_fold_captures_story_id_and_label(self):
+        # #176: a story-scoped build's card shows the STORY id, not the parent bet.
+        events = [
+            ev.make_event(ev.RUN_START, run_id="b1", project="home", workflow="build",
+                          bet_id="WLT-27", story_id="WLT-27-2"),
+        ]
+        run = cockpit.fold_runs(events)["b1"]
+        self.assertEqual(run["story_id"], "WLT-27-2")
+        self.assertEqual(run["bet_id"], "WLT-27")          # parent kept for resume/--bet
+        self.assertEqual(cockpit._scope_label(run), "WLT-27-2")
+        # bet-scoped build (no story) → label falls back to the bet
+        self.assertEqual(cockpit._scope_label({"bet_id": "WLT-27", "story_id": None}), "WLT-27")
+
 
 class TestCostRollup(unittest.TestCase):
     def test_usage_accumulates_per_run(self):
