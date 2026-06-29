@@ -23,10 +23,10 @@ events.jsonl schema (one JSON object per line):
   workflow  str  — workflow name
   bet_id    str  — bet id or null
   + type-specific fields:
-    run_start     : allow_write (bool), branch (str|null)
+    run_start     : allow_write (bool), branch (str|null), actor (str — who launched)
     step_start    : step (int), title, agent, task
     gate_open     : step (int), kind ("hitl"|"routing"), title  ← cockpit's "awaiting you"
-    gate_decision : step (int), decision (str)                  ← closes the open gate
+    gate_decision : step (int), decision (str), actor (str — who decided)  ← closes the open gate
     handoff       : step (int), target (str — "/workflow" or "close")
     step_end      : step (int), gate_result (str), output_chars (int)
     run_end       : status ("completed"|"halted"), reason (str)
