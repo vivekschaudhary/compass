@@ -56,6 +56,7 @@ def fold_runs(events: list) -> dict:
             # step-level status (#111): {step_num: {status, title, agent, task}}
             "steps": {},
             "project_dir": None,   # full path (#119) — lets the cockpit resume any run
+            "compass_dir": None,   # #178 — framework dir, for the copy-paste resume cmd
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
         for k in ("project", "workflow", "bet_id", "story_id"):
@@ -68,6 +69,8 @@ def fold_runs(events: list) -> dict:
             r["started"] = e.get("ts")
             if e.get("project_dir"):
                 r["project_dir"] = e["project_dir"]
+            if e.get("compass_dir"):                  # #178: framework dir for the resume cmd
+                r["compass_dir"] = e["compass_dir"]
             for k in ("allow_write", "claude_cli", "codex_cli"):   # #156: run mode
                 if e.get(k) is not None:
                     r[k] = e.get(k)
@@ -285,6 +288,8 @@ def _approve_cmd(run: dict) -> str:
         "python3 -m compass.orchestrator.run", run.get("workflow") or "<workflow>",
         f"--project-dir {pdir}",
     ]
+    if run.get("compass_dir"):   # #178: target the right framework dir, not project/compass
+        parts.append(f"--compass-dir {run['compass_dir']}")
     if run.get("bet_id"):
         parts.append(f"--bet {run['bet_id']}")
     if run.get("run_id"):

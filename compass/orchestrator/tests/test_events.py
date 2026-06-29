@@ -149,7 +149,8 @@ class TestCockpitFold(unittest.TestCase):
     def test_approve_command_well_formed(self):
         events = [
             ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="build",
-                          bet_id="CB-7", project_dir="/repos/home"),
+                          bet_id="CB-7", project_dir="/repos/home",
+                          compass_dir="/repos/compass/compass"),
             ev.make_event(ev.GATE_OPEN, run_id="r1", step=6, kind="hitl", title="review gate"),
         ]
         runs = cockpit.fold_runs(events)
@@ -162,6 +163,8 @@ class TestCockpitFold(unittest.TestCase):
         # and the real captured project_dir, so it actually runs + closes THIS gate.
         self.assertIn("--run-id r1", cmd)
         self.assertIn("--project-dir /repos/home", cmd)
+        # #178: and the framework dir, else a manual run hits the stale project/compass
+        self.assertIn("--compass-dir /repos/compass/compass", cmd)
         self.assertNotIn(" --approve ", f" {cmd} ")   # the old bare bridge is gone
 
     def test_gate_age_rendered(self):
