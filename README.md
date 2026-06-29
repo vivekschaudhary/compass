@@ -4,6 +4,12 @@
 
 > The vendor-neutral delivery control tower.
 
+## Why I built this
+
+Enterprises and consultancies run delivery on **status theater** — RAG decks that read green until they're abruptly red, Jira boards anyone can drag to "done," a program that looks fine in the monthly steering review and is on fire by month three. The flaw is structural: the *report* is divorced from the *work*. A status assembled by hand is one you can shade, delay, or simply get wrong — so the people who most need the truth are the last to get it.
+
+**Compass inverts it.** Don't *report on* delivery — *run it on the platform*, and let the truth fall out as a byproduct of doing the work.
+
 Compass is a **multi-model delivery control tower**. The work — briefs, architecture, stories, builds, cross-model reviews, gated merges — **runs *on* the platform**. So transparency isn't a status report you ask for; it's a **byproduct of execution**. The board can't lie, because the board *is* the work.
 
 That one property is the whole idea: a delivery exec opens one screen and knows the **ground truth** of every program — what's done, what's stuck, what decided what, what it cost, where the risk is — without asking anyone for a status, and without anyone being able to game it. And because the work runs on the platform, the tower can **prove every control the engagement must hit was met, with evidence** — governance and conformance as a *byproduct of execution*, not a report assembled after the fact.
