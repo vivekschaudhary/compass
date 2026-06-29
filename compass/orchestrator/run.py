@@ -461,9 +461,31 @@ def _ensure_work_branch(project_dir, branch_name: str):
     )
     if base and git("checkout", "-b", branch_name, base).returncode == 0:
         return branch_name
-    # no remote/base, or the clean checkout failed (e.g. dirty tree) → current HEAD
+    # #173: the clean checkout failed — almost always a DIRTY TREE (leftover work +
+    # orchestrator telemetry from the prior run). The old code silently fell back to
+    # `checkout -b` from the CURRENT branch, stacking the new story's work on the
+    # previous one → cumulative, conflicting PRs (live: WLT-27-2's PR contained
+    # WLT-27-1's commits; -3 contained both). Instead, STASH the dirty tree (incl.
+    # untracked) so the work branch starts CLEAN from the fresh base. The stash is
+    # recoverable (`git stash list`) — nothing is discarded — and we do NOT pop it
+    # onto the new branch (that would re-introduce the contamination).
+    if base:
+        stash = git("stash", "push", "--include-untracked",
+                    "-m", f"compass auto-stash before {branch_name}")
+        stashed = stash.returncode == 0 and "No local changes" not in stash.stdout
+        if stashed and git("checkout", "-b", branch_name, base).returncode == 0:
+            print(f"[branch] stashed a dirty tree to start '{branch_name}' clean from "
+                  f"{base} — prior residue is on the stash (recover via `git stash list`), "
+                  f"NOT stacked onto this branch (#173)")
+            return branch_name
+    # last resort — no remote/base (or stash failed): current HEAD. May stack; loud.
     made = git("checkout", "-b", branch_name)
-    return branch_name if made.returncode == 0 else (current or None)
+    if made.returncode == 0:
+        print(f"[branch] WARNING: could not isolate from a fresh base — '{branch_name}' "
+              f"is cut from the current HEAD and MAY include prior work (#173).",
+              file=sys.stderr)
+        return branch_name
+    return current or None
 
 
 def _skip_for_route(router_number: int, target: int) -> set:
@@ -1359,6 +1381,12 @@ def _run_workflow(
         prior_outputs = list(initial_prior_outputs or []) + disk_outputs
         print(f"  {len(disk_outputs)} prior step(s) loaded.\n")
 
+    # #173: keep the ORIGINAL user-supplied context for branch naming, BEFORE the
+    # bet/story/full-project blobs are prepended below. Slugging the loaded blob
+    # produced garbage branches like `feat/WLT-27-bet-context-wlt-27-briefmd-----id`
+    # (the #157 fix only covered the resume path; fresh runs still slugged the blob).
+    user_context = context
+
     # --full-project: load portfolio-wide context (foundation + all bets + status)
     if full_project:
         fp_context = _load_full_project_context(project_dir)
@@ -1414,7 +1442,7 @@ def _run_workflow(
             # #172: a story-scoped build branches on the story id (feat/<story>-…)
             # so multiple stories of one bet can build in parallel without colliding
             # on a single feat/<bet>-… branch.
-            bname = _work_branch_name(workflow_name, story_id or bet_id, context)
+            bname = _work_branch_name(workflow_name, story_id or bet_id, user_context)
             work_branch = _ensure_work_branch(project_dir, bname)
             if work_branch:
                 print(f"[branch] write-mode work on '{work_branch}' (not main) — open a PR + merge after review")
