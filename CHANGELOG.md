@@ -10,6 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Dashboard approve no longer races the auto-refresh — clicks land first try (#177).** "I click approve and nothing happens; the 2nd or 3rd try works." The cockpit auto-reloads every 5s via `setInterval(… location.reload())`, and that timer was paused only while *typing in the launch form* — not when clicking an action button. So if the reload fired between the approve `confirm()` and the POST landing, the GET reload **aborted the approve POST** (no server-side trace — the request never arrived; the spine showed exactly one clean resume, not failed ones). Now `_act` (every approve/reject/route/launch submit) sets a shared `window.__cpause` flag that stops the reload, so the POST always completes; the 303 redirect then loads a fresh page. +1 test (371), CONSISTENT. *(Compounded by #176 — both parallel cards read `build · WLT-27`, so it was also unclear which to approve; now they show distinct story ids.)*
+
 - **Dashboard shows the story id for a story-scoped build, not the parent bet (#176).** A `/build WLT-27-2` run card read `build · WLT-27` (the parent bet) — the run spine already carried `story_id` (#172), but `fold_runs` didn't capture it and every label rendered `bet_id`. `fold_runs` now keeps `story_id`, and a `_scope_label(run)` helper (story id when present, else bet id) drives all run-card labels. `bet_id` stays the parent for the resume/`--bet` command (the requirement gate needs it). Cosmetic only — the build itself was already correctly story-scoped + worktree-isolated. +1 test (370), CONSISTENT.
 
 ### Changed

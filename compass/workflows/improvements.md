@@ -4038,4 +4038,16 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **370 pass** (+1: `fold_runs` keeps `story_id`; `_scope_label` prefers story then bet). Live-confirmed: the WLT-27-2 / WLT-27-3 in-flight runs now label `WLT-27-2` / `WLT-27-3`. consistency-check CONSISTENT.
 
-**Files touched (2):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #176. **(#031 batch: #168–#176 of #168–#177.)** On branch `fix/cockpit-story-label` → PR; cross-model review (Codex/Gemini, not Claude).
+**Files touched (2):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #176. **(#031 batch: #168–#176 of #168–#177.)** On branch `fix/cockpit-story-label` → PR #18, merged. Cross-model review (Codex/Gemini, not Claude).
+
+### 2026-06-29 — dashboard approve no longer races the auto-refresh (#177)
+
+**Trigger origin (live consumer signal).** A parallel build reached the merge gate; the DRI clicked approve and *"it didn't work — the second or third run worked."* The event spine showed **exactly one clean resume** (run_start → gate_open → gate_decision → steps 7/8 → completed) — no failed resume processes. So the failed clicks never reached the server; the POST was being dropped client-side.
+
+**Root cause.** The cockpit auto-reloads every 5s via `setInterval(function(){ … location.reload() }, 5000)` (#128). That timer was paused only while a launch-form field was focused/typed — clicking an **action button** (approve/reject/route/launch) did NOT pause it. `_act` runs a blocking `confirm()`, then the form POSTs; if the 5s tick fired during the confirm or just as the POST began navigating, `location.reload()` (a GET to `/`) **aborted the in-flight POST**. The gate stayed open → "nothing happened." A retry that happened to miss the tick worked — exactly the flaky 2nd/3rd-try symptom, with no server trace because the request never arrived.
+
+**Fix.** `_act` now sets a shared `window.__cpause=true` the moment any action is submitted, and the reload tick checks `if(window.__cpause)return` (unified with the launch-form pause, which previously used a separate per-closure `paused` var). Submitting stops the reload; the POST completes; the 303 redirect loads a fresh page. **Compounded by #176** — both parallel run cards read `build · WLT-27`, so it was also unclear which card's approve to click; #176's distinct story labels remove that ambiguity. This is a [`observability-before-trust`]-adjacent reliability fix on the actionable surface (an action you take must not be silently dropped).
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **371 pass** (+1: the actionable page's `_act` sets `window.__cpause` and the reload tick honors it; the old per-closure `if(paused)return` is gone). consistency-check CONSISTENT.
+
+**Files touched (2):** `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #177. **(#031 batch: #168–#177 of #168–#177 — batch complete; Retro #031 due, plus the still-owed Retro #030 for #158–#167.)** On branch `fix/cockpit-approve-refresh-race` → PR; cross-model review (Codex/Gemini, not Claude).

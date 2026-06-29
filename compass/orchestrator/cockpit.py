@@ -613,6 +613,13 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         # waits on the redirect + refresh.
         p.append(
             "<script>function _act(f,m){if(m&&!confirm(m))return false;"
+            # #177: STOP the auto-refresh the instant an action is submitted. The reload
+            # timer (below) is a GET location.reload(); if it fired between confirm() and
+            # the POST landing, it aborted the approve/launch navigation → "I clicked
+            # approve and nothing happened" (then a lucky 2nd/3rd try that missed the 5s
+            # tick worked). Setting the shared flag here guarantees the POST completes;
+            # the 303 redirect loads a fresh page afterward.
+            "window.__cpause=true;"
             "var b=document.querySelectorAll('button');"
             "for(var i=0;i<b.length;i++){b[i].disabled=true;}"
             "var s=document.createElement('div');s.className='ts';"
@@ -622,15 +629,15 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     # #128: JS auto-reload that never clobbers input. Pauses the instant you focus
     # or type in the Launch form (composing a launch), and skips any tick while a
     # field is focused — so the live feed keeps updating when you're just watching,
-    # but your typing/selection is never wiped. Submitting navigates away (303),
-    # which resumes the live state on the next page.
+    # but your typing/selection is never wiped. #177: also paused by _act on submit
+    # (shared window.__cpause) so a reload can't abort an approve/launch POST.
     p.append(
-        "<script>(function(){var paused=false;var ms=%d;"
+        "<script>(function(){var ms=%d;"
         "var lf=document.querySelector('.launch');"
-        "function pause(){if(paused)return;paused=true;var t=document.getElementById('ts');"
+        "function pause(){window.__cpause=true;var t=document.getElementById('ts');"
         "if(t)t.textContent='auto-refresh paused while you compose — submit, or reload to resume.';}"
         "if(lf){lf.addEventListener('focusin',pause);lf.addEventListener('input',pause);}"
-        "setInterval(function(){if(paused)return;var a=document.activeElement;"
+        "setInterval(function(){if(window.__cpause)return;var a=document.activeElement;"
         "if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;location.reload();},ms);"
         "})();</script>" % (int(refresh) * 1000)
     )
