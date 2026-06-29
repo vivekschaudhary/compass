@@ -3838,4 +3838,20 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **324 pass** (+11: jira create/update · confluence create/update-with-version-bump · auth env + ATLASSIAN fallback + unset→None · connector jira no-creds fallback · create-then-idempotent-update with pointer stored · per-artifact routing · pointer frontmatter round-trip; + the existing promotion-fallback test updated to the new labels). consistency-check CONSISTENT.
 
-**Files touched (6):** `compass/orchestrator/stores.py` (new) · `compass/orchestrator/connector.py` · `compass/orchestrator/run.py` · `compass/config.yaml` · `compass/orchestrator/tests/test_stores.py` (new) · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #163. **(#030 batch: #158–#163 of #158–#167.)** On branch `mvp/store-projection` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). Follow-ups: status→Jira-transition map (config-driven, needs the project's workflow ids) · drift detection (read external state back) · bet→epic with stories linked under it. Next MVP capability: **#3** (exec control-tower WBS view).
+**Files touched (6):** `compass/orchestrator/stores.py` (new) · `compass/orchestrator/connector.py` · `compass/orchestrator/run.py` · `compass/config.yaml` · `compass/orchestrator/tests/test_stores.py` (new) · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #163. **(#030 batch: #158–#163 of #158–#167.)** Merged via PR #5. Follow-ups: status→Jira-transition map · drift detection · bet→epic linking.
+
+### 2026-06-28 — exec control-tower WBS view + manage-by-exception (#164)
+
+**Trigger origin (MVP plan):** capability #3 — the demo's *face*. The cockpit folds the spine into per-RUN state (flat); the WBS lives in artifact frontmatter. This adds the **program→bet→story** view an exec reads to manage by exception, tying together everything the earlier capabilities produce.
+
+**What shipped.** New `wbs.py`:
+- **`build_wbs(project_dir, with_conformance=)`** — reads `docs/bets/*/brief.md` + `stories/*/story.md` frontmatter (id · status · type · priority · depends_on · jira_key) into a program→bet→story tree, **correlated with spine run-state** (`cockpit.fold_runs(load_events())` grouped by bet) for in-flight runs + open gates.
+- **Manage-by-exception** — per-node attention reasons: awaiting gate (from the spine) · run halted · **blocked by an unshipped dependency** (the `depends_on` graph) · not-started · **SOW-conformance gaps** (folded from `logger.build_audit` when `controls.md` exists). A red/amber/green rollup per bet.
+- **`render_wbs()`** — the text control-tower view: needs-attention FIRST (manage by exception), then the tree with ground-truth status + story→Jira pointers (#163).
+- **`--wbs` CLI** — `python3 -m compass.orchestrator.run --wbs` prints it; smoke-tested.
+
+**Why it's the face.** One screen ties it together: the WBS (this) · ground-truth status (spine) · SOW-conformance (#2) · the Jira/Confluence pointers (#163) · manage-by-exception. It's the train-ops-center the DRI described — and it reads CT-1 (this very build) as a program when pointed at this repo.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **330 pass** (+6: hierarchy + story pointers · blocked-by-dep red · shipped green/no-attention · proposed→not-started · awaiting-gate from the spine · render sections). consistency-check CONSISTENT. CLI smoke-test green.
+
+**Files touched (4):** `compass/orchestrator/wbs.py` (new) · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_wbs.py` (new) (+ CHANGELOG + this file). Counter: #164. **(#030 batch: #158–#164 of #158–#167.)** On branch `mvp/exec-wbs-view` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). Follow-up: render the WBS in the cockpit HTML alongside the per-run view. Next MVP capability: **#5** (coherence floor — stale-run auto-halt) — the last one.

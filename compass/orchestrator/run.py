@@ -2031,6 +2031,13 @@ def main(argv=None):
              "or docs/controls.md if omitted.",
     )
     parser.add_argument(
+        "--wbs",
+        action="store_true",
+        help="Print the exec control-tower view — the program→bet→story Work "
+             "Breakdown Structure with ground-truth status, manage-by-exception, "
+             "and (where controls.md exists) SOW-conformance — then exit.",
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -2071,9 +2078,12 @@ def main(argv=None):
         sys.exit(code)
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
-    if args.log or args.dri or args.hitl_log or args.export_audit:
+    if args.log or args.dri or args.hitl_log or args.export_audit or args.wbs:
         from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
+        if args.wbs:
+            from .wbs import build_wbs, render_wbs
+            print(render_wbs(build_wbs(project_dir, with_conformance=True)))
         if args.log:
             print_run_table(project_dir)
         if args.dri:
