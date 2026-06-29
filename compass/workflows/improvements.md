@@ -3870,4 +3870,19 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **333 pass** (+3: is_stale across in-flight/fresh/ended/never-started · halt reaps only the stale one with a proper RUN_END(halted) · idempotent re-run). consistency-check CONSISTENT. Smoke-test: a zombie run_start → `--reap-stale` → 1 halted + the halt event in the spine.
 
-**Files touched (4):** `compass/orchestrator/events.py` · `compass/orchestrator/wbs.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #165. **(#030 batch: #158–#165 of #158–#167.)** On branch `mvp/coherence-floor` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). **🎯 The control-tower MVP is now feature-complete: capabilities #1–#5 (improvements #160–#165) — stack-agnostic core · SOW-conformance audit · Jira/Confluence projection · exec WBS view · coherence floor.** Remaining before the pilot: the **.NET de-risk** (deferred to the real POC env) + the noted follow-ups (status→Jira-transition map · drift detection · cockpit-HTML WBS · bet→epic linking · automated `/ingest-sow`). Batch #030 nears the retro trigger (#167).
+**Files touched (4):** `compass/orchestrator/events.py` · `compass/orchestrator/wbs.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #165. **(#030 batch: #158–#165 of #158–#167.)** Merged via PR #7. **🎯 The control-tower MVP is feature-complete: capabilities #1–#5 (improvements #160–#165).**
+
+### 2026-06-28 — projection fires on draft creation, not only on approval (#166)
+
+**Trigger origin (DRI change):** a correction to #163 — *"we shouldn't wait for approvals to send the story and docs to Jira/Confluence."* The control-tower thesis wants the team to see the work in their tools the moment it's authored (in draft status), with approval as a *status transition* on the already-projected item, not the first time it appears.
+
+**The bug it fixes.** #163 projected only inside the `if result["approved"]` branch — and a non-interactive gate `sys.exit(0)`s on pause *before* that branch. So a paused gate (the dashboard-awaiting case) projected **nothing**: the story/doc never reached Jira/Confluence until a human approved.
+
+**What changed.**
+- **Draft projection on gate ARRIVAL** — when the run reaches an artifact-bearing HITL gate, the orchestrator projects the artifact in its **current (draft) status**, *before* the decision and *before* any pause. So a paused gate still lands the story/doc in Jira/Confluence (proposed), and the team sees it immediately.
+- **Approval re-projects** with `status: approved` — an *update*, not a new create.
+- **Shared `_promote_artifact()`** behind both paths reads the **on-disk artifact** (not the step output) when present, so the **distribution pointer** (`jira_key` / `confluence_page_id`) written by the draft projection survives into the approval re-projection → `push_artifact` finds it → **idempotent update of the same Jira issue / Confluence page** (the duplicate-on-approval trap avoided). `status=None` projects the draft as-is; `status="approved"` flips it. Falls back to the step output when the canonical file isn't on disk yet.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **337 pass** (+4: on-disk read preserves the pointer + flips status · status=None leaves the draft as-is · falls back to the step output with body-extraction · no-write returns None). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #166. **(#030 batch: #158–#166 of #158–#167 — one from the retro trigger.)** On branch `mvp/project-on-create` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). Follow-up (carried from #163): status→Jira-*transition* on approval (move the ticket, not just set a field) once the project's workflow transition-ids are configured.
