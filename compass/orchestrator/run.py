@@ -1424,7 +1424,7 @@ def _run_workflow(
                 from .connector import (
                     extract_artifact_body,
                     push_artifact,
-                    resolve_connector,
+                    resolve_connector_for_artifact,
                     set_frontmatter_status,
                 )
                 if "<bet-id>" in step.artifact_target and not bet_id:
@@ -1452,7 +1452,7 @@ def _run_workflow(
                             project_dir,
                             canonical_rel,
                             content,
-                            resolve_connector(project_dir, compass_dir),
+                            resolve_connector_for_artifact(canonical_rel, project_dir, compass_dir),
                         )
                         print(f"[promoted → {canonical_rel} via {connector_label}]")
 

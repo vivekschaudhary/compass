@@ -155,6 +155,12 @@ connectors:
   design:          figma
   docs:            confluence   # confluence | notion | gdrive
   incident_alert:  slack        # slack | pagerduty | opsgenie | linear
+  # One-way projection (Compass-primary → Jira/Confluence) is credentialed from the
+  # ENVIRONMENT (never committed), so headless/dashboard runs work:
+  #   JIRA_BASE_URL · JIRA_EMAIL · JIRA_API_TOKEN · JIRA_PROJECT
+  #   CONFLUENCE_BASE_URL · CONFLUENCE_EMAIL · CONFLUENCE_API_TOKEN · CONFLUENCE_SPACE
+  #   (ATLASSIAN_BASE_URL / _EMAIL / _API_TOKEN are shared fallbacks)
+  # Unset → the artifact stays in the filesystem cache with an honest fallback label.
 
 # ─── Sprint cadence ───────────────────────────────────────────────────
 sprint:

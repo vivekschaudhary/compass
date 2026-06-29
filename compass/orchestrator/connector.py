@@ -6,28 +6,27 @@ draft; HITL approval is the WRITE TRIGGER that pushes the artifact to its
 canonical home. The canonical home is connector-dependent — Confluence / Notion
 / Linear when configured, the project filesystem (`docs/`) otherwise.
 
-Per [declare-not-implement] (canon v0.3.9), this module DECLARES the push
-interface and implements ONLY the filesystem backend. Vendor backends are
-consumer-side / upstream work:
+This module implements the **filesystem** backend (the Compass-primary cache, always
+written) and **one-way projection** to **jira** + **confluence** (via `stores.py`,
+server-to-server API token). Compass stays canonical; the external systems are
+projections of it. The distribution pointer (Jira key / Confluence page id) is stored
+on the artifact's frontmatter, so a re-push is an idempotent update-not-create. Missing
+creds → honest filesystem fallback (never a silent failure).
 
-    push contract for a future backend:
-      def push(project_dir: Path, canonical_rel_path: str, content: str) -> str
-      — deliver `content` to the destination identified by `canonical_rel_path`,
-        return a human-readable label for the hitl.jsonl `connector` field.
-
-`resolve_connector()` reads `compass/config.yaml` `connectors.docs:`; an
-unimplemented name degrades to the filesystem backend with an honest label
-("filesystem fallback — <name> not implemented") — never silently.
+`resolve_connector()` reads `compass/config.yaml` `connectors.docs:` (the gate-promotion
+default); `resolve_connector_for_artifact()` routes per artifact type (stories →
+ticketing/jira; docs → docs/confluence).
 """
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-IMPLEMENTED_BACKENDS = {"filesystem"}
+IMPLEMENTED_BACKENDS = {"filesystem", "jira", "confluence"}
 
 
-def resolve_connector(project_dir: Path, compass_dir: Path = None) -> str:
-    """Read the configured docs connector name from compass/config.yaml."""
+def _config_connector(project_dir: Path, compass_dir, key: str) -> str:
+    """Read `connectors.<key>` from compass/config.yaml (filesystem if unset)."""
     config = (compass_dir or project_dir / "compass") / "config.yaml"
     if not config.exists():
         return "filesystem"
@@ -40,10 +39,64 @@ def resolve_connector(project_dir: Path, compass_dir: Path = None) -> str:
         if in_connectors:
             if stripped and not stripped.startswith(" "):
                 break  # left the connectors block
-            m = re.match(r"^\s+docs\s*:\s*(\S+)", stripped)
+            m = re.match(rf"^\s+{re.escape(key)}\s*:\s*(\S+)", stripped)
             if m:
                 return m.group(1)
     return "filesystem"
+
+
+def resolve_connector(project_dir: Path, compass_dir: Path = None) -> str:
+    """The configured docs connector (back-compat — the gate-promotion default)."""
+    return _config_connector(project_dir, compass_dir, "docs")
+
+
+def resolve_connector_for_artifact(canonical_rel_path, project_dir: Path,
+                                   compass_dir: Path = None) -> str:
+    """Per-artifact-type backend (Compass-primary → one-way projection): a story →
+    ticketing (jira); foundation / brief / architecture docs → docs (confluence)."""
+    if re.search(r"/stories/[^/]+/story\.md$", str(canonical_rel_path)):
+        return _config_connector(project_dir, compass_dir, "ticketing")
+    return _config_connector(project_dir, compass_dir, "docs")
+
+
+def _frontmatter_field(content: str, field: str):
+    """Read a frontmatter `field:` value, or None."""
+    fm = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    if not fm:
+        return None
+    m = re.search(rf"^{re.escape(field)}\s*:\s*(\S+)", fm.group(1), re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def _set_frontmatter_field(content: str, field: str, value) -> str:
+    """Set/replace a frontmatter `field:` (creates a block if absent). Used to store
+    the distribution pointer (jira_key / confluence_page_id) for idempotent re-push."""
+    if value is None:
+        return content
+    fm = re.match(r"^---\n(.*?)\n---\n?", content, re.DOTALL)
+    if fm:
+        block = fm.group(1)
+        if re.search(rf"^{re.escape(field)}\s*:", block, re.MULTILINE):
+            block = re.sub(rf"^{re.escape(field)}\s*:.*$", f"{field}: {value}",
+                           block, count=1, flags=re.MULTILINE)
+        else:
+            block = block + f"\n{field}: {value}"
+        return f"---\n{block}\n---\n" + content[fm.end():]
+    return f"---\n{field}: {value}\n---\n\n" + content
+
+
+def _artifact_title(content: str, rel_path) -> str:
+    """Title for the projected object — first markdown H1, else frontmatter id/title,
+    else the artifact's parent-dir / filename."""
+    m = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+    if m:
+        return m.group(1).strip()
+    for field in ("title", "id"):
+        v = _frontmatter_field(content, field)
+        if v:
+            return v
+    p = Path(rel_path)
+    return p.parent.name or p.stem
 
 
 def push_artifact(
@@ -51,23 +104,58 @@ def push_artifact(
     canonical_rel_path: str,
     content: str,
     connector_name: str = "filesystem",
+    transport=None,
 ) -> str:
-    """
-    Push approved content to its canonical location.
-
-    Only the filesystem backend is implemented; any other configured name
-    falls back to filesystem with an explicit label so the hitl.jsonl record
-    is honest about where the artifact actually landed.
-    """
-    if connector_name in IMPLEMENTED_BACKENDS:
-        label = connector_name
-    else:
-        label = f"filesystem fallback — {connector_name} not implemented"
-
+    """Write the Compass-primary filesystem cache (always), then PROJECT one-way to the
+    configured backend (jira/confluence) when credentialed, storing the distribution
+    pointer on the artifact for an idempotent re-push. Missing creds / failure → an
+    honest filesystem-fallback label so hitl.jsonl never lies about where it landed.
+    `transport` is injectable for tests."""
+    from . import stores
     target = project_dir / canonical_rel_path
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
-    return label
+
+    def _land(text, label):
+        target.write_text(text, encoding="utf-8")
+        return label
+
+    if connector_name == "filesystem":
+        return _land(content, "filesystem")
+
+    if connector_name == "jira":
+        auth = stores.jira_auth()
+        project_key = os.environ.get("JIRA_PROJECT")
+        if not auth or not project_key:
+            return _land(content, "filesystem fallback — jira not configured "
+                                  "(set JIRA_BASE_URL/EMAIL/API_TOKEN + JIRA_PROJECT)")
+        issue_type = "Story" if "/stories/" in str(canonical_rel_path) else "Epic"
+        res = stores.jira_push(auth, project_key, issue_type,
+                               _artifact_title(content, canonical_rel_path), content,
+                               key=_frontmatter_field(content, "jira_key"),
+                               transport=transport)
+        if res.get("ok") and res.get("pointer"):
+            content = _set_frontmatter_field(content, "jira_key", res["pointer"])
+            content = _set_frontmatter_field(content, "jira_url", res.get("url"))
+            return _land(content, f"jira ({res['pointer']}, {res['action']})")
+        return _land(content, f"filesystem fallback — jira push failed ({res.get('action')})")
+
+    if connector_name == "confluence":
+        auth = stores.confluence_auth()
+        space = os.environ.get("CONFLUENCE_SPACE")
+        if not auth or not space:
+            return _land(content, "filesystem fallback — confluence not configured "
+                                  "(set CONFLUENCE_BASE_URL/EMAIL/API_TOKEN + CONFLUENCE_SPACE)")
+        res = stores.confluence_push(auth, space,
+                                     _artifact_title(content, canonical_rel_path), content,
+                                     page_id=_frontmatter_field(content, "confluence_page_id"),
+                                     transport=transport)
+        if res.get("ok") and res.get("pointer"):
+            content = _set_frontmatter_field(content, "confluence_page_id", res["pointer"])
+            content = _set_frontmatter_field(content, "confluence_url", res.get("url"))
+            return _land(content, f"confluence ({res['pointer']}, {res['action']})")
+        return _land(content, "filesystem fallback — confluence push failed")
+
+    return _land(content, f"filesystem fallback — {connector_name} not implemented")
 
 
 def extract_artifact_body(step_output: str) -> str:
