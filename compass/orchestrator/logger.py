@@ -259,6 +259,49 @@ def print_run_table(project_dir: Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Actor identity + governance audit (the SOW-conformance wedge — provenance half)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Map an agent name → its delivery ROLE, so the audit can assert cross-model
+# independence (the reviewer role on a different model than the implementer).
+# Unknown agents fall back to their own name.
+_ROLE_BY_AGENT = {
+    "engineer": "implementer",
+    "reviewer": "reviewer",
+    "security-reviewer": "security-reviewer",
+    "automation": "automation",
+    "architect": "architect",
+    "enterprise-architect": "architect",
+    "pm": "pm",
+    "delivery-manager": "delivery-manager",
+}
+
+
+def _role_for(agent: str) -> str:
+    return _ROLE_BY_AGENT.get((agent or "").lower(), (agent or "unknown"))
+
+
+def default_actor(project_dir: Path = None) -> str:
+    """The human operating Compass, for the audit trail (who ran / who approved).
+    `$COMPASS_ACTOR` overrides; else `git config user.email`; else 'unknown'. Never
+    raises — identity is best-effort; the audit records whatever it can resolve."""
+    import os
+    import subprocess
+    actor = os.environ.get("COMPASS_ACTOR")
+    if actor and actor.strip():
+        return actor.strip()
+    try:
+        cwd = str(project_dir) if project_dir else None
+        r = subprocess.run(["git", "config", "user.email"],
+                           capture_output=True, text=True, timeout=5, cwd=cwd)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HITL journal — log every gate decision to hitl.jsonl
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -273,6 +316,8 @@ hitl.jsonl schema (one JSON object per line):
   decision      str   — "approved" | "rejected"
   feedback      str   — reviewer notes on rejection, or null
   reviewer      str   — "human" (all HITL gates today are human)
+  actor         str   — WHO decided (git user.email / $COMPASS_ACTOR / "unknown") —
+                        the audit-trail identity for the approval
   connector     str   — backend the artifact was pushed through on approval
                         ("filesystem" | "filesystem fallback — <name> not
                         implemented"), or null when nothing was promoted
@@ -293,8 +338,10 @@ def log_hitl(
     reviewer: str = "human",
     connector: str = None,
     canonical_path: str = None,
+    actor: str = None,
 ) -> dict:
-    """Append a HITL gate decision to hitl.jsonl."""
+    """Append a HITL gate decision to hitl.jsonl. `actor` is the human identity of
+    the decider (the audit trail's who-approved); defaults to `default_actor()`."""
     record = {
         "run_id": run_id,
         "ts": datetime.now(timezone.utc).isoformat(),
@@ -305,6 +352,7 @@ def log_hitl(
         "decision": decision,
         "feedback": feedback or None,
         "reviewer": reviewer,
+        "actor": actor or default_actor(project_dir),
         "connector": connector,
         "canonical_path": canonical_path,
     }
@@ -390,3 +438,115 @@ def dri_decisions_report(project_dir: Path) -> None:
         print(f"\n[{d['ts']}] {d['bet_id']} | {d['agent']} via {d['workflow']}")
         print(d["decision"][:400])
     print()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Governance audit — the exportable who-did-what lineage (#2a)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None) -> dict:
+    """Assemble the governance audit for a bet (or a single run): the who-did-what
+    lineage the SOW-conformance wedge needs — per-step agent/role/host/model, gate
+    decisions + approver identity, and the **cross-model-independence verdict**
+    (reviewer-role model(s) disjoint from the implementer's). Reads runs.jsonl +
+    hitl.jsonl (per-project) + the user-local event spine (the run launcher's
+    identity). The control→evidence mapping is layered on in #2b."""
+    from . import events as ev
+
+    def _match(rec):
+        if run_id and rec.get("run_id") != run_id:
+            return False
+        if bet_id and rec.get("bet_id") != bet_id:
+            return False
+        return True
+
+    steps = [r for r in load_runs(project_dir) if _match(r)]
+    gates = [h for h in load_hitl_log(project_dir) if _match(h)]
+
+    launchers = {}
+    for e in ev.load_events():
+        if e.get("type") != ev.RUN_START:
+            continue
+        if run_id and e.get("run_id") != run_id:
+            continue
+        if bet_id and e.get("bet_id") != bet_id:
+            continue
+        launchers[e.get("run_id")] = e.get("actor")
+
+    def _hm(r):  # a step's (host, model) identity; model falls back to host when unset
+        return (r.get("host"), r.get("model") or r.get("host"))
+
+    impl = {_hm(r) for r in steps if _role_for(r.get("agent")) == "implementer"}
+    review = {_hm(r) for r in steps
+              if _role_for(r.get("agent")) in ("reviewer", "security-reviewer")}
+    independent = bool(impl) and bool(review) and impl.isdisjoint(review)
+
+    return {
+        "bet_id": bet_id,
+        "run_id": run_id,
+        "runs": sorted({r.get("run_id") for r in steps if r.get("run_id")}),
+        "launchers": launchers,
+        "steps": [{
+            "run_id": r.get("run_id"), "step": r.get("step"),
+            "agent": r.get("agent"), "role": _role_for(r.get("agent")),
+            "task": r.get("task"), "host": r.get("host"), "model": r.get("model"),
+            "gate_result": r.get("gate_result"), "artifact_path": r.get("artifact_path"),
+        } for r in steps],
+        "gates": [{
+            "run_id": h.get("run_id"), "step": h.get("step"),
+            "decision": h.get("decision"), "actor": h.get("actor"),
+            "ts": h.get("ts"), "artifact_path": h.get("artifact_path"),
+            "feedback": h.get("feedback"),
+        } for h in gates],
+        "cross_model_independence": {
+            "implementer": sorted(list(x) for x in impl),
+            "reviewer": sorted(list(x) for x in review),
+            "independent": independent,
+        },
+        "dri_decisions": [
+            {"run_id": r.get("run_id"), "agent": r.get("agent"), "decision": d}
+            for r in steps for d in (r.get("dri_decisions") or [])
+        ],
+    }
+
+
+def format_audit_markdown(audit: dict) -> str:
+    """Render build_audit() as a human / Confluence-projectable governance audit doc."""
+    scope = audit.get("bet_id") or audit.get("run_id") or "(all runs)"
+    lines = [f"# Governance audit — {scope}", ""]
+
+    ind = audit.get("cross_model_independence", {})
+    verdict = "✅ independent" if ind.get("independent") else "⚠ NOT verified"
+    lines += [
+        "## Cross-model review independence",
+        f"- **Verdict:** {verdict} (reviewer model(s) disjoint from the implementer's)",
+        f"- Implementer: {ind.get('implementer') or '—'}",
+        f"- Reviewer: {ind.get('reviewer') or '—'}",
+        "",
+        "## Runs",
+    ]
+    for rid in audit.get("runs", []):
+        who = (audit.get("launchers") or {}).get(rid) or "unknown"
+        lines.append(f"- `{rid}` — launched by {who}")
+    lines += ["", "## Steps (who did what)", "",
+              "| run | step | role | agent.task | host | model | gate |",
+              "|---|---|---|---|---|---|---|"]
+    for s in audit.get("steps", []):
+        lines.append(
+            f"| {s.get('run_id','')} | {s.get('step','')} | {s.get('role','')} | "
+            f"{s.get('agent','')}.{s.get('task','')} | {s.get('host','')} | "
+            f"{s.get('model') or '(default)'} | {s.get('gate_result','')} |")
+    lines += ["", "## Gate decisions (approvals)", "",
+              "| step | decision | approver | when | artifact |",
+              "|---|---|---|---|---|"]
+    for g in audit.get("gates", []):
+        lines.append(
+            f"| {g.get('step','')} | {g.get('decision','')} | {g.get('actor') or '—'} | "
+            f"{(g.get('ts') or '')[:19]} | {g.get('artifact_path') or '—'} |")
+    dri = audit.get("dri_decisions", [])
+    if dri:
+        lines += ["", f"## DRI decisions ({len(dri)})", ""]
+        for d in dri:
+            lines.append(f"- [{d.get('agent','')}] {str(d.get('decision',''))[:300]}")
+    lines.append("")
+    return "\n".join(lines)

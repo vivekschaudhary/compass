@@ -282,5 +282,87 @@ class TestParseStepOutput(unittest.TestCase):
         self.assertEqual(parsed["dri_decisions"], [])
 
 
+class TestGovernanceAudit(unittest.TestCase):
+    """#2a: actor identity on gate decisions + build_audit assembling the
+    who-did-what lineage with a cross-model-independence verdict."""
+
+    def setUp(self):
+        self.project_dir = Path(tempfile.mkdtemp())
+        # isolate the user-local event spine to a temp home for this test
+        self.home = tempfile.mkdtemp()
+        self._old_home = os.environ.get("COMPASS_HOME")
+        os.environ["COMPASS_HOME"] = self.home
+
+    def tearDown(self):
+        if self._old_home is None:
+            os.environ.pop("COMPASS_HOME", None)
+        else:
+            os.environ["COMPASS_HOME"] = self._old_home
+        os.environ.pop("COMPASS_ACTOR", None)
+
+    def test_default_actor_env_override(self):
+        from compass.orchestrator.logger import default_actor
+        os.environ["COMPASS_ACTOR"] = "md@deloitte.com"
+        self.assertEqual(default_actor(self.project_dir), "md@deloitte.com")
+
+    def test_log_hitl_records_actor(self):
+        from compass.orchestrator.logger import log_hitl, load_hitl_log
+        os.environ["COMPASS_ACTOR"] = "approver@x.com"
+        log_hitl(project_dir=self.project_dir, run_id="r1", workflow="build",
+                 bet_id="CB-4", step=5, artifact_path=None, decision="approved")
+        self.assertEqual(load_hitl_log(self.project_dir)[0]["actor"], "approver@x.com")
+
+    def test_build_audit_independence_verdict_and_roles(self):
+        from compass.orchestrator.logger import log_step, log_hitl, build_audit
+        # implementer on claude, reviewer on codex → independent
+        log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
+                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 host="claude", model="claude-opus", output=FAKE_OUTPUT)
+        log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
+                 bet_id="CB-4", step=3, agent="reviewer", task="review-pr",
+                 host="codex", model="gpt-5", output=FAKE_OUTPUT)
+        log_hitl(project_dir=self.project_dir, run_id="b1", workflow="build",
+                 bet_id="CB-4", step=6, artifact_path=None, decision="approved",
+                 actor="md@deloitte.com")
+        audit = build_audit(self.project_dir, bet_id="CB-4")
+        self.assertTrue(audit["cross_model_independence"]["independent"])
+        roles = {s["agent"]: s["role"] for s in audit["steps"]}
+        self.assertEqual(roles["engineer"], "implementer")
+        self.assertEqual(roles["reviewer"], "reviewer")
+        self.assertEqual(audit["gates"][0]["actor"], "md@deloitte.com")
+
+    def test_build_audit_flags_same_model_review(self):
+        from compass.orchestrator.logger import log_step, build_audit
+        # implementer AND reviewer both on claude → NOT independent
+        for agent in ("engineer", "reviewer"):
+            log_step(project_dir=self.project_dir, run_id="b2", workflow="build",
+                     bet_id="CB-9", step=1, agent=agent, task="t",
+                     host="claude", model="claude-opus", output=FAKE_OUTPUT)
+        audit = build_audit(self.project_dir, bet_id="CB-9")
+        self.assertFalse(audit["cross_model_independence"]["independent"])
+
+    def test_build_audit_captures_launcher_from_spine(self):
+        from compass.orchestrator import events as ev
+        from compass.orchestrator.logger import log_step, build_audit
+        ev.jsonl_sink()(ev.make_event(
+            ev.RUN_START, run_id="b3", bet_id="CB-4", workflow="build",
+            actor="launcher@x.com"))
+        log_step(project_dir=self.project_dir, run_id="b3", workflow="build",
+                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 host="claude", model=None, output=FAKE_OUTPUT)
+        audit = build_audit(self.project_dir, bet_id="CB-4", run_id="b3")
+        self.assertEqual(audit["launchers"].get("b3"), "launcher@x.com")
+
+    def test_format_audit_markdown(self):
+        from compass.orchestrator.logger import log_step, build_audit, format_audit_markdown
+        log_step(project_dir=self.project_dir, run_id="b4", workflow="build",
+                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 host="claude", model="claude-opus", output=FAKE_OUTPUT)
+        md = format_audit_markdown(build_audit(self.project_dir, bet_id="CB-4"))
+        self.assertIn("Governance audit", md)
+        self.assertIn("Cross-model review independence", md)
+        self.assertIn("engineer.implement-story", md)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

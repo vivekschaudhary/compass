@@ -1078,7 +1078,7 @@ def _run_workflow(
     from .graph import load_workflow, load_workflow_meta
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host, deep_model
-    from .logger import log_step, log_hitl
+    from .logger import log_step, log_hitl, default_actor
     from . import events as ev
 
     workflow_file = compass_dir / "workflows" / f"{workflow_name}.md"
@@ -1191,6 +1191,7 @@ def _run_workflow(
     # paused run, not fork a new id — otherwise the original lingers in the
     # cockpit's ⏸ awaiting queue forever and the resume shows as a duplicate run.
     run_id = run_id_override or f"{workflow_name}--{bet_id or 'no-bet'}--{_ts}"
+    actor = default_actor(project_dir)  # who launched this run — the audit-trail identity
 
     prior_outputs = list(initial_prior_outputs or [])
     artifact_paths = []
@@ -1287,7 +1288,7 @@ def _run_workflow(
     def emit(type, **fields):
         _sink(ev.make_event(type, **fields))
 
-    emit(ev.RUN_START, allow_write=allow_write, branch=work_branch,
+    emit(ev.RUN_START, allow_write=allow_write, branch=work_branch, actor=actor,
          # #156: record the run's host MODE so a dashboard /decide resume can carry it
          # forward (reuse the subscription CLI hosts, not silently fall back to the API).
          claude_cli=claude_cli, codex_cli=codex_cli,
@@ -1347,7 +1348,7 @@ def _run_workflow(
                 artifact_path=None,
                 decision=choice["route"],
             )
-            emit(ev.GATE_DECISION, step=step.number, decision=choice["route"])
+            emit(ev.GATE_DECISION, step=step.number, decision=choice["route"], actor=actor)
             if isinstance(target, int):
                 # Inline branch (#96): skip the not-taken steps, keep walking.
                 skipped.update(_skip_for_route(step.number, target))
@@ -1467,7 +1468,7 @@ def _run_workflow(
                 connector=connector_label,
                 canonical_path=canonical_rel,
             )
-            emit(ev.GATE_DECISION, step=step.number, decision=decision)
+            emit(ev.GATE_DECISION, step=step.number, decision=decision, actor=actor)
             print(f"[hitl → {decision}]")
 
             # #147 delivery closure: approving a MERGE gate actually merges the PR
@@ -2007,6 +2008,21 @@ def main(argv=None):
         help="Print the HITL decision log (docs/orchestrator-runs/hitl.jsonl) and exit.",
     )
     parser.add_argument(
+        "--export-audit",
+        action="store_true",
+        dest="export_audit",
+        help="Export the governance audit (who-did-what lineage · cross-model "
+             "independence · gate approvals + approver) and exit. Scope with "
+             "--bet / --run-id; format with --audit-format.",
+    )
+    parser.add_argument(
+        "--audit-format",
+        dest="audit_format",
+        choices=["json", "md"],
+        default="json",
+        help="Format for --export-audit (json | md). Default json.",
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -2046,8 +2062,8 @@ def main(argv=None):
         )
         sys.exit(code)
 
-    # ── log / dri / hitl-log report modes (no workflow needed) ──────────────
-    if args.log or args.dri or args.hitl_log:
+    # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
+    if args.log or args.dri or args.hitl_log or args.export_audit:
         from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
         if args.log:
@@ -2056,6 +2072,13 @@ def main(argv=None):
             dri_decisions_report(project_dir)
         if args.hitl_log:
             print_hitl_table(project_dir)
+        if args.export_audit:
+            from .logger import build_audit, format_audit_markdown
+            audit = build_audit(project_dir, bet_id=args.bet, run_id=args.run_id)
+            if args.audit_format == "md":
+                print(format_audit_markdown(audit))
+            else:
+                print(json.dumps(audit, indent=2, ensure_ascii=False))
         return
 
     if not args.workflow and not args.pipeline:
