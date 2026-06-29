@@ -596,8 +596,9 @@ class TestStepOutcome(unittest.TestCase):
 
 
 class TestAllowWriteResolution(unittest.TestCase):
-    """#159: authoring workflows are useless read-only → default write-enabled;
-    code workflows keep the caller's explicit choice (branch/PR lane stays opt-in)."""
+    """#179: every PRODUCING workflow — authoring (docs) AND code (build/fix/ops) —
+    writes by default; the write checkbox was friction that only caused silent
+    read-only failures (live: WLT-27-5/6 builds went red writing nothing)."""
 
     def setUp(self):
         from compass.orchestrator import run as runmod
@@ -612,16 +613,25 @@ class TestAllowWriteResolution(unittest.TestCase):
             self.assertTrue(self.resolve(wf, True), wf)
             self.assertIn(wf, self.runmod._AUTHORING_WORKFLOWS)
 
-    def test_code_workflows_keep_caller_choice(self):
+    def test_code_workflows_default_on(self):
+        # #179: build/fix/ops now write by default too — no more opt-in checkbox.
         for wf in ("build", "fix", "ops"):
-            self.assertFalse(self.resolve(wf, False), wf)  # opt-in preserved
+            self.assertTrue(self.resolve(wf, False), wf)   # forced on even when caller said False
             self.assertTrue(self.resolve(wf, True), wf)
-            self.assertNotIn(wf, self.runmod._AUTHORING_WORKFLOWS)
+            self.assertIn(wf, self.runmod._CODE_WORKFLOWS)
+            self.assertIn(wf, self.runmod._WRITE_BY_DEFAULT)
 
-    def test_authoring_and_code_sets_are_disjoint(self):
+    def test_non_producing_workflow_keeps_caller_choice(self):
+        # a read-only reporting workflow isn't force-enabled — honors the caller.
+        for wf in ("status", "dashboard", "metrics"):
+            self.assertFalse(self.resolve(wf, False), wf)
+            self.assertTrue(self.resolve(wf, True), wf)
+            self.assertNotIn(wf, self.runmod._WRITE_BY_DEFAULT)
+
+    def test_write_by_default_is_authoring_plus_code(self):
         self.assertEqual(
-            set(self.runmod._AUTHORING_WORKFLOWS) & set(self.runmod._CODE_WORKFLOWS),
-            set(),
+            set(self.runmod._WRITE_BY_DEFAULT),
+            set(self.runmod._AUTHORING_WORKFLOWS) | set(self.runmod._CODE_WORKFLOWS),
         )
 
 

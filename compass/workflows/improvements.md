@@ -4060,4 +4060,16 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **371 pass** (the approve-command test now asserts `--compass-dir` is present). consistency-check CONSISTENT.
 
-**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #178. **(#032 batch opens: #178–#187.)** On branch `fix/approve-cmd-compass-dir` → PR; cross-model review (Codex/Gemini, not Claude).
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_events.py` (+ CHANGELOG + this file). Counter: #178. **(#032 batch opens: #178–#187.)** On branch `fix/approve-cmd-compass-dir` → PR #20, merged. Cross-model review (Codex/Gemini, not Claude).
+
+### 2026-06-29 — producing workflows write by default; the write checkbox was friction (#179)
+
+**Trigger origin (DRI direction).** Two concurrent `build`s (WLT-27-5, -6) went **red on the engineer step**: launched without the dashboard's "allow writes" checkbox → `allow_write=False` → the claude-code host dispatched **read-only**, the engineer couldn't write a file (*"haven't granted it yet"* on every Edit), burned the turn, and the #149 classifier flagged it incomplete. The DRI cut to the principle: *"but why the friction — workflows that need write should do it."*
+
+**The call.** Write permission shouldn't be a checkbox. A workflow that **produces** something (code or docs) needs to write; gating it only yields silent read-only failures. #159 established this for *authoring* workflows; the carve-out keeping **code** workflows opt-in guarded nothing — the **branch-never-main** discipline (#99) protects `main` independently of write permission. So the opt-in was pure friction.
+
+**Fix.** `_WRITE_BY_DEFAULT = _AUTHORING_WORKFLOWS + _CODE_WORKFLOWS`; `_resolve_allow_write` force-enables write for any producing workflow (was authoring-only). `--dry-run` stays the read-only override; read-only reporting workflows (status/dashboard/metrics/measure/scan) aren't listed, so they honor the caller. The dashboard checkbox is relabeled optional; the launch/run messages now say "producing workflow → write-enabled by default (#179)".
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **372 pass** (`TestAllowWriteResolution` rewritten: code workflows default-on; a non-producing workflow honors the caller; `_WRITE_BY_DEFAULT == authoring ∪ code`). consistency-check CONSISTENT.
+
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #179. **(#032 batch: #178–#179 of #178–#187.)** On branch `fix/write-by-default` → PR; cross-model review (Codex/Gemini, not Claude). *(Operational note: a `--reap-stale` with `COMPASS_STALE_TIMEOUT=1` halted a still-running legit build (-4) in the spine — a targeted `--reap-stale --run-id` is a worthwhile follow-up so cleanup can't catch in-flight runs.)*

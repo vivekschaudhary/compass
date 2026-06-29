@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Producing workflows write by default — build/fix/ops no longer need the write checkbox (#179).** A workflow that *produces* something (code or docs) needs to write; gating that behind an opt-in only ever caused **silent read-only failures** — live, two concurrent `build`s launched without the checkbox dispatched the engineer **read-only**, so it couldn't write a single file, burned the turn retrying Edits, and went red. #159 already write-enabled *authoring* workflows for this exact reason; #179 extends it to **build/fix/ops** (`_WRITE_BY_DEFAULT = authoring + code`). The opt-in guarded nothing — the **branch-never-main** discipline (#99) already protects `main` independently. `--dry-run` remains the explicit read-only pass; read-only reporting workflows (status/dashboard/metrics/…) are unaffected. Dashboard write checkbox relabeled as optional. +1 test net (372), CONSISTENT.
+
 ### Fixed
 
 - **Copy-paste approve command carries `--compass-dir` (#178).** The dashboard's copy-paste resume/approve command (`_approve_cmd`) included `--project-dir` but not `--compass-dir`, so running it manually fell back to `<project>/compass` — the stale vendored copy — instead of the framework dir the run actually used. The run now records `compass_dir` on its `run_start` event (alongside `project_dir`, #119); `fold_runs` captures it and `_approve_cmd` emits `--compass-dir`, so a hand-run approve targets the same framework the dashboard launched with. Surfaced while handing the DRI a manual approve to dodge the #177 refresh race. CONSISTENT (371 tests; existing approve-command test extended).
