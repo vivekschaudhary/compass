@@ -6,14 +6,14 @@
 
 Compass is a **multi-model delivery control tower**. The work — briefs, architecture, stories, builds, cross-model reviews, gated merges — **runs *on* the platform**. So transparency isn't a status report you ask for; it's a **byproduct of execution**. The board can't lie, because the board *is* the work.
 
-That one property is the whole idea: a delivery exec opens one screen and knows the **ground truth** of every program — what's done, what's stuck, what decided what, what it cost, where the risk is — without asking anyone for a status, and without anyone being able to game it.
+That one property is the whole idea: a delivery exec opens one screen and knows the **ground truth** of every program — what's done, what's stuck, what decided what, what it cost, where the risk is — without asking anyone for a status, and without anyone being able to game it. And because the work runs on the platform, the tower can **prove every control the engagement must hit was met, with evidence** — governance and conformance as a *byproduct of execution*, not a report assembled after the fact.
 
 ## Why a control tower (and not the tools you already have)
 
 | | What it shows you | The catch |
 |---|---|---|
-| **Status decks / Jira / Jellyfish / LinearB** | Reports *about* work done elsewhere | Self-reported proxies — gameable, and late |
-| **Cursor / Copilot / Devin** | Do the work | Reveal nothing org-wide; no governance |
+| **Status decks / delivery dashboards** | Reports *about* work done elsewhere | Self-reported proxies — gameable, and late |
+| **AI coding assistants** | Do the work | Reveal nothing org-wide; no governance |
 | **Compass** | **Does the work *and* reveals it** | The status report can't lie — the orchestrator *is* the work |
 
 This changes the executive conversation from **monthly, reactive status reporting → proactive management-by-exception**: spend time only on the programs that need help, caught at week 1, not month 3. For consultancies and outsourcers, the same transparency becomes a **client trust** lever — the black box becomes glass.
@@ -48,20 +48,20 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 - **Retros are fractal** (`[fractal-retro]`, canon v0.3.17). The same `/retro` shape applies at every altitude — role · workflow · bet · project · org · framework — with bottom-up consolidation; patterns promote to canon.
 - **Compass scans your product like Snyk scans your code.** A continuous quality scanner runs across six SDLC phases — Product, Architecture, Build, Production Ready, GTM, Operate — producing *findings, not failures* (severity + confidence + location + reason + fix). Owners decide; the scanner informs.
 
-## The control tower — shipped vs. building now
+## What's shipped (the Control Tower)
 
-Compass is honest about what exists today versus the direction (`[declare-not-implement]`):
+The control-tower capabilities are built and on `main` — early alpha, but real and tested:
 
-**Shipped today**
-- The delivery spine: dispatch-graph workflows → per-role agents → HITL gates → cross-model gated review → merge.
-- The orchestrator (v0.4-alpha) + a live **cockpit** (`compass/orchestrator/cockpit.py`) — a portfolio view of runs, awaiting gates (with age), per-step ✓/✗, live logs, cost, and one-tap approve/reject from the browser.
-- An append-only **event spine** as the orchestration-state + audit ledger.
-- Subscription CLI hosts (flat-cost), self-approval guards, idle-timeout/streaming, fail-loud on silent failures.
+- **The delivery spine** — dispatch-graph workflows → per-role agents → HITL gates → **cross-model gated review** → merge. Plus a live **cockpit**: portfolio view of runs, awaiting gates (with age), per-step ✓/✗, live logs, cost, one-tap approve/reject. An append-only **event spine** is the orchestration-state + audit ledger.
+- **Stack-agnostic core** — agents carry the *methodology*; the stack is a pluggable profile (`compass/stacks/<stack>.md`). A project/engagement overrides templates, workflows, or stack **without forking** — *opinionated defaults, fully overridable*.
+- **Governed-delivery audit** — actor identity (who ran / who approved), a **cross-model-independence verdict** (the reviewer was a different model than the implementer), and the full Decision/Risk/Issue trail — exportable (`--export-audit`).
+- **Conformance to a control framework** — a control set (`controls.md`) maps each control → the delivery evidence that satisfies it → **met / at-risk / unmet**. *Prove every control was met — the audit can't lie, because it's drawn from the actual run.*
+- **Canonical store + one-way projection** — deliverables are canonical *on Compass* (plain markdown + an append-only ledger), then projected — idempotently, on draft creation and on approval — to your tracker and your docs space. Your tools stay in sync; Compass stays the source of truth.
+- **Exec control-tower view** (`--wbs`) — the live **program → bet → story** Work Breakdown Structure with ground-truth status, **manage-by-exception** (awaiting / stalled / blocked / conformance gaps), and the conformance rollup.
+- **Coherence floor** — stale-run auto-halt, no silent write-failures, self-approval guards: a killed run can't show in-flight forever, and a write that wrote nothing can't report success.
+- **Cost-flat on subscriptions** — dispatch via your logged-in CLIs, no metered keys.
 
-**Building now — the Control Tower MVP** (tracked as a real Compass bet in this repo: [`docs/bets/CT-1/`](docs/bets/CT-1/brief.md) — the tower tracking its own construction)
-- **Coherence layer** — no zombie runs, no stranded bookkeeping, deploy/URL/flag visibility through to the board (so the chain doesn't go dark at the merge line).
-- **Compass-primary store + projection** — deliverables are canonical *on Compass*, then projected one-way to **Jira** (epics/stories) and **Confluence** (product/strategy); gate approval drives the Jira transition + Confluence update. Code stays GitHub-canonical (observed + reconciled).
-- **Exec control-tower view** — the live WBS / ops-center: programs → epics → stories with ground-truth status, manage-by-exception surfacing, and an unbroken **traceability chain** (intake → brief → architecture → stories → build → review → merge → deploy → live → metric).
+**On the roadmap** (`[declare-not-implement]` — the contract ships; vendor backends are wired by adopters): status→workflow-transition mapping, drift detection on externally-edited artifacts, the cockpit rendering the WBS, automated control-framework ingestion, and a multi-team scheduler.
 
 ## OKR-driven organizations
 

@@ -46,7 +46,7 @@ Primary: a **delivery exec / engagement MD** (the economic buyer) who wants to m
 
 ## Why this matters
 
-This is the MVP that proves the company thesis on **one real program**: vendor-neutral, multi-model delivery that runs *on* the platform, so transparency is a byproduct of execution. It's also the **Deloitte demo** — and the sample program we walk through IS this bet (the tower tracking its own construction). Without it, Compass is a code-gen tool among many; with it, Compass is the layer none of them have.
+This is the MVP that proves the company thesis on **one real program**: vendor-neutral, multi-model delivery that runs *on* the platform, so transparency is a byproduct of execution. It's also the **flagship demo** — and the sample program we walk through IS this bet (the tower tracking its own construction). Without it, Compass is a code-gen tool among many; with it, Compass is the layer none of them have.
 
 ## Hypothesis (the bet)
 
@@ -66,7 +66,7 @@ If we make Compass the **canonical store** for planning/governance deliverables,
 - **Coherence layer** (trust precondition): stale-run auto-halt, bookkeeping-promotion-on-merge, delivery observability (deploy/URL/flags). *(Down-payment shipped: gate-no-TTY-safety + authoring-write-default, #159.)*
 - **Compass-primary store + projection**: canonical-on-Compass semantics + distribution-pointer model; **Jira** projection adapter (epic+stories, status→transition map, idempotent); **Confluence** projection adapter (product/brief/architecture pages, idempotent); **gate approval drives the Jira transition + Confluence update**; drift detection (Compass wins).
 - **Exec control-tower view**: portfolio/WBS view (programs→epics→stories, live status); manage-by-exception surfacing; traceability-chain drill-down (intake→…→live→metric, no blind links); cost rollup.
-- **Demo readiness**: seed multi-program history (this bet + one Deloitte-relatable domain); scripted dry-run with one safe live beat.
+- **Demo readiness**: seed multi-program history (this bet + one enterprise-relatable domain); scripted dry-run with one safe live beat.
 
 ### Out of scope
 - Multi-user auth / hosting / SSO (productization step — git store is the MVP canonical store).
@@ -120,7 +120,7 @@ _Decomposed into the full story set (the complete backlog) via `/create-story CT
 - **CT-13** Cost rollup per program — depends on: none
 
 *Theme 4 — Demo readiness*
-- **CT-14** Seed multi-program history (this CT-1 bet + one Deloitte-relatable-domain program) — depends on: enough of T1–T3
+- **CT-14** Seed multi-program history (this CT-1 bet + one enterprise-relatable-domain program) — depends on: enough of T1–T3
 - **CT-15** Demo dry-run + one safe live beat (scripted, pre-tested) — depends on: most
 
 **Build order:** CT-5 + the Theme-1 coherence trio first (parallelizable; coherence already in flight) → CT-6/CT-7 → CT-8/CT-9; Theme-3 view stories ride alongside (CT-10/CT-11/CT-13 can start now against the existing spine; CT-12 after CT-4/CT-5); Theme-4 last. **Built one story at a time via `/build`** — sibling stories touching the same files merge serially.

@@ -302,8 +302,8 @@ class TestGovernanceAudit(unittest.TestCase):
 
     def test_default_actor_env_override(self):
         from compass.orchestrator.logger import default_actor
-        os.environ["COMPASS_ACTOR"] = "md@deloitte.com"
-        self.assertEqual(default_actor(self.project_dir), "md@deloitte.com")
+        os.environ["COMPASS_ACTOR"] = "md@example.com"
+        self.assertEqual(default_actor(self.project_dir), "md@example.com")
 
     def test_log_hitl_records_actor(self):
         from compass.orchestrator.logger import log_hitl, load_hitl_log
@@ -323,13 +323,13 @@ class TestGovernanceAudit(unittest.TestCase):
                  host="codex", model="gpt-5", output=FAKE_OUTPUT)
         log_hitl(project_dir=self.project_dir, run_id="b1", workflow="build",
                  bet_id="CB-4", step=6, artifact_path=None, decision="approved",
-                 actor="md@deloitte.com")
+                 actor="md@example.com")
         audit = build_audit(self.project_dir, bet_id="CB-4")
         self.assertTrue(audit["cross_model_independence"]["independent"])
         roles = {s["agent"]: s["role"] for s in audit["steps"]}
         self.assertEqual(roles["engineer"], "implementer")
         self.assertEqual(roles["reviewer"], "reviewer")
-        self.assertEqual(audit["gates"][0]["actor"], "md@deloitte.com")
+        self.assertEqual(audit["gates"][0]["actor"], "md@example.com")
 
     def test_build_audit_flags_same_model_review(self):
         from compass.orchestrator.logger import log_step, build_audit
