@@ -2035,7 +2035,16 @@ def main(argv=None):
         action="store_true",
         help="Print the exec control-tower view — the program→bet→story Work "
              "Breakdown Structure with ground-truth status, manage-by-exception, "
-             "and (where controls.md exists) SOW-conformance — then exit.",
+             "and (where controls.md exists) SOW-conformance — then exit. "
+             "Auto-reaps stale runs first (the board can't lie).",
+    )
+    parser.add_argument(
+        "--reap-stale",
+        action="store_true",
+        dest="reap_stale",
+        help="Halt abandoned/killed in-flight runs (no activity for "
+             "$COMPASS_STALE_TIMEOUT, default 1800s) by emitting RUN_END(halted), so "
+             "they stop showing in-flight forever; then exit.",
     )
     parser.add_argument(
         "--approve",
@@ -2078,11 +2087,20 @@ def main(argv=None):
         sys.exit(code)
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
-    if args.log or args.dri or args.hitl_log or args.export_audit or args.wbs:
+    if args.log or args.dri or args.hitl_log or args.export_audit or args.wbs or args.reap_stale:
         from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
+        if args.reap_stale:
+            from .events import halt_stale_runs
+            reaped = halt_stale_runs()
+            print(f"halted {len(reaped)} stale run(s)"
+                  + (": " + ", ".join(reaped) if reaped else ""))
         if args.wbs:
             from .wbs import build_wbs, render_wbs
+            from .events import halt_stale_runs
+            reaped = halt_stale_runs()  # the tower reaps zombies when you look
+            if reaped:
+                print(f"[reaped {len(reaped)} stale run(s): {', '.join(reaped)}]\n")
             print(render_wbs(build_wbs(project_dir, with_conformance=True)))
         if args.log:
             print_run_table(project_dir)

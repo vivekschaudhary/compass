@@ -68,6 +68,8 @@ def build_wbs(project_dir, with_conformance: bool = False) -> dict:
     audit). Returns {program, bets, summary, attention}."""
     project_dir = Path(project_dir)
     bets_dir = project_dir / "docs" / "bets"
+    from datetime import datetime, timezone
+    now, threshold = datetime.now(timezone.utc), ev.stale_timeout()
 
     runs_by_bet = {}
     for r in fold_runs(ev.load_events()).values():
@@ -102,6 +104,11 @@ def build_wbs(project_dir, with_conformance: bool = False) -> dict:
         for r in halted:
             node_attn.append({"level": "red", "reason": f"run halted: {r.get('reason') or ''}".strip(),
                               "run_id": r["run_id"]})
+        for r in in_flight:
+            if ev.is_stale(r, now, threshold):
+                node_attn.append({"level": "red", "run_id": r["run_id"],
+                                  "reason": f"run stalled — no activity for "
+                                            f"~{int(ev.run_age_seconds(r, now))}s"})
         for dep in b["depends_on"]:
             if status_map.get(dep) not in _SHIPPED:
                 node_attn.append({"level": "red",
