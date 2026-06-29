@@ -3807,4 +3807,19 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **308 pass** (+6: actor env-override · hitl records actor · independence-verdict + role classification · same-model review flagged not-independent · launcher captured from the spine · markdown render). consistency-check CONSISTENT. CLI smoke-test green.
 
-**Files touched (4):** `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/events.py` · `compass/orchestrator/tests/test_jsonl_pipeline.py` (+ CHANGELOG + this file). Counter: #161. **(#030 batch: #158–#161 of #158–#167.)** On branch `mvp/audit-provenance` → PR (not `main`); cross-model review (Codex/Gemini, not Claude) per the invariant this very feature now audits. Next: **#2b** — control framework + conformance mapping.
+**Files touched (4):** `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/events.py` · `compass/orchestrator/tests/test_jsonl_pipeline.py` (+ CHANGELOG + this file). Counter: #161. **(#030 batch: #158–#161 of #158–#167.)** Merged via PR #3. Next: **#2b** — control framework + conformance mapping.
+
+### 2026-06-28 — SOW-conformance: control framework + controls→evidence mapping (#162)
+
+**Trigger origin (MVP plan):** capability #2b — the *conformance half* of the wedge, riding on #2a's audit lineage. The DRI decision (during planning) was **hand-authored controls for the MVP** (automated `/ingest-sow` extraction deferred): the audit gets a *target* — prove every control is met, with evidence.
+
+**What shipped.**
+- **Control framework** — a hand-authored `controls.md`: each control is a `## <ID> — <title>` heading + `- key: value` fields (category · requirement · `check:` · `attest:`). `check:` binds a control to evidence Compass verifies automatically — `cross-model-review` · `human-approval` · `security-review` · `tests-present` — or `manual` (human-attested). Shipped as the standard template `compass/templates/controls.md` with the common governance/security/quality controls pre-filled (the industry-standard sample); overridable via `compass-overrides/`.
+- **`parse_controls()` + `evaluate_conformance(audit, controls)`** — maps each control → the delivery evidence in the #2a lineage (the cross-model verdict, gate approvals, security-review/automation steps) → status **met / unmet / at-risk / exceeded**, with the evidence string. A `conformant` verdict = all controls met/exceeded.
+- **Integration** — `build_audit()` auto-discovers the framework (`docs/bets/<bet>/controls.md` → `docs/controls.md`; `--controls <path>` overrides) and folds `conformance` into the export; `format_audit_markdown()` gets a **SOW-conformance** section (the headline table). JSON export carries it automatically.
+
+**Why this is the wedge complete.** #2a proved *who did what*; #2b proves *we hit the contract*. The MD's N=1 sale — "prove every control in the SOW is met, with evidence, in real time" — now renders from a single command. Smoke-test: a 2-step run (engineer/claude + reviewer/codex) against a 2-control framework → CTRL-1 **met** ("reviewer codex ≠ implementer claude"), CTRL-5 **at-risk** (manual, pending) → `⚠ gaps`.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **313 pass** (+5: parse_controls · conformance statuses across checks · manual-attest met · markdown section · no-controls→no-conformance). consistency-check CONSISTENT. CLI smoke-test green.
+
+**Files touched (4):** `compass/templates/controls.md` (new) · `compass/orchestrator/logger.py` · `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_jsonl_pipeline.py` (+ CHANGELOG + this file). Counter: #162. **(#030 batch: #158–#162 of #158–#167.)** On branch `mvp/sow-conformance` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). MVP capability #2 COMPLETE. Next: **#4** (Jira/Confluence projection) or **#3** (exec WBS view).

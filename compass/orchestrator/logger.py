@@ -444,7 +444,8 @@ def dri_decisions_report(project_dir: Path) -> None:
 # Governance audit — the exportable who-did-what lineage (#2a)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None) -> dict:
+def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
+                controls_path: str = None) -> dict:
     """Assemble the governance audit for a bet (or a single run): the who-did-what
     lineage the SOW-conformance wedge needs — per-step agent/role/host/model, gate
     decisions + approver identity, and the **cross-model-independence verdict**
@@ -481,7 +482,7 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None) -> di
               if _role_for(r.get("agent")) in ("reviewer", "security-reviewer")}
     independent = bool(impl) and bool(review) and impl.isdisjoint(review)
 
-    return {
+    result = {
         "bet_id": bet_id,
         "run_id": run_id,
         "runs": sorted({r.get("run_id") for r in steps if r.get("run_id")}),
@@ -509,11 +510,35 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None) -> di
         ],
     }
 
+    # SOW-conformance (#2b): map controls → evidence. Auto-discover the framework if
+    # not given — docs/bets/<bet>/controls.md, else docs/controls.md.
+    cpath = Path(controls_path) if controls_path else None
+    if cpath is None:
+        candidates = ([project_dir / "docs" / "bets" / bet_id / "controls.md"]
+                      if bet_id else []) + [project_dir / "docs" / "controls.md"]
+        cpath = next((c for c in candidates if c.exists()), None)
+    if cpath and Path(cpath).exists():
+        result["conformance"] = evaluate_conformance(result, parse_controls(cpath))
+        result["controls_source"] = str(cpath)
+    return result
+
 
 def format_audit_markdown(audit: dict) -> str:
     """Render build_audit() as a human / Confluence-projectable governance audit doc."""
     scope = audit.get("bet_id") or audit.get("run_id") or "(all runs)"
     lines = [f"# Governance audit — {scope}", ""]
+
+    conf = audit.get("conformance")
+    if conf:
+        head = "✅ conformant" if conf.get("conformant") else "⚠ gaps"
+        summ = " · ".join(f"{k}: {v}" for k, v in (conf.get("summary") or {}).items())
+        lines += ["## SOW-conformance", f"- **{head}** — {summ}", "",
+                  "| control | category | status | evidence |",
+                  "|---|---|---|---|"]
+        for c in conf.get("controls", []):
+            lines.append(f"| {c.get('id')} {c.get('title')} | {c.get('category') or '—'} | "
+                         f"{c.get('status')} | {c.get('evidence') or '—'} |")
+        lines.append("")
 
     ind = audit.get("cross_model_independence", {})
     verdict = "✅ independent" if ind.get("independent") else "⚠ NOT verified"
@@ -550,3 +575,90 @@ def format_audit_markdown(audit: dict) -> str:
             lines.append(f"- [{d.get('agent','')}] {str(d.get('decision',''))[:300]}")
     lines.append("")
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SOW-conformance — hand-authored control framework + controls→evidence map (#2b)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def parse_controls(path) -> list:
+    """Parse a hand-authored control framework (controls.md). Each control is a
+    `## <ID> — <title>` heading followed by `- key: value` fields (category,
+    requirement, check, attest). Returns a list of control dicts; [] if absent."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    controls = []
+    for block in re.split(r'^##\s+', path.read_text(encoding="utf-8"), flags=re.MULTILINE)[1:]:
+        lines = block.splitlines()
+        head = lines[0].strip()
+        m = re.match(r'(\S+)\s*[—–:-]\s*(.+)', head)
+        ctrl = {"id": (m.group(1) if m else head.split()[0]).strip(),
+                "title": (m.group(2).strip() if m else head),
+                "category": None, "requirement": None,
+                "check": "manual", "attest": None}
+        for ln in lines[1:]:
+            fm = re.match(r'\s*[-*]\s*(\w+)\s*:\s*(.+)', ln)
+            if fm and fm.group(1).lower() in ctrl:
+                ctrl[fm.group(1).lower()] = fm.group(2).strip()
+        controls.append(ctrl)
+    return controls
+
+
+def evaluate_conformance(audit: dict, controls: list) -> dict:
+    """Map each control → the delivery evidence that satisfies it (from build_audit's
+    lineage) → status. The SOW-conformance proof: 'every control is met, with
+    evidence.' Statuses: met · exceeded · unmet · at-risk · unknown."""
+    steps = audit.get("steps", [])
+    gates = audit.get("gates", [])
+    ind = audit.get("cross_model_independence", {})
+    roles = [s.get("role") for s in steps]
+
+    def _eval(ctrl):
+        check = (ctrl.get("check") or "manual").lower()
+        if check == "cross-model-review":
+            if "reviewer" not in roles and "security-reviewer" not in roles:
+                return "unmet", "no independent review step recorded"
+            if ind.get("independent"):
+                return "met", f"reviewer {ind.get('reviewer')} ≠ implementer {ind.get('implementer')}"
+            return "unmet", "reviewer shares a model with the implementer"
+        if check == "human-approval":
+            if not gates:
+                return "at-risk", "no gate decision recorded yet"
+            approved = [g for g in gates if g.get("decision") == "approved"]
+            if approved:
+                g = approved[-1]
+                return "met", f"approved by {g.get('actor') or 'unknown'} at {(g.get('ts') or '')[:19]}"
+            if any(g.get("decision") == "rejected" for g in gates):
+                return "unmet", "gate rejected, not yet re-approved"
+            return "at-risk", "gate pending"
+        if check == "security-review":
+            return ("met", "security-reviewer step present") if "security-reviewer" in roles \
+                else ("unmet", "no security-review step recorded")
+        if check == "tests-present":
+            if "automation" in roles or any("test" in (s.get("task") or "") for s in steps):
+                return "met", "test/automation step present"
+            return "at-risk", "no test/automation step recorded"
+        if check == "manual":
+            attest = (ctrl.get("attest") or "pending").lower()
+            if attest == "exceeded":
+                return "exceeded", "human-attested: exceeded"
+            if attest in ("met", "yes", "done"):
+                return "met", f"human-attested: {attest}"
+            return "at-risk", f"manual control — attest: {attest}"
+        return "unknown", f"unrecognized check '{check}'"
+
+    results = []
+    for c in controls:
+        status, evidence = _eval(c)
+        results.append({"id": c["id"], "title": c["title"], "category": c.get("category"),
+                        "check": c.get("check"), "status": status, "evidence": evidence})
+    summary = {}
+    for r in results:
+        summary[r["status"]] = summary.get(r["status"], 0) + 1
+    return {
+        "controls": results,
+        "summary": summary,
+        "total": len(results),
+        "conformant": bool(results) and all(r["status"] in ("met", "exceeded") for r in results),
+    }
