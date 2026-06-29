@@ -64,6 +64,14 @@ class TestConfluencePush(unittest.TestCase):
         self.assertEqual(t.calls[1]["method"], "PUT")
         self.assertEqual(t.calls[1]["body"]["version"], {"number": 4})
 
+    def test_update_bails_on_failed_version_get(self):
+        # [Codex review] a 404/401 on the version GET must NOT become a version-2 PUT
+        t = FakeTransport([(404, {"message": "not found"})])
+        res = stores.confluence_push(AUTH, "ENG", "T", "body", page_id="999", transport=t)
+        self.assertFalse(res["ok"])
+        self.assertEqual(len(t.calls), 1)            # bailed after GET — no PUT
+        self.assertEqual(t.calls[0]["method"], "GET")
+
 
 class TestAuthResolution(unittest.TestCase):
     KEYS = ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN",

@@ -3885,4 +3885,22 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **337 pass** (+4: on-disk read preserves the pointer + flips status · status=None leaves the draft as-is · falls back to the step output with body-extraction · no-write returns None). consistency-check CONSISTENT.
 
-**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #166. **(#030 batch: #158–#166 of #158–#167 — one from the retro trigger.)** On branch `mvp/project-on-create` → PR (not `main`); cross-model review (Codex/Gemini, not Claude). Follow-up (carried from #163): status→Jira-*transition* on approval (move the ticket, not just set a field) once the project's workflow transition-ids are configured.
+**Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #166. **(#030 batch: #158–#166 of #158–#167.)** Merged via PR #8.
+
+### 2026-06-28 — cross-model review of the MVP batch (#160–#166) + fixes (#167)
+
+**Trigger origin (DRI direction + the invariant):** the DRI called for running the **cross-model review** over the whole MVP batch — every PR #160–#166 was *implemented by Claude*, so per the reviewer-≠-implementer invariant none had had its independent review. This dogfoods the very independence #161 now audits.
+
+**How it ran.** Assembled the batch code diff (`dda4725..main`, ~2200 lines across orchestrator/agents/stacks/templates/config) + the Reviewer agent file as the prompt, and ran it through **`codex exec`** (read-only, isolated) — the proven #155 invocation. Codex returned a structured review (BLOCKER/ISSUE/NIT + recommendation).
+
+**Findings, triaged honestly (the respond-to-review step):**
+- **[BLOCKER] missing `os` import in events.py → DISPUTED (false positive).** `import os` is present (events.py:40); the reviewer saw only the diff, which didn't include the pre-existing import, and `--reap-stale` had smoke-tested green (would `NameError` otherwise). A real instance of *why a reviewer needs the file, not just the diff* — but not a real defect.
+- **[BLOCKER] pre-approval canonical write → FIXED.** #166's draft-on-gate-arrival could write an *unapproved* draft to the canonical filesystem from step output. Now the draft projection fires **only when the agent already wrote the canonical file** (never fabricated from step output pre-approval — that stays approval-gated) **and only for external connectors** (jira/confluence; a filesystem-only setup is unchanged). The user's intent (send drafts to Jira/Confluence) is preserved; the footgun (unapproved canonical) is closed.
+- **[ISSUE] confluence version-GET unchecked → FIXED.** A 401/404/429 on the version GET became a misleading version-2 PUT; now `confluence_push` bails `ok:False` with the response.
+- **[ISSUE] `wbs._list` quote/format handling → FIXED.** Strips quotes on inline-flow dependency lists; block-style YAML lists documented as unsupported (the template uses inline flow).
+
+**Why it matters.** The cross-model loop caught **2 real defects + 1 real robustness gap** in code that passed 337 self-run tests — exactly the class self-review misses (the implementer's blind spots). And the false positive surfaced a true limitation (reviewer-sees-diff-not-file) worth noting for the orchestrator's review dispatch.
+
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **339 pass** (+2: confluence GET-failure bail · `_list` quoted/bracketed parsing). consistency-check CONSISTENT.
+
+**Files touched (5):** `compass/orchestrator/run.py` · `compass/orchestrator/stores.py` · `compass/orchestrator/wbs.py` · `compass/orchestrator/tests/test_stores.py` · `compass/orchestrator/tests/test_wbs.py` (+ CHANGELOG + this file). Counter: #167. **(#030 batch: #158–#167 COMPLETE.)** On branch `review/mvp-fixes` → PR. **🔔 Retro #030 is now DUE (every-10 cadence, #158–#167)** — covers the full control-tower MVP build + this cross-model pass. Codification watch-fors for the retro: `[reviewer-needs-file-not-just-diff]` (the false-positive class — feed the orchestrator's review dispatch the file, not only the diff) · `[external-primary-with-cached-pointer]` 2nd+ instance (the projection pointers) · the deferred follow-ups (status→Jira-transition · drift detection · cockpit-HTML WBS · automated `/ingest-sow` · .NET de-risk on the POC env).
