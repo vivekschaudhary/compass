@@ -368,6 +368,16 @@ class TestHtmlCockpit(unittest.TestCase):
 
     def test_build_page_returns_bytes(self):
         self.assertIsInstance(cockpit.build_page([], snapshot_ts="t"), bytes)
+
+    def test_action_submit_pauses_autorefresh(self):
+        # #177: clicking approve/launch must STOP the auto-reload, else the GET
+        # location.reload() races the POST → "I clicked approve and nothing happened."
+        out = cockpit.render_html(cockpit.fold_runs(self._events()), actions=True,
+                                  snapshot_ts="t", default_project_dir="/repos/home")
+        # _act sets the shared pause flag on submit, and the reload tick honors it
+        self.assertIn("window.__cpause=true", out)
+        self.assertIn("if(window.__cpause)return", out)
+        self.assertNotIn("if(paused)return", out)   # old per-closure flag is gone
         self.assertIsInstance(cockpit.build_page(self._events(), snapshot_ts="t"), bytes)
 
     def test_step_rows_parity_text_and_html(self):
