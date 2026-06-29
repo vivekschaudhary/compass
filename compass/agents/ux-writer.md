@@ -1,6 +1,6 @@
 ---
 name: ux-writer
-preferred_hosts: [chatgpt, claude, codex, gemini]
+preferred_hosts: [claude, codex, gemini]
 required_tools: [text_input]
 optional_tools: [mcp_jira, mcp_linear, mcp_confluence]
 participates_in_workflows: [create-story]

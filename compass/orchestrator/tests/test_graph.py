@@ -569,13 +569,30 @@ class TestStepOutcome(unittest.TestCase):
             self.assertEqual(self.classify(t)[0], "incomplete", t)
 
     def test_done_not_falsely_tripped_by_159(self):
-        # the broadened regex must not flag normal completed work
+        # the broadened regex must not flag normal completed work — incl. the
+        # delivery-manager status reports that legitimately narrate awaiting states
+        # (the live false positive: "WLT-27 awaiting human approval" tripped ✗ even
+        # though status.md was written). #168 tightened the regex to require
+        # "permission" context, not bare "approval".
         for t in (
             "Brief written to docs/bets/WLT-27/brief.md. Awaiting human review at the HITL gate.",
             "Done — added an allow-list to the route and committed.",
             "Wrote the story; the designer will pick up the UI slice next.",
+            "status.md refreshed: WLT-27 awaiting human approval before build.",
+            "Two items in flight; the bet is pending approval at the HITL gate.",
+            "Updated status; awaiting your decision on the architecture.",
         ):
             self.assertEqual(self.classify(t)[0], "done", t)
+
+    def test_permission_block_still_incomplete_after_168(self):
+        # #168 tightening must NOT weaken the #159 permission-block detection
+        for t in (
+            "The research.md write is waiting on permission approval.",
+            "awaiting permission to write the file",
+            "The permission dialog has appeared and not been approved.",
+            "please approve both writes",
+        ):
+            self.assertEqual(self.classify(t)[0], "incomplete", t)
 
 
 class TestAllowWriteResolution(unittest.TestCase):
@@ -667,6 +684,21 @@ class TestStackProfile(unittest.TestCase):
         stacks = Path(__file__).resolve().parents[2] / "stacks"
         self.assertTrue((stacks / "nextjs-ts.md").exists(), "nextjs-ts profile missing")
         self.assertTrue((stacks / "dotnet-blazor.md").exists(), "dotnet-blazor profile missing")
+
+
+class TestRepoReadingAgentHosts(unittest.TestCase):
+    """#168: agents that must READ repo artifacts (story / brief / design) cannot lead
+    with a tool-less host like `chatgpt` — it refuses on a live orchestrator run because
+    it can't read files (the live create-story "failed on copy"). 3rd instance of
+    host-capability-validation: pm (#86), researcher (#137), designer + ux-writer (#168)."""
+
+    def test_no_chatgpt_for_repo_readers(self):
+        from compass.orchestrator.run import _read_preferred_hosts
+        agents = Path(__file__).resolve().parents[2] / "agents"
+        for agent in ("designer", "ux-writer", "pm", "researcher"):
+            hosts = _read_preferred_hosts(agents / f"{agent}.md")
+            self.assertNotIn("chatgpt", hosts, f"{agent} includes tool-less chatgpt")
+            self.assertIn(hosts[0], ("claude", "claude-code", "codex", "gemini"), agent)
 
 
 class TestMergeGate(unittest.TestCase):
