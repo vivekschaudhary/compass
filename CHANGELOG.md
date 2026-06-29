@@ -10,6 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Framework issues + improvements captured as GitHub issues, tagged to release milestones (#180).** Forward framework work (bugs, improvement proposals, codification candidates, retro watch-fors) now opens a GitHub issue in `vivekschaudhary/compass` (labels `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro`) tagged to a release milestone, instead of being buried in markdown notes. `improvements.md` stays the shipped-change memory (log on ship + close the issue). Consumer projects keep their own capture — framework-repo only. First backlog: issues #22–#32 (from Retros #030/#031); planning the 1.0 milestone.
+
 - **Producing workflows write by default — build/fix/ops no longer need the write checkbox (#179).** A workflow that *produces* something (code or docs) needs to write; gating that behind an opt-in only ever caused **silent read-only failures** — live, two concurrent `build`s launched without the checkbox dispatched the engineer **read-only**, so it couldn't write a single file, burned the turn retrying Edits, and went red. #159 already write-enabled *authoring* workflows for this exact reason; #179 extends it to **build/fix/ops** (`_WRITE_BY_DEFAULT = authoring + code`). The opt-in guarded nothing — the **branch-never-main** discipline (#99) already protects `main` independently. `--dry-run` remains the explicit read-only pass; read-only reporting workflows (status/dashboard/metrics/…) are unaffected. Dashboard write checkbox relabeled as optional. +1 test net (372), CONSISTENT.
 
 ### Fixed

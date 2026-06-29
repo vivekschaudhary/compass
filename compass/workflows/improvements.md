@@ -4,6 +4,16 @@ Real friction encountered while using Compass, with the change made to fix it. T
 
 Each entry: what happened → what changed → what to watch for.
 
+## Capture going forward (#180) — GitHub issues are the live tracker (framework only)
+
+As of #180, **framework** issues and improvement proposals are captured as **GitHub issues** in `vivekschaudhary/compass` (`gh issue create`), labeled `bug` / `enhancement` / `codification` / `tech-debt` / `from-retro`. This file stays the **shipped-change memory** (the "why we're shaped this way" record retros read + `consistency-check` relies on) — not a TODO list:
+
+- **Discovered now, not done yet** (a bug, friction, improvement idea, codification candidate, retro watch-for) → **open a GitHub issue.** Don't bury forward work in markdown notes.
+- **Shipped** → add the entry here AND close the issue (PR `Closes #N`).
+- **Retros** file their watch-for / promotion candidates as issues (not just narrate them) — see issues #22–#32 from Retros #030/#031.
+
+Scope: **the Compass framework repo only.** Consumer projects keep their own capture (their `docs/improvements.md`, DRI logs, and their own trackers) — this convention is about how we develop Compass itself.
+
 ## Retro cadence
 
 Retros every **10** entries (framework altitude; **changed from 5 → 10 at #146** — fewer, deeper reviews after the discipline proved durable over 26 on-time/near-on-time retros) per AGENTS.md principle #14 (soft-spec-rationalization defense via periodic pattern review). Reports — does not prescribe. Patterns surfaced feed future improvements via normal triggers.
@@ -4075,3 +4085,11 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **372 pass** (`TestAllowWriteResolution` rewritten: code workflows default-on; a non-producing workflow honors the caller; `_WRITE_BY_DEFAULT == authoring ∪ code`). consistency-check CONSISTENT.
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_graph.py` (+ CHANGELOG + this file). Counter: #179. **(#032 batch: #178–#179 of #178–#187.)** On branch `fix/write-by-default` → PR; cross-model review (Codex/Gemini, not Claude). *(Operational note: a `--reap-stale` with `COMPASS_STALE_TIMEOUT=1` halted a still-running legit build (-4) in the spine — a targeted `--reap-stale --run-id` is a worthwhile follow-up so cleanup can't catch in-flight runs.)*
+
+### 2026-06-29 — framework issues + improvements captured as GitHub issues, tagged to release milestones (#180)
+
+**Trigger origin (DRI direction).** *"Lets start capturing all issues, improvements in GitHub going forward… for compass framework only… I want to tag issues to releases. Lets plan 1.0."* The markdown watch-for / "noted for later" habit buried forward work where it couldn't be tracked or scheduled; Retros #030/#031 had just surfaced ~11 open items.
+
+**The convention (framework repo only).** GitHub issues in `vivekschaudhary/compass` are the **live tracker** for framework issues + improvement proposals (labels `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro`); this log stays the **shipped-change memory** (what retros read + `consistency-check` relies on). Forward work → open an issue; shipped → log here AND close the issue (`Closes #N`); retros file their watch-for/promotion candidates as issues. Issues are tagged to **release milestones** (1.0, …) for scheduling. **Consumer projects keep their own capture** — this is how we develop Compass itself. First backlog filed: #22–#32 (from Retros #030/#031); milestone planning: 1.0.
+
+**Files touched:** `compass/workflows/improvements.md` (header + this entry) · `CLAUDE.md` (host pointer) · `CHANGELOG.md`. Counter: #180. **(#032 batch: #178–#180 of #178–#187.)** Process change (no code). Going forward, new framework improvements reference their closing issue #.

@@ -49,6 +49,10 @@ You have filesystem access via the Read / Edit / Write tools and shell access vi
 
 These preferences are runtime-shape, not role-shape — they let you execute agent tasks efficiently on this host. They do not override the task's own discipline (refusal rules, gates, postconditions).
 
+## Capturing framework work (#180) — GitHub issues, tagged to releases
+
+For **framework** work (this repo only), capture issues + improvement proposals as **GitHub issues** in `vivekschaudhary/compass` (`gh issue create`), labeled `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro` and tagged to a **release milestone** (1.0, …). Don't bury forward work in markdown notes. `compass/workflows/improvements.md` stays the **shipped-change memory** (log the entry on ship AND close the issue via `Closes #N`). Retros file their watch-for / promotion candidates as issues. Consumer projects keep their own capture — this convention is for developing Compass itself. (Full description: improvements.md header.)
+
 ## Refusal rules (host-runtime level — generic, agent-task-specific rules live in agent files)
 
 1. **Do not skip HITL gates.** Agent task files declare them as hard stops. Respect them. (Today: read `compass/config.yaml` `hitl_level` to know which gates apply — this remains documentation; load-bearing enforcement lives in the agent task postconditions.)
