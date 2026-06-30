@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Pip-installable `compass-run` entrypoint + stale-module warning (#40).** Fixes the footgun where `python -m compass.orchestrator.run` run from a *consumer* dir loads that consumer's **vendored (stale) `compass/`** copy — so new flags error as "unrecognized" even though `--compass-dir` names the real framework (it bit the live Jira/Confluence push). Two parts: (1) a **`pyproject.toml`** packaging `compass.orchestrator` with console scripts — `pip install -e .` from the repo gives **`compass-run`** / **`compass-cockpit`** on PATH that always execute *this* framework's code, cwd-independent; (2) a **runtime warning** — when the running orchestrator is a vendored framework checkout (`workflows/`/`agents/` siblings) that differs from `--compass-dir`, it warns loudly (and never false-warns for an installed/site-packages module). +4 tests (382), CONSISTENT. (Version `0.4.0a1` is a placeholder; #38 settles 1.0 versioning.)
+
 ### Changed
 
 - **GitHub is the record for framework work; `improvements.md` frozen at #181 (#42).** Going further than #180's hybrid: forward work → a **GitHub issue**; the change → a **PR that closes it** (`Closes #N`); shipped summary → this `CHANGELOG.md` + GitHub Releases; retros read closed issues + merged PRs. `compass/workflows/improvements.md` is frozen as historical memory (retros #001–#031 reference it) — no new entries. **Consumer apps** (home-app, …) track their work in **Jira + Confluence** (the projection Compass ships, #34). Convention codified in CLAUDE.md + the improvements.md banner; retro workflow's framework-altitude source repointed to GitHub.

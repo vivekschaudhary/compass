@@ -1,0 +1,30 @@
+# Compass orchestrator — pip-installable so the CLI is cwd-independent (#40).
+# `pip install -e .` from the repo root gives `compass-run` / `compass-cockpit` on PATH,
+# which always execute THIS framework's code regardless of the directory you run from —
+# fixing the footgun where `python -m compass.orchestrator.run` from a consumer dir loads
+# that consumer's vendored (possibly stale) `compass/` copy.
+#
+# Only the Python package `compass.orchestrator` is packaged; the framework docs
+# (workflows/, agents/, stacks/, templates/, config.yaml) are passed at runtime via
+# --compass-dir, not installed. Version is a placeholder aligned with "v0.4-alpha";
+# #38 (1.0 versioning) settles the canonical version + its single source.
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compass-orchestrator"
+version = "0.4.0a1"
+description = "Compass — the delivery control-tower orchestrator (dispatch-graph workflows over multi-host agents)."
+requires-python = ">=3.10"
+readme = "README.md"
+
+[project.scripts]
+compass-run = "compass.orchestrator.run:main"
+compass-cockpit = "compass.orchestrator.cockpit:main"
+
+[tool.setuptools.packages.find]
+# package only the orchestrator code under the `compass` namespace (no __init__ at
+# compass/, so it's a namespace package); never package the non-Python doc dirs.
+include = ["compass.orchestrator*"]
+namespaces = true
