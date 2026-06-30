@@ -494,6 +494,36 @@ def _ensure_work_branch(project_dir, branch_name: str):
     return current or None
 
 
+def _project_artifact(project_dir: Path, compass_dir, rel: str, transport=None) -> tuple:
+    """#34: on-demand one-way projection of an EXISTING artifact to its configured
+    backend (Jira for stories, Confluence for foundation/brief/architecture — per
+    config.yaml connectors), or an honest filesystem-fallback label when uncredentialed.
+    Returns (rel, label). Distinct from gate-approval promotion: lets you push the
+    product brief + docs so the team SEES them, without re-running a workflow."""
+    from .connector import resolve_connector_for_artifact, push_artifact
+    target = project_dir / rel
+    if not target.exists():
+        return (rel, "ERROR — not found")
+    content = target.read_text(encoding="utf-8")
+    conn = resolve_connector_for_artifact(rel, project_dir, compass_dir)
+    return (rel, push_artifact(project_dir, rel, content, conn, transport=transport))
+
+
+def _bet_doc_paths(project_dir: Path, bet: str) -> list:
+    """#34: the product docs of a bet, in push order — brief/architecture/research
+    (→ Confluence) then each story (→ Jira). Only paths that exist on disk."""
+    base = Path("docs") / "bets" / bet
+    rels = []
+    for name in ("brief.md", "architecture.md", "research.md"):
+        if (project_dir / base / name).exists():
+            rels.append(str(base / name))
+    stories = project_dir / base / "stories"
+    if stories.is_dir():
+        for sf in sorted(stories.glob("*/story.md")):
+            rels.append(str(sf.relative_to(project_dir)))
+    return rels
+
+
 def _worktree_root(project_dir) -> Path:
     """#174: where isolated build worktrees live — under ~/.compass (OUTSIDE the repo),
     namespaced by project label, so concurrent story builds never share a working tree."""
@@ -2388,6 +2418,29 @@ def main(argv=None):
              "kept. Then exit. (--project-dir selects the repo.)",
     )
     parser.add_argument(
+        "--push",
+        metavar="PATH",
+        default=None,
+        help=(
+            "#34: project an existing artifact one-way to its configured backend "
+            "(story → Jira, foundation/brief/architecture → Confluence; per "
+            "config.yaml connectors), then exit. Credentialed from the environment "
+            "(JIRA_*/CONFLUENCE_*/ATLASSIAN_*); uncredentialed → honest filesystem "
+            "fallback. Stores the distribution pointer for idempotent re-push."
+        ),
+    )
+    parser.add_argument(
+        "--push-bet",
+        metavar="BET",
+        default=None,
+        dest="push_bet",
+        help=(
+            "#34: project a whole bet's product docs at once — brief.md + "
+            "architecture.md + research.md (→ Confluence) and every story (→ Jira). "
+            "Then exit. Same env credentialing as --push."
+        ),
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -2426,6 +2479,30 @@ def main(argv=None):
             bet_id=args.bet,
         )
         sys.exit(code)
+
+    # ── on-demand projection to Jira/Confluence (#34, no workflow needed) ──
+    if args.push or args.push_bet:
+        project_dir = Path(args.project_dir).resolve()
+        compass_dir = (Path(args.compass_dir).resolve() if args.compass_dir
+                       else project_dir / "compass")
+        rels = ([args.push] if args.push
+                else _bet_doc_paths(project_dir, args.push_bet))
+        if not rels:
+            print(f"Nothing to push (no docs found for {args.push or args.push_bet}).",
+                  file=sys.stderr)
+            sys.exit(1)
+        print(f"Projecting {len(rels)} artifact(s) (Compass-primary → one-way):")
+        any_fallback = False
+        for rel, label in (_project_artifact(project_dir, compass_dir, r) for r in rels):
+            mark = "→" if "fallback" not in label and "ERROR" not in label else "·"
+            print(f"  {mark} {rel}  [{label}]")
+            any_fallback = any_fallback or ("fallback" in label)
+        if any_fallback:
+            print("\nSome artifacts stayed in the filesystem cache — set the env creds to "
+                  "project live:\n  JIRA_BASE_URL/EMAIL/API_TOKEN + JIRA_PROJECT  ·  "
+                  "CONFLUENCE_BASE_URL/EMAIL/API_TOKEN + CONFLUENCE_SPACE  (or ATLASSIAN_* "
+                  "shared).", file=sys.stderr)
+        return
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
     if (args.log or args.dri or args.hitl_log or args.export_audit or args.wbs
