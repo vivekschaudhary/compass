@@ -150,5 +150,98 @@ class TestConnectorRouting(unittest.TestCase):
         self.assertEqual(connector._frontmatter_field(c, "jira_key"), "PROJ-9")
 
 
+class TestPushErrorSurfacing(unittest.TestCase):
+    """#181: a failed push must say WHY (status + API message), not a blind 'failed'."""
+
+    def test_confluence_401_surfaces_in_label(self):
+        with tempfile.TemporaryDirectory() as d:
+            project = Path(d)
+            os.environ.update({"CONFLUENCE_BASE_URL": "https://acme.atlassian.net",
+                               "CONFLUENCE_EMAIL": "x@x.com", "CONFLUENCE_API_TOKEN": "bad",
+                               "CONFLUENCE_SPACE": "ENG"})
+            try:
+                t = FakeTransport([(401, {"message": "Unauthorized; bad token"})])
+                label = connector.push_artifact(project, "docs/foundation/product.md",
+                                                "# P\nbody", "confluence", transport=t)
+            finally:
+                for k in ("CONFLUENCE_BASE_URL", "CONFLUENCE_EMAIL",
+                          "CONFLUENCE_API_TOKEN", "CONFLUENCE_SPACE"):
+                    os.environ.pop(k, None)
+            self.assertIn("confluence push failed", label)
+            self.assertIn("401", label)
+            self.assertIn("Unauthorized", label)
+
+    def test_jira_error_messages_surface(self):
+        with tempfile.TemporaryDirectory() as d:
+            project = Path(d)
+            os.environ.update({"JIRA_BASE_URL": "https://acme.atlassian.net",
+                               "JIRA_EMAIL": "x@x.com", "JIRA_API_TOKEN": "t",
+                               "JIRA_PROJECT": "WLT"})
+            try:
+                t = FakeTransport([(400, {"errorMessages": ["project WLT does not exist"]})])
+                label = connector.push_artifact(project, "docs/bets/B/stories/B-1/story.md",
+                                                "# S\nbody", "jira", transport=t)
+            finally:
+                for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT"):
+                    os.environ.pop(k, None)
+            self.assertIn("jira push failed", label)
+            self.assertIn("400", label)
+            self.assertIn("does not exist", label)
+
+
+class TestOnDemandPush(unittest.TestCase):
+    """#34: --push / --push-bet project EXISTING artifacts to their configured backend
+    (story → Jira, brief/architecture → Confluence per config.yaml), or honest
+    filesystem-fallback when uncredentialed."""
+
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp())
+        self.compass = Path(__file__).resolve().parents[2]  # real config.yaml: jira/confluence
+        # ensure no live creds bleed in from the env
+        self._saved = {}
+        for v in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT",
+                  "CONFLUENCE_BASE_URL", "CONFLUENCE_EMAIL", "CONFLUENCE_API_TOKEN",
+                  "CONFLUENCE_SPACE", "ATLASSIAN_BASE_URL", "ATLASSIAN_EMAIL",
+                  "ATLASSIAN_API_TOKEN"):
+            self._saved[v] = os.environ.pop(v, None)
+        b = self.project / "docs" / "bets" / "CB-1"
+        (b / "stories" / "CB-1-1").mkdir(parents=True)
+        (b / "brief.md").write_text("---\nid: CB-1\n---\n# Brief\nbody\n", encoding="utf-8")
+        (b / "architecture.md").write_text("---\nstatus: approved\n---\n# Arch\n", encoding="utf-8")
+        (b / "stories" / "CB-1-1" / "story.md").write_text("---\nid: CB-1-1\n---\n# Story\n", encoding="utf-8")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.project, ignore_errors=True)
+        for k, v in self._saved.items():
+            if v is not None:
+                os.environ[k] = v
+
+    def test_bet_doc_paths_order(self):
+        from compass.orchestrator.run import _bet_doc_paths
+        paths = _bet_doc_paths(self.project, "CB-1")
+        self.assertEqual(paths[0], "docs/bets/CB-1/brief.md")
+        self.assertIn("docs/bets/CB-1/architecture.md", paths)
+        self.assertTrue(paths[-1].endswith("CB-1-1/story.md"))
+
+    def test_story_routes_to_jira(self):
+        from compass.orchestrator.run import _project_artifact
+        _, label = _project_artifact(self.project, self.compass,
+                                     "docs/bets/CB-1/stories/CB-1-1/story.md")
+        self.assertIn("jira", label)          # routed to the ticketing backend
+        self.assertIn("fallback", label)      # uncredentialed → honest fallback
+
+    def test_brief_routes_to_confluence(self):
+        from compass.orchestrator.run import _project_artifact
+        _, label = _project_artifact(self.project, self.compass, "docs/bets/CB-1/brief.md")
+        self.assertIn("confluence", label)
+        self.assertIn("fallback", label)
+
+    def test_missing_file_errors(self):
+        from compass.orchestrator.run import _project_artifact
+        _, label = _project_artifact(self.project, self.compass, "docs/bets/CB-1/nope.md")
+        self.assertIn("ERROR", label)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

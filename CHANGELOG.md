@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **On-demand projection to Jira/Confluence — `--push` / `--push-bet` (#181, toward #34).** You can now project an existing artifact (or a whole bet's product docs) to the team's Atlassian on demand, without re-running a workflow: `--push <path>` routes one artifact (story → Jira, brief/architecture/research → Confluence per `config.yaml` connectors); `--push-bet <BET>` pushes the bet's brief + architecture + research (→ Confluence) and every story (→ Jira). Credentialed from the environment (`JIRA_*`/`CONFLUENCE_*`/`ATLASSIAN_*`); uncredentialed → honest filesystem-fallback labels (no silent no-op), and the distribution pointer is stored for idempotent re-push. This makes "see the product brief + docs in Confluence/Jira" a one-liner. +4 tests (376), CONSISTENT. Live proof on the pilot's Atlassian is tracked in #34.
+
 ### Changed
 
 - **Framework issues + improvements captured as GitHub issues, tagged to release milestones (#180).** Forward framework work (bugs, improvement proposals, codification candidates, retro watch-fors) now opens a GitHub issue in `vivekschaudhary/compass` (labels `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro`) tagged to a release milestone, instead of being buried in markdown notes. `improvements.md` stays the shipped-change memory (log on ship + close the issue). Consumer projects keep their own capture — framework-repo only. First backlog: issues #22–#32 (from Retros #030/#031); planning the 1.0 milestone.

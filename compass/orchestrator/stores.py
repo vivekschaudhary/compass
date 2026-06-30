@@ -86,7 +86,7 @@ def jira_push(auth, project_key, issue_type, summary, body, key=None, transport=
         status, resp = transport(
             "PUT", f"{auth['base_url']}/rest/api/3/issue/{key}", headers, {"fields": fields})
         return {"pointer": key, "url": f"{auth['base_url']}/browse/{key}",
-                "action": "updated", "ok": status in (200, 204), "response": resp}
+                "action": "updated", "ok": status in (200, 204), "status": status, "response": resp}
     fields["project"] = {"key": project_key}
     fields["issuetype"] = {"name": issue_type}
     status, resp = transport(
@@ -94,7 +94,8 @@ def jira_push(auth, project_key, issue_type, summary, body, key=None, transport=
     new_key = resp.get("key")
     return {"pointer": new_key,
             "url": f"{auth['base_url']}/browse/{new_key}" if new_key else None,
-            "action": "created", "ok": status in (200, 201) and bool(new_key), "response": resp}
+            "action": "created", "ok": status in (200, 201) and bool(new_key),
+            "status": status, "response": resp}
 
 
 def confluence_push(auth, space, title, body, page_id=None, transport=None):
@@ -110,20 +111,21 @@ def confluence_push(auth, space, title, body, page_id=None, transport=None):
             headers, None)
         if vstatus != 200:  # [Codex review] don't mask a 401/404/429 as a version-2 PUT
             return {"pointer": page_id, "url": None, "action": "updated",
-                    "ok": False, "response": vresp}
+                    "ok": False, "status": vstatus, "response": vresp}
         ver = (vresp.get("version") or {}).get("number", 1) + 1
         status, resp = transport(
             "PUT", f"{auth['base_url']}/wiki/rest/api/content/{page_id}", headers,
             {"id": page_id, "type": "page", "title": title,
              "version": {"number": ver}, "body": storage})
         return {"pointer": page_id, "url": _conf_url(auth, resp, page_id),
-                "action": "updated", "ok": status == 200, "response": resp}
+                "action": "updated", "ok": status == 200, "status": status, "response": resp}
     status, resp = transport(
         "POST", f"{auth['base_url']}/wiki/rest/api/content", headers,
         {"type": "page", "title": title, "space": {"key": space}, "body": storage})
     new_id = resp.get("id")
     return {"pointer": new_id, "url": _conf_url(auth, resp, new_id),
-            "action": "created", "ok": status in (200, 201) and bool(new_id), "response": resp}
+            "action": "created", "ok": status in (200, 201) and bool(new_id),
+            "status": status, "response": resp}
 
 
 def _conf_url(auth, resp, page_id):

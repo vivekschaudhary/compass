@@ -25,6 +25,22 @@ from pathlib import Path
 IMPLEMENTED_BACKENDS = {"filesystem", "jira", "confluence"}
 
 
+def _push_err(res: dict) -> str:
+    """#181: a concise, actionable failure reason from a jira/confluence push result —
+    so the fallback label says WHY (401 bad creds, 404 wrong space, title exists, …)
+    instead of a blind 'push failed'. Reads the HTTP status + the API error body
+    (Confluence: message; Jira: errorMessages/errors)."""
+    import json as _json
+    r = res.get("response") or {}
+    status = res.get("status")
+    msg = (r.get("message")
+           or "; ".join(r.get("errorMessages") or [])
+           or (_json.dumps(r.get("errors")) if r.get("errors") else "")
+           or r.get("error")
+           or (str(r)[:160] if r else "no response body"))
+    return f"HTTP {status}: {msg}".strip() if status else (msg or "unknown error")[:200]
+
+
 def _config_connector(project_dir: Path, compass_dir, key: str) -> str:
     """Read `connectors.<key>` from compass/config.yaml (filesystem if unset)."""
     config = (compass_dir or project_dir / "compass") / "config.yaml"
@@ -137,7 +153,7 @@ def push_artifact(
             content = _set_frontmatter_field(content, "jira_key", res["pointer"])
             content = _set_frontmatter_field(content, "jira_url", res.get("url"))
             return _land(content, f"jira ({res['pointer']}, {res['action']})")
-        return _land(content, f"filesystem fallback — jira push failed ({res.get('action')})")
+        return _land(content, f"filesystem fallback — jira push failed: {_push_err(res)}")
 
     if connector_name == "confluence":
         auth = stores.confluence_auth()
@@ -153,7 +169,7 @@ def push_artifact(
             content = _set_frontmatter_field(content, "confluence_page_id", res["pointer"])
             content = _set_frontmatter_field(content, "confluence_url", res.get("url"))
             return _land(content, f"confluence ({res['pointer']}, {res['action']})")
-        return _land(content, "filesystem fallback — confluence push failed")
+        return _land(content, f"filesystem fallback — confluence push failed: {_push_err(res)}")
 
     return _land(content, f"filesystem fallback — {connector_name} not implemented")
 
