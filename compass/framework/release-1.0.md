@@ -34,7 +34,7 @@ The sharp edges the live dogfood exposed; these would embarrass in the pilot.
 
 ### Phase 2 — Demo surface (build on the live Atlassian win)
 - **#35** — cross-story dependencies → Jira epic + blocked-by links *(the demo-maker: six flat tickets → a managed program)*
-- **#34** — live Jira/Confluence (PROVEN 2026-06-30: 8 Confluence pages + KAN-1…6; closes when the pilot slice runs through it)
+- **#34** — live Jira/Confluence ✅ **DONE** (proven 2026-06-30: 8 Confluence pages + Jira KAN-1…6 on the pilot's Atlassian)
 - **Confluence formatting** *(new — to file):* markdown → proper storage headings, not `<pre>` blocks, so pages read like real docs
 - **#30** — cockpit self-reload (merged dashboard fixes go live without a manual restart)
 - **#29** — auto-remove a merged build's worktree
