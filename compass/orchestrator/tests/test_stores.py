@@ -150,6 +150,45 @@ class TestConnectorRouting(unittest.TestCase):
         self.assertEqual(connector._frontmatter_field(c, "jira_key"), "PROJ-9")
 
 
+class TestPushErrorSurfacing(unittest.TestCase):
+    """#181: a failed push must say WHY (status + API message), not a blind 'failed'."""
+
+    def test_confluence_401_surfaces_in_label(self):
+        with tempfile.TemporaryDirectory() as d:
+            project = Path(d)
+            os.environ.update({"CONFLUENCE_BASE_URL": "https://acme.atlassian.net",
+                               "CONFLUENCE_EMAIL": "x@x.com", "CONFLUENCE_API_TOKEN": "bad",
+                               "CONFLUENCE_SPACE": "ENG"})
+            try:
+                t = FakeTransport([(401, {"message": "Unauthorized; bad token"})])
+                label = connector.push_artifact(project, "docs/foundation/product.md",
+                                                "# P\nbody", "confluence", transport=t)
+            finally:
+                for k in ("CONFLUENCE_BASE_URL", "CONFLUENCE_EMAIL",
+                          "CONFLUENCE_API_TOKEN", "CONFLUENCE_SPACE"):
+                    os.environ.pop(k, None)
+            self.assertIn("confluence push failed", label)
+            self.assertIn("401", label)
+            self.assertIn("Unauthorized", label)
+
+    def test_jira_error_messages_surface(self):
+        with tempfile.TemporaryDirectory() as d:
+            project = Path(d)
+            os.environ.update({"JIRA_BASE_URL": "https://acme.atlassian.net",
+                               "JIRA_EMAIL": "x@x.com", "JIRA_API_TOKEN": "t",
+                               "JIRA_PROJECT": "WLT"})
+            try:
+                t = FakeTransport([(400, {"errorMessages": ["project WLT does not exist"]})])
+                label = connector.push_artifact(project, "docs/bets/B/stories/B-1/story.md",
+                                                "# S\nbody", "jira", transport=t)
+            finally:
+                for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT"):
+                    os.environ.pop(k, None)
+            self.assertIn("jira push failed", label)
+            self.assertIn("400", label)
+            self.assertIn("does not exist", label)
+
+
 class TestOnDemandPush(unittest.TestCase):
     """#34: --push / --push-bet project EXISTING artifacts to their configured backend
     (story → Jira, brief/architecture → Confluence per config.yaml), or honest
