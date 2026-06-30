@@ -8,6 +8,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **GitHub is the record for framework work; `improvements.md` frozen at #181 (#42).** Going further than #180's hybrid: forward work → a **GitHub issue**; the change → a **PR that closes it** (`Closes #N`); shipped summary → this `CHANGELOG.md` + GitHub Releases; retros read closed issues + merged PRs. `compass/workflows/improvements.md` is frozen as historical memory (retros #001–#031 reference it) — no new entries. **Consumer apps** (home-app, …) track their work in **Jira + Confluence** (the projection Compass ships, #34). Convention codified in CLAUDE.md + the improvements.md banner; retro workflow's framework-altitude source repointed to GitHub.
+- **1.0 release plan locked (`compass/framework/release-1.0.md`).** Pilot-ready definition, acceptance gate (#33 — the pilot runs E2E), 4 phases (operability · demo surface · release engineering · codify+spike) sequenced against the milestone, scope in/out, and the dual-tracker model. Milestone [1.0](https://github.com/vivekschaudhary/compass/milestone/1) (16 issues) points at it.
+
 ### Added
 
 - **On-demand projection to Jira/Confluence — `--push` / `--push-bet` (#181, toward #34).** You can now project an existing artifact (or a whole bet's product docs) to the team's Atlassian on demand, without re-running a workflow: `--push <path>` routes one artifact (story → Jira, brief/architecture/research → Confluence per `config.yaml` connectors); `--push-bet <BET>` pushes the bet's brief + architecture + research (→ Confluence) and every story (→ Jira). Credentialed from the environment (`JIRA_*`/`CONFLUENCE_*`/`ATLASSIAN_*`); uncredentialed → honest filesystem-fallback labels (no silent no-op), and the distribution pointer is stored for idempotent re-push. This makes "see the product brief + docs in Confluence/Jira" a one-liner. +4 tests (376), CONSISTENT. Live proof on the pilot's Atlassian is tracked in #34.

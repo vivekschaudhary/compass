@@ -4,15 +4,17 @@ Real friction encountered while using Compass, with the change made to fix it. T
 
 Each entry: what happened → what changed → what to watch for.
 
-## Capture going forward (#180) — GitHub issues are the live tracker (framework only)
+## ⛔ FROZEN at #181 (2026-06-30) — framework work is now tracked in GitHub (#42)
 
-As of #180, **framework** issues and improvement proposals are captured as **GitHub issues** in `vivekschaudhary/compass` (`gh issue create`), labeled `bug` / `enhancement` / `codification` / `tech-debt` / `from-retro`. This file stays the **shipped-change memory** (the "why we're shaped this way" record retros read + `consistency-check` relies on) — not a TODO list:
+This log is **historical memory** (improvements #1–#181 — the "why we're shaped this way" record that retros #001–#031 reference). It is **frozen and no longer appended.** As of 2026-06-30, all framework issues + changes live in **GitHub**:
 
-- **Discovered now, not done yet** (a bug, friction, improvement idea, codification candidate, retro watch-for) → **open a GitHub issue.** Don't bury forward work in markdown notes.
-- **Shipped** → add the entry here AND close the issue (PR `Closes #N`).
-- **Retros** file their watch-for / promotion candidates as issues (not just narrate them) — see issues #22–#32 from Retros #030/#031.
+- **The why / proposal** → a **GitHub issue** in `vivekschaudhary/compass` (`gh issue create`), labeled (`bug`/`enhancement`/`codification`/`tech-debt`/`from-retro`) and milestone-tagged.
+- **The change** → a **PR that closes it** (`Closes #N`). The issue + PR *are* the record (the why + the implementation).
+- **The shipped summary** → `CHANGELOG.md` + GitHub Releases.
+- **Retros** read **closed issues + merged PRs** in the period — not this file.
+- **Consumer apps** (home-app, …) track their work in **Jira + Confluence** (the projection Compass ships, #34), not here.
 
-Scope: **the Compass framework repo only.** Consumer projects keep their own capture (their `docs/improvements.md`, DRI logs, and their own trackers) — this convention is about how we develop Compass itself.
+Don't add new entries below. Everything ≤ #181 stays immutable. (Framework release sequencing: `compass/framework/release-1.0.md`.)
 
 ## Retro cadence
 

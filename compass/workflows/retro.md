@@ -12,7 +12,7 @@ The retro **reports**, it doesn't **prescribe**. Patterns surfaced feed future i
 
 | Altitude | What it retros on | Source log | Archive path | Default cadence |
 |---|---|---|---|---|
-| `framework` | Compass framework evolution | `compass/workflows/improvements.md` | `compass/workflows/retros/<date>-retro-<NNN>-<period>.md` | Every 10 improvements (was 5 → 10 at #146 — fewer, deeper reviews) |
+| `framework` | Compass framework evolution | **GitHub: closed issues + merged PRs** in `vivekschaudhary/compass` for the period (#42 — `compass/workflows/improvements.md` is **frozen at #181**, the historical source for retros ≤ #031 only) | `compass/workflows/retros/<date>-retro-<NNN>-<period>.md` | Every ~10 shipped changes (was 5 → 10 at #146) |
 | `project` | Cross-bet patterns within a consuming project | `docs/improvements.md` | `docs/retros/<NNN>-<period>.md` | Every 5 improvements (project's own) |
 | `bet` | Bet outcome + DRI log + scope drift | `docs/bets/<bet-id>/` (DRI logs + outcome) | `docs/bets/<bet-id>/retro.md` | At bet outcome transition (won / learning / inconclusive) |
 | `role` | Per-role / per-agent activity patterns | `docs/role-activity/<role>.md` | `docs/retros/role-<role>-<NNN>.md` | Every N activity entries (default ≥5) |

@@ -49,9 +49,17 @@ You have filesystem access via the Read / Edit / Write tools and shell access vi
 
 These preferences are runtime-shape, not role-shape — they let you execute agent tasks efficiently on this host. They do not override the task's own discipline (refusal rules, gates, postconditions).
 
-## Capturing framework work (#180) — GitHub issues, tagged to releases
+## Capturing framework work — GitHub is the record (#42, supersedes #180)
 
-For **framework** work (this repo only), capture issues + improvement proposals as **GitHub issues** in `vivekschaudhary/compass` (`gh issue create`), labeled `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro` and tagged to a **release milestone** (1.0, …). Don't bury forward work in markdown notes. `compass/workflows/improvements.md` stays the **shipped-change memory** (log the entry on ship AND close the issue via `Closes #N`). Retros file their watch-for / promotion candidates as issues. Consumer projects keep their own capture — this convention is for developing Compass itself. (Full description: improvements.md header.)
+All **framework** work (this repo only) is tracked in **GitHub** — `compass/workflows/improvements.md` is **frozen at #181** (historical only, don't append):
+
+- **The why / proposal** → a **GitHub issue** in `vivekschaudhary/compass` (`gh issue create`), labeled `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro` and tagged to a **release milestone** (1.0, …).
+- **The change** → a **PR that closes it** (`Closes #N`). The issue + PR are the record.
+- **The shipped summary** → `CHANGELOG.md` + GitHub Releases. **No improvements.md entry.**
+- **Retros** read closed issues + merged PRs for the period.
+- **Consumer apps** (home-app, …) track their work in **Jira + Confluence** (the projection Compass ships, #34), not GitHub issues.
+
+So: framework → GitHub issues + PRs; consumer work → Jira/Conf. (1.0 sequencing: `compass/framework/release-1.0.md`.)
 
 ## Refusal rules (host-runtime level — generic, agent-task-specific rules live in agent files)
 
