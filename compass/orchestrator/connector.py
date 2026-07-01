@@ -174,6 +174,94 @@ def push_artifact(
     return _land(content, f"filesystem fallback — {connector_name} not implemented")
 
 
+def _frontmatter_list(content: str, field: str) -> list:
+    """#35: read a frontmatter list field (`dependencies`, `area_tags`) as a list of ids
+    — inline (`[a, b]`/`a, b`) + block (`  - a`) forms; drops `<placeholder>` items."""
+    fm = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    if not fm:
+        return []
+    m = re.search(rf"^{re.escape(field)}[ \t]*:[ \t]*(.*(?:\n[ \t]+-.*)*)$",
+                  fm.group(1), re.MULTILINE)
+    if not m:
+        return []
+    inline, _, rest = m.group(1).partition("\n")
+    items = list(inline.strip().strip("[]").split(","))
+    for line in rest.splitlines():
+        lm = re.match(r"^[ \t]+-\s*(.*)$", line)
+        if lm:
+            items.append(lm.group(1))
+    return [x.strip().strip("\"'") for x in items
+            if x.strip().strip("\"'") and not x.strip().startswith("<")]
+
+
+def project_bet_jira_structure(project_dir, bet_id: str, transport=None) -> list:
+    """#35: after a bet's stories are projected to Jira (flat issues with stored
+    `jira_key`s), wire the STRUCTURE so the program is visible in Jira, not a flat pile:
+      1. a bet **Epic** (created once; pointer `jira_epic_key` stored on brief.md),
+      2. each story **parented** under that epic,
+      3. **'is blocked by'** links from each story's `dependencies`.
+    Idempotent — reuses the epic pointer, re-parenting is a no-op PUT, and existing
+    links are skipped. Reads the on-disk `jira_key`s (only stories already projected get
+    wired). No-op with a reason when Jira isn't configured. Returns action strings."""
+    import os
+    from pathlib import Path as _Path
+    from . import stores
+    auth = stores.jira_auth()
+    project_key = os.environ.get("JIRA_PROJECT")
+    if not auth or not project_key:
+        return ["structure skipped — jira not configured (JIRA_* / JIRA_PROJECT)"]
+    bet_dir = _Path(project_dir) / "docs" / "bets" / bet_id
+    actions = []
+
+    # 1) ensure the bet Epic
+    brief = bet_dir / "brief.md"
+    bc = brief.read_text(encoding="utf-8") if brief.exists() else ""
+    epic_key = _frontmatter_field(bc, "jira_epic_key")
+    if not epic_key:
+        title = _artifact_title(bc, f"docs/bets/{bet_id}/brief.md") if bc else bet_id
+        res = stores.jira_push(auth, project_key, "Epic", f"{bet_id}: {title}",
+                               bc or f"# {bet_id}", transport=transport)
+        if res.get("ok") and res.get("pointer"):
+            epic_key = res["pointer"]
+            if brief.exists():
+                bc = _set_frontmatter_field(bc, "jira_epic_key", epic_key)
+                bc = _set_frontmatter_field(bc, "jira_epic_url", res.get("url"))
+                brief.write_text(bc, encoding="utf-8")
+            actions.append(f"epic {epic_key} created")
+        else:
+            return actions + [f"epic create failed: {_push_err(res)}"]
+    else:
+        actions.append(f"epic {epic_key} (reused)")
+
+    # gather already-projected stories: story_id -> (jira_key, [deps])
+    story_key, story_deps = {}, {}
+    sdir = bet_dir / "stories"
+    for sf in sorted(sdir.glob("*/story.md")) if sdir.is_dir() else []:
+        c = sf.read_text(encoding="utf-8")
+        jk = _frontmatter_field(c, "jira_key")
+        if jk:
+            story_key[sf.parent.name] = jk
+            story_deps[sf.parent.name] = _frontmatter_list(c, "dependencies")
+
+    # 2) parent each story under the epic
+    for sid, jk in story_key.items():
+        res = stores.jira_set_parent(auth, jk, epic_key, transport=transport)
+        actions.append(f"{jk} → under {epic_key}" if res.get("ok")
+                       else f"{jk} parent failed: {_push_err(res)}")
+
+    # 3) 'is blocked by' links from dependencies (idempotent)
+    for sid, jk in story_key.items():
+        existing = stores.jira_links_of(auth, jk, transport=transport)
+        for dep in story_deps.get(sid, []):
+            dk = story_key.get(dep)
+            if not dk or ("Blocks", dk) in existing:
+                continue
+            res = stores.jira_link(auth, inward_key=jk, outward_key=dk, transport=transport)
+            actions.append(f"{jk} ⟵ blocked by {dk}" if res.get("ok")
+                           else f"link {jk}⟵{dk} failed: {_push_err(res)}")
+    return actions
+
+
 def extract_artifact_body(step_output: str) -> str:
     """
     Extract the artifact draft from an agent step output.

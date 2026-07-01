@@ -189,6 +189,112 @@ class TestPushErrorSurfacing(unittest.TestCase):
             self.assertIn("does not exist", label)
 
 
+class TestJiraStructureStores(unittest.TestCase):
+    """#35: the Jira structural primitives — epic parenting + blocked-by links."""
+
+    def test_set_parent_puts_parent_field(self):
+        t = FakeTransport([(204, {})])
+        res = stores.jira_set_parent(AUTH, "KAN-2", "KAN-10", transport=t)
+        self.assertTrue(res["ok"])
+        self.assertEqual(t.calls[0]["method"], "PUT")
+        self.assertIn("/issue/KAN-2", t.calls[0]["url"])
+        self.assertEqual(t.calls[0]["body"]["fields"]["parent"], {"key": "KAN-10"})
+
+    def test_link_blocked_by_direction(self):
+        # inward is_blocked_by outward: KAN-4 (inward) is blocked by KAN-3 (outward)
+        t = FakeTransport([(201, {})])
+        res = stores.jira_link(AUTH, inward_key="KAN-4", outward_key="KAN-3", transport=t)
+        self.assertTrue(res["ok"])
+        body = t.calls[0]["body"]
+        self.assertEqual(body["type"]["name"], "Blocks")
+        self.assertEqual(body["inwardIssue"]["key"], "KAN-4")
+        self.assertEqual(body["outwardIssue"]["key"], "KAN-3")
+
+    def test_links_of_parses_existing(self):
+        t = FakeTransport([(200, {"fields": {"issuelinks": [
+            {"type": {"name": "Blocks"}, "outwardIssue": {"key": "KAN-3"}}]}})])
+        self.assertEqual(stores.jira_links_of(AUTH, "KAN-4", transport=t),
+                         {("Blocks", "KAN-3")})
+
+
+class TestProjectBetStructure(unittest.TestCase):
+    """#35: project_bet_jira_structure wires epic + parents + blocked-by from the stored
+    jira_keys, idempotently."""
+
+    class _Routing:
+        def __init__(self):
+            self.calls = []
+        def __call__(self, method, url, headers, body):
+            self.calls.append((method, url, body))
+            if method == "POST" and url.endswith("/issue"):
+                return (201, {"key": "KAN-EPIC"})
+            if method == "PUT" and "/issue/" in url:
+                return (204, {})
+            if method == "GET" and "issuelinks" in url:
+                return (200, {"fields": {"issuelinks": []}})
+            if method == "POST" and url.endswith("/issueLink"):
+                return (201, {})
+            return (200, {})
+
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp())
+        self._saved = {}
+        for v in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT"):
+            self._saved[v] = os.environ.get(v)
+        os.environ.update({"JIRA_BASE_URL": "https://acme.atlassian.net",
+                           "JIRA_EMAIL": "x@x.com", "JIRA_API_TOKEN": "t",
+                           "JIRA_PROJECT": "KAN"})
+        b = self.project / "docs" / "bets" / "WLT-27"
+        (b / "stories" / "WLT-27-3").mkdir(parents=True)
+        (b / "stories" / "WLT-27-4").mkdir(parents=True)
+        (b / "brief.md").write_text("---\nid: WLT-27\n---\n# The Bet\n", encoding="utf-8")
+        (b / "stories" / "WLT-27-3" / "story.md").write_text(
+            "---\nid: WLT-27-3\njira_key: KAN-3\ndependencies: []\n---\n# API\n", encoding="utf-8")
+        (b / "stories" / "WLT-27-4" / "story.md").write_text(
+            "---\nid: WLT-27-4\njira_key: KAN-4\ndependencies: [WLT-27-3]\n---\n# Wizard\n",
+            encoding="utf-8")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.project, ignore_errors=True)
+        for k, v in self._saved.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+    def test_wires_epic_parents_and_blocked_by(self):
+        t = self._Routing()
+        actions = connector.project_bet_jira_structure(self.project, "WLT-27", transport=t)
+        # epic created + pointer written back to brief.md
+        self.assertIn("epic KAN-EPIC created", actions)
+        brief = (self.project / "docs" / "bets" / "WLT-27" / "brief.md").read_text()
+        self.assertIn("jira_epic_key: KAN-EPIC", brief)
+        # both stories parented, and KAN-4 blocked by KAN-3
+        self.assertTrue(any("KAN-3 → under KAN-EPIC" in a for a in actions))
+        self.assertTrue(any("KAN-4 ⟵ blocked by KAN-3" in a for a in actions))
+        # the issueLink call used the right direction
+        link = [c for c in t.calls if c[1].endswith("/issueLink")]
+        self.assertEqual(len(link), 1)
+        self.assertEqual(link[0][2]["inwardIssue"]["key"], "KAN-4")
+        self.assertEqual(link[0][2]["outwardIssue"]["key"], "KAN-3")
+
+    def test_idempotent_epic_reuse_and_skip_existing_link(self):
+        # brief already has the epic; the link already exists → no epic create, no re-link
+        b = self.project / "docs" / "bets" / "WLT-27"
+        (b / "brief.md").write_text("---\nid: WLT-27\njira_epic_key: KAN-EPIC\n---\n# The Bet\n",
+                                    encoding="utf-8")
+        class _Existing(self._Routing):
+            def __call__(self, method, url, headers, body):
+                if method == "GET" and "issuelinks" in url:
+                    self.calls.append((method, url, body))
+                    return (200, {"fields": {"issuelinks": [
+                        {"type": {"name": "Blocks"}, "outwardIssue": {"key": "KAN-3"}}]}})
+                return super().__call__(method, url, headers, body)
+        t = _Existing()
+        actions = connector.project_bet_jira_structure(self.project, "WLT-27", transport=t)
+        self.assertIn("epic KAN-EPIC (reused)", actions)
+        self.assertFalse(any(c[1].endswith("/issue") and c[0] == "POST" for c in t.calls))  # no epic create
+        self.assertFalse(any(c[1].endswith("/issueLink") for c in t.calls))  # link skipped
+
+
 class TestOnDemandPush(unittest.TestCase):
     """#34: --push / --push-bet project EXISTING artifacts to their configured backend
     (story → Jira, brief/architecture → Confluence per config.yaml), or honest

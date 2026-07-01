@@ -2622,6 +2622,15 @@ def main(argv=None):
                   "project live:\n  JIRA_BASE_URL/EMAIL/API_TOKEN + JIRA_PROJECT  ·  "
                   "CONFLUENCE_BASE_URL/EMAIL/API_TOKEN + CONFLUENCE_SPACE  (or ATLASSIAN_* "
                   "shared).", file=sys.stderr)
+        # #35: after a whole-bet push, wire the Jira STRUCTURE — epic + stories under it
+        # + 'is blocked by' links from dependencies — so the program is visible, not flat.
+        if args.push_bet and not any_fallback:
+            from .connector import project_bet_jira_structure
+            struct = project_bet_jira_structure(project_dir, args.push_bet)
+            if struct:
+                print("\nJira structure (#35 — epic · parents · blocked-by):")
+                for a in struct:
+                    print(f"  · {a}")
         return
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──

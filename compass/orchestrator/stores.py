@@ -98,6 +98,49 @@ def jira_push(auth, project_key, issue_type, summary, body, key=None, transport=
             "status": status, "response": resp}
 
 
+def jira_set_parent(auth, key, parent_key, transport=None):
+    """#35: put issue `key` under Epic `parent_key` (team-managed hierarchy uses the
+    `parent` field). Idempotent (re-setting the same parent is a no-op PUT). Returns
+    {ok, status, response}."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Content-Type": "application/json"}
+    status, resp = transport("PUT", f"{auth['base_url']}/rest/api/3/issue/{key}",
+                             headers, {"fields": {"parent": {"key": parent_key}}})
+    return {"ok": status in (200, 204), "status": status, "response": resp}
+
+
+def jira_link(auth, inward_key, outward_key, link_type="Blocks", transport=None):
+    """#35: create an issue link — with type 'Blocks', `outward_key` **blocks**
+    `inward_key` (i.e. inward 'is blocked by' outward). Use inward = the dependent
+    story, outward = its dependency. Returns {ok, status, response}."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Content-Type": "application/json"}
+    status, resp = transport(
+        "POST", f"{auth['base_url']}/rest/api/3/issueLink", headers,
+        {"type": {"name": link_type},
+         "inwardIssue": {"key": inward_key}, "outwardIssue": {"key": outward_key}})
+    return {"ok": status in (200, 201), "status": status, "response": resp}
+
+
+def jira_links_of(auth, key, transport=None):
+    """#35: existing issue links of `key` as a set of (link_type_name, other_key), so
+    re-linking is idempotent. Best-effort — empty set on any error."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Accept": "application/json"}
+    status, resp = transport(
+        "GET", f"{auth['base_url']}/rest/api/3/issue/{key}?fields=issuelinks", headers, None)
+    if status != 200:
+        return set()
+    out = set()
+    for lk in ((resp.get("fields") or {}).get("issuelinks") or []):
+        tname = (lk.get("type") or {}).get("name")
+        for side in ("inwardIssue", "outwardIssue"):
+            other = (lk.get(side) or {}).get("key")
+            if other:
+                out.add((tname, other))
+    return out
+
+
 def confluence_push(auth, space, title, body, page_id=None, transport=None):
     """Create (or update, when `page_id` is set) a Confluence page. Idempotent via
     `page_id`. Returns {pointer, url, action, ok, response}."""
