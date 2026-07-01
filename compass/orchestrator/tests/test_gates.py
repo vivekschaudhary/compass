@@ -26,6 +26,7 @@ from compass.orchestrator.run import (
     _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
     _ensure_work_worktree, prune_worktrees, _module_mismatch_warning,
+    _read_story_fm_list, _overlapping_inflight_builds,
 )
 from compass.orchestrator.logger import ensure_runs_dir, log_step
 
@@ -593,6 +594,66 @@ class TestTelemetryGitignore(unittest.TestCase):
         gi = self.project / "docs" / "orchestrator-runs" / ".gitignore"
         self.assertTrue(gi.exists())                                  # telemetry self-ignores
         self.assertTrue((self.project / "docs" / "orchestrator-runs" / "runs.jsonl").exists())
+
+
+class TestSiblingOverlap(unittest.TestCase):
+    """#26: a story-scoped build that overlaps an in-flight build of the same module
+    (shared area_tags, or a declared dependency) warns — same-module stories merge
+    serially."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.project = Path(self._tmp.name)
+        self.stories = self.project / "docs" / "bets" / "WLT-27" / "stories"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _story(self, sid, *, area_tags="[]", dependencies="[]"):
+        d = self.stories / sid
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "story.md").write_text(
+            f"---\nid: {sid}\narea_tags: {area_tags}\ndependencies: {dependencies}\n---\n# {sid}\n",
+            encoding="utf-8")
+
+    def _inflight(self, sid):
+        return {f"build--{sid}--x": {"workflow": "build", "ended": False, "story_id": sid}}
+
+    def test_read_fm_list_inline_and_block(self):
+        self._story("WLT-27-2", area_tags="[accounts, csv]")
+        self.assertEqual(_read_story_fm_list(self.project, "WLT-27", "WLT-27-2", "area_tags"),
+                         {"accounts", "csv"})
+
+    def test_shared_area_overlaps(self):
+        self._story("WLT-27-3", area_tags="[accounts, csv]")
+        self._story("WLT-27-4", area_tags="[accounts]")
+        overlaps = _overlapping_inflight_builds(self.project, "WLT-27", "WLT-27-4",
+                                                runs=self._inflight("WLT-27-3"))
+        self.assertEqual(len(overlaps), 1)
+        self.assertEqual(overlaps[0][0], "WLT-27-3")
+        self.assertIn("shared area: accounts", overlaps[0][1])
+
+    def test_dependency_overlaps(self):
+        self._story("WLT-27-3", area_tags="[]")
+        self._story("WLT-27-4", area_tags="[]", dependencies="[WLT-27-3]")
+        overlaps = _overlapping_inflight_builds(self.project, "WLT-27", "WLT-27-4",
+                                                runs=self._inflight("WLT-27-3"))
+        self.assertEqual([o[0] for o in overlaps], ["WLT-27-3"])
+        self.assertIn("dependency", overlaps[0][1])
+
+    def test_disjoint_no_overlap(self):
+        self._story("WLT-27-3", area_tags="[dashboard]")
+        self._story("WLT-27-4", area_tags="[accounts]")
+        self.assertEqual(
+            _overlapping_inflight_builds(self.project, "WLT-27", "WLT-27-4",
+                                         runs=self._inflight("WLT-27-3")), [])
+
+    def test_ended_build_and_self_ignored(self):
+        self._story("WLT-27-4", area_tags="[accounts]")
+        runs = {"a": {"workflow": "build", "ended": True, "story_id": "WLT-27-3"},   # ended
+                "b": {"workflow": "build", "ended": False, "story_id": "WLT-27-4"}}  # self
+        self.assertEqual(
+            _overlapping_inflight_builds(self.project, "WLT-27", "WLT-27-4", runs=runs), [])
 
 
 if __name__ == "__main__":
