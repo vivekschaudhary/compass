@@ -2142,6 +2142,31 @@ def _run_workflow(
 # CLI entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _module_mismatch_warning(compass_dir, running=None) -> str:
+    """#40: warn when the RUNNING orchestrator code is a VENDORED framework copy that
+    differs from --compass-dir — the footgun where `python -m compass.orchestrator.run`
+    from a consumer dir loads that consumer's stale `compass/` (so new flags error as
+    'unrecognized') even though --compass-dir names the real framework. The running
+    code lives at `compass/orchestrator/run.py`, so its framework dir is
+    `Path(__file__).parents[1]` (overridable via `running` for tests); we only warn when
+    that dir is itself a framework checkout (has `workflows/`/`agents/` siblings) — NOT
+    an installed package in site-packages — so a clean `pip install -e .` never
+    false-warns. Returns the warning string, or None."""
+    if not compass_dir:
+        return None
+    running = (Path(running) if running else Path(__file__).parents[1]).resolve()
+    target = Path(compass_dir).resolve()
+    if running == target:
+        return None
+    if (running / "workflows").is_dir() or (running / "agents").is_dir():
+        return (f"⚠ stale-module risk (#40): running orchestrator code from {running}, "
+                f"but --compass-dir points at {target}. You're likely running a VENDORED "
+                f"compass copy (e.g. from a consumer dir), not the framework you named — "
+                f"new flags/fixes may be missing. Run from the compass repo dir, or "
+                f"`pip install -e .` there for a cwd-independent `compass-run`.")
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="compass run",
@@ -2466,6 +2491,11 @@ def main(argv=None):
         help="Reviewer feedback recorded with --reject (or --approve).",
     )
     args = parser.parse_args(argv)
+
+    # #40: loud heads-up if we're running a vendored/stale compass module vs --compass-dir.
+    _mm = _module_mismatch_warning(args.compass_dir)
+    if _mm:
+        print(_mm, file=sys.stderr)
 
     # ── manual approval bridge (no workflow needed) ──────────────────────────
     if args.approve or args.reject:

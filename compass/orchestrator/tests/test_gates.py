@@ -25,7 +25,7 @@ from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
     _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
-    _ensure_work_worktree, prune_worktrees,
+    _ensure_work_worktree, prune_worktrees, _module_mismatch_warning,
 )
 from compass.orchestrator.logger import ensure_runs_dir, log_step
 
@@ -528,6 +528,44 @@ class TestWorktreeIsolation(unittest.TestCase):
         self.assertEqual(len(removed), 1)        # exactly the clean one
         self.assertFalse(Path(clean).exists())   # finished worktree removed
         self.assertTrue(Path(dirty).exists())    # in-flight worktree kept
+
+
+class TestModuleMismatchWarning(unittest.TestCase):
+    """#40: warn when the running orchestrator is a vendored framework copy that differs
+    from --compass-dir, but never false-warn for an installed (site-packages) module."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        # a "vendored framework copy" = a compass dir with workflows/ (+ agents/)
+        self.vendored = self.root / "home-app" / "compass"
+        (self.vendored / "workflows").mkdir(parents=True)
+        (self.vendored / "agents").mkdir(parents=True)
+        # the real target framework
+        self.real = self.root / "compass" / "compass"
+        (self.real / "workflows").mkdir(parents=True)
+        # an installed-package dir (no workflows/agents — like site-packages)
+        self.installed = self.root / "site-packages" / "compass"
+        (self.installed / "orchestrator").mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_none_without_compass_dir(self):
+        self.assertIsNone(_module_mismatch_warning(None, running=self.vendored))
+
+    def test_none_when_running_matches_target(self):
+        self.assertIsNone(_module_mismatch_warning(str(self.real), running=self.real))
+
+    def test_warns_on_vendored_mismatch(self):
+        w = _module_mismatch_warning(str(self.real), running=self.vendored)
+        self.assertIsNotNone(w)
+        self.assertIn("stale-module risk", w)
+        self.assertIn(str(self.vendored), w)
+
+    def test_no_warn_for_installed_package(self):
+        # mismatch, but the running dir isn't a framework checkout (no workflows/agents)
+        self.assertIsNone(_module_mismatch_warning(str(self.real), running=self.installed))
 
 
 class TestTelemetryGitignore(unittest.TestCase):
