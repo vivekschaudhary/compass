@@ -2659,6 +2659,11 @@ def main(argv=None):
             reaped = halt_stale_runs()  # the tower reaps zombies when you look
             if reaped:
                 print(f"[reaped {len(reaped)} stale run(s): {', '.join(reaped)}]\n")
+            # #29: the tower also self-heals finished build worktrees — a merged/done
+            # build's worktree is clean, so it's removed when you look (like stale runs).
+            pruned = prune_worktrees(project_dir)
+            if pruned:
+                print(f"[pruned {len(pruned)} finished worktree(s)]\n")
             print(render_wbs(build_wbs(project_dir, with_conformance=True)))
         if args.log:
             print_run_table(project_dir)

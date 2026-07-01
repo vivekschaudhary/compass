@@ -383,6 +383,27 @@ class TestHtmlCockpit(unittest.TestCase):
         self.assertNotIn("if(paused)return", out)   # old per-closure flag is gone
         self.assertIsInstance(cockpit.build_page(self._events(), snapshot_ts="t"), bytes)
 
+
+class TestCockpitStaleness(unittest.TestCase):
+    """#30: the cockpit warns when its own code changed on disk since it started, so a
+    merged dashboard fix doesn't sit invisible until a manual restart."""
+
+    def test_is_stale_none_and_future(self):
+        self.assertFalse(cockpit._code_is_stale(None))          # not tracking → never stale
+        import time
+        self.assertFalse(cockpit._code_is_stale(time.time() + 10_000))  # started 'after' → fresh
+
+    def test_is_stale_when_code_newer(self):
+        # started long ago → the real code mtime is newer → stale
+        self.assertTrue(cockpit._code_is_stale(1.0))
+
+    def test_banner_shown_only_when_stale(self):
+        stale = cockpit.render_html({}, snapshot_ts="t", code_stale=True)
+        fresh = cockpit.render_html({}, snapshot_ts="t", code_stale=False)
+        self.assertIn("Dashboard code was updated on disk", stale)
+        self.assertIn("relaunch", stale)
+        self.assertNotIn("Dashboard code was updated on disk", fresh)
+
     def test_step_rows_parity_text_and_html(self):
         # _run_step_rows is the single source both renderers use → no drift.
         run = {"run_id": "r", "project": "home", "workflow": "fix", "bet_id": None,
