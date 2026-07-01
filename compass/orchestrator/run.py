@@ -751,14 +751,26 @@ def _collect_input(step_label: str, inline_context: str = "", non_interactive: b
     return "\n".join(lines)
 
 
+def _step_dir(project_dir: Path, workflow: str, run_id: str = None) -> Path:
+    """#27: the dir holding a run's step artifacts. **Run-scoped** —
+    docs/orchestrator-runs/<workflow>/<run_id>/ — so concurrent same-workflow builds
+    don't clobber each other's `step-*.md` (the collision Retro #031 flagged). Falls
+    back to the flat <workflow>/ dir when no run_id (legacy / non-run contexts). Drops
+    the #175 .gitignore via ensure_runs_dir."""
+    from .logger import ensure_runs_dir
+    d = ensure_runs_dir(project_dir) / workflow
+    if run_id:
+        d = d / run_id.replace("/", "__")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _write_artifact(
     project_dir: Path, workflow: str, step_num: int,
-    agent: str, task: str, content: str,
+    agent: str, task: str, content: str, run_id: str = None,
 ) -> Path:
-    """Write step output to docs/orchestrator-runs/<workflow>/step-<N>-<agent>-<task>.md."""
-    from .logger import ensure_runs_dir
-    run_dir = ensure_runs_dir(project_dir) / workflow  # #175: drops the .gitignore
-    run_dir.mkdir(parents=True, exist_ok=True)
+    """Write step output to docs/orchestrator-runs/<workflow>/<run_id>/step-<N>-<agent>-<task>.md (#27)."""
+    run_dir = _step_dir(project_dir, workflow, run_id)
     out_file = run_dir / f"step-{step_num:02d}-{agent}-{task}.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     header = (
@@ -770,12 +782,10 @@ def _write_artifact(
 
 
 def _write_rejection_note(
-    project_dir: Path, workflow: str, step_num: int, feedback: str,
+    project_dir: Path, workflow: str, step_num: int, feedback: str, run_id: str = None,
 ) -> Path:
-    """Write a HITL rejection note alongside the step artifact."""
-    from .logger import ensure_runs_dir
-    run_dir = ensure_runs_dir(project_dir) / workflow  # #175: drops the .gitignore
-    run_dir.mkdir(parents=True, exist_ok=True)
+    """Write a HITL rejection note alongside the step artifact (run-scoped, #27)."""
+    run_dir = _step_dir(project_dir, workflow, run_id)
     note_file = run_dir / f"step-{step_num:02d}-hitl-rejected.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     content = (
@@ -889,10 +899,14 @@ def _manual_hitl_decision(
 
 
 def _load_prior_outputs_from_disk(
-    project_dir: Path, workflow: str, steps: list, up_to_step: int,
+    project_dir: Path, workflow: str, steps: list, up_to_step: int, run_id: str = None,
 ) -> list:
-    """Load step outputs from artifact files for steps < up_to_step."""
-    run_dir = project_dir / "docs" / "orchestrator-runs" / workflow
+    """Load step outputs from artifact files for steps < up_to_step. Reads the
+    run-scoped dir when `run_id` is given (#27), else the legacy flat <workflow>/ dir —
+    and falls back to flat if the run-scoped dir has no artifacts (resuming a pre-#27 run)."""
+    run_dir = _step_dir(project_dir, workflow, run_id)
+    if run_id and not any(run_dir.glob("step-*.md")):
+        run_dir = project_dir / "docs" / "orchestrator-runs" / workflow   # legacy fallback
     prior_outputs = []
     for step in steps:
         if step.number >= up_to_step:
@@ -1568,7 +1582,7 @@ def _run_workflow(
     if from_step is not None:
         print(f"\nResuming from step {from_step} — loading prior outputs from disk …")
         disk_outputs = _load_prior_outputs_from_disk(
-            project_dir, workflow_name, steps, from_step
+            project_dir, workflow_name, steps, from_step, run_id
         )
         prior_outputs = list(initial_prior_outputs or []) + disk_outputs
         print(f"  {len(disk_outputs)} prior step(s) loaded.\n")
@@ -1918,7 +1932,7 @@ def _run_workflow(
             if not result["approved"]:
                 if not no_write:
                     note_path = _write_rejection_note(
-                        project_dir, workflow_name, step.number, result["feedback"]
+                        project_dir, workflow_name, step.number, result["feedback"], run_id
                     )
                     print(f"[rejection note → {note_path.relative_to(project_dir)}]")
                 print(
@@ -2120,7 +2134,7 @@ def _run_workflow(
         if not no_write:
             artifact_path = _write_artifact(
                 project_dir, workflow_name, step.number,
-                step.agent, step.task, result,
+                step.agent, step.task, result, run_id,
             )
             rel = str(artifact_path.relative_to(project_dir))
             print(f"[artifact → {rel}]")

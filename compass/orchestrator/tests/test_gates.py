@@ -27,6 +27,7 @@ from compass.orchestrator.run import (
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
     _ensure_work_worktree, prune_worktrees, _module_mismatch_warning,
     _read_story_fm_list, _overlapping_inflight_builds,
+    _step_dir, _write_artifact,
 )
 from compass.orchestrator.logger import ensure_runs_dir, log_step
 
@@ -654,6 +655,44 @@ class TestSiblingOverlap(unittest.TestCase):
                 "b": {"workflow": "build", "ended": False, "story_id": "WLT-27-4"}}  # self
         self.assertEqual(
             _overlapping_inflight_builds(self.project, "WLT-27", "WLT-27-4", runs=runs), [])
+
+
+class TestRunScopedArtifacts(unittest.TestCase):
+    """#27: concurrent same-workflow runs write step artifacts to run-scoped dirs so
+    they don't clobber each other's step-*.md."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.project = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_step_dir_run_scoped_vs_flat(self):
+        flat = _step_dir(self.project, "build")
+        scoped = _step_dir(self.project, "build", "build--WLT-27-2--x")
+        self.assertTrue(str(flat).endswith("orchestrator-runs/build"))
+        self.assertTrue(str(scoped).endswith("orchestrator-runs/build/build--WLT-27-2--x"))
+        self.assertTrue(scoped.is_dir())
+
+    def test_concurrent_runs_dont_clobber(self):
+        a = _write_artifact(self.project, "build", 1, "engineer", "implement-story",
+                            "AAA content", "build--WLT-27-2--x")
+        b = _write_artifact(self.project, "build", 1, "engineer", "implement-story",
+                            "BBB content", "build--WLT-27-3--y")
+        self.assertNotEqual(a, b)                       # different run-scoped paths
+        self.assertIn("AAA content", a.read_text())
+        self.assertIn("BBB content", b.read_text())     # NOT overwritten by the other run
+
+    def test_run_artifact_dir_prefers_per_run_then_flat(self):
+        from compass.orchestrator.cockpit import _run_artifact_dir
+        rid = "build--WLT-27-4--z"
+        _write_artifact(self.project, "build", 1, "e", "t", "x", rid)  # creates per-run dir
+        run = {"project_dir": str(self.project), "workflow": "build", "run_id": rid}
+        self.assertTrue(str(_run_artifact_dir(run)).endswith(rid))     # per-run preferred
+        # a run with no per-run dir → flat fallback
+        legacy = {"project_dir": str(self.project), "workflow": "build", "run_id": "nope--1"}
+        self.assertTrue(str(_run_artifact_dir(legacy)).endswith("orchestrator-runs/build"))
 
 
 if __name__ == "__main__":
