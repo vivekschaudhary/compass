@@ -1200,6 +1200,69 @@ def _story_human_deliverable_blockers(project_dir: Path, bet_id: str, story_id: 
     return blockers
 
 
+def _read_story_fm_list(project_dir: Path, bet_id: str, story_id: str, field: str) -> set:
+    """#26: read a story's frontmatter list field (e.g. `area_tags`, `dependencies`) as a
+    set of ids/tags. Handles inline (`[a, b]`/`a, b`) + block (`  - a`) forms; drops
+    template placeholders (`<…>`). Empty set on any miss."""
+    try:
+        content = (Path(project_dir) / "docs" / "bets" / bet_id / "stories"
+                   / story_id / "story.md").read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    fm = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    if not fm:
+        return set()
+    m = re.search(rf"^{re.escape(field)}[ \t]*:[ \t]*(.*(?:\n[ \t]+-.*)*)$",
+                  fm.group(1), re.MULTILINE)
+    if not m:
+        return set()
+    inline, _, rest = m.group(1).partition("\n")
+    items = list(inline.strip().strip("[]").split(","))
+    for line in rest.splitlines():
+        lm = re.match(r"^[ \t]+-\s*(.*)$", line)
+        if lm:
+            items.append(lm.group(1))
+    return {x.strip().strip("\"'") for x in items
+            if x.strip().strip("\"'") and not x.strip().startswith("<")}
+
+
+def _overlapping_inflight_builds(project_dir: Path, bet_id: str, story_id: str,
+                                 runs: dict = None) -> list:
+    """#26: a story-scoped build that overlaps another IN-FLIGHT build of the SAME module
+    will conflict at merge — same-module stories merge serially (live: WLT-27-2/3/4 on
+    the CSV module). Overlap = shared `area_tags`, or a declared dependency, between the
+    target story and an in-flight build's story. Returns [(other_story_id, reason)].
+    `runs` is the folded spine (injectable for tests). Best-effort; never raises."""
+    if not (bet_id and story_id):
+        return []
+    target_tags = _read_story_fm_list(project_dir, bet_id, story_id, "area_tags")
+    target_deps = _read_story_fm_list(project_dir, bet_id, story_id, "dependencies")
+    if runs is None:
+        try:
+            from . import events as ev
+            from .cockpit import fold_runs
+            runs = fold_runs(ev.load_events())
+        except Exception:
+            return []
+    overlaps = []
+    for r in runs.values():
+        if r.get("workflow") != "build" or r.get("ended"):
+            continue
+        other = r.get("story_id")
+        if not other or other == story_id:
+            continue
+        reasons = []
+        shared = target_tags & _read_story_fm_list(project_dir, bet_id, other, "area_tags")
+        if shared:
+            reasons.append("shared area: " + ", ".join(sorted(shared)))
+        other_deps = _read_story_fm_list(project_dir, bet_id, other, "dependencies")
+        if other in target_deps or story_id in other_deps:
+            reasons.append("a declared dependency between them")
+        if reasons:
+            overlaps.append((other, "; ".join(reasons)))
+    return overlaps
+
+
 def _load_story_context(project_dir: Path, bet_id: str, story_id: str) -> str:
     """#172: focused context for a story-scoped build — the parent bet's brief +
     architecture (the load-bearing decisions) plus the FULL target story, with an
@@ -1435,6 +1498,18 @@ def _run_workflow(
                       file=sys.stderr)
                 sys.exit(3)
             print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
+
+    # ── sibling-overlap warning (#26) — same-module stories merge serially ──────────
+    # A story-scoped build that overlaps another IN-FLIGHT build of the same module will
+    # conflict at merge (live: WLT-27-4 vs the CSV-module siblings). Warn loudly but do
+    # NOT block — the operator may know what they're doing; the PM should have sequenced
+    # them (decompose-bet-to-story #26). Non-fatal.
+    if story_id and workflow_name in _CODE_WORKFLOWS:
+        for other, reason in _overlapping_inflight_builds(project_dir, bet_id, story_id):
+            print(f"⚠ overlap (#26): {story_id} overlaps the in-flight build of {other} "
+                  f"({reason}). Same-module stories merge SERIALLY — building them in "
+                  f"parallel will conflict at merge. Consider waiting for {other} to merge "
+                  f"first, or sequence them via `dependencies`.", file=sys.stderr)
 
     # ── dry-run ──────────────────────────────────────────────────────────────
     if dry_run:
