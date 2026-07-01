@@ -189,6 +189,45 @@ class TestPushErrorSurfacing(unittest.TestCase):
             self.assertIn("does not exist", label)
 
 
+class TestConfluenceFormatting(unittest.TestCase):
+    """#41: markdown → storage XHTML (headings/lists/code/inline), not one <pre> block."""
+
+    def test_headings_and_paragraph(self):
+        html_out = stores._storage("---\nid: x\n---\n# Title\n\nSome **bold** text.\n")
+        self.assertIn("<h1>Title</h1>", html_out)
+        self.assertIn("<strong>bold</strong>", html_out)
+        self.assertNotIn("# Title", html_out)          # raw markdown gone
+        self.assertNotIn("id: x", html_out)            # frontmatter stripped
+
+    def test_bullets_and_numbered(self):
+        html_out = stores._storage("- a\n- b\n\n1. one\n2. two\n")
+        self.assertIn("<ul><li>a</li><li>b</li></ul>", html_out)
+        self.assertIn("<ol><li>one</li><li>two</li></ol>", html_out)
+
+    def test_code_fence_uses_code_macro(self):
+        html_out = stores._storage("text\n\n```\nx = 1\n```\n")
+        self.assertIn('ac:name="code"', html_out)
+        self.assertIn("<![CDATA[x = 1]]>", html_out)
+
+    def test_inline_code_and_link_escaped(self):
+        html_out = stores._storage("Use `KAN-1` and see [docs](https://x.co/a).")
+        self.assertIn("<code>KAN-1</code>", html_out)
+        self.assertIn('<a href="https://x.co/a">docs</a>', html_out)
+
+    def test_table(self):
+        html_out = stores._storage("| A | B |\n| --- | --- |\n| 1 | 2 |\n")
+        self.assertIn("<th>A</th>", html_out)
+        self.assertIn("<td>1</td>", html_out)
+
+    def test_confluence_push_sends_formatted_body(self):
+        # the storage body handed to Confluence is real XHTML, not a <pre> dump
+        t = FakeTransport([(201, {"id": "999", "_links": {"webui": "/p/999"}})])
+        stores.confluence_push(AUTH, "ENG", "T", "# H\n\nbody\n", transport=t)
+        body = t.calls[0]["body"]["body"]["storage"]["value"]
+        self.assertIn("<h1>H</h1>", body)
+        self.assertNotIn("<pre>", body)
+
+
 class TestJiraStructureStores(unittest.TestCase):
     """#35: the Jira structural primitives — epic parenting + blocked-by links."""
 
