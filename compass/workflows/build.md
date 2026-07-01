@@ -257,7 +257,7 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 - **`.github/workflows/ai-review.yml` installed** — Engineer → Reviewer handoff automated on CI-green per `[agent-handoff]` (canon v0.3.5). Either path (automated OR manual `codex` invocation) terminates at the same place (PR comment); automation removes the tool-switch only.
 - **Security-Reviewer auto-engages** in parallel with Reviewer when diff touches sensitive surfaces. Two reviews + two PR comments; both must clear (zero BLOCKERs + zero CRITICALs) before Step 7 mechanical merge constraints pass.
 - **Single-host run (everything on Claude Code)** — works but VIOLATES cross-host integrity per Reviewer's `preferred_hosts: [codex, gemini]`. Engineer can run on Claude Code; Reviewer task must dispatch to Codex CLI (or Gemini CLI) for a fresh model perspective. Do NOT run Reviewer-on-Claude against Claude-written code.
-- **Tech Writer / Security Reviewer migrated v0.3.36** — workflow references `compass/agents/tech-writer.md` (Task `accumulate-changelog`) + `compass/agents/security-reviewer.md` (Task `review-pr-security`). Legacy `compass/roles/` copies are grace-period only (removed in v0.4).
+- **Tech Writer / Security Reviewer migrated v0.3.36** — workflow references `compass/agents/tech-writer.md` (Task `accumulate-changelog`) + `compass/agents/security-reviewer.md` (Task `review-pr-security`). Legacy `compass/roles/` copies were removed in v1.0 (#38).
 
 ### Migration (v0.3.0-alpha → v0.3.23)
 

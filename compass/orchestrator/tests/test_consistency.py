@@ -103,6 +103,25 @@ class TestDetectsDrift(unittest.TestCase):
         probs = cc.check_host_list(root)
         self.assertEqual(probs, [])
 
+    def test_version_unified_drift_caught(self):
+        # #38: config.yaml framework_version vs pyproject version disagree → caught
+        root = self._mirror()
+        (root / "compass" / "config.yaml").write_text(
+            "framework_version: 1.0.0-rc.1\n", encoding="utf-8")
+        (root / "pyproject.toml").write_text(
+            '[project]\nversion = "0.4.0a1"\n', encoding="utf-8")
+        probs = cc.check_version_unified(root)
+        self.assertTrue(any("version drift" in p for p in probs))
+
+    def test_version_unified_normalized_match(self):
+        # 1.0.0-rc.1 (config, human) == 1.0.0rc1 (pyproject, PEP 440) → no drift
+        root = self._mirror()
+        (root / "compass" / "config.yaml").write_text(
+            "framework_version: 1.0.0-rc.1\n", encoding="utf-8")
+        (root / "pyproject.toml").write_text(
+            '[project]\nversion = "1.0.0rc1"\n', encoding="utf-8")
+        self.assertEqual(cc.check_version_unified(root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "compass-orchestrator"
-version = "0.4.0a1"
+version = "1.0.0rc1"
 description = "Compass — the delivery control-tower orchestrator (dispatch-graph workflows over multi-host agents)."
 requires-python = ">=3.10"
 readme = "README.md"
