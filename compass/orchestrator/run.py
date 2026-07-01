@@ -2507,7 +2507,8 @@ def main(argv=None):
         dest="reap_stale",
         help="Halt abandoned/killed in-flight runs (no activity for "
              "$COMPASS_STALE_TIMEOUT, default 1800s) by emitting RUN_END(halted), so "
-             "they stop showing in-flight forever; then exit.",
+             "they stop showing in-flight forever; then exit. Add --run-id <id> to halt "
+             "ONLY that run (targeted — won't catch other in-flight builds, #28).",
     )
     parser.add_argument(
         "--prune-worktrees",
@@ -2616,9 +2617,15 @@ def main(argv=None):
         project_dir = Path(args.project_dir).resolve()
         if args.reap_stale:
             from .events import halt_stale_runs
-            reaped = halt_stale_runs()
-            print(f"halted {len(reaped)} stale run(s)"
-                  + (": " + ", ".join(reaped) if reaped else ""))
+            # #28: --reap-stale --run-id X halts ONLY run X (targeted), so cleanup can't
+            # catch other in-flight builds; bare --reap-stale keeps the global sweep.
+            reaped = halt_stale_runs(run_id=args.run_id or None)
+            if args.run_id:
+                print(f"halted run {args.run_id}" if reaped
+                      else f"nothing halted — {args.run_id} is not an in-flight run")
+            else:
+                print(f"halted {len(reaped)} stale run(s)"
+                      + (": " + ", ".join(reaped) if reaped else ""))
         if args.prune_worktrees:
             removed = prune_worktrees(project_dir)
             print(f"removed {len(removed)} finished worktree(s)"
