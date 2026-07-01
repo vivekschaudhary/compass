@@ -835,6 +835,34 @@ class TestStaleRuns(unittest.TestCase):
             ev.halt_stale_runs(now=self.NOW, threshold=100, sink=lambda e: None, events=events),
             [])
 
+    def test_targeted_reap_halts_only_named_run(self):
+        # #28: --reap-stale --run-id X halts ONLY X, even though it's FRESH (not stale),
+        # and never touches other in-flight runs.
+        events = [
+            {"run_id": "keep", "type": ev.RUN_START, "ts": self.OLD,   # stale, but not named
+             "workflow": "build"},
+            {"run_id": "target", "type": ev.RUN_START, "ts": self.RECENT,  # fresh, but named
+             "workflow": "build", "bet_id": "CB-9"},
+        ]
+        emitted = []
+        halted = ev.halt_stale_runs(now=self.NOW, threshold=100, sink=emitted.append,
+                                    events=events, run_id="target")
+        self.assertEqual(halted, ["target"])                      # only the named run
+        self.assertEqual(emitted[0]["run_id"], "target")
+        self.assertEqual(emitted[0]["status"], "halted")
+        self.assertIn("operator-reaped", emitted[0]["reason"])
+
+    def test_targeted_reap_skips_ended_and_unknown(self):
+        events = [
+            {"run_id": "done", "type": ev.RUN_START, "ts": self.OLD},
+            {"run_id": "done", "type": ev.RUN_END, "ts": self.OLD, "status": "completed"},
+        ]
+        # naming an already-ended run → no-op; naming an unknown run → no-op
+        self.assertEqual(ev.halt_stale_runs(now=self.NOW, sink=lambda e: None,
+                                            events=events, run_id="done"), [])
+        self.assertEqual(ev.halt_stale_runs(now=self.NOW, sink=lambda e: None,
+                                            events=events, run_id="nope"), [])
+
 
 if __name__ == "__main__":
     unittest.main()

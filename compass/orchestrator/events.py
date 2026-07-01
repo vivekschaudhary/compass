@@ -251,22 +251,33 @@ def is_stale(run: dict, now, threshold: int) -> bool:
     return age is not None and age > threshold
 
 
-def halt_stale_runs(now=None, threshold=None, sink=None, events=None) -> list:
-    """Reap zombies: emit RUN_END(halted) for every in-flight run with no activity for
-    > threshold seconds, so it stops showing in-flight forever. Idempotent (ended runs
-    are skipped). `now` / `threshold` / `sink` / `events` are injectable for tests.
-    Returns the list of halted run_ids."""
+def halt_stale_runs(now=None, threshold=None, sink=None, events=None, run_id=None) -> list:
+    """Reap zombies: emit RUN_END(halted) for in-flight runs, so they stop showing
+    in-flight forever. Idempotent (ended runs are skipped). Two modes (#28):
+      - default → halt every run STALE past `threshold` (the global sweep).
+      - `run_id` set → halt ONLY that run, regardless of staleness (an operator
+        explicitly reaping one dead run without catching other in-flight builds — the
+        `--reap-stale --run-id X` fix for the over-reap footgun).
+    `now` / `threshold` / `sink` / `events` are injectable for tests. Returns the
+    halted run_ids."""
     from .cockpit import fold_runs  # local import — cockpit imports events (avoid cycle)
     now = now or datetime.now(timezone.utc)
     threshold = stale_timeout() if threshold is None else threshold
     sink = sink or jsonl_sink()
     halted = []
     for r in fold_runs(events if events is not None else load_events()).values():
-        if is_stale(r, now, threshold):
-            age = int(run_age_seconds(r, now))
-            sink(make_event(
-                RUN_END, run_id=r["run_id"], project=r.get("project"),
-                workflow=r.get("workflow"), bet_id=r.get("bet_id"), status="halted",
-                reason=f"stale — no activity for {age}s (auto-halt)"))
-            halted.append(r["run_id"])
+        if run_id is not None:
+            # targeted: halt exactly the named run if it's in-flight, ignore staleness
+            if r["run_id"] != run_id or not r.get("started") or r.get("ended"):
+                continue
+            reason = "operator-reaped (--reap-stale --run-id)"
+        else:
+            if not is_stale(r, now, threshold):
+                continue
+            reason = f"stale — no activity for {int(run_age_seconds(r, now))}s (auto-halt)"
+        sink(make_event(
+            RUN_END, run_id=r["run_id"], project=r.get("project"),
+            workflow=r.get("workflow"), bet_id=r.get("bet_id"), status="halted",
+            reason=reason))
+        halted.append(r["run_id"])
     return halted
