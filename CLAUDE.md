@@ -13,7 +13,7 @@ When the user invokes a workflow command (`/<workflow-name>`):
 3. Execute the task in the agent file. Respect the gates. Halt at HITL handoffs.
 4. Move to the next step.
 
-All 14 agents are migrated to `compass/agents/` as of v0.3.36. `compass/roles/` is grace-period only (removed in v0.4) — if a workflow file still references `compass/roles/<role>.md`, prefer the migrated `compass/agents/<agent>.md` and flag the stale workflow reference.
+All 14 agents live in `compass/agents/` (source of truth). **`compass/roles/` was removed in v1.0 (#38)** — if any doc still references `compass/roles/<role>.md`, use the migrated `compass/agents/<agent>.md`.
 
 ## Commands available
 
@@ -100,9 +100,9 @@ Under `[agent-as-surface-independent-unit]` (canon v0.3.14):
 - **Cross-host independence preserved structurally.** The Reviewer agent (migrated v0.3.16) declares `preferred_hosts: [codex, gemini]` (NOT claude) — making the implementer/reviewer model split enforced at the agent-frontmatter level, not via CLAUDE.md prose. Security Reviewer migrated v0.3.36 with the same exclusion: `compass/agents/security-reviewer.md` declares `preferred_hosts: [codex, gemini]`; `.codex/prompts/security-reviewer.md` is the Codex CLI entry wrapper.
 - **No same-host self-review.** Even though Claude Code CAN execute any agent file, do not run reviewer / security-reviewer tasks against code Claude Code wrote. The cross-model review independence is a Compass design principle; respect it at runtime.
 
-## Notes on the orchestrator (v0.4-alpha, shipped — `compass/orchestrator/`)
+## Notes on the orchestrator (shipped — `compass/orchestrator/`)
 
-The orchestrator (v0.4-alpha; exact alpha number in CHANGELOG.md — the single source, not restated here):
+The orchestrator (framework version 1.0.0-rc.1 — `framework_version` in `compass/config.yaml` is the single source, #38; CHANGELOG.md is the change log):
 1. Reads `compass/workflows/<workflow>.md` dispatch graph
 2. For each step, looks up the agent's `preferred_hosts:` and dispatches via the appropriate host's API (Claude API / OpenAI API / Gemini API per `router.py`)
 3. Passes agent file contents as system prompt; task-step inputs as user prompt

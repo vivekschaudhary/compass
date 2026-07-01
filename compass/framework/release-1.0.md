@@ -2,7 +2,7 @@
 
 **Theme:** *Pilot-ready.* 1.0 ships when the delivery control tower is hardened enough to run **one real enterprise program end-to-end** — the .NET/Blazor licensing-portal POC — through the full lifecycle (foundation → bets → stories → parallel isolated builds → cross-model review → merge → WBS/conformance/audit), on the pilot's own GitHub + Jira + Confluence, with no sharp edge that would embarrass in front of the MD.
 
-**Status (2026-06-30):** planning locked. Milestone [1.0](https://github.com/vivekschaudhary/compass/milestone/1). Tracks the strategic thesis — *validate via one real program* (the control-tower thesis).
+**Status (2026-06-30):** planning locked; **version `1.0.0-rc.1`** (unified across `compass/config.yaml` `framework_version` + `pyproject.toml`, #38 — bumps to `1.0.0` when the pilot gate #33 passes). Milestone [1.0](https://github.com/vivekschaudhary/compass/milestone/1). Tracks the strategic thesis — *validate via one real program* (the control-tower thesis).
 
 **Single sources:** framework work is tracked in **GitHub** — open backlog = issues (milestone 1.0); the why + change = issue + PR (`Closes #N`); shipped summary = `CHANGELOG.md` + Releases (#42; `improvements.md` is frozen at #181, historical). This file is the scope map + sequencing, not a version log.
 

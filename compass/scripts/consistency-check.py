@@ -92,10 +92,33 @@ def check_version_self_claims(repo_root: Path) -> list:
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if re.search(r"alpha-[0-9]", line):
                 problems.append(
-                    f"{rel}:{n}: hardcoded orchestrator 'alpha-N' version — say "
-                    f"'v0.4-alpha' and let CHANGELOG.md be the single source "
-                    f"(de-duplication, Principle #17)."
+                    f"{rel}:{n}: hardcoded orchestrator 'alpha-N' version — "
+                    f"compass/config.yaml `framework_version` is the single source "
+                    f"(#38; de-duplication, Principle #17)."
                 )
+    return problems
+
+
+def check_version_unified(repo_root: Path) -> list:
+    """#38: compass/config.yaml `framework_version` is the single version source; the
+    pyproject `version` must agree (normalized to ignore rc/dash formatting differences,
+    e.g. 1.0.0-rc.1 == 1.0.0rc1)."""
+    problems = []
+    cfg = repo_root / "compass" / "config.yaml"
+    pyp = repo_root / "pyproject.toml"
+    fw = pv = None
+    if cfg.exists():
+        m = re.search(r"^framework_version:\s*(\S+)", cfg.read_text(encoding="utf-8"), re.M)
+        fw = m.group(1) if m else None
+    if pyp.exists():
+        m = re.search(r'^version\s*=\s*"([^"]+)"', pyp.read_text(encoding="utf-8"), re.M)
+        pv = m.group(1) if m else None
+    norm = lambda v: re.sub(r"[^a-z0-9]", "", (v or "").lower())
+    if fw and pv and norm(fw) != norm(pv):
+        problems.append(
+            f"version drift: config.yaml framework_version={fw} but pyproject "
+            f"version={pv} — config.yaml is the single source (#38)."
+        )
     return problems
 
 
@@ -137,6 +160,7 @@ def run_all(repo_root: Path) -> list:
         check_dispatch_graph_count(repo_root)
         + check_catalog_count(repo_root)
         + check_version_self_claims(repo_root)
+        + check_version_unified(repo_root)
         + check_host_list(repo_root)
     )
 
@@ -149,7 +173,7 @@ def main(argv=None) -> int:
 
     problems = run_all(repo_root)
     if not problems:
-        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims, host list all check out.")
+        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims, version unified, host list all check out.")
         return 0
     print(f"DRIFT FOUND ({len(problems)}):\n", file=sys.stderr)
     for p in problems:

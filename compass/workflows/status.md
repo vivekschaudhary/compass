@@ -8,7 +8,7 @@ Surfaces current state of all in-flight work. Invokes Delivery Manager agent.
 
 ## Process
 
-1. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md` — migrated + renamed v0.3.15; legacy role file at `compass/roles/project-manager.md` retained during v0.3.x grace period for unmigrated workflows but the agent file wins on divergence)
+1. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md` — migrated + renamed v0.3.15; legacy role file at `compass/roles/project-manager.md` removed in v1.0 (#38); the agent file is authoritative)
 2. **Gather state:**
    - Last `docs/status.md`
    - **`docs/foundation/plan.md`** if it exists — the living project plan owns the time-bound schedule. `/status` reads it to populate ETAs / in-flight / next-up. Don't recompute schedule data here; `/plan` does that.
