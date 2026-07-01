@@ -781,13 +781,21 @@ def _extract_pr_urls(text: str) -> list:
 
 
 def _run_artifact_dir(run: dict):
-    """The dir holding a run's step artifacts (#136):
-    <project_dir>/docs/orchestrator-runs/<workflow>/. None if unknown."""
+    """The dir holding a run's step artifacts (#136). Prefers the **run-scoped** dir
+    <project_dir>/docs/orchestrator-runs/<workflow>/<run_id>/ (#27 — so concurrent
+    same-workflow runs don't show each other's step-*.md), falling back to the legacy
+    flat <workflow>/ dir for pre-#27 runs. None if unknown."""
     pdir = run.get("project_dir") if run else None
     wf = run.get("workflow") if run else None
     if not pdir or not wf:
         return None
-    return Path(pdir) / "docs" / "orchestrator-runs" / wf
+    base = Path(pdir) / "docs" / "orchestrator-runs" / wf
+    rid = run.get("run_id")
+    if rid:
+        per_run = base / rid.replace("/", "__")
+        if per_run.is_dir():
+            return per_run
+    return base
 
 
 def _run_log_path(run_id: str):
