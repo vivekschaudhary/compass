@@ -510,7 +510,7 @@ def _decide_forms(r: dict, cdir) -> str:
 
 def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
                 refresh=5, snapshot_ts="", actions=False, default_project_dir="",
-                now=None) -> str:
+                now=None, code_stale=False) -> str:
     """Self-contained HTML cockpit (#113) — same data as the text view, browser layout.
     `snapshot_ts` is passed in (no Date.now); `refresh` drives the JS reload.
     `actions` (#119) turns on the Launch form + per-gate approve/reject/route buttons
@@ -536,6 +536,14 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     p.append(f"<h1>{title}</h1>")
     mode = "actions enabled — launch & approve below" if actions else "read-only (start with --allow-actions to launch/approve)"
     p.append(f"<div class='ts' id='ts'>snapshot {_esc(snapshot_ts)} · auto-refresh {int(refresh)}s (pauses while you type) · {mode}</div>")
+    # #30: the cockpit loads its render/JS code once at startup; a merged dashboard fix
+    # (like the #177 approve-race) only takes effect after a restart. Detect that the
+    # code changed on disk and tell the operator, so a fix doesn't sit invisible.
+    if code_stale:
+        p.append("<div style='background:#7a2e00;color:#ffd9b3;padding:10px 14px;"
+                 "border-radius:8px;margin:8px 0;font-weight:600'>⚠ Dashboard code was "
+                 "updated on disk since this server started — Ctrl-C and relaunch "
+                 "<code>cockpit --serve</code> to apply the latest (#30).</div>")
 
     # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
     if actions:
@@ -652,12 +660,34 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
 
 def build_page(events: list, project_filter=None, limit=10, cdir=None,
                refresh=5, snapshot_ts="", actions=False, default_project_dir="",
-               now=None) -> bytes:
+               now=None, code_stale=False) -> bytes:
     """events → HTML bytes (what the --serve handler returns per request, #113)."""
     runs = fold_runs(events)
     return render_html(runs, project_filter, limit, cdir, refresh, snapshot_ts,
                        actions=actions, default_project_dir=default_project_dir,
-                       now=now or datetime.now(timezone.utc)).encode("utf-8")
+                       now=now or datetime.now(timezone.utc),
+                       code_stale=code_stale).encode("utf-8")
+
+
+_START_MTIME = None  # #30: cockpit code mtime captured at server startup
+
+
+def _code_mtime() -> float:
+    """#30: newest mtime among the modules whose code shapes the dashboard — this file +
+    run.py. Used to detect a merged dashboard fix that only takes effect after a restart."""
+    import os
+    paths = [__file__]
+    try:
+        from . import run as _run
+        paths.append(_run.__file__)
+    except Exception:
+        pass
+    return max((os.path.getmtime(p) for p in paths if p), default=0.0)
+
+
+def _code_is_stale(start_mtime) -> bool:
+    """#30: True when the dashboard code on disk is newer than when the server started."""
+    return bool(start_mtime) and _code_mtime() > start_mtime
 
 
 # ── action endpoints (#119): the cockpit relays launches/decisions to compass-run ──
@@ -926,6 +956,9 @@ def _serve(events_path, cdir, project_filter, limit, port,
     from datetime import datetime, timezone
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+    global _START_MTIME                       # #30: snapshot the code mtime at startup
+    _START_MTIME = _code_mtime()              #      so a later merged fix surfaces a banner
+
     defaults = {"known": _known_workflows(cdir), "project_dir": default_project_dir,
                 "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None}
 
@@ -1071,7 +1104,8 @@ def _serve(events_path, cdir, project_filter, limit, port,
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             body = build_page(events, project_filter=project_filter, limit=limit,
                               cdir=cdir, snapshot_ts=ts, actions=allow_actions,
-                              default_project_dir=default_project_dir or "")
+                              default_project_dir=default_project_dir or "",
+                              code_stale=_code_is_stale(_START_MTIME))  # #30
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
