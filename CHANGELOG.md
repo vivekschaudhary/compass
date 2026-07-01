@@ -10,6 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **1.0 quickstart — someone other than the DRI can stand it up (#37).** `SETUP.md` gains a top-of-file **Quickstart** (zero → first shipped story): prereqs, `pip install -e .` → `compass-run`/`compass-cockpit` (the cwd-independent install that dodges the #40 trap), the `--compass-dir`(framework) vs `--project-dir`(artifacts) mental model, flat-cost subscription dispatch, launching the cockpit, the approve-gated lifecycle, and the optional `--push-bet` → Jira/Confluence projection. Also fixed the doc drift the release surfaced (removed the `compass/roles/` tree line, `v0.4-alpha` → current). Doc-only.
+
 - **Cockpit self-detects stale code + prompts a restart (#30).** The dashboard loads its render/JS code once at startup, so a merged fix (like the #177 approve-race) sat invisible until a manual restart. The cockpit now snapshots its code mtime at startup and, on each page render, shows a **banner** when `cockpit.py`/`run.py` changed on disk since — *"Dashboard code was updated on disk … relaunch to apply (#30)"*. Turns "why didn't my fix show up" into an explicit prompt. +3 tests (406), CONSISTENT.
 - **Build worktrees auto-prune when you view the tower (#29).** Finished/merged build worktrees (clean — work committed + pushed) are now removed automatically as part of the `--wbs` self-heal (alongside stale-run reaping), so they don't accumulate under `~/.compass/worktrees/`; in-flight (dirty) worktrees are kept. The explicit `--prune-worktrees` remains. CONSISTENT.
 

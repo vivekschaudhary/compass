@@ -2,6 +2,62 @@
 
 How to install Compass with Claude Code (implementer) + OpenAI Codex CLI (reviewer) as the v1 supported tools. Vendor-neutral — add other tools later via thin wrappers.
 
+---
+
+## Quickstart (zero → first shipped story, ~5 min setup)
+
+For anyone standing Compass up for the first time — the fast path. The detailed, workflow-by-workflow version is in **First run** below.
+
+**Prereqs:** Python 3.10+, `git`, `gh` (GitHub CLI, authed), and the `claude` CLI logged in (`npm i -g @anthropic-ai/claude-code`). Optional: the `codex` CLI (cross-model review); an Atlassian API token (Jira/Confluence projection).
+
+**1. Install the orchestrator as a cwd-independent CLI.**
+```bash
+git clone <compass-repo> && cd compass
+pip install -e .          # → `compass-run` + `compass-cockpit` on your PATH (#40)
+compass-run --help
+```
+> Why `pip install -e .` and not `python3 -m compass.orchestrator.run`? The console command always executes **this** framework's code from any directory. Running the module from inside a *project* dir can load that project's vendored (possibly stale) `compass/` copy — a real trap (#40). If you must run the module, watch for the `⚠ stale-module risk` warning.
+
+**2. The two dirs (this is the whole mental model).**
+- **`--compass-dir`** → the *framework* (this repo's `compass/`: agents, workflows, `config.yaml`).
+- **`--project-dir`** → *your project* (where artifacts land: `docs/bets/…`).
+- One framework drives many projects. `compass-run` reads the framework from `--compass-dir`, writes artifacts to `--project-dir`.
+
+**3. Run flat-cost on your subscriptions (no API keys).**
+```bash
+export COMPASS_CLAUDE_HOST=cli COMPASS_CODEX_HOST=cli
+```
+Claude implements, Codex reviews — each via your logged-in CLI, ~$0 marginal cost.
+
+**4. Launch the control tower (browser).**
+```bash
+compass-cockpit --serve --allow-actions \
+  --project-dir /path/to/your-project \
+  --compass-dir  /path/to/compass/compass
+# → http://127.0.0.1:8765  — launch workflows + approve gates from the browser
+```
+
+**5. Do the work.** From the cockpit (or `compass-run <workflow>`), run the lifecycle, approving at each human gate:
+```
+/setup-product  →  approve
+/setup-foundation-architecture  →  approve
+/create-brief <bet>  →  approve
+/create-story <bet>
+/build <story-id>            ← builds ONE story in an isolated git worktree
+→  approve the merge gate    ← in the browser, or: compass-run --approve <path>
+```
+Parallel story builds are safe (each gets its own worktree off `main`); `/build` warns if two stories touch the same module (they should merge serially).
+
+**6. Make it visible in the team's tools (optional).** With Atlassian creds set (`ATLASSIAN_BASE_URL` / `_EMAIL` / `_API_TOKEN` + `JIRA_PROJECT` + `CONFLUENCE_SPACE`), project a bet's docs + backlog:
+```bash
+compass-run --push-bet <bet> --project-dir <proj> --compass-dir <compass>
+# brief/architecture/research → Confluence pages (real formatting)
+# stories → Jira issues under an Epic, with 'is blocked by' links from dependencies
+```
+Idempotent — re-push updates the same pages/issues, never duplicates.
+
+---
+
 ## Install
 
 ### 1. Drop the kit into your repo
@@ -218,10 +274,9 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 ├── SETUP.md                     ← this file
 │
 ├── compass/                     ← ★ THE FRAMEWORK (vendor-neutral)
-│   ├── agents/                  #   14 agent files — all migrated as of v0.3.36
-│   ├── roles/                   #   legacy role files (grace period only; removed in v0.4)
-│   ├── workflows/               #   17 workflows (one per command; 6 as dispatch graphs)
-│   ├── orchestrator/            #   v0.4-alpha multi-host orchestrator (python3 -m compass.orchestrator.run)
+│   ├── agents/                  #   14 self-sufficient agent files (source of truth)
+│   ├── workflows/               #   one per command (several as dispatch graphs)
+│   ├── orchestrator/            #   multi-host orchestrator (1.0.0-rc.1) — `compass-run` after `pip install -e .`
 │   ├── templates/               #   10 artifact templates
 │   └── config.yaml              #   team decisions
 │
@@ -246,7 +301,7 @@ When the measurement window closes, the bet transitions to `won`, `learning`, or
 
 ## Picking which agent plays which role
 
-As of v0.3.14, **each agent file declares its own `preferred_hosts:` in its frontmatter** — that is the source-of-truth for routing. The v0.4-alpha orchestrator reads `preferred_hosts:` and dispatches each workflow step to the appropriate host automatically.
+As of v0.3.14, **each agent file declares its own `preferred_hosts:` in its frontmatter** — that is the source-of-truth for routing. The orchestrator reads `preferred_hosts:` and dispatches each workflow step to the appropriate host automatically.
 
 ```yaml
 # Inside compass/agents/engineer.md frontmatter
