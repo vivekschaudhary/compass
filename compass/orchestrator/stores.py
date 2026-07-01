@@ -20,6 +20,7 @@ import base64
 import html
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -70,9 +71,79 @@ def _adf(text: str) -> dict:
         {"type": "paragraph", "content": [{"type": "text", "text": text[:30000]}]}]}
 
 
+def _md_inline(s: str) -> str:
+    """#41: markdown inline → storage XHTML: `code`, **bold**, *italic*, [text](url).
+    Escapes HTML first, then applies the markup (the md metacharacters survive escaping)."""
+    s = html.escape(s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<!\*)\*([^*\s][^*]*?)\*(?!\*)", r"<em>\1</em>", s)
+    s = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', s)
+    return s
+
+
 def _storage(text: str) -> str:
-    """Confluence storage XHTML — a preformatted block (lossless, renders anywhere)."""
-    return f"<pre>{html.escape(text)}</pre>"
+    """#41: convert markdown to Confluence **storage XHTML** — headings, bullet/numbered
+    lists, code blocks (the code macro), tables, and inline bold/italic/code/links — so
+    pages read like real docs instead of one preformatted `<pre>` block. A lightweight
+    stdlib converter (no deps); a leading `--- … ---` frontmatter block is stripped."""
+    text = re.sub(r"^---\n.*?\n---\n", "", text, count=1, flags=re.DOTALL)
+    lines = text.split("\n")
+    out, para = [], []
+    n, i = len(lines), 0
+
+    def flush():
+        if para:
+            out.append("<p>" + _md_inline(" ".join(para).strip()) + "</p>")
+            para.clear()
+
+    while i < n:
+        line = lines[i]
+        if re.match(r"^\s*```", line):                                  # code fence
+            flush()
+            code, i = [], i + 1
+            while i < n and not re.match(r"^\s*```\s*$", lines[i]):
+                code.append(lines[i]); i += 1
+            i += 1
+            body = "\n".join(code).replace("]]>", "]]]]><![CDATA[>")
+            out.append('<ac:structured-macro ac:name="code"><ac:plain-text-body>'
+                       f"<![CDATA[{body}]]></ac:plain-text-body></ac:structured-macro>")
+            continue
+        h = re.match(r"^(#{1,6})\s+(.*)$", line)                        # heading
+        if h:
+            flush()
+            lvl = len(h.group(1))
+            out.append(f"<h{lvl}>{_md_inline(h.group(2).strip())}</h{lvl}>"); i += 1; continue
+        if re.match(r"^\s*([-*_])\1{2,}\s*$", line):                    # horizontal rule
+            flush(); out.append("<hr/>"); i += 1; continue
+        if (line.lstrip().startswith("|") and i + 1 < n               # table
+                and re.match(r"^\s*\|[\s:|-]+\|\s*$", lines[i + 1])):
+            flush()
+            header = [c.strip() for c in line.strip().strip("|").split("|")]
+            i += 2; rows = []
+            while i < n and lines[i].lstrip().startswith("|"):
+                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")]); i += 1
+            th = "".join(f"<th>{_md_inline(c)}</th>" for c in header)
+            trs = "".join("<tr>" + "".join(f"<td>{_md_inline(c)}</td>" for c in r) + "</tr>"
+                          for r in rows)
+            out.append(f"<table><tbody><tr>{th}</tr>{trs}</tbody></table>"); continue
+        if re.match(r"^\s*[-*+]\s+", line):                             # bullet list
+            flush(); items = []
+            while i < n and re.match(r"^\s*[-*+]\s+", lines[i]):
+                items.append(re.sub(r"^\s*[-*+]\s+", "", lines[i])); i += 1
+            out.append("<ul>" + "".join(f"<li>{_md_inline(x)}</li>" for x in items) + "</ul>")
+            continue
+        if re.match(r"^\s*\d+\.\s+", line):                            # numbered list
+            flush(); items = []
+            while i < n and re.match(r"^\s*\d+\.\s+", lines[i]):
+                items.append(re.sub(r"^\s*\d+\.\s+", "", lines[i])); i += 1
+            out.append("<ol>" + "".join(f"<li>{_md_inline(x)}</li>" for x in items) + "</ol>")
+            continue
+        if not line.strip():                                           # blank → para break
+            flush(); i += 1; continue
+        para.append(line.strip()); i += 1
+    flush()
+    return "".join(out) or "<p></p>"
 
 
 def jira_push(auth, project_key, issue_type, summary, body, key=None, transport=None):
