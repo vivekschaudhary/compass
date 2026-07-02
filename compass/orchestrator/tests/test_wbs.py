@@ -185,6 +185,63 @@ class TestStoryDependencies(unittest.TestCase):
         self.assertIn("⛔ blocked by WLT-27-2", out)
 
 
+class TestBetStatusDerivation(unittest.TestCase):
+    """#57: bet status is DERIVED from stories (ground truth), not hand-set
+    frontmatter. Frontmatter is a cache; all stories shipped ⇒ bet shipped."""
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp())
+        self.home = tempfile.mkdtemp()
+        self._old = os.environ.get("COMPASS_HOME")
+        os.environ["COMPASS_HOME"] = self.home
+
+    def tearDown(self):
+        os.environ.pop("COMPASS_HOME", None) if self._old is None \
+            else os.environ.__setitem__("COMPASS_HOME", self._old)
+
+    def _node(self, bid):
+        return next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == bid)
+
+    def test_all_stories_shipped_promotes_stale_bet_to_shipped(self):
+        # frontmatter says approved, but every story shipped → effective shipped
+        _bet(self.project, "CB-2", "approved",
+             stories=[("CB-2-1", "shipped"), ("CB-2-2", "merged")])
+        n = self._node("CB-2")
+        self.assertEqual(n["status"], "shipped")
+        self.assertEqual(n["declared_status"], "approved")
+        self.assertTrue(n["status_derived"])
+        self.assertEqual(n["rag"], "green")
+        self.assertEqual(n["attention"], [])
+
+    def test_dependency_uses_derived_status_not_declared(self):
+        # CB-15 depends on CB-2; CB-2 frontmatter is stale (approved) but its stories
+        # all shipped → CB-15 must NOT be blocked (the WLT-15 class, fixed at source)
+        _bet(self.project, "CB-2", "approved", stories=[("CB-2-1", "shipped")])
+        _bet(self.project, "CB-15", "shipped", depends_on="[CB-2]",
+             stories=[("CB-15-1", "shipped")])
+        n = self._node("CB-15")
+        self.assertFalse(any("blocked by CB-2" in a["reason"] for a in n["attention"]))
+        self.assertEqual(n["rag"], "green")
+
+    def test_false_shipped_is_flagged_red(self):
+        # frontmatter claims shipped but a story is still ready → theater, flag RED
+        _bet(self.project, "CB-9", "shipped",
+             stories=[("CB-9-1", "shipped"), ("CB-9-2", "ready")])
+        n = self._node("CB-9")
+        self.assertEqual(n["rag"], "red")
+        self.assertTrue(any("declared shipped but 1 of 2 stories not shipped" in a["reason"]
+                            for a in n["attention"]))
+
+    def test_no_stories_keeps_declared_status(self):
+        _bet(self.project, "CB-5", "approved")
+        n = self._node("CB-5")
+        self.assertEqual((n["status"], n["status_derived"]), ("approved", False))
+
+    def test_render_shows_derivation_marker(self):
+        _bet(self.project, "CB-2", "approved", stories=[("CB-2-1", "shipped")])
+        out = wbs.render_wbs(wbs.build_wbs(self.project))
+        self.assertIn("[shipped ⟵ approved]", out)
+
+
 class TestHaltCollapse(unittest.TestCase):
     """#67: terminal/superseded halted runs collapse out of the exception list."""
     def setUp(self):

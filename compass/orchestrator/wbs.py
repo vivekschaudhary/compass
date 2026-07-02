@@ -114,16 +114,40 @@ def build_wbs(project_dir, with_conformance: bool = False,
     for brief in (sorted(bets_dir.glob("*/brief.md")) if bets_dir.exists() else []):
         bdir = brief.parent
         fm = _frontmatter(brief)
+        declared = fm.get("status") or "unknown"
+        # #57: read stories now so bet status can DERIVE from them. Ground truth wins
+        # over stale hand-set frontmatter — a bet whose every story shipped IS shipped;
+        # frontmatter is a cache, not the source. Doing this in the FIRST pass means the
+        # dependency map below sees effective (not declared) status, so a bet blocked by
+        # a dep whose stories all shipped is no longer falsely red.
+        sdir = bdir / "stories"
+        story_nodes = []
+        for sf in sorted(sdir.glob("*/story.md")) if sdir.exists() else []:
+            sfm = _frontmatter(sf)
+            story_nodes.append({
+                "id": sfm.get("id") or sf.parent.name,
+                "status": sfm.get("status") or "unknown",
+                "type": sfm.get("type"),
+                "owner": sfm.get("owner"),
+                "dependencies": _list(sfm.get("dependencies")),
+                "jira_key": sfm.get("jira_key"),
+            })
+        stories_all_shipped = bool(story_nodes) and all(s["status"] in _SHIPPED for s in story_nodes)
+        effective = "shipped" if stories_all_shipped else declared
         raw.append({
             "id": fm.get("id") or bdir.name,
-            "status": fm.get("status") or "unknown",
+            "status": effective,                       # ground-truth-derived (#57)
+            "declared_status": declared,               # what the frontmatter says
+            "status_derived": effective != declared,
+            "stories_all_shipped": stories_all_shipped,
+            "story_nodes": story_nodes,
             "type": fm.get("type"),
             "priority": fm.get("priority"),
             "depends_on": _list(fm.get("depends_on")),
             "title": _title(brief, fm.get("id") or bdir.name),
             "dir": bdir,
         })
-    status_map = {b["id"]: b["status"] for b in raw}
+    status_map = {b["id"]: b["status"] for b in raw}   # EFFECTIVE status (#57)
 
     bets, attention = [], []
     for b in raw:
@@ -166,22 +190,20 @@ def build_wbs(project_dir, with_conformance: bool = False,
                                   "reason": f"blocked by {dep} ({status_map.get(dep, 'unknown')})"})
         if b["status"] == "proposed" and not runs:
             node_attn.append({"level": "amber", "reason": "not started"})
+        # #57 false-shipped guard: frontmatter claims shipped/won/merged but the
+        # stories say otherwise — status theater in the other direction. Flag it RED
+        # so a bet that only *claims* to be done can't render green.
+        if b["declared_status"] in _SHIPPED and b["story_nodes"] and not b["stories_all_shipped"]:
+            n_open = sum(1 for s in b["story_nodes"] if s["status"] not in _SHIPPED)
+            node_attn.append({"level": "red",
+                              "reason": f"declared {b['declared_status']} but {n_open} of "
+                                        f"{len(b['story_nodes'])} stories not shipped"})
 
-        # stories — read each, then resolve cross-story dependencies (#171: a feature
-        # story blocked by an un-delivered design/copy story; design/copy stories
-        # awaiting human delivery) so the tower surfaces them under manage-by-exception.
-        sdir = b["dir"] / "stories"
-        story_nodes = []
-        for sf in sorted(sdir.glob("*/story.md")) if sdir.exists() else []:
-            sfm = _frontmatter(sf)
-            story_nodes.append({
-                "id": sfm.get("id") or sf.parent.name,
-                "status": sfm.get("status") or "unknown",
-                "type": sfm.get("type"),
-                "owner": sfm.get("owner"),
-                "dependencies": _list(sfm.get("dependencies")),
-                "jira_key": sfm.get("jira_key"),
-            })
+        # stories — resolve cross-story dependencies (#171: a feature story blocked by
+        # an un-delivered design/copy story; design/copy stories awaiting human
+        # delivery) so the tower surfaces them under manage-by-exception. Nodes were
+        # read in the first pass (#57) — reuse them here.
+        story_nodes = b["story_nodes"]
         story_status = {s["id"]: s["status"] for s in story_nodes}
 
         stories = []
@@ -219,6 +241,7 @@ def build_wbs(project_dir, with_conformance: bool = False,
             "in_flight": len(in_flight), "open_gates": len(open_gates),
             "conformance": conformance, "attention": node_attn,
             "hidden_halts": hidden_halts,
+            "declared_status": b["declared_status"], "status_derived": b["status_derived"],
         })
 
     summary = {"bets": len(bets), "needs_attention": sum(1 for b in bets if b["attention"]),
@@ -255,7 +278,11 @@ def render_wbs(wbs: dict) -> str:
         # noted here so the history stays discoverable (--wbs-verbose to expand).
         hist = (f"  · {b['hidden_halts']} halted run(s) in history"
                 if b.get("hidden_halts") and not b.get("attention") else "")
-        lines.append(f"  {_GLYPH.get(b['rag'],'•')} {b['id']} [{b['status']}] {b.get('title','')}"
+        # #57: show when the status was DERIVED from stories (frontmatter is stale) —
+        # transparent, so the override of the hand-set value is visible, not silent.
+        st = (f"{b['status']} ⟵ {b['declared_status']}" if b.get("status_derived")
+              else b['status'])
+        lines.append(f"  {_GLYPH.get(b['rag'],'•')} {b['id']} [{st}] {b.get('title','')}"
                      f"  ({b['story_count']} stories){conf}{hist}")
         for st in b.get("stories", []):
             ptr = f" → {st['jira_key']}" if st.get("jira_key") else ""
