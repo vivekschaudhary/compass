@@ -32,8 +32,27 @@ def _frontmatter(path) -> dict:
     for line in m.group(1).splitlines():
         km = re.match(r"^([\w-]+)\s*:\s*(.*)$", line)
         if km:
-            fm[km.group(1)] = km.group(2).strip()
+            fm[km.group(1)] = _strip_inline_comment(km.group(2)).strip()
     return fm
+
+
+def _strip_inline_comment(val: str) -> str:
+    """Strip a YAML inline comment from a scalar/flow value. Per YAML, a `#`
+    begins a comment only when preceded by whitespace (or at string start) and
+    not inside a quoted string. So `[A] # note` -> `[A]` and `bet-1 # why` ->
+    `bet-1`, while `(#171)` and `"a#b"` are preserved (the `#` isn't after
+    whitespace / is quoted). Without this, `depends_on: [A] # note` parses the
+    comment into the dep id and the tower shows a phantom `(unknown)` blocker."""
+    quote = None
+    for i, ch in enumerate(val):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or val[i - 1].isspace()):
+            return val[:i].rstrip()
+    return val
 
 
 def _list(val) -> list:

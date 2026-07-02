@@ -81,6 +81,27 @@ class TestWbs(unittest.TestCase):
         self.assertEqual(wbs._list("[]"), [])
         self.assertEqual(wbs._list(None), [])
 
+    def test_strip_inline_comment(self):
+        # YAML inline comments (`#` after whitespace, outside quotes) are stripped;
+        # `#` mid-token or quoted is preserved.
+        self.assertEqual(wbs._strip_inline_comment("[CB-1] # why"), "[CB-1]")
+        self.assertEqual(wbs._strip_inline_comment("CB-1 # sibling overlay"), "CB-1")
+        self.assertEqual(wbs._strip_inline_comment("[CB-1]"), "[CB-1]")
+        self.assertEqual(wbs._strip_inline_comment("foo (#171) bar"), "foo (#171) bar")
+        self.assertEqual(wbs._strip_inline_comment('"a#b"'), '"a#b"')
+        self.assertEqual(wbs._strip_inline_comment("# whole line"), "")
+
+    def test_depends_on_with_inline_comment_resolves(self):
+        # Regression: a valid-YAML inline comment on depends_on must NOT leak into
+        # the dep id (was surfacing a phantom `(unknown)` blocker).
+        _bet(self.project, "CB-1", "shipped")
+        _bet(self.project, "CB-2", "approved",
+             depends_on="[CB-1] # the shared substrate + orthogonality discipline")
+        cb2 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-2")
+        self.assertEqual(cb2["depends_on"], ["CB-1"])
+        # dep is shipped -> no phantom "(unknown)" blocker
+        self.assertFalse(any("unknown" in a["reason"] for a in cb2["attention"]))
+
     def test_render_contains_sections(self):
         _bet(self.project, "CB-1", "proposed", stories=[("CB-1-1", "ready")])
         out = wbs.render_wbs(wbs.build_wbs(self.project))
