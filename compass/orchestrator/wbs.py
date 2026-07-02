@@ -88,10 +88,19 @@ def _rag(status: str, attention: list) -> str:
     return "green"
 
 
-def build_wbs(project_dir, with_conformance: bool = False) -> dict:
+def _run_order(r) -> str:
+    """Sort key for runs — most recent last. Uses last activity, then start, then
+    run_id (which carries a trailing timestamp)."""
+    return (r.get("last_ts") or "", r.get("started") or "", r.get("run_id") or "")
+
+
+def build_wbs(project_dir, with_conformance: bool = False,
+              show_halt_history: bool = False) -> dict:
     """Build the program→bet→story WBS with ground-truth status + manage-by-exception.
     `with_conformance` folds the SOW-conformance verdict per bet (slower — reads the
-    audit). Returns {program, bets, summary, attention}."""
+    audit). `show_halt_history` keeps every halted run in the exception list; by
+    default terminal/superseded halts are collapsed (see below). Returns
+    {program, bets, summary, attention}."""
     project_dir = Path(project_dir)
     bets_dir = project_dir / "docs" / "bets"
     from datetime import datetime, timezone
@@ -123,12 +132,28 @@ def build_wbs(project_dir, with_conformance: bool = False) -> dict:
         halted = [r for r in runs if r.get("status") == "halted"]
         in_flight = [r for r in runs if r.get("started") and not r.get("ended")]
 
+        # Collapse halted-run noise (#67). A shipped/merged bet has moved past any
+        # failed attempts — pure history. For a live bet only the LATEST halt is the
+        # current actionable state; older attempts are superseded. Nothing is lost:
+        # the full history stays in the spine and shows with show_halt_history=True
+        # (--wbs-verbose). [fail-loud-not-silent] — the surviving line carries the
+        # hidden count, so the board still can't lie.
+        hidden_halts = 0
+        if halted and not show_halt_history:
+            if b["status"] in _SHIPPED:
+                hidden_halts, halted = len(halted), []
+            else:
+                hidden_halts, halted = len(halted) - 1, [max(halted, key=_run_order)]
+
         node_attn = []
         for r in open_gates:
             node_attn.append({"level": "amber", "reason": f"awaiting gate at step {r['open_gate'].get('step')}",
                               "run_id": r["run_id"]})
         for r in halted:
-            node_attn.append({"level": "red", "reason": f"run halted: {r.get('reason') or ''}".strip(),
+            extra = (f" (+{hidden_halts} earlier attempt{'' if hidden_halts == 1 else 's'} hidden)"
+                     if hidden_halts else "")
+            node_attn.append({"level": "red",
+                              "reason": f"run halted: {r.get('reason') or ''}{extra}".strip(),
                               "run_id": r["run_id"]})
         for r in in_flight:
             if ev.is_stale(r, now, threshold):
@@ -193,6 +218,7 @@ def build_wbs(project_dir, with_conformance: bool = False) -> dict:
             "stories": stories, "story_count": len(stories),
             "in_flight": len(in_flight), "open_gates": len(open_gates),
             "conformance": conformance, "attention": node_attn,
+            "hidden_halts": hidden_halts,
         })
 
     summary = {"bets": len(bets), "needs_attention": sum(1 for b in bets if b["attention"]),
@@ -225,8 +251,12 @@ def render_wbs(wbs: dict) -> str:
         conf = ""
         if b.get("conformance"):
             conf = "  · conformance " + ("✅" if b["conformance"]["conformant"] else "⚠ gaps")
+        # a shipped bet's failed attempts are hidden from the exception list but
+        # noted here so the history stays discoverable (--wbs-verbose to expand).
+        hist = (f"  · {b['hidden_halts']} halted run(s) in history"
+                if b.get("hidden_halts") and not b.get("attention") else "")
         lines.append(f"  {_GLYPH.get(b['rag'],'•')} {b['id']} [{b['status']}] {b.get('title','')}"
-                     f"  ({b['story_count']} stories){conf}")
+                     f"  ({b['story_count']} stories){conf}{hist}")
         for st in b.get("stories", []):
             ptr = f" → {st['jira_key']}" if st.get("jira_key") else ""
             tag = f" ({st['type']}, human)" if st.get("owner") == "human" else (
