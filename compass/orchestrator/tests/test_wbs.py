@@ -242,6 +242,102 @@ class TestBetStatusDerivation(unittest.TestCase):
         self.assertIn("[shipped ⟵ approved]", out)
 
 
+class TestStoryReconcile(unittest.TestCase):
+    """#57 Layer B: buildable-story status derives from real PR state + spine."""
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp())
+        self.home = tempfile.mkdtemp()
+        self._old = os.environ.get("COMPASS_HOME")
+        os.environ["COMPASS_HOME"] = self.home
+
+    def tearDown(self):
+        os.environ.pop("COMPASS_HOME", None) if self._old is None \
+            else os.environ.__setitem__("COMPASS_HOME", self._old)
+
+    def _story(self, bid, sid):
+        return next(s for b in wbs.build_wbs(self.project, reconcile=True, pr_map=self.pr)["bets"]
+                    if b["id"] == bid for s in b["stories"] if s["id"] == sid)
+
+    def test_id_in_branch_bounded(self):
+        self.assertTrue(wbs._id_in_branch("WLT-27-3", "feat/WLT-27-3-build-scope"))
+        self.assertFalse(wbs._id_in_branch("WLT-27-3", "feat/WLT-27-30-build"))
+        self.assertFalse(wbs._id_in_branch("WLT-27", "feat/WLT-27-3-build"))  # bet ≠ story
+
+    def test_merged_pr_makes_story_merged_and_bet_shipped(self):
+        _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
+        self.pr = [{"headRefName": "feat/CB-1-1-build", "state": "MERGED",
+                    "mergedAt": "2026-06-30T00:00:00Z", "number": 5}]
+        s = self._story("CB-1", "CB-1-1")
+        self.assertEqual((s["status"], s["status_reconciled"]), ("merged", True))
+        # reconciled story feeds Layer A → bet derives shipped
+        bet = next(b for b in wbs.build_wbs(self.project, reconcile=True, pr_map=self.pr)["bets"]
+                   if b["id"] == "CB-1")
+        self.assertEqual(bet["status"], "shipped")
+
+    def test_open_pr_is_in_review(self):
+        _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "ready")])
+        self.pr = [{"headRefName": "feat/CB-1-1-x", "state": "OPEN", "mergedAt": None, "number": 6}]
+        self.assertEqual(self._story("CB-1", "CB-1-1")["status"], "in_review")
+
+    def test_closed_unmerged_pr_is_ready_with_note(self):
+        _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
+        self.pr = [{"headRefName": "feat/CB-1-1-x", "state": "CLOSED", "mergedAt": None, "number": 7},
+                   {"headRefName": "feat/CB-1-1-y", "state": "CLOSED", "mergedAt": None, "number": 8}]
+        s = self._story("CB-1", "CB-1-1")
+        self.assertEqual(s["status"], "ready")
+        self.assertEqual(s["reconcile_note"], "2 PRs closed unmerged")
+
+    def test_no_pr_but_halted_run_is_ready(self):
+        _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
+        sink = ev.jsonl_sink()
+        sink(ev.make_event(ev.RUN_START, run_id="r1", bet_id="CB-1", story_id="CB-1-1",
+                           workflow="build", project_dir=str(self.project)))
+        sink(ev.make_event(ev.RUN_END, run_id="r1", bet_id="CB-1", story_id="CB-1-1",
+                           workflow="build", status="halted", reason="boom"))
+        self.pr = []  # gh available, no PR for this story
+        s = self._story("CB-1", "CB-1-1")
+        self.assertEqual((s["status"], s["reconcile_note"]), ("ready", "last build attempt halted"))
+
+    def test_terminal_status_not_downgraded(self):
+        # declared `shipped` (stronger than PR `merged`) stays shipped — no noisy relabel
+        _bet(self.project, "CB-1", "shipped", stories=[("CB-1-1", "shipped")])
+        self.pr = [{"headRefName": "feat/CB-1-1-x", "state": "MERGED",
+                    "mergedAt": "2026-06-30T00:00:00Z", "number": 9}]
+        s = self._story("CB-1", "CB-1-1")
+        self.assertEqual((s["status"], s["status_reconciled"]), ("shipped", False))
+
+    def test_terminal_not_demoted_by_closed_pr(self):
+        # declared merged, only closed PRs visible → do NOT drop to ready
+        _bet(self.project, "CB-1", "shipped", stories=[("CB-1-1", "merged")])
+        self.pr = [{"headRefName": "feat/CB-1-1-x", "state": "CLOSED", "mergedAt": None, "number": 9}]
+        self.assertEqual(self._story("CB-1", "CB-1-1")["status"], "merged")
+
+    def test_human_owned_design_story_left_alone(self):
+        bdir = self.project / "docs" / "bets" / "CB-1"
+        (bdir / "stories" / "CB-1-1").mkdir(parents=True)
+        (bdir / "brief.md").write_text(
+            "---\nid: CB-1\ntype: feature\nstatus: in-build\ndepends_on: []\n---\n# CB-1\n")
+        (bdir / "stories" / "CB-1-1" / "story.md").write_text(
+            "---\nid: CB-1-1\ntype: design\nowner: human\nstatus: needs-design\n"
+            "dependencies: []\n---\n# CB-1-1\n")
+        self.pr = [{"headRefName": "feat/CB-1-1-x", "state": "MERGED",
+                    "mergedAt": "2026-06-30T00:00:00Z", "number": 9}]
+        s = self._story("CB-1", "CB-1-1")
+        self.assertEqual((s["status"], s["status_reconciled"]), ("needs-design", False))
+
+    def test_reconcile_off_by_default_keeps_declared(self):
+        _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
+        bet = wbs.build_wbs(self.project)["bets"][0]   # no reconcile
+        self.assertEqual(bet["stories"][0]["status"], "in_review")
+
+    def test_render_shows_reconcile_marker_and_note(self):
+        _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
+        pr = [{"headRefName": "feat/CB-1-1-x", "state": "CLOSED", "mergedAt": None, "number": 7}]
+        out = wbs.render_wbs(wbs.build_wbs(self.project, reconcile=True, pr_map=pr))
+        self.assertIn("[ready ⟵ in_review]", out)
+        self.assertIn("⚠ 1 PR closed unmerged", out)
+
+
 class TestHaltCollapse(unittest.TestCase):
     """#67: terminal/superseded halted runs collapse out of the exception list."""
     def setUp(self):

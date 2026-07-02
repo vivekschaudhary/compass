@@ -2673,7 +2673,8 @@ def main(argv=None):
             if pruned:
                 print(f"[pruned {len(pruned)} finished worktree(s)]\n")
             print(render_wbs(build_wbs(project_dir, with_conformance=True,
-                                       show_halt_history=args.wbs_verbose)))
+                                       show_halt_history=args.wbs_verbose,
+                                       reconcile=True)))
         if args.log:
             print_run_table(project_dir)
         if args.dri:

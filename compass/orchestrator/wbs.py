@@ -94,21 +94,87 @@ def _run_order(r) -> str:
     return (r.get("last_ts") or "", r.get("started") or "", r.get("run_id") or "")
 
 
+def _load_pr_map(project_dir):
+    """#57 Layer B: all PRs for the repo as gh JSON [{headRefName, state, mergedAt,
+    number}]. Best-effort — returns None if gh is unavailable / not a GitHub repo /
+    times out, so the tower falls back to declared status and never blocks."""
+    import json
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["gh", "pr", "list", "--state", "all", "--limit", "300",
+             "--json", "headRefName,state,mergedAt,number"],
+            cwd=str(project_dir), capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout)
+    except (ValueError, TypeError):
+        return None
+
+
+def _id_in_branch(sid: str, branch: str) -> bool:
+    """True if branch names story `sid` as a bounded token. Ids are hierarchical
+    (`WLT-27-3`), so a trailing digit OR `-<digit>` means it's actually a LONGER id
+    and must not match: `WLT-27-3` matches `feat/WLT-27-3-slug` but NOT
+    `feat/WLT-27-30-slug` (longer number), `feat/WLT-27-3-1-slug` (sub-id), or the
+    bet branch `feat/WLT-27-3` when we're looking for `WLT-27`."""
+    if not sid or not branch:
+        return False
+    return bool(re.search(r"(?<![A-Za-z0-9])" + re.escape(sid) + r"(?!-?[0-9])", branch))
+
+
+def _reconcile_story(sid, declared, owner, pr_map, runs):
+    """#57 Layer B: derive a buildable story's status from real PR state + the spine.
+    Ground truth wins over hand-set frontmatter; returns (status, note|None). Only
+    POSITIVE signals override — never demote on absence. Human-owned design/copy
+    states are left alone (their truth is human delivery, not a PR)."""
+    if owner == "human" or declared in _PENDING_HUMAN:
+        return declared, None
+    # Never DOWNGRADE an already-terminal status. `shipped` is stronger than the PR's
+    # `merged` (implies deployed); and closed/halted evidence must not knock a story
+    # frontmatter legitimately calls done back to `ready`. Only positive signals that
+    # ADVANCE a non-terminal story override the cache.
+    terminal = declared in _SHIPPED
+    if pr_map is not None:
+        matches = [p for p in pr_map if _id_in_branch(sid, p.get("headRefName", ""))]
+        if any(p.get("mergedAt") or p.get("state") == "MERGED" for p in matches):
+            return (declared, None) if terminal else ("merged", None)
+        if not terminal:
+            if any(p.get("state") == "OPEN" for p in matches):
+                return "in_review", None
+            closed = [p for p in matches if p.get("state") == "CLOSED" and not p.get("mergedAt")]
+            if closed:
+                return "ready", f"{len(closed)} PR{'s' if len(closed) > 1 else ''} closed unmerged"
+    if not terminal and any(r.get("status") == "halted" for r in runs):
+        return "ready", "last build attempt halted"
+    return declared, None
+
+
 def build_wbs(project_dir, with_conformance: bool = False,
-              show_halt_history: bool = False) -> dict:
+              show_halt_history: bool = False, reconcile: bool = False,
+              pr_map=None) -> dict:
     """Build the program→bet→story WBS with ground-truth status + manage-by-exception.
     `with_conformance` folds the SOW-conformance verdict per bet (slower — reads the
     audit). `show_halt_history` keeps every halted run in the exception list; by
-    default terminal/superseded halts are collapsed (see below). Returns
+    default terminal/superseded halts are collapsed. `reconcile` (Layer B, #57) derives
+    each buildable story's status from real PR state + the spine — `pr_map` may be
+    injected (tests); when None it is loaded best-effort via gh. Returns
     {program, bets, summary, attention}."""
     project_dir = Path(project_dir)
     bets_dir = project_dir / "docs" / "bets"
     from datetime import datetime, timezone
     now, threshold = datetime.now(timezone.utc), ev.stale_timeout()
+    if reconcile and pr_map is None:
+        pr_map = _load_pr_map(project_dir)
 
-    runs_by_bet = {}
+    runs_by_bet, runs_by_story = {}, {}
     for r in fold_runs(ev.load_events()).values():
         runs_by_bet.setdefault(r.get("bet_id"), []).append(r)
+        if r.get("story_id"):
+            runs_by_story.setdefault(r.get("story_id"), []).append(r)
 
     raw = []
     for brief in (sorted(bets_dir.glob("*/brief.md")) if bets_dir.exists() else []):
@@ -124,11 +190,21 @@ def build_wbs(project_dir, with_conformance: bool = False,
         story_nodes = []
         for sf in sorted(sdir.glob("*/story.md")) if sdir.exists() else []:
             sfm = _frontmatter(sf)
+            sid = sfm.get("id") or sf.parent.name
+            declared_s = sfm.get("status") or "unknown"
+            owner = sfm.get("owner")
+            # #57 Layer B: derive buildable-story status from PR/spine ground truth.
+            status_s, note = (_reconcile_story(sid, declared_s, owner, pr_map,
+                                               runs_by_story.get(sid, []))
+                              if reconcile else (declared_s, None))
             story_nodes.append({
-                "id": sfm.get("id") or sf.parent.name,
-                "status": sfm.get("status") or "unknown",
+                "id": sid,
+                "status": status_s,
+                "declared_status": declared_s,
+                "status_reconciled": status_s != declared_s,
+                "reconcile_note": note,
                 "type": sfm.get("type"),
-                "owner": sfm.get("owner"),
+                "owner": owner,
                 "dependencies": _list(sfm.get("dependencies")),
                 "jira_key": sfm.get("jira_key"),
             })
@@ -289,6 +365,10 @@ def render_wbs(wbs: dict) -> str:
             tag = f" ({st['type']}, human)" if st.get("owner") == "human" else (
                 f" ({st['type']})" if st.get("type") and st.get("type") != "story" else "")
             blocked = f"  ⛔ blocked by {', '.join(st['blocked_by'])}" if st.get("blocked_by") else ""
-            lines.append(f"      - {st['id']} [{st['status']}]{tag}{ptr}{blocked}")
+            # #57: show reconciled status transparently (frontmatter → ground truth) + note
+            stat = (f"{st['status']} ⟵ {st['declared_status']}" if st.get("status_reconciled")
+                    else st['status'])
+            note = f"  ⚠ {st['reconcile_note']}" if st.get("reconcile_note") else ""
+            lines.append(f"      - {st['id']} [{stat}]{tag}{ptr}{blocked}{note}")
     lines.append("")
     return "\n".join(lines)
