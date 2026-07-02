@@ -2516,6 +2516,14 @@ def main(argv=None):
              "Auto-reaps stale runs first (the board can't lie).",
     )
     parser.add_argument(
+        "--wbs-verbose",
+        action="store_true",
+        dest="wbs_verbose",
+        help="With --wbs: show every halted run in the exception list. By default "
+             "terminal (shipped-bet) and superseded (older-than-latest) halts are "
+             "collapsed — the surviving line carries the hidden count.",
+    )
+    parser.add_argument(
         "--reap-stale",
         action="store_true",
         dest="reap_stale",
@@ -2664,7 +2672,8 @@ def main(argv=None):
             pruned = prune_worktrees(project_dir)
             if pruned:
                 print(f"[pruned {len(pruned)} finished worktree(s)]\n")
-            print(render_wbs(build_wbs(project_dir, with_conformance=True)))
+            print(render_wbs(build_wbs(project_dir, with_conformance=True,
+                                       show_halt_history=args.wbs_verbose)))
         if args.log:
             print_run_table(project_dir)
         if args.dri:

@@ -164,5 +164,60 @@ class TestStoryDependencies(unittest.TestCase):
         self.assertIn("⛔ blocked by WLT-27-2", out)
 
 
+class TestHaltCollapse(unittest.TestCase):
+    """#67: terminal/superseded halted runs collapse out of the exception list."""
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp())
+        self.home = tempfile.mkdtemp()
+        self._old = os.environ.get("COMPASS_HOME")
+        os.environ["COMPASS_HOME"] = self.home
+
+    def tearDown(self):
+        os.environ.pop("COMPASS_HOME", None) if self._old is None \
+            else os.environ.__setitem__("COMPASS_HOME", self._old)
+
+    def _halt(self, sink, bet, rid, reason, ts):
+        sink(ev.make_event(ev.RUN_START, run_id=rid, bet_id=bet, workflow="build",
+                           project_dir=str(self.project), ts=ts))
+        sink(ev.make_event(ev.RUN_END, run_id=rid, bet_id=bet, workflow="build",
+                           status="halted", reason=reason, ts=ts))
+
+    def test_superseded_halts_collapse_to_latest(self):
+        _bet(self.project, "CB-1", "approved")
+        sink = ev.jsonl_sink()
+        self._halt(sink, "CB-1", "r1", "old timeout", "2026-06-30T01:00:00+00:00")
+        self._halt(sink, "CB-1", "r2", "older refuse", "2026-06-30T02:00:00+00:00")
+        self._halt(sink, "CB-1", "r3", "latest failure", "2026-06-30T03:00:00+00:00")
+        cb1 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-1")
+        halt_lines = [a for a in cb1["attention"] if "run halted" in a["reason"]]
+        self.assertEqual(len(halt_lines), 1)
+        self.assertIn("latest failure", halt_lines[0]["reason"])
+        self.assertIn("+2 earlier attempts hidden", halt_lines[0]["reason"])
+
+    def test_shipped_bet_hides_all_halts(self):
+        _bet(self.project, "CB-2", "shipped")
+        sink = ev.jsonl_sink()
+        self._halt(sink, "CB-2", "r1", "a", "2026-06-30T01:00:00+00:00")
+        self._halt(sink, "CB-2", "r2", "b", "2026-06-30T02:00:00+00:00")
+        cb2 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-2")
+        self.assertEqual([a for a in cb2["attention"] if "run halted" in a["reason"]], [])
+        self.assertEqual(cb2["rag"], "green")
+        self.assertEqual(cb2["hidden_halts"], 2)
+        self.assertIn("2 halted run(s) in history",
+                      wbs.render_wbs(wbs.build_wbs(self.project)))
+
+    def test_verbose_shows_every_halt(self):
+        _bet(self.project, "CB-1", "approved")
+        sink = ev.jsonl_sink()
+        self._halt(sink, "CB-1", "r1", "a", "2026-06-30T01:00:00+00:00")
+        self._halt(sink, "CB-1", "r2", "b", "2026-06-30T02:00:00+00:00")
+        self._halt(sink, "CB-1", "r3", "c", "2026-06-30T03:00:00+00:00")
+        cb1 = next(b for b in wbs.build_wbs(self.project, show_halt_history=True)["bets"]
+                   if b["id"] == "CB-1")
+        halt_lines = [a for a in cb1["attention"] if "run halted" in a["reason"]]
+        self.assertEqual(len(halt_lines), 3)
+        self.assertFalse(any("hidden" in a["reason"] for a in halt_lines))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
