@@ -404,6 +404,27 @@ class TestCockpitStaleness(unittest.TestCase):
         self.assertIn("relaunch", stale)
         self.assertNotIn("Dashboard code was updated on disk", fresh)
 
+    def test_banner_names_a_runnable_relaunch_command(self):
+        # the banner must name a command that actually works — never the non-existent
+        # bare `cockpit`. It shows the installed console script OR the module form.
+        stale = cockpit.render_html({}, snapshot_ts="t", code_stale=True)
+        self.assertRegex(stale, r"compass-cockpit --serve|python3 -m compass\.orchestrator\.cockpit --serve")
+        self.assertNotIn("<code>cockpit --serve</code>", stale)
+
+    def test_relaunch_cmd_falls_back_to_module_form(self):
+        # #78: no console script on PATH → the always-works module form (the case for a
+        # user without `pip install -e .`).
+        import shutil
+        orig = shutil.which
+        try:
+            shutil.which = lambda name: None
+            self.assertEqual(cockpit._relaunch_cmd(),
+                             "python3 -m compass.orchestrator.cockpit --serve")
+            shutil.which = lambda name: "/usr/local/bin/compass-cockpit"
+            self.assertEqual(cockpit._relaunch_cmd(), "compass-cockpit --serve")
+        finally:
+            shutil.which = orig
+
     def test_step_rows_parity_text_and_html(self):
         # _run_step_rows is the single source both renderers use → no drift.
         run = {"run_id": "r", "project": "home", "workflow": "fix", "bet_id": None,
