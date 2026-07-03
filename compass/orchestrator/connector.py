@@ -76,6 +76,8 @@ def resolve_connector_for_artifact(canonical_rel_path, project_dir: Path,
         return _config_connector(project_dir, compass_dir, "ticketing")
     if re.search(r"/fixes/[^/]+\.md$", p):          # #71: a fix record → Jira Bug/Story
         return _config_connector(project_dir, compass_dir, "ticketing")
+    if re.search(r"/ops/[^/]+\.md$", p):            # #72: an ops-change → Jira Task/Bug
+        return _config_connector(project_dir, compass_dir, "ticketing")
     return _config_connector(project_dir, compass_dir, "docs")
 
 
@@ -93,9 +95,13 @@ _JIRA_ISSUE_TYPE = {
 def resolve_issue_type(canonical_rel_path, content: str = "") -> str:
     """#73: the Jira issue type for an artifact. Prefers the frontmatter `type:`
     (bug/defect→Bug, architecture/research/ops→Task, story/design/copy→Story,
-    bet/brief→Epic); falls back to the path. Defaults to Epic (back-compat: today the
-    only jira-routed artifact is a story → Story, and a bet brief → Epic)."""
+    bet/brief→Epic); falls back to the path. #72: an ops change with
+    `change_class: emergency` (incident-driven) is a **Bug**, not a Task. Defaults to
+    Epic (back-compat: today the only jira-routed artifact is a story → Story)."""
     t = (_frontmatter_field(content, "type") or "").lower()
+    if t == "ops":              # #72: an emergency (incident-driven) ops change is a Bug
+        cc = (_frontmatter_field(content, "change_class") or "").lower()
+        return "Bug" if cc == "emergency" else "Task"
     if t in _JIRA_ISSUE_TYPE:
         return _JIRA_ISSUE_TYPE[t]
     p = str(canonical_rel_path)

@@ -4,6 +4,7 @@ type: ops
 bet: <BET-ID or null>
 hygiene: false
 status: planned             # planned | approved | in-execution | shipped | rolled-back | deploy-failed
+change_class: additive      # additive | amendment | emergency — an emergency (incident-driven) projects as a Jira Bug; additive/amendment as a Task
 domain: infra               # infra | database | secrets | ci-cd | dependencies | networking | observability
 blast_radius: medium        # low | medium | high
 author: Enterprise/Solution Architect
