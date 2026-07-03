@@ -150,6 +150,64 @@ class TestConnectorRouting(unittest.TestCase):
         self.assertEqual(connector._frontmatter_field(c, "jira_key"), "PROJ-9")
 
 
+class TestIssueTypeResolution(unittest.TestCase):
+    """#73: connector emits Bug/Task (not just Epic/Story); type from frontmatter/path
+    or an explicit override."""
+    def test_resolve_from_frontmatter_type(self):
+        r = connector.resolve_issue_type
+        self.assertEqual(r("docs/x.md", "---\ntype: defect\n---\n"), "Bug")
+        self.assertEqual(r("docs/x.md", "---\ntype: bug\n---\n"), "Bug")
+        self.assertEqual(r("docs/x.md", "---\ntype: ops\n---\n"), "Task")
+        self.assertEqual(r("docs/x.md", "---\ntype: architecture\n---\n"), "Task")
+        self.assertEqual(r("docs/x.md", "---\ntype: enhancement\n---\n"), "Story")
+        self.assertEqual(r("docs/x.md", "---\ntype: design\n---\n"), "Story")
+
+    def test_resolve_from_path_fallback(self):
+        r = connector.resolve_issue_type
+        self.assertEqual(r("docs/bets/CB-1/stories/CB-1-1/story.md", ""), "Story")
+        self.assertEqual(r("docs/ops/OPS-1.md", ""), "Task")
+        self.assertEqual(r("docs/bets/CB-1/architecture.md", ""), "Task")
+        self.assertEqual(r("docs/bets/CB-1/brief.md", ""), "Epic")   # back-compat default
+
+    def test_back_compat_story_unchanged(self):
+        # frontmatter type wins, but a plain story path still → Story (no regression)
+        self.assertEqual(connector.resolve_issue_type(
+            "docs/bets/CB-1/stories/CB-1-1/story.md", "# S\nbody"), "Story")
+
+
+class TestPushArtifactIssueType(unittest.TestCase):
+    """#73: push_artifact honors an explicit issue_type and otherwise resolves it."""
+    KEYS = ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT")
+
+    def setUp(self):
+        self.project_dir = Path(tempfile.mkdtemp())
+        self._saved = {k: os.environ.get(k) for k in self.KEYS}
+        os.environ.update(JIRA_BASE_URL="https://a.net", JIRA_EMAIL="e",
+                          JIRA_API_TOKEN="t", JIRA_PROJECT="PROJ")
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+    def test_explicit_issue_type_bug(self):
+        t = FakeTransport([(201, {"key": "PROJ-1"})])
+        connector.push_artifact(self.project_dir, "docs/fixes/F-1.md", "# Fix\nbody",
+                                "jira", transport=t, issue_type="Bug")
+        self.assertEqual(t.calls[0]["body"]["fields"]["issuetype"], {"name": "Bug"})
+
+    def test_resolved_task_from_frontmatter(self):
+        t = FakeTransport([(201, {"key": "PROJ-2"})])
+        connector.push_artifact(self.project_dir, "docs/ops/OPS-1.md",
+                                "---\ntype: ops\n---\n# Cert rotation\nbody", "jira", transport=t)
+        self.assertEqual(t.calls[0]["body"]["fields"]["issuetype"], {"name": "Task"})
+
+    def test_default_still_story_for_story_path(self):
+        t = FakeTransport([(201, {"key": "PROJ-3"})])
+        connector.push_artifact(self.project_dir, "docs/bets/CB-1/stories/CB-1-1/story.md",
+                                "# S\nbody", "jira", transport=t)
+        self.assertEqual(t.calls[0]["body"]["fields"]["issuetype"], {"name": "Story"})
+
+
 class TestPushErrorSurfacing(unittest.TestCase):
     """#181: a failed push must say WHY (status + API message), not a blind 'failed'."""
 
