@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.50
+version: 0.3.51
 requires_approved: []
 ---
 
@@ -44,8 +44,8 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 **Dispatches:** Engineer agent (tool-capable host — it reads + runs the real code)
 **Task definition:** `compass/agents/engineer.md` → Task `triage-and-fix`
 **Input:** ticket / free-text bug report (or a `/triage` route's classification) · the project source · bet context if bet-linked
-**What it covers:** **triage from the code** — reproduce by reading + running the actual source (don't interrogate the user for what the code shows) → classify severity P0–P3 → check duplicates → identify affected bet(s) or tag `hygiene: true`. `[refuse-escalate]` (refined): reproduce from code first; ask the human only for what code can't reveal (prod data, account state, credentials); **if still irreproducible, HALT with a precise ask — don't fix blind**. Then: **failing regression test FIRST** (`test: reproduce <bug>`) → minimum fix (`fix: …`) → run ALL local checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → pre-PR `[cross-artifact-sweep-on-contract-shift]` → open PR with a short **triage summary** (severity · repro · root-cause vs symptom). Halts for Reviewer; does NOT self-review.
-**Output:** PR with regression-test-first commit order + triage summary
+**What it covers:** **triage from the code** — reproduce by reading + running the actual source (don't interrogate the user for what the code shows) → classify severity P0–P3 → **classify defect vs enhancement** (defect → Jira **Bug**; enhancement → Jira **Story**, opened directly, no brief) → check duplicates → identify affected bet(s) or tag `hygiene: true`. `[refuse-escalate]` (refined): reproduce from code first; ask the human only for what code can't reveal (prod data, account state, credentials); **if still irreproducible, HALT with a precise ask — don't fix blind**. Then: **failing regression test FIRST** (`test: reproduce <bug>`) → minimum fix (`fix: …`) → run ALL local checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → pre-PR `[cross-artifact-sweep-on-contract-shift]` → open PR with a short **triage summary** (severity · repro · root-cause vs symptom) → **write a fix record (`compass/templates/fix.md`) and project it to Jira as a Bug/Story (#71)** — bet-linked under the Epic, hygiene standalone, linking the PR. Halts for Reviewer; does NOT self-review.
+**Output:** PR with regression-test-first commit order + triage summary · a fix record (`docs/fixes/<id>.md` or `docs/bets/<bet>/fixes/<id>.md`) projected to Jira as a **Bug** (defect) / **Story** (enhancement)
 
 ### Step 2. `automation.write-e2e-tests` (Automation agent owns)
 
@@ -79,7 +79,8 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 
 ## Workflow-level verification (final GATE)
 
-- [ ] (Step 1) Defect **reproduced from the code** (or HALTED with a precise ask if irreproducible) · severity + bet-linkage/hygiene classified in the triage summary · **failing regression test landed BEFORE the fix** (visible in commit order) · minimum fix · all local checks + runtime artifact green
+- [ ] (Step 1) Defect **reproduced from the code** (or HALTED with a precise ask if irreproducible) · severity + **defect-vs-enhancement** + bet-linkage/hygiene classified in the triage summary · **failing regression test landed BEFORE the fix** (visible in commit order) · minimum fix · all local checks + runtime artifact green
+- [ ] (Step 1) **Fix record written and projected to Jira (#71)** — `type: bug` → **Bug**, `type: enhancement` → **Story**; bet-linked → under the bet's Epic, hygiene → standalone; the PR is linked and status derives from it (#57)
 - [ ] (Step 2) E2E extended for user-flow regressions (vertical test + cleanup AC for data surfaces) OR skip logged
 - [ ] (Step 3) Full Reviewer pass by a **different model**; Security Reviewer engaged if sensitive surface; zero unresolved BLOCKERs/CRITICALs
 - [ ] (Step 5) HITL merge approval (not self-approved)

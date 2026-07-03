@@ -143,6 +143,11 @@ class TestConnectorRouting(unittest.TestCase):
             "docs/bets/CB-1/stories/CB-1-1/story.md", self.project_dir), "jira")
         self.assertEqual(connector.resolve_connector_for_artifact(
             "docs/bets/CB-1/brief.md", self.project_dir), "confluence")
+        # #71: a fix record routes to ticketing (Jira), not docs
+        self.assertEqual(connector.resolve_connector_for_artifact(
+            "docs/fixes/FIX-1.md", self.project_dir), "jira")
+        self.assertEqual(connector.resolve_connector_for_artifact(
+            "docs/bets/CB-1/fixes/FIX-2.md", self.project_dir), "jira")
 
     def test_pointer_frontmatter_roundtrip(self):
         c = connector._set_frontmatter_field("---\nid: X\n---\nbody", "jira_key", "PROJ-9")
@@ -173,6 +178,13 @@ class TestIssueTypeResolution(unittest.TestCase):
         # frontmatter type wins, but a plain story path still → Story (no regression)
         self.assertEqual(connector.resolve_issue_type(
             "docs/bets/CB-1/stories/CB-1-1/story.md", "# S\nbody"), "Story")
+
+    def test_fix_record_types(self):
+        # #71: defect → Bug, enhancement → Story; a fix path with no type defaults to Bug
+        r = connector.resolve_issue_type
+        self.assertEqual(r("docs/fixes/FIX-1.md", "---\ntype: bug\n---\n"), "Bug")
+        self.assertEqual(r("docs/fixes/FIX-1.md", "---\ntype: enhancement\n---\n"), "Story")
+        self.assertEqual(r("docs/bets/CB-1/fixes/FIX-2.md", ""), "Bug")   # path default
 
 
 class TestPushArtifactIssueType(unittest.TestCase):
