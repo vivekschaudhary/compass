@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.51
+version: 0.3.52
 requires_approved: []
 ---
 
@@ -44,8 +44,8 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 **Dispatches:** Engineer agent (tool-capable host — it reads + runs the real code)
 **Task definition:** `compass/agents/engineer.md` → Task `triage-and-fix`
 **Input:** ticket / free-text bug report (or a `/triage` route's classification) · the project source · bet context if bet-linked
-**What it covers:** **triage from the code** — reproduce by reading + running the actual source (don't interrogate the user for what the code shows) → classify severity P0–P3 → **classify defect vs enhancement** (defect → Jira **Bug**; enhancement → Jira **Story**, opened directly, no brief) → check duplicates → identify affected bet(s) or tag `hygiene: true`. `[refuse-escalate]` (refined): reproduce from code first; ask the human only for what code can't reveal (prod data, account state, credentials); **if still irreproducible, HALT with a precise ask — don't fix blind**. Then: **failing regression test FIRST** (`test: reproduce <bug>`) → minimum fix (`fix: …`) → run ALL local checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → pre-PR `[cross-artifact-sweep-on-contract-shift]` → open PR with a short **triage summary** (severity · repro · root-cause vs symptom) → **write a fix record (`compass/templates/fix.md`) and project it to Jira as a Bug/Story (#71)** — bet-linked under the Epic, hygiene standalone, linking the PR. Halts for Reviewer; does NOT self-review.
-**Output:** PR with regression-test-first commit order + triage summary · a fix record (`docs/fixes/<id>.md` or `docs/bets/<bet>/fixes/<id>.md`) projected to Jira as a **Bug** (defect) / **Story** (enhancement)
+**What it covers:** **triage from the code** — reproduce by reading + running the actual source (don't interrogate the user for what the code shows) → classify severity P0–P3 → **classify defect vs enhancement** (defect → Jira **Bug**; enhancement → Jira **Story**, opened directly, no brief) → check duplicates → identify affected bet(s) or tag `hygiene: true`. `[refuse-escalate]` (refined): reproduce from code first; ask the human only for what code can't reveal (prod data, account state, credentials); **if still irreproducible, HALT with a precise ask — don't fix blind**. Then: **failing regression test FIRST** (`test: reproduce <bug>`) → minimum fix (`fix: …`) → run ALL local checks + `[mechanical-output-verification]` → `[per-surface-vertical-test]` flag if a data surface is touched → pre-PR `[cross-artifact-sweep-on-contract-shift]` → open PR with a short **triage summary** (severity · repro · root-cause vs symptom) **stating the defect-vs-enhancement classification** (#71). Halts for Reviewer; does NOT self-review. **The orchestrator** — not the agent — writes the fix record + projects it to Jira at run completion (see the run-level note below), so the tracking can't be skipped (#89).
+**Output:** PR with regression-test-first commit order + triage summary. At run completion the **orchestrator** projects a fix record (`docs/fixes/<id>.md` or `docs/bets/<bet>/fixes/<id>.md`) to Jira as a **Bug** (defect) / **Story** (enhancement) — bet-linked under the Epic, hygiene standalone, linking the PR; `jira_key` stored (idempotent).
 
 ### Step 2. `automation.write-e2e-tests` (Automation agent owns)
 
@@ -80,7 +80,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 ## Workflow-level verification (final GATE)
 
 - [ ] (Step 1) Defect **reproduced from the code** (or HALTED with a precise ask if irreproducible) · severity + **defect-vs-enhancement** + bet-linkage/hygiene classified in the triage summary · **failing regression test landed BEFORE the fix** (visible in commit order) · minimum fix · all local checks + runtime artifact green
-- [ ] (Step 1) **Fix record written and projected to Jira (#71)** — `type: bug` → **Bug**, `type: enhancement` → **Story**; bet-linked → under the bet's Epic, hygiene → standalone; the PR is linked and status derives from it (#57)
+- [ ] (Run completion) **Orchestrator projected the fix record to Jira (#71)** — `type: bug` → **Bug**, `type: enhancement` → **Story**; bet-linked → under the bet's Epic, hygiene → standalone; PR linked; `jira_key` stored. The run **fails loud** (`⚠ TRACKING INCOMPLETE`) if Jira is configured but nothing was created — no Jira item = the work isn't tracked (#89, [fail-loud-not-silent])
 - [ ] (Step 2) E2E extended for user-flow regressions (vertical test + cleanup AC for data surfaces) OR skip logged
 - [ ] (Step 3) Full Reviewer pass by a **different model**; Security Reviewer engaged if sensitive surface; zero unresolved BLOCKERs/CRITICALs
 - [ ] (Step 5) HITL merge approval (not self-approved)
