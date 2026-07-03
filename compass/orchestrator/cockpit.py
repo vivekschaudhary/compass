@@ -680,25 +680,37 @@ def build_page(events: list, project_filter=None, limit=10, cdir=None,
                        code_stale=code_stale).encode("utf-8")
 
 
-_START_MTIME = None  # #30: cockpit code mtime captured at server startup
+_START_FINGERPRINT = None  # #30/#82: cockpit code content-hash captured at server startup
 
 
-def _code_mtime() -> float:
-    """#30: newest mtime among the modules whose code shapes the dashboard — this file +
-    run.py. Used to detect a merged dashboard fix that only takes effect after a restart."""
-    import os
+def _code_fingerprint() -> str:
+    """#30/#82: a CONTENT hash of the modules whose code shapes the dashboard — this
+    file + run.py. Used to detect a merged dashboard fix that only takes effect after a
+    restart. Content-based, not mtime-based: git rewrites working-tree files on
+    checkout/switch/pull and bumps their mtime even when the bytes are identical, so an
+    mtime check false-fires on every branch switch (#82). A hash only differs when the
+    code actually changed."""
+    import hashlib
     paths = [__file__]
     try:
         from . import run as _run
         paths.append(_run.__file__)
     except Exception:
         pass
-    return max((os.path.getmtime(p) for p in paths if p), default=0.0)
+    h = hashlib.sha256()
+    for p in sorted(x for x in paths if x):
+        try:
+            with open(p, "rb") as f:
+                h.update(f.read())
+        except OSError:
+            continue
+    return h.hexdigest()
 
 
-def _code_is_stale(start_mtime) -> bool:
-    """#30: True when the dashboard code on disk is newer than when the server started."""
-    return bool(start_mtime) and _code_mtime() > start_mtime
+def _code_is_stale(start_fp) -> bool:
+    """#30/#82: True when the dashboard code on disk differs (by content) from what the
+    running server loaded at startup."""
+    return bool(start_fp) and _code_fingerprint() != start_fp
 
 
 # ── action endpoints (#119): the cockpit relays launches/decisions to compass-run ──
@@ -967,8 +979,8 @@ def _serve(events_path, cdir, project_filter, limit, port,
     from datetime import datetime, timezone
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    global _START_MTIME                       # #30: snapshot the code mtime at startup
-    _START_MTIME = _code_mtime()              #      so a later merged fix surfaces a banner
+    global _START_FINGERPRINT                 # #30/#82: snapshot the code content-hash at startup
+    _START_FINGERPRINT = _code_fingerprint()  #          so a later merged fix surfaces a banner
 
     defaults = {"known": _known_workflows(cdir), "project_dir": default_project_dir,
                 "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None}
@@ -1116,7 +1128,7 @@ def _serve(events_path, cdir, project_filter, limit, port,
             body = build_page(events, project_filter=project_filter, limit=limit,
                               cdir=cdir, snapshot_ts=ts, actions=allow_actions,
                               default_project_dir=default_project_dir or "",
-                              code_stale=_code_is_stale(_START_MTIME))  # #30
+                              code_stale=_code_is_stale(_START_FINGERPRINT))  # #30/#82
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

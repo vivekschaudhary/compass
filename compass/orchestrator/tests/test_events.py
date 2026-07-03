@@ -388,14 +388,19 @@ class TestCockpitStaleness(unittest.TestCase):
     """#30: the cockpit warns when its own code changed on disk since it started, so a
     merged dashboard fix doesn't sit invisible until a manual restart."""
 
-    def test_is_stale_none_and_future(self):
-        self.assertFalse(cockpit._code_is_stale(None))          # not tracking → never stale
-        import time
-        self.assertFalse(cockpit._code_is_stale(time.time() + 10_000))  # started 'after' → fresh
+    def test_is_stale_none_and_matching(self):
+        self.assertFalse(cockpit._code_is_stale(None))                        # not tracking → never stale
+        self.assertFalse(cockpit._code_is_stale(cockpit._code_fingerprint()))  # same content → fresh
 
-    def test_is_stale_when_code_newer(self):
-        # started long ago → the real code mtime is newer → stale
-        self.assertTrue(cockpit._code_is_stale(1.0))
+    def test_is_stale_when_content_differs(self):
+        self.assertTrue(cockpit._code_is_stale("a-different-fingerprint"))    # content changed → stale
+
+    def test_mtime_bump_without_content_change_is_not_stale(self):
+        # #82: git checkout/switch bumps mtime without changing bytes — must NOT false-fire
+        import os
+        fp = cockpit._code_fingerprint()
+        os.utime(cockpit.__file__, None)          # touch: new mtime, identical content
+        self.assertFalse(cockpit._code_is_stale(fp))
 
     def test_banner_shown_only_when_stale(self):
         stale = cockpit.render_html({}, snapshot_ts="t", code_stale=True)
