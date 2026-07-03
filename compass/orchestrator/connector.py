@@ -68,9 +68,13 @@ def resolve_connector(project_dir: Path, compass_dir: Path = None) -> str:
 
 def resolve_connector_for_artifact(canonical_rel_path, project_dir: Path,
                                    compass_dir: Path = None) -> str:
-    """Per-artifact-type backend (Compass-primary → one-way projection): a story →
-    ticketing (jira); foundation / brief / architecture docs → docs (confluence)."""
-    if re.search(r"/stories/[^/]+/story\.md$", str(canonical_rel_path)):
+    """Per-artifact-type backend (Compass-primary → one-way projection): a story or a
+    fix record → ticketing (jira); foundation / brief / architecture docs → docs
+    (confluence)."""
+    p = str(canonical_rel_path)
+    if re.search(r"/stories/[^/]+/story\.md$", p):
+        return _config_connector(project_dir, compass_dir, "ticketing")
+    if re.search(r"/fixes/[^/]+\.md$", p):          # #71: a fix record → Jira Bug/Story
         return _config_connector(project_dir, compass_dir, "ticketing")
     return _config_connector(project_dir, compass_dir, "docs")
 
@@ -97,6 +101,8 @@ def resolve_issue_type(canonical_rel_path, content: str = "") -> str:
     p = str(canonical_rel_path)
     if re.search(r"/stories/[^/]+/story\.md$", p):
         return "Story"
+    if "/fixes/" in p:          # #71: a fix record with no explicit type defaults to Bug
+        return "Bug"
     if "/ops/" in p:
         return "Task"
     if re.search(r"/(architecture|research)\.md$", p):
