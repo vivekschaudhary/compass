@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/fix` now actually creates the Jira Bug/Story — mechanically, at run completion (#71, finishing it for real per #89).** #71 originally shipped the *plumbing* (routing + type mapping + template + agent-doc instructions) but the real headless `/fix` run created **no ticket** — the projection was left as agent prose the agent skipped (a Principle #14 hole). Now the **orchestrator** owns it: at run completion `_project_fix_record` writes the fix record from the engineer's classification (defect→Bug / enhancement→Story) + the PR, projects it to Jira (bet-linked → under the Epic, hygiene → standalone), stores the `jira_key` (idempotent update, not duplicate), and **fails loud** (`⚠ TRACKING INCOMPLETE`) if Jira is configured but nothing was created. The engineer now only *classifies*; it no longer writes/projects the record. **Verified by a live dogfood: a real `/fix` produced KAN-10** (Bug, PR-linked) against the home-app board — not just green unit tests. +4 tests (445), CONSISTENT.
+
 ### Added
 
 - **`/ops` projects the ops-change as a Jira Task — Bug for an incident/emergency (#72).** An ops-change doc now carries a `change_class` (`additive | amendment | emergency`) and **projects to Jira** as a **Task** (routine) or a **Bug** (an `emergency`, incident-driven change) — bet-linked under the bet's Epic, hygiene standalone, holding the `jira_key` pointer (status derives from ground truth, #57). The connector routes `docs/**/ops/*.md` → ticketing and `resolve_issue_type` maps `type: ops` by `change_class`. Closes the gap where operational work was invisible to the board. Sibling of #71 (`/fix`); part of #56 (all work tracked). 438 tests, CONSISTENT.

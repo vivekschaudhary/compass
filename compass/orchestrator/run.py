@@ -137,6 +137,21 @@ def _open_pr_url(project_dir, branch):
         return None
 
 
+def _pr_url_any_state(project_dir, branch):
+    """#71: the PR URL for `branch` regardless of state (open OR merged) — the fix
+    record links its PR even on a resume/retro projection. Best-effort; None on failure."""
+    if not branch:
+        return None
+    import json as _json
+    import subprocess
+    try:
+        r = subprocess.run(["gh", "pr", "view", branch, "--json", "url"],
+                           cwd=str(project_dir), capture_output=True, text=True, timeout=60)
+        return _json.loads(r.stdout).get("url") if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
 def _merge_next_steps(pr_url, bet_id) -> str:
     """#157: the explicit next-step block printed when a MERGE gate is approved but
     NOT auto-merged — so the operator isn't left at '[handle manually]' with no idea
@@ -1384,6 +1399,108 @@ def _promote_artifact(project_dir, compass_dir, canonical_rel, fallback_output,
                          resolve_connector_for_artifact(canonical_rel, project_dir, compass_dir))
 
 
+def _fix_title(output: str) -> str:
+    """Best-effort short title from the engineer's triage output (TL;DR or first H1)."""
+    for pat in (r"^\*\*TL;DR:?\*\*\s*(.+)$", r"^#\s+(.+)$"):
+        m = re.search(pat, output or "", re.MULTILINE)
+        if m:
+            return m.group(1).strip().rstrip(".")[:100]
+    return ""
+
+
+def _render_fix_record(fid, ftype, bet_id, severity, pr_url, title, today) -> str:
+    """#71: a minimal fix record (Compass-primary). `type:` drives the Jira issue type
+    (bug→Bug, enhancement→Story). The PR carries the full triage; this is the tracked item."""
+    jira_type = "Story" if ftype == "enhancement" else "Bug"
+    return (
+        "---\n"
+        f"id: {fid}\n"
+        f"type: {ftype}\n"
+        f"bet: {bet_id or 'null'}\n"
+        f"hygiene: {'false' if bet_id else 'true'}\n"
+        "status: in_review\n"
+        f"severity: {severity}\n"
+        f"pr: {pr_url or 'null'}\n"
+        "author: Engineer\n"
+        f"created: {today}\n"
+        "---\n\n"
+        f"# Fix: {title or fid}\n\n"
+        "Tracked fix record (#71). Full triage — symptom/repro, root cause, regression "
+        "test, and the minimum fix — is in the PR.\n\n"
+        f"- **PR:** {pr_url or '(none yet)'}\n"
+        f"- **type:** {ftype} → Jira {jira_type}\n"
+        f"- **severity:** {severity}\n"
+    )
+
+
+def _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
+                        last_agent_output, run_id):
+    """#71: the ORCHESTRATOR (not the agent) writes the fix record from the engineer's
+    classification + PR and PROJECTS it to Jira as a Bug (defect) / Story (enhancement).
+    Moving this out of agent prose closes the Principle #14 hole that left #71's Jira
+    creation to a headless agent that skipped it. Best-effort — returns the connector
+    label (`jira (KAN-42, created)` | `filesystem fallback — …`), never raises into the run."""
+    from datetime import datetime, timezone
+    from .connector import (push_artifact, resolve_connector_for_artifact,
+                            resolve_issue_type)
+    try:
+        out = last_agent_output or ""
+        # a /fix is a DEFECT by default; enhancement only on an explicit marker, so a
+        # mis-read defaults to Bug (the common case), never silently mislabels.
+        ftype = ("enhancement"
+                 if re.search(r"classification\s*:\s*enhancement|type\s*:\s*enhancement",
+                              out, re.IGNORECASE)
+                 else "bug")
+        sev = re.search(r"\bP([0-3])\b", out)
+        severity = f"P{sev.group(1)}" if sev else "P2"
+        # link the PR regardless of state — at projection time it's open, but a
+        # resume/retro projection should still link a merged PR.
+        pr_url = _pr_url_any_state(project_dir, work_branch) or ""
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        slug = ((work_branch or run_id or "fix").split("/")[-1]
+                .replace("fix--", "").replace("fix/", "")[:40].strip("-") or "fix")
+        fid = f"FIX-{today}-{slug}"
+        rel = (f"docs/bets/{bet_id}/fixes/{fid}.md" if bet_id
+               else f"docs/fixes/{fid}.md")
+        content = _render_fix_record(fid, ftype, bet_id, severity, pr_url,
+                                     _fix_title(out), today)
+        # idempotency: if the record already exists, carry its stored jira_key into the
+        # regenerated content so a re-projection UPDATES the same issue, not a duplicate.
+        existing = project_dir / rel
+        if existing.exists():
+            from .connector import _frontmatter_field, _set_frontmatter_field
+            jk = _frontmatter_field(existing.read_text(encoding="utf-8"), "jira_key")
+            if jk:
+                content = _set_frontmatter_field(content, "jira_key", jk)
+        # route via the PROJECT's connector config (the consumer declares ticketing: jira)
+        conn = resolve_connector_for_artifact(rel, project_dir, None)
+        label = push_artifact(project_dir, rel, content, conn,
+                              issue_type=resolve_issue_type(rel, content))
+        if bet_id and label and label.startswith("jira ("):   # bet-linked → under the Epic
+            _parent_fix_under_epic(project_dir, bet_id, rel)
+        return label
+    except Exception as exc:
+        return f"filesystem fallback — fix projection error: {exc}"
+
+
+def _parent_fix_under_epic(project_dir, bet_id, fix_rel):
+    """#71/#35: put a bet-linked fix's Jira issue under the bet's Epic. Best-effort."""
+    from .connector import _frontmatter_field, project_bet_jira_structure
+    from . import stores
+    try:
+        project_bet_jira_structure(project_dir, bet_id)   # ensure the Epic exists
+        brief = Path(project_dir) / "docs" / "bets" / bet_id / "brief.md"
+        epic_key = (_frontmatter_field(brief.read_text(encoding="utf-8"), "jira_epic_key")
+                    if brief.exists() else None)
+        fix_key = _frontmatter_field(
+            (Path(project_dir) / fix_rel).read_text(encoding="utf-8"), "jira_key")
+        auth = stores.jira_auth()
+        if auth and epic_key and fix_key:
+            stores.jira_set_parent(auth, fix_key, epic_key)
+    except Exception:
+        pass
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Core workflow runner — returns (prior_outputs, artifact_paths)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2235,6 +2352,24 @@ def _run_workflow(
                 f"you see permission-dialog narration, the host couldn't write).")
         print("\n" + warn, file=sys.stderr)
         emit(ev.NOTE, text=warn)
+
+    # #71: /fix must actually CREATE the Jira Bug/Story. The orchestrator writes the fix
+    # record from the ENGINEER's classification + PR and projects it — not left to agent
+    # prose (which the headless agent skipped, #89). Fail LOUD if Jira is configured but
+    # nothing was tracked. [fail-loud-not-silent].
+    if workflow_name == "fix" and not handed_off and not no_write:
+        _eng_output = next((p["output"] for p in prior_outputs
+                            if p.get("task") == "triage-and-fix"), last_agent_output)
+        _fix_label = _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
+                                         _eng_output, run_id)
+        if _fix_label:
+            print(f"\n[fix tracked → {_fix_label}]")
+            emit(ev.NOTE, text=f"fix tracked → {_fix_label}")
+            if "fallback" in _fix_label and "not configured" not in _fix_label:
+                warn = (f"⚠ TRACKING INCOMPLETE — /fix produced no Jira item "
+                        f"({_fix_label}). The work isn't on the board.")
+                print("\n" + warn, file=sys.stderr)
+                emit(ev.NOTE, text=warn)
 
     if not handed_off:
         emit(ev.RUN_END, status="completed", reason="all steps complete")
