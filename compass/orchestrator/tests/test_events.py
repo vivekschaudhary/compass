@@ -430,6 +430,19 @@ class TestCockpitStaleness(unittest.TestCase):
         finally:
             shutil.which = orig
 
+    def test_relaunch_cmd_preserves_allow_actions(self):
+        # #86: in actions mode the relaunch command must keep --allow-actions, else the
+        # restart lands read-only (no launch/approve controls).
+        self.assertIn("--allow-actions", cockpit._relaunch_cmd(allow_actions=True))
+        self.assertNotIn("--allow-actions", cockpit._relaunch_cmd(allow_actions=False))
+        # and the banner's relaunch <code> reflects the running server's mode (the
+        # read-only page still mentions --allow-actions in its mode hint, so assert on
+        # the code block specifically)
+        actions_banner = cockpit.render_html({}, snapshot_ts="t", code_stale=True, actions=True)
+        readonly_banner = cockpit.render_html({}, snapshot_ts="t", code_stale=True, actions=False)
+        self.assertIn("--serve --allow-actions</code>", actions_banner)
+        self.assertIn("--serve</code>", readonly_banner)
+
     def test_step_rows_parity_text_and_html(self):
         # _run_step_rows is the single source both renderers use → no drift.
         run = {"run_id": "r", "project": "home", "workflow": "fix", "bet_id": None,
