@@ -553,10 +553,19 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     # (like the #177 approve-race) only takes effect after a restart. Detect that the
     # code changed on disk and tell the operator, so a fix doesn't sit invisible.
     if code_stale:
-        p.append("<div style='background:#7a2e00;color:#ffd9b3;padding:10px 14px;"
-                 "border-radius:8px;margin:8px 0;font-weight:600'>⚠ Dashboard code was "
-                 "updated on disk since this server started — Ctrl-C and relaunch "
-                 f"<code>{_relaunch_cmd(actions)}</code> to apply the latest (#30).</div>")
+        # #88: the dismiss key is the CURRENT on-disk code fingerprint — dismissing hides
+        # the banner for THIS version (survives the auto-refresh reload via localStorage),
+        # and it returns automatically when the code changes again (new fp ≠ stored).
+        fp = _code_fingerprint()
+        p.append(
+            f"<div id='cbanner' data-fp='{fp}' style='background:#7a2e00;color:#ffd9b3;"
+            "padding:10px 14px;border-radius:8px;margin:8px 0;font-weight:600'>⚠ Dashboard "
+            "code was updated on disk since this server started — Ctrl-C and relaunch "
+            f"<code>{_relaunch_cmd(actions)}</code> to apply the latest (#30). "
+            "<button onclick=\"localStorage.setItem('compass_cbanner',this.parentNode."
+            "dataset.fp);this.parentNode.style.display='none'\" style='margin-left:8px;"
+            "background:#5a2200;color:#ffd9b3;border:1px solid #ffd9b3;border-radius:6px;"
+            "padding:2px 8px;cursor:pointer;font-weight:600'>Dismiss ✕</button></div>")
 
     # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
     if actions:
@@ -659,6 +668,11 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     # (shared window.__cpause) so a reload can't abort an approve/launch POST.
     p.append(
         "<script>(function(){var ms=%d;"
+        # #88: keep the stale-code banner hidden across auto-refresh reloads if the
+        # operator dismissed THIS code version (localStorage keyed by the on-disk fp).
+        "var _cb=document.getElementById('cbanner');"
+        "if(_cb&&localStorage.getItem('compass_cbanner')===_cb.dataset.fp)"
+        "{_cb.style.display='none';}"
         "var lf=document.querySelector('.launch');"
         "function pause(){window.__cpause=true;var t=document.getElementById('ts');"
         "if(t)t.textContent='auto-refresh paused while you compose — submit, or reload to resume.';}"

@@ -430,6 +430,16 @@ class TestCockpitStaleness(unittest.TestCase):
         finally:
             shutil.which = orig
 
+    def test_banner_is_dismissible(self):
+        # #88: the stale banner carries a fingerprint + Dismiss button, and the page
+        # script hides it when the operator dismissed this exact code version.
+        stale = cockpit.render_html({}, snapshot_ts="t", code_stale=True)
+        self.assertIn("id='cbanner'", stale)
+        self.assertIn("data-fp='", stale)
+        self.assertIn("Dismiss", stale)
+        self.assertIn("localStorage.setItem('compass_cbanner'", stale)   # the button
+        self.assertIn("localStorage.getItem('compass_cbanner')", stale)  # the hide-on-load check
+
     def test_relaunch_cmd_preserves_allow_actions(self):
         # #86: in actions mode the relaunch command must keep --allow-actions, else the
         # restart lands read-only (no launch/approve controls).
