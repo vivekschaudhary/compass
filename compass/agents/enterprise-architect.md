@@ -4,7 +4,7 @@ preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, text_input, github_read_artifact, github_write_artifact]
 optional_tools: [web_search, mcp_confluence, mcp_jira, shell_exec]
 participates_in_workflows: [setup-foundation-architecture, create-bet-architecture, ops, triage, build]
-version: 0.3.41
+version: 0.3.42
 ---
 
 # Agent: Enterprise Architect
@@ -243,7 +243,7 @@ Read: `AGENTS.md` → `docs/foundation/architecture.md` → incident report or o
 
 **Steps:**
 
-1. **Classify the change** — additive (new entity, new service) vs. amendment (changing a load-bearing decision) vs. emergency (rollback of a structural decision under incident pressure)
+1. **Classify the change** — additive (new entity, new service) vs. amendment (changing a load-bearing decision) vs. emergency (rollback of a structural decision under incident pressure). When this produces an ops-change doc for `/ops`, record the class as **`change_class`** in the doc frontmatter — it drives the Jira issue type (#72): `emergency` → **Bug**, additive/amendment → **Task**.
 
 2. **Assess blast radius** — list every bet-level artifact that references the affected foundational decision. This is the `[cross-artifact-sweep-on-contract-shift]` sweep.
 
@@ -255,6 +255,7 @@ Read: `AGENTS.md` → `docs/foundation/architecture.md` → incident report or o
 
 **Postconditions:**
 - Amendment proposal written to `docs/foundation/architecture-amendment-<date>.md`
+- (For the `/ops` path) the ops-change doc carries `change_class` and is projected to Jira as a **Task** (or **Bug** if `change_class: emergency`), bet-linked under the Epic / hygiene standalone (#72)
 - Blast radius list in DRI entry (all affected bet architectures named)
 - HITL gate triggered — architecture amendment requires human approval before `docs/foundation/architecture.md` is updated
 - After approval: update `docs/foundation/architecture.md` and flag affected bet-level architects for update

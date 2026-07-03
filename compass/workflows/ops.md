@@ -4,7 +4,7 @@ status: active
 owner: enterprise-architect
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.45
+version: 0.3.46
 requires_approved: []
 ---
 
@@ -42,8 +42,8 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th work
 **Dispatches:** Enterprise Architect agent
 **Task definition:** `compass/agents/enterprise-architect.md` → Task `lead-ops-change`
 **Input:** ops description / ticket · `docs/foundation/architecture.md` · affected bet/system context
-**What it covers:** classify the change (additive / amendment / emergency) → determine bet-link vs standalone hygiene → assess blast radius (`[cross-artifact-sweep-on-contract-shift]`) → draft the ops-change doc (`compass/templates/ops-change.md`) with domain tag, affected systems, and a **mandatory, explicit, testable, time-bounded rollback procedure** → DRI seed.
-**Output:** ops-change doc (`docs/ops/<ops-id>.md` or `docs/bets/<bet-id>/ops/<ops-id>.md`), `status: proposed`
+**What it covers:** classify the change (additive / amendment / emergency) — record it as `change_class` in the doc frontmatter → determine bet-link vs standalone hygiene → assess blast radius (`[cross-artifact-sweep-on-contract-shift]`) → draft the ops-change doc (`compass/templates/ops-change.md`) with domain tag, affected systems, and a **mandatory, explicit, testable, time-bounded rollback procedure** → DRI seed → **project the ops-change to Jira (#72) as a Task** (or a **Bug** when `change_class: emergency` — an incident-driven change), **bet-linked → under the bet's Epic**, hygiene → standalone, holding the `jira_key` pointer (status derives from ground truth, #57).
+**Output:** ops-change doc (`docs/ops/<ops-id>.md` or `docs/bets/<bet-id>/ops/<ops-id>.md`), `status: proposed`, projected to Jira as a **Task** (or **Bug** if emergency)
 
 ### Step 2. **HITL gate — plan approved** (human)
 
@@ -84,6 +84,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th work
 ## Workflow-level verification (final GATE)
 
 - [ ] (Step 1) Ops-change doc exists with domain tag, blast radius, affected systems, and an explicit **rollback procedure**; DRI seeded
+- [ ] (Step 1) **`change_class` classified and the ops-change projected to Jira (#72)** — `emergency` → **Bug**, additive/amendment → **Task**; bet-linked → under the bet's Epic, hygiene → standalone; `jira_key` pointer stored
 - [ ] (Step 2) HITL plan approval recorded (not self-approved); nothing executed before it
 - [ ] (Step 3) Change applied per plan (no scope drift); **rollback tested** + result recorded; PR open if committed files changed
 - [ ] (Step 4) Full Reviewer pass; Security Reviewer engaged if secrets/IAM/network/auth/certs; zero unresolved BLOCKERs/CRITICALs

@@ -148,6 +148,11 @@ class TestConnectorRouting(unittest.TestCase):
             "docs/fixes/FIX-1.md", self.project_dir), "jira")
         self.assertEqual(connector.resolve_connector_for_artifact(
             "docs/bets/CB-1/fixes/FIX-2.md", self.project_dir), "jira")
+        # #72: an ops-change routes to ticketing (Jira), not docs
+        self.assertEqual(connector.resolve_connector_for_artifact(
+            "docs/ops/OPS-1.md", self.project_dir), "jira")
+        self.assertEqual(connector.resolve_connector_for_artifact(
+            "docs/bets/CB-1/ops/OPS-2.md", self.project_dir), "jira")
 
     def test_pointer_frontmatter_roundtrip(self):
         c = connector._set_frontmatter_field("---\nid: X\n---\nbody", "jira_key", "PROJ-9")
@@ -185,6 +190,14 @@ class TestIssueTypeResolution(unittest.TestCase):
         self.assertEqual(r("docs/fixes/FIX-1.md", "---\ntype: bug\n---\n"), "Bug")
         self.assertEqual(r("docs/fixes/FIX-1.md", "---\ntype: enhancement\n---\n"), "Story")
         self.assertEqual(r("docs/bets/CB-1/fixes/FIX-2.md", ""), "Bug")   # path default
+
+    def test_ops_change_types(self):
+        # #72: a routine ops change → Task; an emergency (incident-driven) one → Bug
+        r = connector.resolve_issue_type
+        self.assertEqual(r("docs/ops/OPS-1.md", "---\ntype: ops\nchange_class: additive\n---\n"), "Task")
+        self.assertEqual(r("docs/ops/OPS-1.md", "---\ntype: ops\nchange_class: amendment\n---\n"), "Task")
+        self.assertEqual(r("docs/ops/OPS-1.md", "---\ntype: ops\nchange_class: emergency\n---\n"), "Bug")
+        self.assertEqual(r("docs/ops/OPS-1.md", "---\ntype: ops\n---\n"), "Task")   # no class → Task
 
 
 class TestPushArtifactIssueType(unittest.TestCase):
