@@ -2108,10 +2108,25 @@ def _run_workflow(
             )
             emit(ev.RUN_END, status="halted", reason=str(exc))
             sys.exit(1)
+        except KeyboardInterrupt:
+            # #83: operator Ctrl-C. The dispatch runner already killed the child
+            # process group; halt the RUN CLEANLY (emit RUN_END so it doesn't hang
+            # in-flight forever + orphan the worktree) with a one-line message, not a
+            # raw traceback. Resume from this step whenever you want.
+            print(
+                f"\n⏹  Interrupted — halting the run and stopping the process. "
+                f"Resume:\n"
+                f"    python3 -m compass.orchestrator.run {workflow_name} "
+                f"--from-step {step.number}"
+                + (f" --allow-write" if allow_write else ""),
+                file=sys.stderr,
+            )
+            emit(ev.RUN_END, status="halted",
+                 reason=f"interrupted by operator at step {step.number}")
+            sys.exit(130)
         except Exception as exc:
             # Any dispatch failure — API 400s, rate limits, network, SDK errors
             # (#112) — halts CLEANLY with a resume hint, never a raw traceback.
-            # (KeyboardInterrupt is BaseException, so Ctrl-C still propagates.)
             print(
                 f"Error dispatching step {step.number} ({step.agent}.{step.task}) "
                 f"to {host}: {exc}\n"
