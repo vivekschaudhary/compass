@@ -18,10 +18,21 @@ Usage:
   COMPASS_HOME=/tmp/ch python3 -m compass.orchestrator.cockpit
 """
 import argparse
+import shutil
 import sys
 from datetime import datetime, timezone
 
 from . import events as ev
+
+
+def _relaunch_cmd() -> str:
+    """#78: the command that actually relaunches the cockpit FOR THIS USER. The
+    `compass-cockpit` console script only exists after `pip install -e .` (#40); when
+    it isn't on PATH, the module form always works. Show whichever is runnable so the
+    stale-code banner never points at a 'command not found' (actionability-before-trust)."""
+    if shutil.which("compass-cockpit"):
+        return "compass-cockpit --serve"
+    return "python3 -m compass.orchestrator.cockpit --serve"
 
 
 def fold_runs(events: list) -> dict:
@@ -543,7 +554,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         p.append("<div style='background:#7a2e00;color:#ffd9b3;padding:10px 14px;"
                  "border-radius:8px;margin:8px 0;font-weight:600'>⚠ Dashboard code was "
                  "updated on disk since this server started — Ctrl-C and relaunch "
-                 "<code>compass-cockpit --serve</code> to apply the latest (#30).</div>")
+                 f"<code>{_relaunch_cmd()}</code> to apply the latest (#30).</div>")
 
     # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
     if actions:
