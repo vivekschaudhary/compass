@@ -75,6 +75,35 @@ def resolve_connector_for_artifact(canonical_rel_path, project_dir: Path,
     return _config_connector(project_dir, compass_dir, "docs")
 
 
+# #73: work-type → Jira issue type. The artifact's frontmatter `type:` picks the row;
+# callers (/fix, /ops) may also pass an explicit issue_type. Sub-task is intentionally
+# absent — no consumer parents work under a Story yet (deferred, see #73).
+_JIRA_ISSUE_TYPE = {
+    "bet": "Epic", "brief": "Epic",
+    "story": "Story", "design": "Story", "copy": "Story", "enhancement": "Story",
+    "architecture": "Task", "research": "Task", "ops": "Task",
+    "bug": "Bug", "defect": "Bug",
+}
+
+
+def resolve_issue_type(canonical_rel_path, content: str = "") -> str:
+    """#73: the Jira issue type for an artifact. Prefers the frontmatter `type:`
+    (bug/defect→Bug, architecture/research/ops→Task, story/design/copy→Story,
+    bet/brief→Epic); falls back to the path. Defaults to Epic (back-compat: today the
+    only jira-routed artifact is a story → Story, and a bet brief → Epic)."""
+    t = (_frontmatter_field(content, "type") or "").lower()
+    if t in _JIRA_ISSUE_TYPE:
+        return _JIRA_ISSUE_TYPE[t]
+    p = str(canonical_rel_path)
+    if re.search(r"/stories/[^/]+/story\.md$", p):
+        return "Story"
+    if "/ops/" in p:
+        return "Task"
+    if re.search(r"/(architecture|research)\.md$", p):
+        return "Task"
+    return "Epic"
+
+
 def _frontmatter_field(content: str, field: str):
     """Read a frontmatter `field:` value, or None."""
     fm = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
@@ -121,12 +150,15 @@ def push_artifact(
     content: str,
     connector_name: str = "filesystem",
     transport=None,
+    issue_type: str = None,
 ) -> str:
     """Write the Compass-primary filesystem cache (always), then PROJECT one-way to the
     configured backend (jira/confluence) when credentialed, storing the distribution
     pointer on the artifact for an idempotent re-push. Missing creds / failure → an
     honest filesystem-fallback label so hitl.jsonl never lies about where it landed.
-    `transport` is injectable for tests."""
+    `transport` is injectable for tests. `issue_type` (#73) overrides the Jira issue
+    type (/fix passes Bug or Story, /ops passes Task); when None it is resolved from
+    the artifact's frontmatter `type:` / path via `resolve_issue_type`."""
     from . import stores
     target = project_dir / canonical_rel_path
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -144,8 +176,8 @@ def push_artifact(
         if not auth or not project_key:
             return _land(content, "filesystem fallback — jira not configured "
                                   "(set JIRA_BASE_URL/EMAIL/API_TOKEN + JIRA_PROJECT)")
-        issue_type = "Story" if "/stories/" in str(canonical_rel_path) else "Epic"
-        res = stores.jira_push(auth, project_key, issue_type,
+        itype = issue_type or resolve_issue_type(canonical_rel_path, content)
+        res = stores.jira_push(auth, project_key, itype,
                                _artifact_title(content, canonical_rel_path), content,
                                key=_frontmatter_field(content, "jira_key"),
                                transport=transport)
