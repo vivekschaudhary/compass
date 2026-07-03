@@ -264,41 +264,50 @@ def _default_runner(argv, input, cwd=None):
     out_lines, err_lines, result_line = [], [], None
     eofs, last_action = 0, "(no output yet)"
     start = time.monotonic()
-    while eofs < 2:
-        try:
-            tag, line = q.get(timeout=idle) if idle else q.get()
-        except queue.Empty:
-            _kill_group(proc)
-            raise RuntimeError(
-                f"claude CLI produced no output for {idle}s and was killed — it is "
-                f"genuinely stuck (a command that never returns, like a dev server / "
-                f"watcher, or an interactive prompt). Last activity: {last_action}. "
-                f"Re-run from this step, or raise COMPASS_CLAUDE_CLI_IDLE_TIMEOUT "
-                f"(seconds; 0 disables the idle guard)."
-            )
-        if line is None:
-            eofs += 1
-            continue
-        if tag == "out":
-            out_lines.append(line)
-            obj = _safe_json(line)
-            if obj is not None:
-                if obj.get("type") == "result":
-                    result_line = line.strip()
-                p = _progress_line(obj)
-                if p:
-                    for pl in p.splitlines():
-                        last_action = pl
-                        print(f"    {pl}", flush=True)
-        else:
-            err_lines.append(line)
-        if hard and (time.monotonic() - start) > hard:
-            _kill_group(proc)
-            raise RuntimeError(
-                f"claude CLI exceeded the {hard}s absolute backstop and was killed "
-                f"(it kept emitting but never finished). Re-run, or adjust "
-                f"COMPASS_CLAUDE_CLI_TIMEOUT (0 disables the backstop)."
-            )
+    # #83: on ANY abnormal exit — operator Ctrl-C (KeyboardInterrupt), a SIGTERM, or an
+    # unexpected error while streaming — kill the child process group before propagating,
+    # so a `claude -p` (and anything it spawned: dev server, watcher) is never orphaned
+    # and left running. The idle/hard-timeout paths kill explicitly below; this is the
+    # catch-all so no failure path leaves the process open. `_kill_group` is idempotent.
+    try:
+        while eofs < 2:
+            try:
+                tag, line = q.get(timeout=idle) if idle else q.get()
+            except queue.Empty:
+                _kill_group(proc)
+                raise RuntimeError(
+                    f"claude CLI produced no output for {idle}s and was killed — it is "
+                    f"genuinely stuck (a command that never returns, like a dev server / "
+                    f"watcher, or an interactive prompt). Last activity: {last_action}. "
+                    f"Re-run from this step, or raise COMPASS_CLAUDE_CLI_IDLE_TIMEOUT "
+                    f"(seconds; 0 disables the idle guard)."
+                )
+            if line is None:
+                eofs += 1
+                continue
+            if tag == "out":
+                out_lines.append(line)
+                obj = _safe_json(line)
+                if obj is not None:
+                    if obj.get("type") == "result":
+                        result_line = line.strip()
+                    p = _progress_line(obj)
+                    if p:
+                        for pl in p.splitlines():
+                            last_action = pl
+                            print(f"    {pl}", flush=True)
+            else:
+                err_lines.append(line)
+            if hard and (time.monotonic() - start) > hard:
+                _kill_group(proc)
+                raise RuntimeError(
+                    f"claude CLI exceeded the {hard}s absolute backstop and was killed "
+                    f"(it kept emitting but never finished). Re-run, or adjust "
+                    f"COMPASS_CLAUDE_CLI_TIMEOUT (0 disables the backstop)."
+                )
+    except BaseException:
+        _kill_group(proc)   # never leave the child (or its spawns) running on a failure
+        raise
     proc.wait()
     stdout = result_line if result_line is not None else "".join(out_lines)
     return subprocess.CompletedProcess(argv, proc.returncode, stdout, "".join(err_lines))

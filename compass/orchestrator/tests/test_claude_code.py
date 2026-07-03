@@ -344,5 +344,51 @@ class TestRemap(unittest.TestCase):
                          ["claude-code", "gemini"])
 
 
+class TestInterruptHandling(unittest.TestCase):
+    """#83: an operator Ctrl-C must kill the child process and propagate to the run
+    boundary — never orphan the process or get swallowed as a normal error."""
+
+    def test_keyboardinterrupt_propagates_from_dispatch(self):
+        # so run.py's run-boundary handler can emit RUN_END(halted) + exit cleanly.
+        def interrupt(argv, input, cwd=None):
+            raise KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            cc.dispatch("/x/agent.md", "t", "x", runner=interrupt, on_event=lambda e: None)
+
+    def test_default_runner_kills_child_group_on_interrupt(self):
+        # a Ctrl-C while streaming must SIGKILL the child's process group (child + any
+        # dev server / watcher it spawned), not leave it running.
+        killed = []
+
+        class _Stream:
+            def readline(self):
+                return ""            # immediate EOF → reader threads exit cleanly
+
+        class _Stdin:
+            def write(self, s): pass
+            def close(self): pass
+
+        class _Proc2:
+            pid, returncode = 4242, 0
+            stdin, stdout, stderr = _Stdin(), _Stream(), _Stream()
+            def wait(self, timeout=None): return 0
+
+        class _InterruptQueue:
+            def put(self, item): pass
+            def get(self, timeout=None): raise KeyboardInterrupt()
+
+        saved = (cc.subprocess.Popen, cc.queue.Queue, cc.os.getpgid, cc.os.killpg)
+        cc.subprocess.Popen = lambda *a, **k: _Proc2()
+        cc.queue.Queue = lambda: _InterruptQueue()
+        cc.os.getpgid = lambda pid: pid
+        cc.os.killpg = lambda pgid, sig: killed.append(pgid)
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                cc._default_runner(["claude"], input="x", cwd=None)
+            self.assertIn(4242, killed)   # the child's process group was killed
+        finally:
+            (cc.subprocess.Popen, cc.queue.Queue, cc.os.getpgid, cc.os.killpg) = saved
+
+
 if __name__ == "__main__":
     unittest.main()
