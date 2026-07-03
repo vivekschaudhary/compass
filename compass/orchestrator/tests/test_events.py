@@ -404,6 +404,12 @@ class TestCockpitStaleness(unittest.TestCase):
         self.assertIn("relaunch", stale)
         self.assertNotIn("Dashboard code was updated on disk", fresh)
 
+    def test_banner_names_the_real_relaunch_command(self):
+        # the banner must name the actual entry point (compass-cockpit, #40) — not the
+        # non-existent `cockpit` command that drifted in.
+        stale = cockpit.render_html({}, snapshot_ts="t", code_stale=True)
+        self.assertIn("compass-cockpit --serve", stale)
+
     def test_step_rows_parity_text_and_html(self):
         # _run_step_rows is the single source both renderers use → no drift.
         run = {"run_id": "r", "project": "home", "workflow": "fix", "bet_id": None,

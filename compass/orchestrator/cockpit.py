@@ -543,7 +543,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         p.append("<div style='background:#7a2e00;color:#ffd9b3;padding:10px 14px;"
                  "border-radius:8px;margin:8px 0;font-weight:600'>⚠ Dashboard code was "
                  "updated on disk since this server started — Ctrl-C and relaunch "
-                 "<code>cockpit --serve</code> to apply the latest (#30).</div>")
+                 "<code>compass-cockpit --serve</code> to apply the latest (#30).</div>")
 
     # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
     if actions:
