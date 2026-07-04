@@ -146,6 +146,19 @@ tool_assignments:
 # via <project>/compass-overrides/stacks/<stack>.md. Unset → agents run stack-neutral.
 # stack: nextjs-ts        # uncomment and set to your project's stack
 
+# ─── CI-parity checks (#92) ───────────────────────────────────────────
+# The commands the ORCHESTRATOR runs in the worktree after a code-producing step, to
+# VERIFY the branch before it opens the PR — 'checks green' is mechanically checked, not
+# self-reported by the agent, and a PR is only ever opened on green (clean by construction).
+# Set this to MIRROR your CI workflow exactly (so local and CI can't diverge). When unset,
+# the orchestrator falls back to the active stack's default suite (see compass/stacks/).
+# checks:
+#   - pnpm install --frozen-lockfile
+#   - pnpm lint
+#   - pnpm typecheck
+#   - pnpm test
+#   - pnpm build
+
 # ─── Connectors (MCP) ─────────────────────────────────────────────────
 # Wire these up in .mcp.json. The framework references them by name here.
 connectors:

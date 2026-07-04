@@ -196,6 +196,21 @@ def _merge_pr(project_dir, branch):
 
 _CODE_WORKFLOWS = ("fix", "build", "ops")
 
+# #92: after one of these code-producing steps commits+pushes, the orchestrator runs
+# the CI-parity check suite in the worktree and opens the PR only on green.
+_CHECK_TASKS = frozenset({"triage-and-fix", "implement-story", "apply-ops-change",
+                          "respond-to-review"})
+
+# Per-stack default check suite — CI-parity commands the orchestrator runs to VERIFY a
+# branch before opening a PR (not the agent's self-report). The project overrides via
+# `config.yaml checks:` to mirror its exact CI. Install-first kills the missing-deps class.
+_STACK_CHECKS = {
+    "nextjs-ts": ["pnpm install --frozen-lockfile", "pnpm lint", "pnpm typecheck",
+                  "pnpm test", "pnpm build"],
+    "dotnet-blazor": ["dotnet format --verify-no-changes", "dotnet build -c Release",
+                      "dotnet test"],
+}
+
 # #159: workflows whose WHOLE JOB is to author a doc artifact (brief, story,
 # foundation/portfolio/architecture docs), reviewed via their HITL gate — not a PR.
 _AUTHORING_WORKFLOWS = (
@@ -1501,6 +1516,79 @@ def _parent_fix_under_epic(project_dir, bet_id, fix_rel):
         pass
 
 
+def _read_checks_from_config(project_dir):
+    """#92: read a `checks:` list (inline `[a, b]` or block `- a`) from the PROJECT's
+    config.yaml — the CI-parity commands the orchestrator runs before opening a PR."""
+    config = Path(project_dir) / "compass" / "config.yaml"
+    if not config.exists():
+        return []
+    cmds, in_block = [], False
+    for line in config.read_text(encoding="utf-8").splitlines():
+        s = line.split("#")[0].rstrip()
+        if re.match(r"^checks\s*:", s):
+            inline = s.split(":", 1)[1].strip()
+            if inline.startswith("["):
+                return [x.strip().strip("\"'") for x in inline.strip("[]").split(",") if x.strip()]
+            in_block = True
+            continue
+        if in_block:
+            m = re.match(r"^\s+-\s*(.+)$", s)
+            if m:
+                cmds.append(m.group(1).strip().strip("\"'"))
+            elif s and not s[0].isspace():
+                break  # left the checks block
+    return cmds
+
+
+def _resolve_checks(project_dir, compass_dir):
+    """#92: the CI-parity check commands. Prefers the project's `config.yaml checks:`
+    (set to mirror its CI); falls back to the active stack's default suite. Empty →
+    nothing declared (a warning, not a silent skip)."""
+    return (_read_checks_from_config(project_dir)
+            or list(_STACK_CHECKS.get(_read_stack_from_config(compass_dir) or "", [])))
+
+
+def _run_checks(exec_dir, checks, runner=None):
+    """#92: run each CI-parity check IN THE WORKTREE. Returns (ok, failed_cmd, tail).
+    Stops at the first failure. `runner` injectable for tests. Never raises."""
+    import subprocess
+    runner = runner or (lambda cmd, cwd: subprocess.run(
+        cmd, shell=True, cwd=str(cwd), capture_output=True, text=True, timeout=1800))
+    for cmd in checks:
+        print(f"  [check] {cmd}", flush=True)
+        try:
+            r = runner(cmd, exec_dir)
+        except Exception as exc:
+            return (False, cmd, f"could not run: {exc}")
+        if getattr(r, "returncode", 1) != 0:
+            tail = ((getattr(r, "stdout", "") or "") + (getattr(r, "stderr", "") or ""))[-2000:]
+            return (False, cmd, tail)
+    return (True, None, "")
+
+
+def _ensure_pr(exec_dir, work_branch, body_output):
+    """#92: the ORCHESTRATOR opens the PR (once) AFTER the check gate passes — a PR is
+    only ever created on green checks (clean from creation, #89). Idempotent: reuse an
+    existing PR for the branch. Best-effort; returns the PR URL or None."""
+    if not work_branch:
+        return None
+    existing = _pr_url_any_state(exec_dir, work_branch)
+    if existing:
+        return existing
+    import subprocess
+    from .connector import extract_artifact_body
+    title = (_fix_title(body_output) or work_branch.split("/")[-1].replace("-", " "))[:100]
+    body = (extract_artifact_body(body_output)[:4000] if body_output
+            else "Opened by the orchestrator after CI-parity checks passed (#92).")
+    try:
+        r = subprocess.run(["gh", "pr", "create", "--head", work_branch,
+                            "--title", title, "--body", body],
+                           cwd=str(exec_dir), capture_output=True, text=True, timeout=120)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Core workflow runner — returns (prior_outputs, artifact_paths)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2326,6 +2414,38 @@ def _run_workflow(
             emit(ev.RUN_END, status="halted",
                  reason=f"agent refused at step {step.number} ({step.agent}.{step.task})")
             sys.exit(1)
+
+        # #92: mechanical, CI-parity CHECK GATE. After a code-producing step commits +
+        # pushes, the ORCHESTRATOR runs ALL checks (lint/typecheck/test/build) in the
+        # worktree — 'checks green' is VERIFIED, not the agent's self-report — and opens
+        # the PR ONLY on green, so a PR is never created dirty (#89, [fail-loud-not-silent],
+        # parallels #71). Fixes the class where a lint/typecheck error first surfaced in CI.
+        if (workflow_name in _CODE_WORKFLOWS and allow_write and not no_write
+                and step.task in _CHECK_TASKS):
+            checks = _resolve_checks(project_dir, compass_dir)
+            if not checks:
+                warn = ("⚠ NO CHECKS DECLARED — add a `checks:` list to config.yaml "
+                        "(CI-parity) so the orchestrator verifies lint/typecheck/test/build "
+                        "before the PR. Mechanical verification skipped this run.")
+                print("\n" + warn, file=sys.stderr)
+                emit(ev.NOTE, text=warn)
+            else:
+                print(f"\n[checks] running {len(checks)} CI-parity check(s) in {exec_dir} …")
+                ok, failed, tail = _run_checks(exec_dir, checks)
+                if not ok:
+                    print(f"\n⚠ CHECKS FAILED — `{failed}`\n{tail}\n"
+                          f"  Run halted BEFORE opening a PR (no dirty PR). Fix, then resume:\n"
+                          f"    python3 -m compass.orchestrator.run {workflow_name} "
+                          f"--from-step {step.number}"
+                          + (" --allow-write" if allow_write else ""),
+                          file=sys.stderr)
+                    emit(ev.RUN_END, status="halted", reason=f"checks failed: {failed}")
+                    sys.exit(1)
+                print("  ✓ all checks passed")
+                pr = _ensure_pr(exec_dir, work_branch, result)
+                if pr:
+                    print(f"[PR opened on green checks → {pr}]")
+                    emit(ev.NOTE, text=f"PR opened on green checks → {pr}")
 
     # #145: a write-mode run that did real work but left it uncommitted hasn't
     # DELIVERED it (no commit → no PR → no deploy — the "I didn't see a deployment"
