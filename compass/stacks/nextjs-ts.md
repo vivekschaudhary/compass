@@ -14,6 +14,8 @@ The delivery agents are stack-agnostic; this profile supplies the Next.js/TS spe
 - **unit / component tests:** `pnpm test`
 - **E2E framework:** Playwright / Cypress — detected from `package.json`
 
+**Orchestrator CI-parity check suite (#92):** the default commands the orchestrator runs in the worktree to verify a branch *before it opens the PR* — `pnpm install --frozen-lockfile · pnpm lint · pnpm typecheck · pnpm test · pnpm build`. Override to match your exact CI via `config.yaml` `checks:`.
+
 ## Production-build runtime-artifact inspection (`[mechanical-output-verification]`)
 Inspect what actually runs, not just the process exit code — when runtime config is data-driven (manifests/bundle indexes written by the build), reading source ≠ reading runtime:
 - **Next.js 16+:** `.next/server/functions-config-manifest.json` (middleware/proxy registration — a `/_middleware` entry with `runtime` + matchers), plus `routes-manifest.json`, `app-paths-manifest.json`, `prerender-manifest.json`.
