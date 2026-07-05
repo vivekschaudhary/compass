@@ -4,7 +4,7 @@ preferred_hosts: [codex, gemini]
 required_tools: [filesystem_read, shell_exec, github_write_artifact, mcp_github]
 optional_tools: [web_search, mcp_sentry]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.37
+version: 0.3.38
 # Freshness markers — per `[freshness-check]` (canon v0.3.3). The documented Codex
 # review output shape (below) is parsed by `/build` Phase 5; external-tool drift
 # (Codex CLI updates, format changes) makes it go stale silently. /build Phase 5
@@ -73,9 +73,11 @@ The core review work. Used by `/build` Phase 5 (after CI green) and `/ops` (afte
    - **General principle:** when runtime config is data-driven (manifests, bundle/boot indexes, config written by the build), reading source ≠ reading runtime. **Inspect the runtime.**
    - **If the build output is wrong, the tests are misleading.** A green test suite that imports/references a source file directly can pass even when the framework never registers it at runtime (or runs it under the wrong mode). Flag as BLOCKER if the feature relies on framework discovery. This is the `polished-but-broken` failure mode at the test layer.
 
+0b. **Scope every finding to the DIFF (`[reviewer-scopes-to-diff]`, #95).** You review **only the changed lines in this PR's diff** — not the whole file, not the rest of the codebase. **Every BLOCKER/ISSUE MUST cite a file + line that appears in the diff.** Do **NOT** raise the reachability, wiring, a11y, or test-coverage of code the diff **did not change** (e.g. flagging that a component is 'unreachable' or 'has no tests' when the PR only touched one function in it, or commenting on a file not in the diff at all) — that is **out of scope** for this PR: omit it, or drop it to a **NIT note** at most, never a gating BLOCKER/ISSUE. A scoped fix must get scoped review. *(Live miss #95: a 5-file INR date fix got BLOCKERs about `ManualAccountForm`/`RegionSwitcher` — files not even in the diff.)*
+
 1. **Read diff carefully, file by file.**
 
-2. **For each file:** does it match bet architecture? Project conventions? Are tests adequate? Edge cases covered? Is UX copy verbatim (no paraphrasing of UX Writer output)?
+2. **For each file:** does it match bet architecture? Project conventions? Are tests adequate for **the change**? Edge cases covered? Is UX copy verbatim (no paraphrasing of UX Writer output)?
 
 3. **Architect compliance check.** Verify bet-level architecture compliance — flag drift from the approved bet architecture as BLOCKER. (Architect role's job is to engage on PRs through your review.)
 
