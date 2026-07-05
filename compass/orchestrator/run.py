@@ -258,6 +258,11 @@ def _with_review_context(user_message: str, diff: str) -> str:
         return user_message
     return ("## Code under review — `git diff` of the work branch vs its base\n"
             "(You have no repo/PR tool access on this host; review THIS diff.)\n\n"
+            "**Scope (#95): review ONLY this diff.** Every BLOCKER/ISSUE MUST cite a "
+            "file + line that appears BELOW. Do NOT comment on files not shown here, and "
+            "do NOT raise the reachability / wiring / test-coverage of code this diff "
+            "did not change — that is OUT OF SCOPE for this PR (at most a NIT note, never "
+            "a gating finding). If you cannot tie a concern to a changed line, omit it.\n\n"
             f"```diff\n{diff}\n```\n\n---\n\n" + user_message)
 
 
