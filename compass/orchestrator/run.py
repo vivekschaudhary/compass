@@ -2803,6 +2803,14 @@ def main(argv=None):
              "ONLY that run (targeted — won't catch other in-flight builds, #28).",
     )
     parser.add_argument(
+        "--cancel",
+        action="store_true",
+        help="Cancel a run ON DEMAND (#80) — immediately halt it (RUN_END 'cancelled by "
+             "operator') + prune its worktree, without waiting out the stale timeout. "
+             "`--cancel --run-id <id>` cancels that run; bare `--cancel` cancels ALL "
+             "in-flight runs for --project-dir; then exit.",
+    )
+    parser.add_argument(
         "--prune-worktrees",
         action="store_true",
         dest="prune_worktrees",
@@ -2913,9 +2921,23 @@ def main(argv=None):
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
     if (args.log or args.dri or args.hitl_log or args.export_audit or args.wbs
-            or args.reap_stale or args.prune_worktrees):
+            or args.reap_stale or args.cancel or args.prune_worktrees):
         from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
+        if args.cancel:
+            # #80: immediate operator cancel — halt now + free the worktree, no stale wait.
+            from .events import cancel_inflight, project_label
+            proj = None if args.run_id else project_label(str(project_dir))
+            cancelled = cancel_inflight(run_id=args.run_id or None, project=proj)
+            if args.run_id:
+                print(f"cancelled run {args.run_id}" if cancelled
+                      else f"nothing cancelled — {args.run_id} is not an in-flight run")
+            else:
+                print(f"cancelled {len(cancelled)} in-flight run(s)"
+                      + (": " + ", ".join(cancelled) if cancelled else ""))
+            removed = prune_worktrees(project_dir)
+            if removed:
+                print(f"pruned {len(removed)} worktree(s): {', '.join(removed)}")
         if args.reap_stale:
             from .events import halt_stale_runs
             # #28: --reap-stale --run-id X halts ONLY run X (targeted), so cleanup can't
