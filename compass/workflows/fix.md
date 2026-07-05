@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.52
+version: 0.3.53
 requires_approved: []
 ---
 
@@ -80,6 +80,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 ## Workflow-level verification (final GATE)
 
 - [ ] (Step 1) Defect **reproduced from the code** (or HALTED with a precise ask if irreproducible) · severity + **defect-vs-enhancement** + bet-linkage/hygiene classified in the triage summary · **failing regression test landed BEFORE the fix** (visible in commit order) · minimum fix · all local checks + runtime artifact green
+- [ ] (After Step 1) **Orchestrator ran the CI-parity check suite (#92)** — lint/typecheck/test/build in the worktree; the run **halts loud** (`⚠ CHECKS FAILED`) on any failure and **opens NO PR**; the **PR is opened by the orchestrator only on green** (clean from creation, not agent-self-reported)
 - [ ] (Run completion) **Orchestrator projected the fix record to Jira (#71)** — `type: bug` → **Bug**, `type: enhancement` → **Story**; bet-linked → under the bet's Epic, hygiene → standalone; PR linked; `jira_key` stored. The run **fails loud** (`⚠ TRACKING INCOMPLETE`) if Jira is configured but nothing was created — no Jira item = the work isn't tracked (#89, [fail-loud-not-silent])
 - [ ] (Step 2) E2E extended for user-flow regressions (vertical test + cleanup AC for data surfaces) OR skip logged
 - [ ] (Step 3) Full Reviewer pass by a **different model**; Security Reviewer engaged if sensitive surface; zero unresolved BLOCKERs/CRITICALs
