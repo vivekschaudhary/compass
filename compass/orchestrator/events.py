@@ -281,3 +281,28 @@ def halt_stale_runs(now=None, threshold=None, sink=None, events=None, run_id=Non
             reason=reason))
         halted.append(r["run_id"])
     return halted
+
+
+def cancel_inflight(run_id=None, project=None, sink=None, events=None) -> list:
+    """#80: operator-initiated IMMEDIATE cancel — emit RUN_END(halted, 'cancelled by
+    operator') for an in-flight run, regardless of staleness (no 30-min wait). Modes:
+      - `run_id` set → cancel exactly that run (ignores `project`).
+      - else → cancel ALL in-flight runs, optionally scoped to `project` (basename).
+    Idempotent (ended runs skipped). `sink`/`events` injectable for tests. Returns the
+    cancelled run_ids."""
+    from .cockpit import fold_runs  # local import — avoid the cockpit↔events cycle
+    sink = sink or jsonl_sink()
+    out = []
+    for r in fold_runs(events if events is not None else load_events()).values():
+        if not r.get("started") or r.get("ended"):
+            continue
+        if run_id is not None:
+            if r["run_id"] != run_id:
+                continue
+        elif project is not None and r.get("project") != project:
+            continue
+        sink(make_event(RUN_END, run_id=r["run_id"], project=r.get("project"),
+                        workflow=r.get("workflow"), bet_id=r.get("bet_id"),
+                        status="halted", reason="cancelled by operator"))
+        out.append(r["run_id"])
+    return out

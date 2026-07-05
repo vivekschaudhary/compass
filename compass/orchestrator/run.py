@@ -1571,6 +1571,35 @@ def _run_checks(exec_dir, checks, runner=None):
     return (True, None, "")
 
 
+def _pr_title(exec_dir, work_branch):
+    """#97: a MEANINGFUL PR title — the branch's primary conventional commit subject
+    (`fix:`/`feat:` — the engineer's own one-line description of the change), NOT the
+    `TL;DR:` run-status blurb. Falls back to the branch slug."""
+    import subprocess
+
+    def _git(*args):
+        return subprocess.run(["git", "-C", str(exec_dir), *args],
+                              capture_output=True, text=True, timeout=30)
+    try:
+        base = ""
+        for ref in ("origin/main", "main", "origin/master", "master"):
+            mb = _git("merge-base", "HEAD", ref)
+            if mb.returncode == 0 and mb.stdout.strip():
+                base = mb.stdout.strip()
+                break
+        if base:
+            subs = [s.strip() for s in _git("log", f"{base}..HEAD", "--format=%s")
+                    .stdout.splitlines() if s.strip()]
+            for s in subs:                                # prefer a fix:/feat: subject
+                if re.match(r"^(fix|feat|perf|refactor|chore)(\(.+\))?:", s, re.IGNORECASE):
+                    return s[:100]
+            if subs:
+                return subs[-1][:100]                     # oldest commit = the primary change
+    except Exception:
+        pass
+    return ((work_branch or "change").split("/")[-1].replace("-", " ")[:100] or "change")
+
+
 def _ensure_pr(exec_dir, work_branch, body_output):
     """#92: the ORCHESTRATOR opens the PR (once) AFTER the check gate passes — a PR is
     only ever created on green checks (clean from creation, #89). Idempotent: reuse an
@@ -1582,7 +1611,7 @@ def _ensure_pr(exec_dir, work_branch, body_output):
         return existing
     import subprocess
     from .connector import extract_artifact_body
-    title = (_fix_title(body_output) or work_branch.split("/")[-1].replace("-", " "))[:100]
+    title = _pr_title(exec_dir, work_branch)          # #97: from the commit, not the TL;DR
     body = (extract_artifact_body(body_output)[:4000] if body_output
             else "Opened by the orchestrator after CI-parity checks passed (#92).")
     try:
@@ -2808,6 +2837,14 @@ def main(argv=None):
              "ONLY that run (targeted — won't catch other in-flight builds, #28).",
     )
     parser.add_argument(
+        "--cancel",
+        action="store_true",
+        help="Cancel a run ON DEMAND (#80) — immediately halt it (RUN_END 'cancelled by "
+             "operator') + prune its worktree, without waiting out the stale timeout. "
+             "`--cancel --run-id <id>` cancels that run; bare `--cancel` cancels ALL "
+             "in-flight runs for --project-dir; then exit.",
+    )
+    parser.add_argument(
         "--prune-worktrees",
         action="store_true",
         dest="prune_worktrees",
@@ -2918,9 +2955,23 @@ def main(argv=None):
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
     if (args.log or args.dri or args.hitl_log or args.export_audit or args.wbs
-            or args.reap_stale or args.prune_worktrees):
+            or args.reap_stale or args.cancel or args.prune_worktrees):
         from .logger import print_run_table, dri_decisions_report, print_hitl_table
         project_dir = Path(args.project_dir).resolve()
+        if args.cancel:
+            # #80: immediate operator cancel — halt now + free the worktree, no stale wait.
+            from .events import cancel_inflight, project_label
+            proj = None if args.run_id else project_label(str(project_dir))
+            cancelled = cancel_inflight(run_id=args.run_id or None, project=proj)
+            if args.run_id:
+                print(f"cancelled run {args.run_id}" if cancelled
+                      else f"nothing cancelled — {args.run_id} is not an in-flight run")
+            else:
+                print(f"cancelled {len(cancelled)} in-flight run(s)"
+                      + (": " + ", ".join(cancelled) if cancelled else ""))
+            removed = prune_worktrees(project_dir)
+            if removed:
+                print(f"pruned {len(removed)} worktree(s): {', '.join(removed)}")
         if args.reap_stale:
             from .events import halt_stale_runs
             # #28: --reap-stale --run-id X halts ONLY run X (targeted), so cleanup can't
