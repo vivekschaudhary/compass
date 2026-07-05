@@ -1566,6 +1566,35 @@ def _run_checks(exec_dir, checks, runner=None):
     return (True, None, "")
 
 
+def _pr_title(exec_dir, work_branch):
+    """#97: a MEANINGFUL PR title — the branch's primary conventional commit subject
+    (`fix:`/`feat:` — the engineer's own one-line description of the change), NOT the
+    `TL;DR:` run-status blurb. Falls back to the branch slug."""
+    import subprocess
+
+    def _git(*args):
+        return subprocess.run(["git", "-C", str(exec_dir), *args],
+                              capture_output=True, text=True, timeout=30)
+    try:
+        base = ""
+        for ref in ("origin/main", "main", "origin/master", "master"):
+            mb = _git("merge-base", "HEAD", ref)
+            if mb.returncode == 0 and mb.stdout.strip():
+                base = mb.stdout.strip()
+                break
+        if base:
+            subs = [s.strip() for s in _git("log", f"{base}..HEAD", "--format=%s")
+                    .stdout.splitlines() if s.strip()]
+            for s in subs:                                # prefer a fix:/feat: subject
+                if re.match(r"^(fix|feat|perf|refactor|chore)(\(.+\))?:", s, re.IGNORECASE):
+                    return s[:100]
+            if subs:
+                return subs[-1][:100]                     # oldest commit = the primary change
+    except Exception:
+        pass
+    return ((work_branch or "change").split("/")[-1].replace("-", " ")[:100] or "change")
+
+
 def _ensure_pr(exec_dir, work_branch, body_output):
     """#92: the ORCHESTRATOR opens the PR (once) AFTER the check gate passes — a PR is
     only ever created on green checks (clean from creation, #89). Idempotent: reuse an
@@ -1577,7 +1606,7 @@ def _ensure_pr(exec_dir, work_branch, body_output):
         return existing
     import subprocess
     from .connector import extract_artifact_body
-    title = (_fix_title(body_output) or work_branch.split("/")[-1].replace("-", " "))[:100]
+    title = _pr_title(exec_dir, work_branch)          # #97: from the commit, not the TL;DR
     body = (extract_artifact_body(body_output)[:4000] if body_output
             else "Opened by the orchestrator after CI-parity checks passed (#92).")
     try:
