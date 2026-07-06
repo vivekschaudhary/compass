@@ -2256,7 +2256,12 @@ def _run_workflow(
         # #138: the Reviewer runs on a tool-less host (codex/gemini) and can't fetch
         # the PR/diff itself — inject the branch diff so it has something to review.
         if step.agent in ("reviewer", "security-reviewer"):
-            diff = _review_diff(project_dir)
+            # #102: diff the WORKTREE where the code was written (exec_dir), NOT the
+            # shared main checkout (project_dir) — the latter sits on whatever branch
+            # the operator last left it on, so the reviewer would review the WRONG
+            # branch entirely (live: a WLT-28 build reviewed an unrelated accounts fix
+            # branch). exec_dir falls back to project_dir for non-isolated runs.
+            diff = _review_diff(exec_dir)
             if diff:
                 user_context = _with_review_context(user_context, diff)
                 print("[review] injected branch diff as context (reviewer host has no repo tools)")
