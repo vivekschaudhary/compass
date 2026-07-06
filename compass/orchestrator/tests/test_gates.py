@@ -441,6 +441,14 @@ class TestStoryScoping(unittest.TestCase):
     def test_gate_noop_without_bet(self):
         self.assertIsNone(_build_story_gate(self.project, "build", None, None))
 
+    def test_gate_does_not_fire_on_resume(self):
+        # #107: the cockpit's merge-gate resume passes the PARENT bet (--bet WLT-27) +
+        # --from-step N without the story scope. The entry gate must NOT re-fire and
+        # block the human's merge approval. from_step set → always None.
+        self.assertIsNone(_build_story_gate(self.project, "build", "WLT-27", None, from_step=6))
+        # sanity: same args WITHOUT from_step still refuses (proves the guard frees it)
+        self.assertIsNotNone(_build_story_gate(self.project, "build", "WLT-27", None))
+
 
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on

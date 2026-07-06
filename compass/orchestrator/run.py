@@ -1192,14 +1192,20 @@ def _is_story_id(project_dir: Path, candidate: str) -> bool:
     return any(bets_dir.glob(f"*/stories/{candidate}/story.md"))
 
 
-def _build_story_gate(project_dir: Path, workflow_name: str, bet_id, story_id):
+def _build_story_gate(project_dir: Path, workflow_name: str, bet_id, story_id, from_step=None):
     """#103: /build is STORY-scoped (`/build <story-id>` implements ONE story). If an
     operator names a BET instead (bet_id resolved, story_id not), refuse — building a
     bet collapses the whole Epic into one un-decomposed, un-reviewable mega-PR (live:
     `/build WLT-28` implemented the entire debt bet — 28 files — as PR #144). `fix` and
     `ops` are NOT story-scoped, so this gate is build-only. Returns a refusal message,
-    or None when the invocation is fine (a real story, or a non-build workflow)."""
-    if workflow_name != "build" or story_id or not bet_id:
+    or None when the invocation is fine (a real story, or a non-build workflow).
+
+    #107: ENTRY gate only — returns None on a RESUME (`from_step` set). The cockpit's
+    merge-gate resume passes the PARENT bet_id (--bet WLT-28) for the requirement gate
+    plus `--from-step N`, WITHOUT the story scope — re-running this gate then mis-read
+    that as a bet-level build and halted the human's merge approval (live: WLT-28-3 stuck
+    at step 6). On resume the story was already chosen at dispatch, so never re-gate."""
+    if from_step or workflow_name != "build" or story_id or not bet_id:
         return None
     stories = sorted(
         (project_dir / "docs" / "bets" / bet_id / "stories").glob("*/story.md"))
@@ -1721,7 +1727,13 @@ def _run_workflow(
     # collapse the whole Epic into one un-decomposed, un-reviewable mega-PR (live: /build
     # WLT-28 built the entire debt bet as PR #144). Refuse loud, point at /create-story.
     # fix/ops are not story-scoped → _build_story_gate returns None for them.
-    _bsg = _build_story_gate(project_dir, workflow_name, bet_id, story_id)
+    #
+    # #107: ENTRY gate only — never fires on a RESUME. The cockpit's merge-gate resume
+    # passes the PARENT bet_id (--bet WLT-28) for the requirement gate + `--from-step N`,
+    # WITHOUT the story scope. Re-running the gate then mis-read that as a bet-level build
+    # and halted the human's merge approval (live: WLT-28-3 stuck at step 6). On resume the
+    # story was already chosen at dispatch, so `from_step` set ⇒ skip this gate entirely.
+    _bsg = _build_story_gate(project_dir, workflow_name, bet_id, story_id, from_step)
     if _bsg:
         print(f"\nBuild scope gate — {_bsg}")
         if not dry_run:
