@@ -637,6 +637,50 @@ def prune_worktrees(project_dir) -> list:
     return removed
 
 
+def _cleanup_merged_worktree(project_dir, work_branch) -> list:
+    """#104: after a PR is MERGED (auto-merge path), remove THIS unit's worktree and
+    delete its now-merged local branch — so finished worktrees don't accumulate under
+    ~/.compass/worktrees/ until the next `--wbs` sweep. Scoped to `work_branch` only, so
+    a sibling in-flight build is never touched. Safe-delete only (`branch -d`, never -D);
+    a worktree with uncommitted changes is left in place. Best-effort; never raises.
+    Returns the list of removed worktree paths (for logging/tests). The manual-merge
+    path is still covered by the opportunistic prune_worktrees()."""
+    import subprocess
+    if not work_branch:
+        return []
+
+    def git(*args, cwd=None):
+        try:
+            return subprocess.run(["git", "-C", str(cwd or project_dir), *args],
+                                  capture_output=True, text=True)
+        except Exception:
+            class _R:  # never raise into the run
+                returncode, stdout, stderr = 1, "", ""
+            return _R()
+
+    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
+        return []
+    root = str(_worktree_root(project_dir).resolve())
+    removed = []
+    listing = git("worktree", "list", "--porcelain").stdout
+    # parse porcelain: pair each `worktree <path>` with its following `branch <ref>`
+    path = None
+    for ln in listing.splitlines():
+        if ln.startswith("worktree "):
+            path = ln[len("worktree "):]
+        elif ln.startswith("branch ") and path is not None:
+            ref = ln[len("branch "):]                       # e.g. refs/heads/feat/WLT-28-4-work
+            if ref.endswith(f"/{work_branch}") or ref == f"refs/heads/{work_branch}":
+                if (str(Path(path).resolve()).startswith(root)          # only OUR worktrees
+                        and not git("status", "--porcelain", cwd=path).stdout.strip()):
+                    if git("worktree", "remove", path).returncode == 0:
+                        removed.append(path)
+            path = None
+    git("worktree", "prune")
+    git("branch", "-d", work_branch)   # safe delete — no-op if not fully merged locally
+    return removed
+
+
 def _skip_for_route(router_number: int, target: int) -> set:
     """
     Steps to skip when a routing gate (#96) chooses `target`.
@@ -2218,6 +2262,10 @@ def _run_workflow(
                 ok, msg = _merge_pr(project_dir, work_branch)
                 print(f"[auto-merge{'' if ok else ' ⚠'}] {msg}")
                 emit(ev.NOTE, text=f"auto-merge: {msg}")
+                if ok:  # #104: prune this unit's worktree + delete its merged local branch
+                    for wt in _cleanup_merged_worktree(project_dir, work_branch):
+                        print(f"[pruned merged worktree → {wt}]")
+                        emit(ev.NOTE, text=f"pruned merged worktree: {wt}")
             elif result["approved"] and _is_merge_gate(step.title) and not auto_merge:
                 # #157: no auto-merge → don't leave the operator at "[handle manually]"
                 # with no idea what to do. Spell out the next step (merge the PR, then
