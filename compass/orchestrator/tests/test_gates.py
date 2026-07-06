@@ -25,7 +25,7 @@ from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
     _resolve_bet_for_story, _is_story_id, _build_story_gate, _load_story_context, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
-    _ensure_work_worktree, prune_worktrees, _module_mismatch_warning,
+    _ensure_work_worktree, prune_worktrees, _cleanup_merged_worktree, _module_mismatch_warning,
     _read_story_fm_list, _overlapping_inflight_builds,
     _step_dir, _write_artifact,
 )
@@ -567,6 +567,30 @@ class TestWorktreeIsolation(unittest.TestCase):
         self.assertEqual(len(removed), 1)        # exactly the clean one
         self.assertFalse(Path(clean).exists())   # finished worktree removed
         self.assertTrue(Path(dirty).exists())    # in-flight worktree kept
+
+    def test_cleanup_merged_scoped_to_that_branch(self):
+        # #104: at merge time, prune ONLY the merged unit's worktree + its local branch;
+        # a sibling in-flight build is untouched.
+        merged = _ensure_work_worktree(self.repo, "feat/WLT-27-2-work")
+        sibling = _ensure_work_worktree(self.repo, "feat/WLT-27-3-work")
+        (Path(sibling) / "wip.txt").write_text("in-flight\n", encoding="utf-8")
+        removed = _cleanup_merged_worktree(self.repo, "feat/WLT-27-2-work")
+        self.assertEqual([Path(p).resolve() for p in removed], [Path(merged).resolve()])
+        self.assertFalse(Path(merged).exists())                              # merged worktree gone
+        self.assertTrue(Path(sibling).exists())                              # sibling kept
+        self.assertEqual(self._git("branch", "--list", "feat/WLT-27-2-work").stdout.strip(), "")
+        self.assertIn("feat/WLT-27-3-work", self._git("branch", "--list").stdout)  # sibling branch kept
+
+    def test_cleanup_merged_keeps_dirty_worktree(self):
+        # a worktree with uncommitted work is NEVER force-removed, even if named.
+        wt = _ensure_work_worktree(self.repo, "feat/WLT-27-4-work")
+        (Path(wt) / "wip.txt").write_text("uncommitted\n", encoding="utf-8")
+        removed = _cleanup_merged_worktree(self.repo, "feat/WLT-27-4-work")
+        self.assertEqual(removed, [])
+        self.assertTrue(Path(wt).exists())
+
+    def test_cleanup_merged_no_branch_is_noop(self):
+        self.assertEqual(_cleanup_merged_worktree(self.repo, None), [])
 
 
 class TestModuleMismatchWarning(unittest.TestCase):
