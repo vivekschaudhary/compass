@@ -1647,6 +1647,20 @@ def _ensure_pr(exec_dir, work_branch, body_output):
         return None
 
 
+def _dirty_pr_note(exec_dir, work_branch) -> str:
+    """#109: after a FAILED check gate, an agent that (against #92) opened its OWN PR
+    leaves it dirty with the failing code. Detect it so the halt message doesn't falsely
+    claim 'no dirty PR'. Returns a warning naming the PR, or '' when none exists."""
+    if not work_branch:
+        return ""
+    url = _pr_url_any_state(exec_dir, work_branch)
+    if not url:
+        return ""
+    return (f"\n  ⚠ a PR is already open for this branch ({url}) and now holds the "
+            f"FAILING code — the agent should NOT have opened it (#92; the orchestrator "
+            f"opens the PR only on green). Close it or push the fix before merge.")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Core workflow runner — returns (prior_outputs, artifact_paths)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2516,11 +2530,15 @@ def _run_workflow(
                 print(f"\n[checks] running {len(checks)} CI-parity check(s) in {exec_dir} …")
                 ok, failed, tail = _run_checks(exec_dir, checks)
                 if not ok:
+                    dirty = _dirty_pr_note(exec_dir, work_branch)  # #109: no false "no dirty PR"
+                    halted_note = " (no dirty PR)" if not dirty else ""
                     print(f"\n⚠ CHECKS FAILED — `{failed}`\n{tail}\n"
-                          f"  Run halted BEFORE opening a PR (no dirty PR). Fix, then resume:\n"
+                          f"  Run halted BEFORE the orchestrator opens a PR{halted_note}. "
+                          f"Fix, then resume:\n"
                           f"    python3 -m compass.orchestrator.run {workflow_name} "
                           f"--from-step {step.number}"
-                          + (" --allow-write" if allow_write else ""),
+                          + (" --allow-write" if allow_write else "")
+                          + dirty,
                           file=sys.stderr)
                     emit(ev.RUN_END, status="halted", reason=f"checks failed: {failed}")
                     sys.exit(1)

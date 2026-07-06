@@ -4,7 +4,7 @@ status: active
 owner: enterprise-architect
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.46
+version: 0.3.47
 requires_approved: []
 ---
 
@@ -86,7 +86,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th work
 - [ ] (Step 1) Ops-change doc exists with domain tag, blast radius, affected systems, and an explicit **rollback procedure**; DRI seeded
 - [ ] (Step 1) **`change_class` classified and the ops-change projected to Jira (#72)** — `emergency` → **Bug**, additive/amendment → **Task**; bet-linked → under the bet's Epic, hygiene → standalone; `jira_key` pointer stored
 - [ ] (Step 2) HITL plan approval recorded (not self-approved); nothing executed before it
-- [ ] (Step 3) Change applied per plan (no scope drift); **rollback tested** + result recorded; PR open if committed files changed
+- [ ] (Step 3) Change applied per plan (no scope drift); **rollback tested** + result recorded; if committed files changed: committed + pushed and the orchestrator opened the PR on green (#92 — engineer does not open it)
 - [ ] (Step 4) Full Reviewer pass; Security Reviewer engaged if secrets/IAM/network/auth/certs; zero unresolved BLOCKERs/CRITICALs
 - [ ] (Step 6) HITL merge approval
 - [ ] (Step 7) Changelog if user-impacting; DRI updated with outcome

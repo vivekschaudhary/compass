@@ -64,5 +64,29 @@ class TestResolveChecks(unittest.TestCase):
         self.assertEqual(R._resolve_checks(d, d / "compass"), [])
 
 
+class TestDirtyPrNote(unittest.TestCase):
+    """#109: on a FAILED check gate the halt message must not falsely claim 'no dirty
+    PR' when an agent (against #92) already opened one. _dirty_pr_note detects it."""
+
+    def setUp(self):
+        self._orig = R._pr_url_any_state
+        self.addCleanup(lambda: setattr(R, "_pr_url_any_state", self._orig))
+
+    def test_no_branch_returns_empty(self):
+        R._pr_url_any_state = lambda *a: "https://gh/pr/9"  # must not even be consulted
+        self.assertEqual(R._dirty_pr_note("/x", None), "")
+
+    def test_no_pr_returns_empty(self):
+        R._pr_url_any_state = lambda *a: None
+        self.assertEqual(R._dirty_pr_note("/x", "feat/y"), "")
+
+    def test_existing_pr_is_flagged(self):
+        R._pr_url_any_state = lambda *a: "https://github.com/o/r/pull/149"
+        note = R._dirty_pr_note("/x", "feat/WLT-28-4-work")
+        self.assertIn("https://github.com/o/r/pull/149", note)
+        self.assertIn("#92", note)
+        self.assertIn("FAILING", note)
+
+
 if __name__ == "__main__":
     unittest.main()

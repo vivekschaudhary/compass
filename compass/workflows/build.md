@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: []
-version: 0.3.35
+version: 0.3.36
 requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
 ---
 
@@ -53,7 +53,7 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/engineer.md` — implementation + PR open + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
+- `compass/agents/engineer.md` — implementation + commit/push (the orchestrator opens the PR on green, #92) + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
 - `compass/agents/reviewer.md` — PR code review (migrated v0.3.16; `preferred_hosts: [codex, gemini]` deliberately excludes claude per cross-host integrity; task: `review-pr`. E2E authoring split to Automation in v0.3.33)
 - `compass/agents/automation.md` — E2E tests + test framework + CI configs (NEW agent v0.3.33, split from Reviewer; task: `write-e2e-tests`)
 - `compass/agents/pm.md` — arbitrate Engineer-vs-Reviewer disputes (ad-hoc; fires only when Engineer adds `## Dispute` to PR; task: `arbitrate-dispute`)
@@ -75,8 +75,8 @@ Either way, the GRAPH is the same.
 
 **Dispatches:** Engineer agent
 **Task definition:** `compass/agents/engineer.md` → Task `implement-story`
-**What it covers:** read context in order (AGENTS.md → brief → bet architecture → story → copy doc → foundation architecture → existing code) → plan smallest viable diff → write tests first when possible → implement following bet architecture (no improvising) → copy verbatim from copy doc → run ALL local checks (typecheck, lint, all test suites, format, **production build**) → **runtime-artifact inspection** per `[mechanical-output-verification]` (Next 16 functions-config-manifest.json / Vercel functions output / Expo prebuild config) → **runtime-config audit** (public-namespace env vars resolved; no silent dev-default fallback) → open PR via GitHub MCP with full template + ADR refs → story status flips `in-build` → `in-review`.
-**Stop point:** halts after PR open. Does NOT review own diff. Waits for Reviewer.
+**What it covers:** read context in order (AGENTS.md → brief → bet architecture → story → copy doc → foundation architecture → existing code) → plan smallest viable diff → write tests first when possible → implement following bet architecture (no improvising) → copy verbatim from copy doc → run ALL local checks (typecheck, lint, all test suites, format, **production build**) → **runtime-artifact inspection** per `[mechanical-output-verification]` (Next 16 functions-config-manifest.json / Vercel functions output / Expo prebuild config) → **runtime-config audit** (public-namespace env vars resolved; no silent dev-default fallback) → **commit + push (does NOT open the PR itself, #92)** → the orchestrator runs the CI-parity checks in the worktree and **opens the PR only on green** → story status flips `in-build` → `in-review`.
+**Stop point:** halts after commit + push (orchestrator opens the PR on green). Does NOT review own diff. Waits for Reviewer.
 
 <!-- COMPASS_ROLE_BOUNDARY: exit | role=engineer | workflow=build | step=1 -->
 
@@ -177,7 +177,7 @@ If `compass/config.yaml` `scanner.per_phase` is `strict` for the upcoming phase,
 
 Mirrors per-task postconditions + cross-agent invariants.
 
-- [ ] (Step 1 — engineer.implement-story) Code implements story's AC; unit + API + component tests cover happy + unhappy paths; production build green with runtime-artifact inspection confirming framework registration; runtime-config audit clean; copy matches copy doc verbatim; PR open with full template + ADR refs
+- [ ] (Step 1 — engineer.implement-story) Code implements story's AC; unit + API + component tests cover happy + unhappy paths; production build green with runtime-artifact inspection confirming framework registration; runtime-config audit clean; copy matches copy doc verbatim; change committed + pushed and the orchestrator opened the PR on green with full template + ADR refs (engineer does NOT open it — #92)
 - [ ] (Step 1 — pre-PR) **`[rsc-prop-serialization]`** checked if story touches RSC boundary: Server→Client props are JSON-serializable or Server Actions — no functions, class instances, Promises; confirmed or DRI Risk logged
 - [ ] (Step 1 — pre-PR) **`[server-action-file-export-purity]`** checked if story adds/touches `"use server"` files: all exports are `async` functions — no non-async exports; confirmed or DRI Risk logged
 - [ ] (Step 1 — pre-PR) **`[cross-artifact-sweep-on-contract-shift]`** complete if story changed any contract: DRI Decision logged confirming all referencing artifacts swept (components · API clients · tests · config · docs · env vars); no stale references remain
