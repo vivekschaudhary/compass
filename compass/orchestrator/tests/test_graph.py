@@ -787,6 +787,26 @@ class TestDeliveryCheck(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(self.uncommitted(d), [])
 
+    def test_scoped_to_the_dir_given_not_a_sibling(self):
+        # #110: the completion check must inspect exec_dir (the WORKTREE where the host
+        # committed), not project_dir (the shared main checkout). A CLEAN worktree must
+        # return [] even when a SIBLING checkout has uncommitted code — otherwise the
+        # operator's unrelated main-tree junk raises a false DELIVERY INCOMPLETE (live:
+        # a clean /fix that shipped PR #148 warned about docs/status.md in the main tree).
+        import subprocess
+        with tempfile.TemporaryDirectory() as root:
+            worktree, mainrepo = str(Path(root, "wt")), str(Path(root, "main"))
+            for d in (worktree, mainrepo):
+                def g(*a, _d=d):
+                    return subprocess.run(["git", "-C", _d, *a], capture_output=True, text=True)
+                Path(d).mkdir()
+                g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+                Path(d, "seed.txt").write_text("x"); g("add", "-A"); g("commit", "-qm", "seed")
+            # main checkout is dirty with unrelated code; worktree is clean
+            Path(mainrepo, "unrelated.tsx").write_text("// operator's uncommitted junk")
+            self.assertIn("unrelated.tsx", self.uncommitted(mainrepo))   # dirty dir → flagged
+            self.assertEqual(self.uncommitted(worktree), [])             # clean dir → nothing
+
 
 class TestReviewContext(unittest.TestCase):
     """#138: the tool-less reviewer gets the branch diff injected as context."""

@@ -2535,8 +2535,14 @@ def _run_workflow(
     # gap). Fail loud at completion so the result isn't mistaken for shipped.
     # #151: fires for doc workflows too (no work_branch) — they still need the
     # "commit the artifact" nudge even though they don't branch.
+    # #110: inspect exec_dir (the WORKTREE where the host committed), NOT project_dir
+    # (the shared main checkout). For an isolated build/fix the code lands in the
+    # worktree; scanning project_dir flagged the operator's UNRELATED main-checkout
+    # junk as "left uncommitted" → false DELIVERY INCOMPLETE (live: a clean /fix that
+    # shipped PR #148 warned about docs/status.md + config.yaml in the main tree). For
+    # non-isolated doc workflows exec_dir == project_dir, so the #151 nudge is preserved.
     if allow_write and not handed_off:
-        leftover = _uncommitted_code(project_dir)
+        leftover = _uncommitted_code(exec_dir)
         if leftover:
             warn = _delivery_warning(workflow_name, leftover)
             print("\n" + warn, file=sys.stderr)
