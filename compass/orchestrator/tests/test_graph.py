@@ -809,6 +809,50 @@ class TestReviewContext(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(self.runmod._review_diff(d), "")  # no git → "" not a crash
 
+    def test_review_diff_reads_the_dir_it_is_given_not_a_sibling(self):
+        """#102: _review_diff is strictly scoped to the dir it is handed. The dispatch
+        loop must pass exec_dir (the isolated worktree) — NOT project_dir (the shared
+        main checkout parked on a stray branch). Reproduce: two clones off one origin —
+        `wt` (the worktree/exec_dir) is on feat/work touching worktree.txt; `mainrepo`
+        (project_dir) is on an unrelated branch touching accounts.txt. Diffing `wt`
+        shows ONLY worktree.txt; diffing `mainrepo` shows accounts.txt — proving that
+        which dir you pass decides which branch gets reviewed."""
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as root:
+            origin = str(Path(root, "origin"))
+            wt = str(Path(root, "worktree"))
+            mainrepo = str(Path(root, "mainrepo"))
+
+            def g(cwd, *a):
+                return subprocess.run(["git", "-C", cwd, *a],
+                                      capture_output=True, text=True)
+
+            g(root, "init", "-q", "origin")
+            g(origin, "config", "user.email", "t@t"); g(origin, "config", "user.name", "t")
+            g(origin, "checkout", "-qB", "main")
+            Path(origin, "base.txt").write_text("base\n")
+            g(origin, "add", "-A"); g(origin, "commit", "-qm", "base")
+
+            # the worktree (exec_dir): builds the debt work on feat/work
+            g(root, "clone", "-q", origin, wt)
+            g(wt, "config", "user.email", "t@t"); g(wt, "config", "user.name", "t")
+            g(wt, "checkout", "-qb", "feat/work")
+            Path(wt, "worktree.txt").write_text("debt code\n")
+            g(wt, "add", "-A"); g(wt, "commit", "-qm", "feat: debt")
+
+            # the shared main checkout (project_dir): parked on an unrelated fix branch
+            g(root, "clone", "-q", origin, mainrepo)
+            g(mainrepo, "config", "user.email", "t@t"); g(mainrepo, "config", "user.name", "t")
+            g(mainrepo, "checkout", "-qb", "fix/accounts")
+            Path(mainrepo, "accounts.txt").write_text("unrelated accounts fix\n")
+            g(mainrepo, "add", "-A"); g(mainrepo, "commit", "-qm", "fix: accounts")
+
+            wt_diff = self.runmod._review_diff(wt)
+            self.assertIn("worktree.txt", wt_diff)
+            self.assertNotIn("accounts.txt", wt_diff)
+            # the bug: passing project_dir would have reviewed THIS instead
+            self.assertIn("accounts.txt", self.runmod._review_diff(mainrepo))
+
 
 class TestNonInteractiveInput(unittest.TestCase):
     """#134: a headless/dashboard run must NEVER call input() — it would deadlock
