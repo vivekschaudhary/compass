@@ -23,7 +23,7 @@ import os
 
 from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
-    _resolve_bet_for_story, _is_story_id, _load_story_context, _work_branch_name,
+    _resolve_bet_for_story, _is_story_id, _build_story_gate, _load_story_context, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
     _ensure_work_worktree, prune_worktrees, _module_mismatch_warning,
     _read_story_fm_list, _overlapping_inflight_builds,
@@ -411,6 +411,35 @@ class TestStoryScoping(unittest.TestCase):
     def test_no_dependencies_never_blocks(self):
         self._set("WLT-27-1", type="story", owner="agent", status="ready", dependencies="[]")
         self.assertEqual(_story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1"), [])
+
+    # ── #103 build story-scope gate ───────────────────────────────────────────
+    def test_build_refuses_bet_with_stories(self):
+        # /build WLT-27 (a bet with 2 stories) must refuse and name a story to pick.
+        msg = _build_story_gate(self.project, "build", "WLT-27", None)
+        self.assertIsNotNone(msg)
+        self.assertIn("story-scoped", msg)
+        self.assertIn("2 story", msg)
+        self.assertIn("WLT-27-1", msg)  # points at a concrete story to run
+
+    def test_build_refuses_bet_with_no_stories(self):
+        # A bet with no stories yet → point at /create-story, not a story id.
+        (self.project / "docs" / "bets" / "CB-9").mkdir(parents=True)
+        msg = _build_story_gate(self.project, "build", "CB-9", None)
+        self.assertIsNotNone(msg)
+        self.assertIn("no stories yet", msg)
+        self.assertIn("/create-story CB-9", msg)
+
+    def test_build_allows_real_story(self):
+        # story_id resolved → no refusal.
+        self.assertIsNone(_build_story_gate(self.project, "build", "WLT-27", "WLT-27-1"))
+
+    def test_gate_is_build_only(self):
+        # fix/ops are NOT story-scoped — never refused by this gate.
+        self.assertIsNone(_build_story_gate(self.project, "fix", "WLT-27", None))
+        self.assertIsNone(_build_story_gate(self.project, "ops", "WLT-27", None))
+
+    def test_gate_noop_without_bet(self):
+        self.assertIsNone(_build_story_gate(self.project, "build", None, None))
 
 
 class TestWorkBranchIsolation(unittest.TestCase):

@@ -1192,6 +1192,24 @@ def _is_story_id(project_dir: Path, candidate: str) -> bool:
     return any(bets_dir.glob(f"*/stories/{candidate}/story.md"))
 
 
+def _build_story_gate(project_dir: Path, workflow_name: str, bet_id, story_id):
+    """#103: /build is STORY-scoped (`/build <story-id>` implements ONE story). If an
+    operator names a BET instead (bet_id resolved, story_id not), refuse — building a
+    bet collapses the whole Epic into one un-decomposed, un-reviewable mega-PR (live:
+    `/build WLT-28` implemented the entire debt bet — 28 files — as PR #144). `fix` and
+    `ops` are NOT story-scoped, so this gate is build-only. Returns a refusal message,
+    or None when the invocation is fine (a real story, or a non-build workflow)."""
+    if workflow_name != "build" or story_id or not bet_id:
+        return None
+    stories = sorted(
+        (project_dir / "docs" / "bets" / bet_id / "stories").glob("*/story.md"))
+    if stories:
+        return (f"{bet_id} is a bet with {len(stories)} story(ies) — /build is "
+                f"story-scoped. Run /build <story-id> (e.g. {stories[0].parent.name}).")
+    return (f"{bet_id} is a bet, not a story, and has no stories yet — run "
+            f"/create-story {bet_id} to slice it, then /build <story-id>.")
+
+
 def _story_dependencies(content: str) -> list:
     """Parse a story's `dependencies:` frontmatter into a list of story ids. Handles
     both the inline-flow form (`[A, B]` / `A, B`) and block-style `  - A` lines, and
@@ -1697,6 +1715,20 @@ def _run_workflow(
             sys.exit(3)
         if unmet and dry_run:
             print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
+
+    # ── build story-scope gate (#103) — /build is story-scoped; refuse a bet-id ──────
+    # `/build <story-id>` implements ONE story. Given a BET (no story resolved) it would
+    # collapse the whole Epic into one un-decomposed, un-reviewable mega-PR (live: /build
+    # WLT-28 built the entire debt bet as PR #144). Refuse loud, point at /create-story.
+    # fix/ops are not story-scoped → _build_story_gate returns None for them.
+    _bsg = _build_story_gate(project_dir, workflow_name, bet_id, story_id)
+    if _bsg:
+        print(f"\nBuild scope gate — {_bsg}")
+        if not dry_run:
+            print("\nError: /build is story-scoped. Halting — building a bet collapses "
+                  "the Epic into one un-reviewable PR (#103).", file=sys.stderr)
+            sys.exit(3)
+        print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
 
     # ── design/copy gate (#171) — mechanical 'always block' for a story-scoped build ─
     # A UI feature must NOT build until its design/copy dependencies are HUMAN-delivered
