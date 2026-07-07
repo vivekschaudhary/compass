@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: []
-version: 0.3.36
+version: 0.3.37
 requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
 ---
 
@@ -138,6 +138,7 @@ Either way, the GRAPH is the same.
 - Zero Reviewer BLOCKERs unresolved
 - Zero Security Reviewer CRITICALs unresolved
 - Zero unresolved disputes
+- **Reviewer's latest verdict is not `Request changes` (#96)** — the orchestrator **blocks the merge gate** when the last review requested changes and the engineer's fix was not re-reviewed. Re-run the review (`--from-step <review>`) so the Reviewer confirms the fix, or escalate to PM via a `## Dispute`. A request-changes review never auto-falls-through to merge.
 - Human approval recorded (Step 6)
 
 Squash merge to main (per `compass/config.yaml` merge strategy). CI/CD pipeline triggered automatically per `compass/config.yaml` `ci_cd:` settings.

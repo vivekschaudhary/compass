@@ -808,6 +808,37 @@ class TestDeliveryCheck(unittest.TestCase):
             self.assertEqual(self.uncommitted(worktree), [])             # clean dir → nothing
 
 
+class TestReviewRecommendation(unittest.TestCase):
+    """#96: parse the Reviewer's verdict so a request-changes review blocks the merge
+    gate (re-review/escalate) instead of falling through."""
+
+    def setUp(self):
+        from compass.orchestrator import run as runmod
+        self.rec = runmod._review_recommendation
+
+    def test_approve(self):
+        self.assertEqual(self.rec("### Findings\n[NIT] x\n\n### Recommendation\n\nApprove\n"),
+                         "approve")
+
+    def test_request_changes(self):
+        self.assertEqual(self.rec("### Recommendation\n\nRequest changes\n"), "request_changes")
+
+    def test_block_until(self):
+        # the live PR #150 shape — "Block until:" is a request-changes verdict.
+        self.assertEqual(self.rec("### Recommendation\n\nBlock until:\n- fix PATCH\n"),
+                         "request_changes")
+
+    def test_blocker_finding_but_approve_verdict(self):
+        # a [BLOCKER] label up in findings must NOT flip an Approve verdict — the window
+        # is read at the Recommendation heading, not the findings.
+        out = ("### Findings\n[BLOCKER] something\n\n### Recommendation\n\nApprove\n")
+        self.assertEqual(self.rec(out), "approve")
+
+    def test_none_when_no_recommendation(self):
+        self.assertIsNone(self.rec("just some prose, no verdict here"))
+        self.assertIsNone(self.rec(""))
+
+
 class TestReviewContext(unittest.TestCase):
     """#138: the tool-less reviewer gets the branch diff injected as context."""
 

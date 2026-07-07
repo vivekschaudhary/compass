@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.53
+version: 0.3.54
 requires_approved: []
 ---
 
@@ -70,6 +70,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 
 **Dispatches:** HUMAN (not an agent)
 **What it covers:** the human reviews the fix + triage summary and approves merge after CI green + zero unresolved BLOCKERs/CRITICALs. (This is the single human gate — severity/bet-linkage are in the engineer's triage summary, confirmed here rather than at a separate pre-fix gate.) Squash merge → CI/CD deploys → fix status `shipped` (or `deploy-failed` + alert).
+**Merge blocked on an unresolved request-changes review (#96):** if the Reviewer's latest verdict was `Request changes` and the engineer's fix was not re-reviewed, the orchestrator **blocks this gate** rather than opening it — re-run the review (`--from-step 3`) so the Reviewer confirms the fix, or escalate via a `## Dispute`. A request-changes review never auto-falls-through to merge.
 
 ### Step 6. `tech-writer.accumulate-changelog` (Tech Writer agent owns)
 
