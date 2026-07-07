@@ -813,7 +813,9 @@ def _handoff_message(target: str, project_dir, last_artifact_path=None) -> str:
         try:
             ctx = f'--context "$(cat {last_artifact_path.relative_to(project_dir)})"'
         except (ValueError, AttributeError):
-            ctx = '--context "<paste the triage classification above>"'
+            # #120: the artifact lives in the user-local state_dir (not under the repo) —
+            # use its absolute path so the cat still resolves from any CWD.
+            ctx = f'--context "$(cat {last_artifact_path})"'
     else:
         ctx = '--context "<paste the triage classification above>"'
     return (
@@ -850,6 +852,24 @@ def _collect_input(step_label: str, inline_context: str = "", non_interactive: b
             break
         lines.append(line)
     return "\n".join(lines)
+
+
+def _artifact_rel(path, project_dir):
+    """#120: render an artifact/note path for display + logging without crashing. After
+    #118, run artifacts (step-*.md, rejection notes) live in the user-local state_dir, so
+    `relative_to(project_dir)` raises ValueError (the path isn't under the repo). Return a
+    readable relative path — to project_dir when the artifact IS in the repo (canonical
+    docs), else to state_dir, else the basename. None for a falsy path."""
+    if not path:
+        return None
+    from . import events as _ev
+    p = Path(path)
+    for base in (project_dir, _ev.state_dir(project_dir), _ev.compass_home()):
+        try:
+            return str(p.relative_to(base))
+        except (ValueError, TypeError):
+            continue
+    return p.name
 
 
 def _step_dir(project_dir: Path, workflow: str, run_id: str = None) -> Path:
@@ -2266,10 +2286,7 @@ def _run_workflow(
                     last_artifact=last_artifact_path,
                     last_output=last_agent_output,
                 )
-            artifact_rel = (
-                str(last_artifact_path.relative_to(project_dir))
-                if last_artifact_path else None
-            )
+            artifact_rel = _artifact_rel(last_artifact_path, project_dir)  # #120
             decision = "approved" if result["approved"] else "rejected"
 
             # Promotion (#70): approval flips status → approved and RE-projects the
@@ -2341,7 +2358,7 @@ def _run_workflow(
                     note_path = _write_rejection_note(
                         project_dir, workflow_name, step.number, result["feedback"], run_id
                     )
-                    print(f"[rejection note → {note_path.relative_to(project_dir)}]")
+                    print(f"[rejection note → {_artifact_rel(note_path, project_dir)}]")  # #120
                 print(
                     f"\nWorkflow '{workflow_name}' halted at HITL gate (step {step.number}).\n"
                     f"To rerun from this step:\n"
@@ -2563,7 +2580,7 @@ def _run_workflow(
                 project_dir, workflow_name, step.number,
                 step.agent, step.task, result, run_id,
             )
-            rel = str(artifact_path.relative_to(project_dir))
+            rel = _artifact_rel(artifact_path, project_dir)   # #120: may be in state_dir
             print(f"[artifact → {rel}]")
             artifact_paths.append(rel)
             last_artifact_path = artifact_path
@@ -2588,7 +2605,7 @@ def _run_workflow(
             host=host,
             model=step_model,
             output=result,
-            artifact_path=str(last_artifact_path.relative_to(project_dir)) if last_artifact_path else None,
+            artifact_path=_artifact_rel(last_artifact_path, project_dir),  # #120
         )
         # #149: confirm the step actually did its job (not just that it returned).
         outcome, why = _classify_outcome(result)
