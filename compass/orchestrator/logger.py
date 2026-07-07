@@ -29,6 +29,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .events import state_dir  # #118: run telemetry lives user-local, not in the repo
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parser — extract structured sections from agent markdown output
@@ -160,27 +162,20 @@ def parse_step_output(output: str) -> dict:
 # Logger — append a run record to runs.jsonl
 # ─────────────────────────────────────────────────────────────────────────────
 
-_RUNS_GITIGNORE = (
-    "# Compass orchestrator run state — telemetry (runs/hitl jsonl) + per-run step\n"
-    "# artifacts. Local, NOT committed: the durable event spine lives in ~/.compass,\n"
-    "# and committing this dir perpetually dirties the working tree, which breaks\n"
-    "# build-branch isolation and sweeps telemetry into code PRs (#175). Reads (audit,\n"
-    "# cockpit, WBS) work on the on-disk files regardless of git-tracking.\n"
-    "*\n"
-    "!.gitignore\n"
-)
+def runs_root(project_dir: Path) -> Path:
+    """#118: the user-local home for this project's run telemetry (runs.jsonl, hitl.jsonl,
+    per-run step-*.md artifacts) — $COMPASS_HOME/state/<project>/orchestrator-runs/. Was
+    docs/orchestrator-runs/ in the repo (#175 self-ignored it); now it lives OUT of the
+    repo entirely so the consumer tree holds only committed deliverables."""
+    return state_dir(project_dir) / "orchestrator-runs"
 
 
 def ensure_runs_dir(project_dir: Path) -> Path:
-    """#175: create docs/orchestrator-runs/ and drop a .gitignore so orchestrator run
-    state (jsonl telemetry + step-*.md artifacts) stays OUT of git — it dirtied the
-    tree every run (defeating fresh-base branch isolation) and got swept into code PRs
-    by the engineer's `git add -A`. Idempotent; returns the runs dir."""
-    runs_dir = Path(project_dir) / "docs" / "orchestrator-runs"
+    """Create (idempotently) the user-local run-telemetry dir and return it. No in-repo
+    .gitignore needed anymore — the dir isn't in the repo (#118, supersedes the #175
+    self-ignore)."""
+    runs_dir = runs_root(project_dir)
     runs_dir.mkdir(parents=True, exist_ok=True)
-    gitignore = runs_dir / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text(_RUNS_GITIGNORE, encoding="utf-8")
     return runs_dir
 
 
@@ -231,7 +226,7 @@ def log_step(
 
 def load_runs(project_dir: Path) -> list:
     """Load all run records from runs.jsonl."""
-    log_path = project_dir / "docs" / "orchestrator-runs" / "runs.jsonl"
+    log_path = runs_root(project_dir) / "runs.jsonl"
     if not log_path.exists():
         return []
     records = []
@@ -390,7 +385,7 @@ def log_hitl(
 
 def load_hitl_log(project_dir: Path) -> list:
     """Load all HITL records from hitl.jsonl."""
-    log_path = project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"
+    log_path = runs_root(project_dir) / "hitl.jsonl"
     if not log_path.exists():
         return []
     records = []

@@ -39,6 +39,21 @@ class TestCompassHome(unittest.TestCase):
             else:
                 os.environ["COMPASS_HOME"] = old
 
+    def test_state_dir_is_user_local_and_project_keyed(self):
+        # #118: generated/telemetry artifacts live under $COMPASS_HOME/state/<project>/,
+        # never in the consumer repo; keyed by project label so projects don't collide.
+        old = os.environ.get("COMPASS_HOME")
+        try:
+            os.environ["COMPASS_HOME"] = "/tmp/ch-test-xyz"
+            self.assertEqual(ev.state_dir("/some/repos/home-app"),
+                             Path("/tmp/ch-test-xyz") / "state" / "home-app")
+            self.assertNotEqual(ev.state_dir("/a/home-app"), ev.state_dir("/a/kindtree"))
+        finally:
+            if old is None:
+                os.environ.pop("COMPASS_HOME", None)
+            else:
+                os.environ["COMPASS_HOME"] = old
+
 
 class TestSinks(unittest.TestCase):
     def test_jsonl_sink_appends(self):
@@ -745,7 +760,8 @@ class TestActionEndpoints(unittest.TestCase):
         self.assertEqual(cockpit._doc_link(""), "")
         run = {"project_dir": "/proj", "workflow": "create-brief"}
         d = cockpit._run_artifact_dir(run)
-        self.assertTrue(str(d).endswith("/proj/docs/orchestrator-runs/create-brief"))
+        # #118: run artifacts live user-local under state/<project>/orchestrator-runs/
+        self.assertTrue(str(d).endswith("/state/proj/orchestrator-runs/create-brief"))
         self.assertIsNone(cockpit._run_artifact_dir({"project_dir": None, "workflow": "x"}))
         self.assertIsNone(cockpit._run_artifact_dir({"project_dir": "/p"}))  # no workflow
 

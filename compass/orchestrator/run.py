@@ -832,7 +832,7 @@ def _collect_input(step_label: str, inline_context: str = "", non_interactive: b
 
 def _step_dir(project_dir: Path, workflow: str, run_id: str = None) -> Path:
     """#27: the dir holding a run's step artifacts. **Run-scoped** —
-    docs/orchestrator-runs/<workflow>/<run_id>/ — so concurrent same-workflow builds
+    <state_dir>/orchestrator-runs/<workflow>/<run_id>/ (#118 user-local) — so concurrent same-workflow builds
     don't clobber each other's `step-*.md` (the collision Retro #031 flagged). Falls
     back to the flat <workflow>/ dir when no run_id (legacy / non-run contexts). Drops
     the #175 .gitignore via ensure_runs_dir."""
@@ -848,7 +848,7 @@ def _write_artifact(
     project_dir: Path, workflow: str, step_num: int,
     agent: str, task: str, content: str, run_id: str = None,
 ) -> Path:
-    """Write step output to docs/orchestrator-runs/<workflow>/<run_id>/step-<N>-<agent>-<task>.md (#27)."""
+    """Write step output to <state_dir>/orchestrator-runs/<workflow>/<run_id>/step-<N>-<agent>-<task>.md (#27, user-local #118)."""
     run_dir = _step_dir(project_dir, workflow, run_id)
     out_file = run_dir / f"step-{step_num:02d}-{agent}-{task}.md"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2908,7 +2908,7 @@ def main(argv=None):
     parser.add_argument(
         "--log",
         action="store_true",
-        help="Print the run log table (docs/orchestrator-runs/runs.jsonl) and exit.",
+        help="Print the run log table (~/.compass/state/<project>/orchestrator-runs/runs.jsonl) and exit.",
     )
     parser.add_argument(
         "--dri",
@@ -2919,7 +2919,7 @@ def main(argv=None):
         "--hitl-log",
         action="store_true",
         dest="hitl_log",
-        help="Print the HITL decision log (docs/orchestrator-runs/hitl.jsonl) and exit.",
+        help="Print the HITL decision log (~/.compass/state/<project>/orchestrator-runs/hitl.jsonl) and exit.",
     )
     parser.add_argument(
         "--export-audit",

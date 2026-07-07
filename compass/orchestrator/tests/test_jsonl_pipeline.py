@@ -25,7 +25,18 @@ from compass.orchestrator.logger import (
     load_runs,
     load_hitl_log,
     parse_step_output,
+    runs_root,
 )
+
+
+def _isolate_compass_home(case):
+    """#118: run telemetry lives under $COMPASS_HOME/state/<project>/ now — point
+    COMPASS_HOME at a temp dir so tests never touch the real ~/.compass."""
+    home = tempfile.mkdtemp()
+    old = os.environ.get("COMPASS_HOME")
+    os.environ["COMPASS_HOME"] = home
+    case.addCleanup(lambda: os.environ.__setitem__("COMPASS_HOME", old)
+                    if old is not None else os.environ.pop("COMPASS_HOME", None))
 
 
 FAKE_OUTPUT = """\
@@ -52,14 +63,15 @@ FAKE_OUTPUT = """\
 class TestRunsJsonl(unittest.TestCase):
 
     def setUp(self):
+        _isolate_compass_home(self)
         self.tmp = tempfile.mkdtemp()
         self.project_dir = Path(self.tmp)
 
     def _runs_path(self):
-        return self.project_dir / "docs" / "orchestrator-runs" / "runs.jsonl"
+        return runs_root(self.project_dir) / "runs.jsonl"
 
     def _hitl_path(self):
-        return self.project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"
+        return runs_root(self.project_dir) / "hitl.jsonl"
 
     def test_log_step_creates_file_and_record(self):
         record = log_step(
@@ -138,11 +150,12 @@ class TestRunsJsonl(unittest.TestCase):
 class TestHitlJsonl(unittest.TestCase):
 
     def setUp(self):
+        _isolate_compass_home(self)
         self.tmp = tempfile.mkdtemp()
         self.project_dir = Path(self.tmp)
 
     def _hitl_path(self):
-        return self.project_dir / "docs" / "orchestrator-runs" / "hitl.jsonl"
+        return runs_root(self.project_dir) / "hitl.jsonl"
 
     def test_log_hitl_approved_creates_record(self):
         record = log_hitl(
