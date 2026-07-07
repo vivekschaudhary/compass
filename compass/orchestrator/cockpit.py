@@ -70,6 +70,7 @@ def fold_runs(events: list) -> dict:
             "steps": {},
             "project_dir": None,   # full path (#119) — lets the cockpit resume any run
             "compass_dir": None,   # #178 — framework dir, for the copy-paste resume cmd
+            "context": None,       # #108 — what the operator typed at launch (run label)
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
         for k in ("project", "workflow", "bet_id", "story_id"):
@@ -80,6 +81,8 @@ def fold_runs(events: list) -> dict:
         t = e.get("type")
         if t == ev.RUN_START:
             r["started"] = e.get("ts")
+            if e.get("context"):                      # #108: operator's launch context
+                r["context"] = e["context"]
             if e.get("project_dir"):
                 r["project_dir"] = e["project_dir"]
             if e.get("compass_dir"):                  # #178: framework dir for the resume cmd
@@ -254,6 +257,8 @@ def render_run(run: dict, graph_steps: list) -> str:
     """Full annotated step plan for one run: ✓done · ▶running · ⏸awaiting · ·pending."""
     loc = " ".join(x for x in [run.get("project"), run.get("workflow"), _scope_label(run)] if x)
     out = [f"RUN  {loc}  ({run.get('run_id')})", "=" * 60]
+    if run.get("context"):                        # #108: label the run with what was typed
+        out.append(f'  ▸ "{run["context"]}"')
     rows, has_graph = _run_step_rows(run, graph_steps, now=datetime.now(timezone.utc))
     if not has_graph:
         out.append("  (workflow graph unavailable — showing observed steps only; pass --compass-dir for pending steps)")
@@ -437,6 +442,7 @@ _HTML_CSS = """
   @keyframes spin{to{transform:rotate(1turn)}}
   .running .g{color:#58a6ff;display:inline-block;animation:spin 1s linear infinite}
   .dur{color:#6e7681;font-size:11px;margin-left:6px}
+  .ctx{color:#8a8f98;font-style:italic;font-size:12px;margin-top:3px}
   .lg{color:#58a6ff;font-size:11px;margin-left:8px;text-decoration:none}
   .lg:hover{text-decoration:underline}
   .pending{color:#8a8f98}
@@ -597,7 +603,8 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         age_html = f" <span class='dur'>awaiting {_esc(age)}</span>" if age else ""
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
                  f"<span class='muted'>step {_esc(g.get('step'))} — {_esc(g.get('title') or g.get('kind'))}</span>{age_html}"
-                 f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}{act}</div>")
+                 f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}{act}"
+                 f"{_ctx_html(r)}</div>")
 
     # ▶ In flight (+ step plan)
     p.append(f"<h2>▶ In flight ({len(in_flight)})</h2>")
@@ -610,7 +617,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         cur = r.get("current_step")
         head = f"<span class='loc'>{loc}</span>" + (f" <span class='muted'>step {cur}/{total}</span>" if cur and total else "")
         head += _changes_link(r.get("run_id")) + _log_link(r.get("run_id"), actions)
-        p.append(f"<div class='run'>{head}<ul class='steps'>")
+        p.append(f"<div class='run'>{head}{_ctx_html(r)}<ul class='steps'>")
         for n, status, label, dur in rows:
             cls = _HTML_GLYPH_CLASS.get(status, "pending")
             # #130: spinning loader on the running step (CSS animates .running .g)
@@ -629,7 +636,8 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         mark = "✓" if r.get("status") == "completed" else "■"
         p.append(f"<div class='run'>{mark} <span class='loc'>{loc}</span> "
                  f"<span class='muted'>{_esc(r.get('status'))}: {_esc(r.get('reason'))}</span>"
-                 f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}</div>")
+                 f"{_doc_link(r.get('run_id'))}{_changes_link(r.get('run_id'))}{_log_link(r.get('run_id'), actions)}"
+                 f"{_ctx_html(r)}</div>")
 
     # 💰 Spend
     s = spend_summary(vals)
@@ -832,6 +840,13 @@ def _changes_link(run_id) -> str:
     if not run_id:
         return ""
     return f"<a class='lg' href='/changes?run={_esc(run_id)}'>changes ↗</a>"
+
+
+def _ctx_html(run) -> str:
+    """#108: the operator's launch context as a card subtitle, so two parallel runs are
+    distinguishable at a glance. '' when the run carried no context."""
+    ctx = run.get("context")
+    return f"<div class='ctx'>▸ {_esc(ctx)}</div>" if ctx else ""
 
 
 _PR_URL_RE = _re.compile(

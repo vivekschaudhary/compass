@@ -934,5 +934,44 @@ class TestStaleRuns(unittest.TestCase):
                                             events=events, run_id="nope"), [])
 
 
+class TestLaunchContext(unittest.TestCase):
+    """#108: the operator's launch context rides on RUN_START → folds onto the run →
+    renders in the cockpit, so two parallel runs are distinguishable at a glance."""
+
+    def test_short_context_single_lines_and_caps(self):
+        from compass.orchestrator import run as R
+        self.assertEqual(R._short_context(""), "")
+        self.assertEqual(R._short_context(None), "")
+        self.assertEqual(R._short_context("  add   transactions\nfor non-plaid  "),
+                         "add transactions for non-plaid")
+        long = "x" * 500
+        out = R._short_context(long, limit=200)
+        self.assertEqual(len(out), 200)
+        self.assertTrue(out.endswith("…"))
+
+    def test_fold_captures_context(self):
+        events = [
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="fix",
+                          context="filter INR transactions"),
+            ev.make_event(ev.STEP_START, run_id="r1", step=1, agent="engineer", task="triage-and-fix"),
+        ]
+        runs = cockpit.fold_runs(events)
+        self.assertEqual(runs["r1"]["context"], "filter INR transactions")
+
+    def test_render_run_shows_context(self):
+        runs = cockpit.fold_runs([
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="fix",
+                          context="filter INR transactions"),
+        ])
+        out = cockpit.render_run(runs["r1"], [])
+        self.assertIn("filter INR transactions", out)
+
+    def test_render_run_no_context_no_line(self):
+        runs = cockpit.fold_runs([
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="fix"),
+        ])
+        self.assertNotIn("▸", cockpit.render_run(runs["r1"], []))
+
+
 if __name__ == "__main__":
     unittest.main()

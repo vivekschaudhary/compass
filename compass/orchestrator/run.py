@@ -1691,6 +1691,16 @@ def _ensure_pr(exec_dir, work_branch, body_output):
         return None
 
 
+def _short_context(text, limit: int = 200) -> str:
+    """#108: a one-line, length-capped rendering of the operator's launch context for the
+    RUN_START event, so the cockpit can label a run with what was actually typed. Collapses
+    whitespace/newlines and truncates with an ellipsis. Returns '' for empty/None."""
+    if not text:
+        return ""
+    flat = " ".join(str(text).split())
+    return flat if len(flat) <= limit else flat[:limit - 1].rstrip() + "…"
+
+
 def _dirty_pr_note(exec_dir, work_branch) -> str:
     """#109: after a FAILED check gate, an agent that (against #92) opened its OWN PR
     leaves it dirty with the failing code. Detect it so the halt message doesn't falsely
@@ -2057,6 +2067,8 @@ def _run_workflow(
          # #156: record the run's host MODE so a dashboard /decide resume can carry it
          # forward (reuse the subscription CLI hosts, not silently fall back to the API).
          claude_cli=claude_cli, codex_cli=codex_cli,
+         context=_short_context(context),  # #108: what the operator typed — so the cockpit
+         # can tell two parallel runs apart at a glance (e.g. which /fix, which /build).
          project_dir=str(project_dir),  # #119: full path so the cockpit can resume any run
          compass_dir=str(compass_dir))  # #178: so the copy-paste approve targets the right framework dir
 
