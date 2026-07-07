@@ -303,6 +303,28 @@ def _is_refusal(result: str) -> bool:
     return False
 
 
+# #96: the Reviewer's verdict lives in its "### Recommendation" section — "Approve" vs
+# "Request changes" / "Block until: …". Read it near that heading so a `[BLOCKER]` label
+# up in the findings can't be mistaken for the overall verdict.
+_REVIEW_BLOCK_RE = re.compile(r"request[\s-]?changes|\bblock(?:ed|s)?\b", re.I)
+_REVIEW_APPROVE_RE = re.compile(r"\bapprove", re.I)
+
+
+def _review_recommendation(output: str):
+    """#96: parse the Reviewer's overall verdict. Returns 'approve' | 'request_changes' |
+    None (no recognizable recommendation). Scans the window at the Recommendation heading;
+    falls back to the whole output if there is no heading."""
+    if not output:
+        return None
+    m = re.search(r"(?im)^\s*#{0,4}\s*Recommendation\b.*", output)
+    window = output[m.start():m.start() + 250] if m else output
+    if _REVIEW_BLOCK_RE.search(window):
+        return "request_changes"
+    if _REVIEW_APPROVE_RE.search(window):
+        return "approve"
+    return None
+
+
 # #149: a step that *ran* isn't a step that *succeeded*. Beyond the hard REFUSE:
 # sentinel (#125, which halts), agents often emit a SOFT non-completion — a plan, a
 # confabulated block, a permission claim — yet the step was still marked ✓ done.
@@ -2078,6 +2100,14 @@ def _run_workflow(
     # artifact ("no prior step output to promote"). _promote_artifact still reads the
     # on-disk artifact for the actual content.
     last_agent_output = prior_outputs[-1].get("output", "") if prior_outputs else ""
+    # #96: the Reviewer's latest verdict (approve/request_changes). Seed from a loaded
+    # reviewer step on a --from-step resume so a merge-gate resume still enforces the gate.
+    last_review_verdict = None
+    for _po in (prior_outputs or []):
+        if _po.get("agent") == "reviewer":
+            _v = _review_recommendation(_po.get("output", ""))
+            if _v:
+                last_review_verdict = _v
     first_step = True
     skipped = set()  # steps in a not-taken branch (#96 conditional dispatch)
     handed_off = False  # set when a #103 cross-workflow hand-off ends the run early
@@ -2156,6 +2186,26 @@ def _run_workflow(
 
         # ── HITL gate ────────────────────────────────────────────────────────
         if step.is_hitl:
+            # #96: a 'request changes' review must be RE-REVIEWED or escalated to PM —
+            # never auto-fall-through to the merge gate. The engineer's respond-to-review
+            # is not a substitute for the Reviewer confirming the fix. If the latest
+            # Reviewer verdict is unresolved request-changes, block the merge here (loud),
+            # directing to re-review the fixed branch or raise a dispute for PM.
+            if _is_merge_gate(step.title) and last_review_verdict == "request_changes":
+                _rev_step = next((s.number for s in steps if s.agent == "reviewer"), step.number)
+                print(
+                    f"\n⛔ MERGE BLOCKED (#96) — the Reviewer requested changes and the fix "
+                    f"was not re-reviewed. A 'request changes' review must be re-reviewed (or "
+                    f"escalated to PM), never fall through to the merge gate.\n"
+                    f"  Re-review the fixed branch:\n"
+                    f"    python3 -m compass.orchestrator.run {workflow_name} --from-step {_rev_step}"
+                    + (" --allow-write" if allow_write else "")
+                    + f"\n  Or, if you dispute the finding, the engineer raises `## Dispute` on "
+                    f"the PR for PM arbitration.",
+                    file=sys.stderr)
+                emit(ev.RUN_END, status="halted",
+                     reason="merge blocked: unresolved request-changes review (#96)")
+                sys.exit(1)
             emit(ev.GATE_OPEN, step=step.number, kind="hitl", title=step.title)
             # #153: backstop the no-self-approve rule mechanically — if the prior
             # step's agent already marked the gated artifact approved, revert to
@@ -2521,6 +2571,10 @@ def _run_workflow(
             last_artifact_path = None
 
         last_agent_output = result
+        if step.agent == "reviewer":                  # #96: track the Reviewer's verdict
+            _rv = _review_recommendation(result)
+            if _rv:
+                last_review_verdict = _rv
 
         # Log structured record to runs.jsonl
         rec = log_step(
