@@ -69,6 +69,15 @@ def events_path() -> Path:
     return compass_home() / "orchestrator" / "events.jsonl"
 
 
+def state_dir(project_dir) -> Path:
+    """#118: the user-local home for a project's GENERATED / TELEMETRY artifacts —
+    orchestrator run logs, step outputs, the fix-record cache, the status view — so they
+    never sit in the consumer repo (the repo holds only committed, authored deliverables).
+    Mirrors the event spine's user-local design (compass_home). Keyed by project label so
+    concurrent projects never collide: $COMPASS_HOME/state/<project-label>/."""
+    return compass_home() / "state" / project_label(project_dir)
+
+
 def make_event(type: str, **fields) -> dict:
     """Build an event dict with a UTC timestamp. Fields are merged as-is."""
     return {"ts": datetime.now(timezone.utc).isoformat(), "type": type, **fields}

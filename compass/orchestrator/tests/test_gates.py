@@ -29,7 +29,18 @@ from compass.orchestrator.run import (
     _read_story_fm_list, _overlapping_inflight_builds,
     _step_dir, _write_artifact,
 )
-from compass.orchestrator.logger import ensure_runs_dir, log_step
+from compass.orchestrator.logger import ensure_runs_dir, log_step, runs_root
+
+
+def _isolate_compass_home(case):
+    """#118: run telemetry lives under $COMPASS_HOME/state/<project>/ — point
+    COMPASS_HOME at a temp dir so tests never touch the real ~/.compass."""
+    import tempfile as _tf
+    home = _tf.mkdtemp()
+    old = os.environ.get("COMPASS_HOME")
+    os.environ["COMPASS_HOME"] = home
+    case.addCleanup(lambda: os.environ.__setitem__("COMPASS_HOME", old)
+                    if old is not None else os.environ.pop("COMPASS_HOME", None))
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
 WORKFLOWS = COMPASS_DIR / "workflows"
@@ -119,6 +130,7 @@ class TestArtifactTargetParsing(unittest.TestCase):
 
 class TestRequirementMet(unittest.TestCase):
     def setUp(self):
+        _isolate_compass_home(self)
         self._tmp = tempfile.TemporaryDirectory()
         self.project = Path(self._tmp.name)
 
@@ -126,7 +138,7 @@ class TestRequirementMet(unittest.TestCase):
         self._tmp.cleanup()
 
     def _write_hitl(self, records):
-        log = self.project / "docs" / "orchestrator-runs" / "hitl.jsonl"
+        log = runs_root(self.project) / "hitl.jsonl"
         log.parent.mkdir(parents=True, exist_ok=True)
         log.write_text(
             "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8"
@@ -219,6 +231,7 @@ class TestPromotionHelpers(unittest.TestCase):
 
 class TestManualBridge(unittest.TestCase):
     def setUp(self):
+        _isolate_compass_home(self)
         self._tmp = tempfile.TemporaryDirectory()
         self.project = Path(self._tmp.name).resolve()
 
@@ -226,7 +239,7 @@ class TestManualBridge(unittest.TestCase):
         self._tmp.cleanup()
 
     def _hitl_records(self):
-        log = self.project / "docs" / "orchestrator-runs" / "hitl.jsonl"
+        log = runs_root(self.project) / "hitl.jsonl"
         if not log.exists():
             return []
         return [json.loads(l) for l in log.read_text().splitlines() if l.strip()]
@@ -631,31 +644,30 @@ class TestModuleMismatchWarning(unittest.TestCase):
         self.assertIsNone(_module_mismatch_warning(str(self.real), running=self.installed))
 
 
-class TestTelemetryGitignore(unittest.TestCase):
-    """#175: orchestrator run state (jsonl telemetry + step artifacts) must stay OUT of
-    git — it dirtied the tree every run (defeating fresh-base isolation) and got swept
-    into code PRs by the engineer's `git add -A`."""
+class TestTelemetryOutsideRepo(unittest.TestCase):
+    """#118 (supersedes #175's self-ignore): orchestrator run state (jsonl telemetry +
+    step artifacts) lives USER-LOCAL under $COMPASS_HOME/state/<project>/, not in the
+    consumer repo at all — so the repo tree holds only committed deliverables."""
 
     def setUp(self):
+        _isolate_compass_home(self)
         self._tmp = tempfile.TemporaryDirectory()
         self.project = Path(self._tmp.name)
 
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_ensure_runs_dir_writes_gitignore(self):
+    def test_runs_dir_is_user_local_not_in_repo(self):
         d = ensure_runs_dir(self.project)
-        gi = (d / ".gitignore").read_text(encoding="utf-8")
-        self.assertEqual(d, self.project / "docs" / "orchestrator-runs")
-        self.assertIn("*", gi)
-        self.assertIn("!.gitignore", gi)
+        self.assertEqual(d, runs_root(self.project))            # state_dir/orchestrator-runs
+        self.assertFalse(str(d.resolve()).startswith(str(self.project.resolve())))  # NOT in the repo
+        self.assertFalse((d / ".gitignore").exists())           # no in-repo .gitignore needed anymore
 
-    def test_log_step_creates_gitignore(self):
+    def test_log_step_writes_user_local_leaves_repo_clean(self):
         log_step(self.project, "run1", "build", "WLT-27", 1, "engineer",
                  "implement-story", "claude-code", None, "**TL;DR** did the thing\n")
-        gi = self.project / "docs" / "orchestrator-runs" / ".gitignore"
-        self.assertTrue(gi.exists())                                  # telemetry self-ignores
-        self.assertTrue((self.project / "docs" / "orchestrator-runs" / "runs.jsonl").exists())
+        self.assertTrue((runs_root(self.project) / "runs.jsonl").exists())   # telemetry lands user-local
+        self.assertFalse((self.project / "docs" / "orchestrator-runs").exists())  # repo untouched
 
 
 class TestSiblingOverlap(unittest.TestCase):
