@@ -669,6 +669,23 @@ class TestTelemetryOutsideRepo(unittest.TestCase):
         self.assertTrue((runs_root(self.project) / "runs.jsonl").exists())   # telemetry lands user-local
         self.assertFalse((self.project / "docs" / "orchestrator-runs").exists())  # repo untouched
 
+    def test_artifact_rel_does_not_crash_on_state_dir_path(self):
+        # #120 regression: after #118 a step artifact lives in state_dir, NOT under the
+        # repo — relative_to(project_dir) raised ValueError and crashed the run. The
+        # display helper must render it (state-relative), never throw.
+        from compass.orchestrator.run import _artifact_rel, _write_artifact
+        art = _write_artifact(self.project, "fix", 1, "engineer", "triage-and-fix",
+                              "**TL;DR** did it\n", "fix--no-bet--x")
+        self.assertFalse(str(art.resolve()).startswith(str(self.project.resolve())))  # in state_dir
+        rel = _artifact_rel(art, self.project)                       # must NOT raise
+        self.assertIn("orchestrator-runs", rel)
+        self.assertNotIn("..", rel)
+        # a canonical in-repo artifact stays repo-relative; None passes through
+        (self.project / "docs" / "foundation").mkdir(parents=True, exist_ok=True)
+        f = self.project / "docs" / "foundation" / "product.md"; f.write_text("x")
+        self.assertEqual(_artifact_rel(f, self.project), "docs/foundation/product.md")
+        self.assertIsNone(_artifact_rel(None, self.project))
+
 
 class TestSiblingOverlap(unittest.TestCase):
     """#26: a story-scoped build that overlaps an in-flight build of the same module
