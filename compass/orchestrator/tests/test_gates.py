@@ -463,6 +463,58 @@ class TestStoryScoping(unittest.TestCase):
         self.assertIsNotNone(_build_story_gate(self.project, "build", "WLT-27", None))
 
 
+class TestTicketLifecycle(unittest.TestCase):
+    """#MVP1: the run advances its work-item's Jira ticket (To Do → In Progress → Done) so
+    the board reflects reality — best-effort, never breaking the run."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.project = Path(self._tmp.name)
+        self.story = self.project / "docs" / "bets" / "WLT-27" / "stories" / "WLT-27-2" / "story.md"
+        self.story.parent.mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_key_read_from_story_frontmatter(self):
+        from compass.orchestrator.run import _work_item_jira_key
+        self.story.write_text("---\nid: WLT-27-2\njira_key: KAN-42\n---\n# Story\n", encoding="utf-8")
+        self.assertEqual(_work_item_jira_key(self.project, "WLT-27", "WLT-27-2"), "KAN-42")
+
+    def test_key_none_when_missing(self):
+        from compass.orchestrator.run import _work_item_jira_key
+        self.story.write_text("---\nid: WLT-27-2\n---\n# Story\n", encoding="utf-8")   # no jira_key
+        self.assertIsNone(_work_item_jira_key(self.project, "WLT-27", "WLT-27-2"))
+        self.assertIsNone(_work_item_jira_key(self.project, None, None))              # no bet/story
+        self.assertIsNone(_work_item_jira_key(self.project, "WLT-27", "WLT-99"))      # no such story
+
+    def test_advance_is_silent_noop_without_creds(self):
+        from compass.orchestrator import run as R, stores
+        self.story.write_text("---\njira_key: KAN-42\n---\n# S\n", encoding="utf-8")
+        orig = stores.jira_auth
+        stores.jira_auth = lambda: None
+        self.addCleanup(lambda: setattr(stores, "jira_auth", orig))
+        notes = []
+        R._advance_ticket(self.project, "WLT-27", "WLT-27-2", "done", lambda t, **k: notes.append(k))
+        self.assertEqual(notes, [])                                                    # no creds → silent
+
+    def test_advance_calls_transition_and_notes(self):
+        from compass.orchestrator import run as R, stores
+        self.story.write_text("---\njira_key: KAN-42\n---\n# S\n", encoding="utf-8")
+        seen = {}
+        origa, origt = stores.jira_auth, stores.jira_transition
+        stores.jira_auth = lambda: {"base_url": "x", "email": "e", "token": "t"}
+        stores.jira_transition = lambda auth, key, target: (seen.update(key=key, target=target) or
+            {"action": "transitioned", "from": "To Do", "to": "In Progress"})
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", origa),
+                                 setattr(stores, "jira_transition", origt)))
+        notes = []
+        R._advance_ticket(self.project, "WLT-27", "WLT-27-2", "in_progress",
+                          lambda t, **k: notes.append(k.get("text", "")))
+        self.assertEqual((seen["key"], seen["target"]), ("KAN-42", "in_progress"))
+        self.assertTrue(any("KAN-42" in n for n in notes))
+
+
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on
     the previous build's branch — the cause of cumulative, conflicting story PRs (a

@@ -46,6 +46,53 @@ class TestJiraPush(unittest.TestCase):
         self.assertIn("/issue/PROJ-42", t.calls[0]["url"])
 
 
+class TestJiraTransition(unittest.TestCase):
+    """#MVP1: the board must tell the truth — tickets transition through the lifecycle,
+    matched by STATUS CATEGORY (stable) not transition name (per-project)."""
+
+    def _issue(self, cur_cat, cur_name, to_pairs):
+        # to_pairs: [(transition_id, to_name, to_cat), ...]
+        return {"fields": {"status": {"name": cur_name, "statusCategory": {"key": cur_cat}}},
+                "transitions": [{"id": tid, "name": f"go-{tn}",
+                                 "to": {"name": tn, "statusCategory": {"key": tc}}}
+                                for tid, tn, tc in to_pairs]}
+
+    def test_transitions_to_matching_category(self):
+        # To Do (new) → In Progress (indeterminate): finds the transition by category, posts it.
+        t = FakeTransport([(200, self._issue("new", "To Do",
+                            [("11", "In Progress", "indeterminate"), ("31", "Done", "done")])),
+                           (204, {})])
+        res = stores.jira_transition(AUTH, "KAN-9", "in_progress", transport=t)
+        self.assertEqual((res["action"], res["ok"], res["from"]), ("transitioned", True, "To Do"))
+        self.assertEqual(t.calls[1]["method"], "POST")
+        self.assertIn("/issue/KAN-9/transitions", t.calls[1]["url"])
+        self.assertEqual(t.calls[1]["body"], {"transition": {"id": "11"}})   # matched by category
+
+    def test_noop_when_already_in_target(self):
+        t = FakeTransport([(200, self._issue("done", "Shipped", []))])
+        res = stores.jira_transition(AUTH, "KAN-9", "done", transport=t)
+        self.assertEqual((res["action"], res["ok"]), ("noop", True))
+        self.assertEqual(len(t.calls), 1)                                    # no POST
+
+    def test_no_path_when_no_matching_transition(self):
+        t = FakeTransport([(200, self._issue("new", "To Do",
+                            [("11", "In Progress", "indeterminate")]))])     # nothing to 'done'
+        res = stores.jira_transition(AUTH, "KAN-9", "done", transport=t)
+        self.assertEqual((res["action"], res["ok"]), ("no_path", False))
+        self.assertEqual(len(t.calls), 1)
+
+    def test_error_on_bad_get(self):
+        t = FakeTransport([(404, {"error": "not found"})])
+        res = stores.jira_transition(AUTH, "KAN-404", "done", transport=t)
+        self.assertEqual((res["action"], res["ok"]), ("error", False))
+
+    def test_unknown_target_never_calls(self):
+        t = FakeTransport([])
+        res = stores.jira_transition(AUTH, "KAN-9", "shipped-ish", transport=t)
+        self.assertEqual((res["action"], res["ok"]), ("error", False))
+        self.assertEqual(len(t.calls), 0)
+
+
 class TestConfluencePush(unittest.TestCase):
     def test_create(self):
         t = FakeTransport([(200, {"id": "12345",

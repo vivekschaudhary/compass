@@ -212,6 +212,52 @@ def jira_links_of(auth, key, transport=None):
     return out
 
 
+# #MVP1: `statusCategory.key` is STABLE across every Jira workflow (new / indeterminate /
+# done); the transition + status *names* are per-project and unreliable. So we match a
+# canonical lifecycle target to a category, never to a name.
+_STATUS_CATEGORY = {"todo": "new", "in_progress": "indeterminate", "done": "done"}
+
+
+def jira_transition(auth, key, target, transport=None):
+    """#MVP1: move issue `key` toward a canonical lifecycle state — `'todo'` |
+    `'in_progress'` | `'done'` — so the board reflects reality instead of sitting at "To Do"
+    forever. Matches an AVAILABLE transition whose TARGET status **category** equals the
+    target's category (categories are stable across workflows; names are not). No-op when the
+    issue is already in the target category. Best-effort — never raises. Returns
+    `{ok, action, from, to, status, response}` with `action ∈ transitioned | noop | no_path | error`."""
+    transport = transport or _default_transport
+    target_cat = _STATUS_CATEGORY.get(target)
+    if not target_cat:
+        return {"ok": False, "action": "error", "from": None, "to": target,
+                "status": None, "response": {"error": f"unknown target '{target}'"}}
+    headers = {"Authorization": _basic(auth), "Content-Type": "application/json",
+               "Accept": "application/json"}
+    # one call: current status + available transitions from here
+    gstatus, gresp = transport(
+        "GET", f"{auth['base_url']}/rest/api/3/issue/{key}?fields=status&expand=transitions",
+        headers, None)
+    if gstatus != 200:
+        return {"ok": False, "action": "error", "from": None, "to": target,
+                "status": gstatus, "response": gresp}
+    cur = ((gresp.get("fields") or {}).get("status") or {})
+    cur_cat = (cur.get("statusCategory") or {}).get("key")
+    cur_name = cur.get("name")
+    if cur_cat == target_cat:
+        return {"ok": True, "action": "noop", "from": cur_name, "to": target,
+                "status": gstatus, "response": {}}
+    match = next((t for t in (gresp.get("transitions") or [])
+                  if ((t.get("to") or {}).get("statusCategory") or {}).get("key") == target_cat), None)
+    if not match:
+        return {"ok": False, "action": "no_path", "from": cur_name, "to": target,
+                "status": gstatus,
+                "response": {"error": f"no transition to '{target_cat}' available from '{cur_name}'"}}
+    pstatus, presp = transport(
+        "POST", f"{auth['base_url']}/rest/api/3/issue/{key}/transitions", headers,
+        {"transition": {"id": match["id"]}})
+    return {"ok": pstatus in (200, 204), "action": "transitioned", "from": cur_name,
+            "to": (match.get("to") or {}).get("name") or target, "status": pstatus, "response": presp}
+
+
 def confluence_push(auth, space, title, body, page_id=None, transport=None):
     """Create (or update, when `page_id` is set) a Confluence page. Idempotent via
     `page_id`. Returns {pointer, url, action, ok, response}."""

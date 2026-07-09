@@ -1563,6 +1563,43 @@ def _render_fix_record(fid, ftype, bet_id, severity, pr_url, title, today) -> st
     )
 
 
+def _work_item_jira_key(project_dir, bet_id, story_id):
+    """#MVP1: the Jira key of the ticket THIS run is delivering — the story (build) whose
+    `jira_key` was stored on its artifact by create-story's projection. None when there's no
+    story/key (a hygiene fix has no ticket yet; Jira may not be wired)."""
+    from .connector import _frontmatter_field
+    if not (bet_id and story_id):
+        return None
+    story = Path(project_dir) / "docs" / "bets" / bet_id / "stories" / story_id / "story.md"
+    if not story.exists():
+        return None
+    return _frontmatter_field(story.read_text(encoding="utf-8"), "jira_key")
+
+
+def _advance_ticket(project_dir, bet_id, story_id, target, emit):
+    """#MVP1: transition the run's work-item ticket toward a lifecycle state so the Jira board
+    reflects reality (`to_do → in_progress` on start, `→ done` on merge) instead of sitting at
+    "To Do" forever. Best-effort: silent no-op without Jira creds or a resolvable key; never
+    raises into the run; `emit`s a NOTE of what moved (or a soft warning if it couldn't)."""
+    from . import events as ev
+    from .stores import jira_auth, jira_transition
+    auth = jira_auth()
+    if not auth:
+        return
+    key = _work_item_jira_key(project_dir, bet_id, story_id)
+    if not key:
+        return
+    try:
+        res = jira_transition(auth, key, target)
+    except Exception as exc:                       # telemetry is best-effort — never break the run
+        emit(ev.NOTE, text=f"⚠ jira {key} → {target}: transition errored ({type(exc).__name__})")
+        return
+    if res.get("action") in ("transitioned", "noop"):
+        emit(ev.NOTE, text=f"[jira {key} → {target}] {res.get('from')} → {res.get('to')} ({res['action']})")
+    else:
+        emit(ev.NOTE, text=f"⚠ jira {key} → {target} not applied ({res.get('action')}): {(res.get('response') or {}).get('error','')}")
+
+
 def _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
                         last_agent_output, run_id):
     """#71: the ORCHESTRATOR (not the agent) writes the fix record from the engineer's
@@ -2114,6 +2151,11 @@ def _run_workflow(
          project_dir=str(project_dir),  # #119: full path so the cockpit can resume any run
          compass_dir=str(compass_dir))  # #178: so the copy-paste approve targets the right framework dir
 
+    # #MVP1: the work starts now → move its Jira ticket To Do → In Progress, so the board
+    # stops lying (best-effort; no-op for non-code workflows / no story / no creds).
+    if allow_write and workflow_name in _CODE_WORKFLOWS:
+        _advance_ticket(project_dir, bet_id, story_id, "in_progress", emit)
+
     last_artifact_path = None
     # On a --from-step resume the prior agent step was loaded from disk (not re-run),
     # so seed last_agent_output from it — else a gate-resume can't promote/flip the
@@ -2352,6 +2394,12 @@ def _run_workflow(
                 steps_msg = _merge_next_steps(_open_pr_url(project_dir, work_branch), bet_id)
                 print(steps_msg)
                 emit(ev.NOTE, text="merge gate approved — next: merge the PR, then /create-story")
+
+            # #MVP1: approving the merge gate is the delivery shipping (auto-merge does it now;
+            # manual is a formality) → move the ticket to Done so the board isn't stuck at To Do
+            # after deploy. Idempotent (no-op if already Done); best-effort. [#98 folds in here.]
+            if result["approved"] and _is_merge_gate(step.title):
+                _advance_ticket(project_dir, bet_id, story_id, "done", emit)
 
             if not result["approved"]:
                 if not no_write:
