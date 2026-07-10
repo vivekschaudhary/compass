@@ -238,7 +238,8 @@ def _frontmatter_list(content: str, field: str) -> list:
             if x.strip().strip("\"'") and not x.strip().startswith("<")]
 
 
-def project_bet_jira_structure(project_dir, bet_id: str, transport=None) -> list:
+def project_bet_jira_structure(project_dir, bet_id: str, transport=None,
+                               epic_key: str = None, ready_label: bool = False) -> list:
     """#35: after a bet's stories are projected to Jira (flat issues with stored
     `jira_key`s), wire the STRUCTURE so the program is visible in Jira, not a flat pile:
       1. a bet **Epic** (created once; pointer `jira_epic_key` stored on brief.md),
@@ -246,7 +247,13 @@ def project_bet_jira_structure(project_dir, bet_id: str, transport=None) -> list
       3. **'is blocked by'** links from each story's `dependencies`.
     Idempotent — reuses the epic pointer, re-parenting is a no-op PUT, and existing
     links are skipped. Reads the on-disk `jira_key`s (only stories already projected get
-    wired). No-op with a reason when Jira isn't configured. Returns action strings."""
+    wired). No-op with a reason when Jira isn't configured. Returns action strings.
+
+    #127 (Phase 1c, `source_of_truth: external`): pass `epic_key` to parent stories under
+    an **existing** Jira Epic (the `/create-story <EPIC-KEY>` target) without reading/creating
+    one from `brief.md` — external mode has no local brief. Pass `ready_label=True` to mark
+    each **Definition-of-Ready-met** story (frontmatter `status: ready`) with the `ready`
+    label so the board shows what's buildable."""
     import os
     from pathlib import Path as _Path
     from . import stores
@@ -257,28 +264,32 @@ def project_bet_jira_structure(project_dir, bet_id: str, transport=None) -> list
     bet_dir = _Path(project_dir) / "docs" / "bets" / bet_id
     actions = []
 
-    # 1) ensure the bet Epic
-    brief = bet_dir / "brief.md"
-    bc = brief.read_text(encoding="utf-8") if brief.exists() else ""
-    epic_key = _frontmatter_field(bc, "jira_epic_key")
-    if not epic_key:
-        title = _artifact_title(bc, f"docs/bets/{bet_id}/brief.md") if bc else bet_id
-        res = stores.jira_push(auth, project_key, "Epic", f"{bet_id}: {title}",
-                               bc or f"# {bet_id}", transport=transport)
-        if res.get("ok") and res.get("pointer"):
-            epic_key = res["pointer"]
-            if brief.exists():
-                bc = _set_frontmatter_field(bc, "jira_epic_key", epic_key)
-                bc = _set_frontmatter_field(bc, "jira_epic_url", res.get("url"))
-                brief.write_text(bc, encoding="utf-8")
-            actions.append(f"epic {epic_key} created")
-        else:
-            return actions + [f"epic create failed: {_push_err(res)}"]
+    # 1) resolve the bet Epic — an explicit `epic_key` (external mode) wins; otherwise
+    #    read/create the pointer from brief.md (repo mode).
+    if epic_key:
+        actions.append(f"epic {epic_key} (given)")
     else:
-        actions.append(f"epic {epic_key} (reused)")
+        brief = bet_dir / "brief.md"
+        bc = brief.read_text(encoding="utf-8") if brief.exists() else ""
+        epic_key = _frontmatter_field(bc, "jira_epic_key")
+        if not epic_key:
+            title = _artifact_title(bc, f"docs/bets/{bet_id}/brief.md") if bc else bet_id
+            res = stores.jira_push(auth, project_key, "Epic", f"{bet_id}: {title}",
+                                   bc or f"# {bet_id}", transport=transport)
+            if res.get("ok") and res.get("pointer"):
+                epic_key = res["pointer"]
+                if brief.exists():
+                    bc = _set_frontmatter_field(bc, "jira_epic_key", epic_key)
+                    bc = _set_frontmatter_field(bc, "jira_epic_url", res.get("url"))
+                    brief.write_text(bc, encoding="utf-8")
+                actions.append(f"epic {epic_key} created")
+            else:
+                return actions + [f"epic create failed: {_push_err(res)}"]
+        else:
+            actions.append(f"epic {epic_key} (reused)")
 
-    # gather already-projected stories: story_id -> (jira_key, [deps])
-    story_key, story_deps = {}, {}
+    # gather already-projected stories: story_id -> (jira_key, [deps], status)
+    story_key, story_deps, story_status = {}, {}, {}
     sdir = bet_dir / "stories"
     for sf in sorted(sdir.glob("*/story.md")) if sdir.is_dir() else []:
         c = sf.read_text(encoding="utf-8")
@@ -286,6 +297,7 @@ def project_bet_jira_structure(project_dir, bet_id: str, transport=None) -> list
         if jk:
             story_key[sf.parent.name] = jk
             story_deps[sf.parent.name] = _frontmatter_list(c, "dependencies")
+            story_status[sf.parent.name] = (_frontmatter_field(c, "status") or "").lower()
 
     # 2) parent each story under the epic
     for sid, jk in story_key.items():
@@ -303,6 +315,15 @@ def project_bet_jira_structure(project_dir, bet_id: str, transport=None) -> list
             res = stores.jira_link(auth, inward_key=jk, outward_key=dk, transport=transport)
             actions.append(f"{jk} ⟵ blocked by {dk}" if res.get("ok")
                            else f"link {jk}⟵{dk} failed: {_push_err(res)}")
+
+    # 4) mark Definition-of-Ready-met stories `ready` (external mode / Phase 1c)
+    if ready_label:
+        for sid, jk in story_key.items():
+            if story_status.get(sid) != "ready":
+                continue
+            res = stores.jira_add_labels(auth, jk, ["ready"], transport=transport)
+            actions.append(f"{jk} labelled ready" if res.get("ok")
+                           else f"{jk} ready-label failed: {_push_err(res)}")
     return actions
 
 

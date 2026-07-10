@@ -581,6 +581,31 @@ def _bet_doc_paths(project_dir: Path, bet: str) -> list:
     return rels
 
 
+def _remove_local_stories(project_dir: Path, bet: str) -> list:
+    """#127 (Phase 1c, source_of_truth: external): after the stories are authored into Jira
+    under the Epic, the ticket is the single record — remove the local `story.md` files (and
+    prune the now-empty story dirs, the `stories/` dir, and the bet dir if nothing else lives
+    there). Returns the repo-relative paths removed, so the caller can report them. Only
+    called once the Jira projection succeeded (no fallback), so we never delete unshipped work."""
+    base = Path("docs") / "bets" / bet
+    stories = project_dir / base / "stories"
+    removed = []
+    if not stories.is_dir():
+        return removed
+    for sf in sorted(stories.glob("*/story.md")):
+        removed.append(str(sf.relative_to(project_dir)))
+        sf.unlink()
+        sdir = sf.parent
+        if not any(sdir.iterdir()):        # prune the story dir if now empty
+            sdir.rmdir()
+    if stories.is_dir() and not any(stories.iterdir()):
+        stories.rmdir()
+    bet_dir = project_dir / base
+    if bet_dir.is_dir() and not any(bet_dir.iterdir()):
+        bet_dir.rmdir()
+    return removed
+
+
 def _worktree_root(project_dir) -> Path:
     """#174: where isolated build worktrees live — under ~/.compass (OUTSIDE the repo),
     namespaced by project label, so concurrent story builds never share a working tree."""
@@ -1610,6 +1635,38 @@ def _resolve_jira_work_item(raw):
     context = f"{issue['summary']}\n\n{issue['description']}".strip()
     return {"key": issue["key"], "context": context,
             "issuetype": issue["issuetype"], "url": issue["url"]}
+
+
+def _resolve_jira_epic(raw):
+    """#127 (Phase 1c): `/create-story KAN-100` names the Jira **Epic** to decompose. If the
+    input is a Jira key and Jira is wired, READ the Epic so its summary+description become the
+    PM's decomposition context — the stories are authored back into Jira UNDER this Epic, no
+    repo brief. Returns {key, context, url} on success; None when the input isn't a key (repo
+    mode — decompose a local bet). Refuses LOUD (exit 3) when a key is given but unusable, or
+    names an issue that isn't an Epic (you decompose an Epic into Stories, not a Story into
+    Stories) — no dead-ends."""
+    ident = (raw or "").strip()
+    if not _looks_like_jira_key(ident):
+        return None
+    from .stores import jira_auth, jira_get_issue
+    auth = jira_auth()
+    if not auth:
+        print(f"\nRefuse: `{ident}` looks like a Jira Epic key but no Jira creds are set "
+              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Set them, or use "
+              f"`source_of_truth: repo` to decompose a local bet.", file=sys.stderr)
+        sys.exit(3)
+    issue = jira_get_issue(auth, ident)
+    if not issue.get("ok"):
+        print(f"\nRefuse: Jira issue {ident} not found or unreadable "
+              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
+        sys.exit(3)
+    if (issue.get("issuetype") or "").lower() != "epic":
+        print(f"\nRefuse: {ident} is a `{issue.get('issuetype')}`, not an Epic. "
+              f"`/create-story` decomposes an **Epic** into Stories — pass the Epic key.",
+              file=sys.stderr)
+        sys.exit(3)
+    context = f"{issue['summary']}\n\n{issue['description']}".strip()
+    return {"key": issue["key"], "context": context, "url": issue["url"]}
 
 
 def _source_of_truth(project_dir):
@@ -3204,6 +3261,27 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--epic",
+        metavar="KEY",
+        default=None,
+        help=(
+            "#127 (Phase 1c, source_of_truth: external): with --push-bet, parent the "
+            "projected stories under this EXISTING Jira Epic (the /create-story <EPIC-KEY> "
+            "target) instead of reading/creating the Epic from brief.md, and mark each "
+            "Definition-of-Ready-met story (status: ready) with the `ready` label."
+        ),
+    )
+    parser.add_argument(
+        "--external",
+        action="store_true",
+        help=(
+            "#127: external-mode projection — after --push-bet --epic authors the stories "
+            "into Jira, REMOVE the local docs/bets/<bet>/stories/*/story.md files so the "
+            "Story ticket is the single record. No-op without --push-bet --epic (or when the "
+            "push fell back to the filesystem cache — unshipped work is never deleted)."
+        ),
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -3274,11 +3352,22 @@ def main(argv=None):
         # + 'is blocked by' links from dependencies — so the program is visible, not flat.
         if args.push_bet and not any_fallback:
             from .connector import project_bet_jira_structure
-            struct = project_bet_jira_structure(project_dir, args.push_bet)
+            struct = project_bet_jira_structure(
+                project_dir, args.push_bet,
+                epic_key=args.epic, ready_label=bool(args.epic))
             if struct:
-                print("\nJira structure (#35 — epic · parents · blocked-by):")
+                print("\nJira structure (#35 — epic · parents · blocked-by"
+                      + (" · ready" if args.epic else "") + "):")
                 for a in struct:
                     print(f"  · {a}")
+            # #127 external mode: the tickets are the record — drop the local story files
+            if args.epic and args.external:
+                removed = _remove_local_stories(project_dir, args.push_bet)
+                if removed:
+                    print(f"\nExternal mode (source_of_truth) — removed {len(removed)} local "
+                          f"story file(s); Jira is the record:")
+                    for r in removed:
+                        print(f"  ✗ {r}")
         return
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
@@ -3391,6 +3480,7 @@ def main(argv=None):
         # #Phase1a: `/fix KAN-99` executes a bug that LIVES in Jira — read the ticket, use it
         # as the engineer's context, and drive its status; no repo fix record.
         _work_item_key = None
+        _epic_key = None
         if args.workflow == "fix":
             _ji = _resolve_jira_work_item(args.context)   # /fix KAN-99 (Phase 1a): read existing
             if _ji:
@@ -3404,6 +3494,16 @@ def main(argv=None):
                 args.context = _nb["context"]
                 _work_item_key = _nb["key"]
                 print(f"[fix → filed Jira Bug {_work_item_key}] {_nb['url']}")
+        elif args.workflow == "create-story" and _source_of_truth(project_dir) == "external":
+            # #127 (Phase 1c): `/create-story <EPIC-KEY>` decomposes a Jira **Epic**. Read it
+            # so the PM's decomposition context IS the Epic (no local brief); the drafted
+            # functional stories are then authored back UNDER the Epic in Jira via
+            # `--push-bet <staging> --epic <EPIC-KEY> --external` (no story.md left in the repo).
+            _ep = _resolve_jira_epic(args.context)
+            if _ep:
+                args.context = _ep["context"]
+                _epic_key = _ep["key"]
+                print(f"[create-story ← Jira Epic {_epic_key}] {_ep['url']}")
         _run_workflow(
             workflow_name=args.workflow,
             project_dir=project_dir,
@@ -3430,6 +3530,12 @@ def main(argv=None):
             auto_merge=auto_merge,
             work_item_key=_work_item_key,
         )
+        if _epic_key:
+            _bet = args.bet or story_id or _epic_key
+            print(f"\nNext — author the drafted stories into Jira under Epic {_epic_key} "
+                  f"(the ticket is the record, no story.md in the repo):\n"
+                  f"  python3 -m compass.orchestrator.run --push-bet {_bet} "
+                  f"--epic {_epic_key} --external")
         return
 
     # ── pipeline mode ─────────────────────────────────────────────────────────

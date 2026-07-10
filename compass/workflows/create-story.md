@@ -4,7 +4,7 @@ status: active
 owner: pm
 auto_invokes: []
 invoked_by: [manual]
-version: 0.3.57
+version: 0.3.58
 requires_approved: [docs/bets/<bet-id>/brief.md]
 ---
 
@@ -19,6 +19,13 @@ requires_approved: [docs/bets/<bet-id>/brief.md]
 ## Purpose
 
 PM decomposes an approved bet into its **full set** of shippable stories in one pass — the complete backlog, sequenced by dependency/priority, so the bet's plan is visible end-to-end. **A UI slice becomes a trio (#171): a `design` story + a `copy` story (both `owner: human`) + the `feature` story that depends on them.** Designer + UX Writer **spec the requirements into** the design/copy stories — they do NOT produce the Figma or the final copy (humans do); there are no `design.md`/`copy.md` sidecars. (Changed v0.3.57; see migration note.) Feature stories **build independently** via `/build <story-id>` (#172 scopes a build to one story — a bet's stories can develop in parallel on their own branches), but a UI feature stays blocked until its design + copy stories are human-delivered (`status: ready`).
+
+## Where the stories live (`source_of_truth`, #127)
+
+- **Stories are PURELY FUNCTIONAL** — the *what* (Description · user-observable AC · Design link if UI · Dependencies). The PM authors **no technical approach** (`[functional-story]`): it has no codebase access, so the *how* is owned by the **code-grounded architecture review** (Architect) before build. `## Technical approach` ships as a placeholder the arch review fills.
+- **`source_of_truth: external`** — the input is a **Jira Epic key** (`/create-story KAN-100`); Compass reads the Epic as the decomposition context, the PM drafts each functional story, and the orchestrator **authors them into Jira under the Epic** — `--push-bet <staging> --epic <EPIC-KEY> --external` creates each Story, parents it under the Epic, wires `dependencies` as **"is blocked by"** issue links, marks each **DoR-met** story `ready` (the `ready` label), and **removes the local `story.md`** so the Story ticket is the single record.
+- **Definition of Ready** = the template's **Standard Experience Checklist** satisfied (AC present, design linked if UI, no empty experience category). A DoR-met story is marked **Ready**; a DoR-short story is created **without** the mark (visible on the board as not-ready). `/build` (Phase 1d) gates on **Ready and Tech-ready** (arch-reviewed).
+- **`source_of_truth: repo`** (default) — the on-disk `story.md` is the record (classic behavior, unchanged).
 
 ## Architectural shape (v0.3.42)
 

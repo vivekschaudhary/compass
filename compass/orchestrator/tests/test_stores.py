@@ -129,6 +129,25 @@ class TestJiraTransition(unittest.TestCase):
         self.assertEqual(len(t.calls), 0)
 
 
+class TestJiraAddLabels(unittest.TestCase):
+    """#127 (Phase 1c): mark a DoR-met Story `ready` without disturbing existing labels."""
+
+    def test_adds_labels_via_update_verb(self):
+        t = FakeTransport([(204, {})])
+        res = stores.jira_add_labels(AUTH, "KAN-3", ["ready"], transport=t)
+        self.assertTrue(res["ok"])
+        self.assertEqual(t.calls[0]["method"], "PUT")
+        self.assertIn("/issue/KAN-3", t.calls[0]["url"])
+        # `update.labels: [{add: ...}]` — additive, so existing labels are untouched
+        self.assertEqual(t.calls[0]["body"]["update"]["labels"], [{"add": "ready"}])
+
+    def test_empty_labels_is_noop(self):
+        t = FakeTransport([])
+        res = stores.jira_add_labels(AUTH, "KAN-3", [], transport=t)
+        self.assertEqual((res["ok"], res["action"]), (True, "noop"))
+        self.assertEqual(len(t.calls), 0)
+
+
 class TestConfluencePush(unittest.TestCase):
     def test_create(self):
         t = FakeTransport([(200, {"id": "12345",
@@ -498,6 +517,42 @@ class TestProjectBetStructure(unittest.TestCase):
         self.assertIn("epic KAN-EPIC (reused)", actions)
         self.assertFalse(any(c[1].endswith("/issue") and c[0] == "POST" for c in t.calls))  # no epic create
         self.assertFalse(any(c[1].endswith("/issueLink") for c in t.calls))  # link skipped
+
+    def test_external_epic_key_override_needs_no_brief(self):
+        # #127 (Phase 1c): pass an existing Epic key → parent under it WITHOUT reading or
+        # creating one from brief.md (external mode has no local brief).
+        b = self.project / "docs" / "bets" / "WLT-27"
+        (b / "brief.md").unlink()  # external mode: no brief on disk
+        t = self._Routing()
+        actions = connector.project_bet_jira_structure(
+            self.project, "WLT-27", transport=t, epic_key="KAN-100")
+        self.assertIn("epic KAN-100 (given)", actions)
+        # no Epic POST at all — the given key is used directly
+        self.assertFalse(any(c[0] == "POST" and c[1].endswith("/issue") for c in t.calls))
+        self.assertTrue(any("KAN-3 → under KAN-100" in a for a in actions))
+        self.assertTrue(any("KAN-4 → under KAN-100" in a for a in actions))
+
+    def test_ready_label_only_on_dor_met_stories(self):
+        # #127 (Phase 1c): with ready_label=True, a story whose frontmatter is `status: ready`
+        # (DoR met) gets the `ready` label; a story that isn't ready does NOT.
+        b = self.project / "docs" / "bets" / "WLT-27"
+        (b / "stories" / "WLT-27-3" / "story.md").write_text(
+            "---\nid: WLT-27-3\njira_key: KAN-3\nstatus: ready\ndependencies: []\n---\n# API\n",
+            encoding="utf-8")
+        (b / "stories" / "WLT-27-4" / "story.md").write_text(
+            "---\nid: WLT-27-4\njira_key: KAN-4\nstatus: needs-design\ndependencies: []\n---\n# Wizard\n",
+            encoding="utf-8")
+        t = self._Routing()
+        actions = connector.project_bet_jira_structure(
+            self.project, "WLT-27", transport=t, epic_key="KAN-100", ready_label=True)
+        self.assertTrue(any("KAN-3 labelled ready" in a for a in actions))
+        self.assertFalse(any("KAN-4 labelled ready" in a for a in actions))
+        # the label PUT carried the update.labels add verb for KAN-3 only
+        label_puts = [c for c in t.calls
+                      if c[0] == "PUT" and isinstance(c[2], dict) and "update" in c[2]]
+        self.assertEqual(len(label_puts), 1)
+        self.assertIn("/issue/KAN-3", label_puts[0][1])
+        self.assertEqual(label_puts[0][2]["update"]["labels"], [{"add": "ready"}])
 
 
 class TestOnDemandPush(unittest.TestCase):
