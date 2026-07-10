@@ -1576,17 +1576,54 @@ def _work_item_jira_key(project_dir, bet_id, story_id):
     return _frontmatter_field(story.read_text(encoding="utf-8"), "jira_key")
 
 
-def _advance_ticket(project_dir, bet_id, story_id, target, emit):
+_JIRA_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
+
+
+def _looks_like_jira_key(s) -> bool:
+    return bool(s and _JIRA_KEY_RE.match(str(s).strip()))
+
+
+def _resolve_jira_work_item(raw):
+    """#Phase1a: if the /fix input is a Jira key (e.g. KAN-99) and Jira is wired, READ the
+    ticket so Compass executes work that already LIVES in Jira — no repo fix record. Returns
+    {key, context, issuetype, url} on success; None when the input is plain text (current
+    behavior). Refuses LOUD (exit 3) when a key is given but unusable — no dead-ends."""
+    ident = (raw or "").strip()
+    if not _looks_like_jira_key(ident):
+        return None
+    from .stores import jira_auth, jira_get_issue
+    auth = jira_auth()
+    if not auth:
+        print(f"\nRefuse: `{ident}` looks like a Jira key but no Jira creds are set "
+              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Set them, or pass the bug as "
+              f"free text.", file=sys.stderr)
+        sys.exit(3)
+    issue = jira_get_issue(auth, ident)
+    if not issue.get("ok"):
+        print(f"\nRefuse: Jira ticket {ident} not found or unreadable "
+              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
+        sys.exit(3)
+    if issue.get("category") == "done":
+        print(f"\nRefuse: {ident} is already Done — nothing to fix. Reopen it in Jira or file "
+              f"a new bug.", file=sys.stderr)
+        sys.exit(3)
+    context = f"{issue['summary']}\n\n{issue['description']}".strip()
+    return {"key": issue["key"], "context": context,
+            "issuetype": issue["issuetype"], "url": issue["url"]}
+
+
+def _advance_ticket(project_dir, bet_id, story_id, target, emit, key=None):
     """#MVP1: transition the run's work-item ticket toward a lifecycle state so the Jira board
     reflects reality (`to_do → in_progress` on start, `→ done` on merge) instead of sitting at
-    "To Do" forever. Best-effort: silent no-op without Jira creds or a resolvable key; never
-    raises into the run; `emit`s a NOTE of what moved (or a soft warning if it couldn't)."""
+    "To Do" forever. `key` (#Phase1a) is the explicit ticket when the run was launched from a
+    Jira key (`/fix KAN-99`); else it's resolved from the story's frontmatter. Best-effort:
+    silent no-op without creds or a key; never raises; `emit`s a NOTE of what moved."""
     from . import events as ev
     from .stores import jira_auth, jira_transition
     auth = jira_auth()
     if not auth:
         return
-    key = _work_item_jira_key(project_dir, bet_id, story_id)
+    key = key or _work_item_jira_key(project_dir, bet_id, story_id)
     if not key:
         return
     try:
@@ -1823,6 +1860,7 @@ def _run_workflow(
     codex_cli: bool = False,
     run_id_override: str = None,
     auto_merge: bool = False,
+    work_item_key: str = None,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
@@ -2152,9 +2190,10 @@ def _run_workflow(
          compass_dir=str(compass_dir))  # #178: so the copy-paste approve targets the right framework dir
 
     # #MVP1: the work starts now → move its Jira ticket To Do → In Progress, so the board
-    # stops lying (best-effort; no-op for non-code workflows / no story / no creds).
+    # stops lying (best-effort; no-op for non-code workflows / no key / no creds). #Phase1a:
+    # `work_item_key` is the explicit ticket when launched from a Jira key (/fix KAN-99).
     if allow_write and workflow_name in _CODE_WORKFLOWS:
-        _advance_ticket(project_dir, bet_id, story_id, "in_progress", emit)
+        _advance_ticket(project_dir, bet_id, story_id, "in_progress", emit, key=work_item_key)
 
     last_artifact_path = None
     # On a --from-step resume the prior agent step was loaded from disk (not re-run),
@@ -2399,7 +2438,7 @@ def _run_workflow(
             # manual is a formality) → move the ticket to Done so the board isn't stuck at To Do
             # after deploy. Idempotent (no-op if already Done); best-effort. [#98 folds in here.]
             if result["approved"] and _is_merge_gate(step.title):
-                _advance_ticket(project_dir, bet_id, story_id, "done", emit)
+                _advance_ticket(project_dir, bet_id, story_id, "done", emit, key=work_item_key)
 
             if not result["approved"]:
                 if not no_write:
@@ -2763,7 +2802,9 @@ def _run_workflow(
     # record from the ENGINEER's classification + PR and projects it — not left to agent
     # prose (which the headless agent skipped, #89). Fail LOUD if Jira is configured but
     # nothing was tracked. [fail-loud-not-silent].
-    if workflow_name == "fix" and not handed_off and not no_write:
+    # #Phase1a: when /fix was launched from an EXISTING Jira ticket (/fix KAN-99), the ticket
+    # already IS the record — don't create a second one; its status is driven via _advance_ticket.
+    if workflow_name == "fix" and not handed_off and not no_write and not work_item_key:
         _eng_output = next((p["output"] for p in prior_outputs
                             if p.get("task") == "triage-and-fix"), last_agent_output)
         _fix_label = _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
@@ -3312,6 +3353,15 @@ def main(argv=None):
 
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
+        # #Phase1a: `/fix KAN-99` executes a bug that LIVES in Jira — read the ticket, use it
+        # as the engineer's context, and drive its status; no repo fix record.
+        _work_item_key = None
+        if args.workflow == "fix":
+            _ji = _resolve_jira_work_item(args.context)   # None for plain-text /fix
+            if _ji:
+                args.context = _ji["context"]
+                _work_item_key = _ji["key"]
+                print(f"[fix ← Jira {_work_item_key} ({_ji['issuetype']})] {_ji['url']}")
         _run_workflow(
             workflow_name=args.workflow,
             project_dir=project_dir,
@@ -3336,6 +3386,7 @@ def main(argv=None):
             codex_cli=codex_cli,
             run_id_override=args.run_id,
             auto_merge=auto_merge,
+            work_item_key=_work_item_key,
         )
         return
 

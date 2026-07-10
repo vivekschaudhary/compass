@@ -212,6 +212,56 @@ def jira_links_of(auth, key, transport=None):
     return out
 
 
+def _adf_to_text(adf) -> str:
+    """#Phase1a: flatten an Atlassian Document Format doc (Jira v3 `description`) to plain
+    text — the inverse of `_adf`. Best-effort: concatenates text nodes, newline after each
+    block. So Compass can READ a ticket it (or a human) wrote and hand it to the engineer."""
+    if not isinstance(adf, dict):
+        return str(adf or "")
+    out = []
+    _BLOCK = {"paragraph", "heading", "listItem", "codeBlock", "blockquote", "rule"}
+
+    def walk(node):
+        if node.get("type") == "text":
+            out.append(node.get("text", ""))
+        for child in (node.get("content") or []):
+            walk(child)
+        if node.get("type") in _BLOCK:
+            out.append("\n")
+
+    for node in (adf.get("content") or []):
+        walk(node)
+    return "".join(out).strip()
+
+
+def jira_get_issue(auth, key, transport=None):
+    """#Phase1a: READ a Jira issue so Compass can execute work that lives in Jira, not the
+    repo (a bug filed in Jira → `/fix KAN-99`). Returns a normalized dict
+    {ok, key, summary, description, status, category, issuetype, parent, labels, url,
+    status_code}. Best-effort — `ok=False` on a non-200, never raises."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Accept": "application/json"}
+    status, resp = transport(
+        "GET", f"{auth['base_url']}/rest/api/3/issue/{key}"
+               "?fields=summary,description,status,issuetype,parent,labels", headers, None)
+    if status != 200:
+        return {"ok": False, "key": key, "status_code": status, "response": resp}
+    f = resp.get("fields") or {}
+    st = f.get("status") or {}
+    return {
+        "ok": True, "key": resp.get("key") or key,
+        "summary": f.get("summary") or "",
+        "description": _adf_to_text(f.get("description")),
+        "status": st.get("name"),
+        "category": (st.get("statusCategory") or {}).get("key"),   # new | indeterminate | done
+        "issuetype": ((f.get("issuetype") or {}).get("name") or "").lower(),
+        "parent": (f.get("parent") or {}).get("key"),
+        "labels": f.get("labels") or [],
+        "url": f"{auth['base_url']}/browse/{resp.get('key') or key}",
+        "status_code": status,
+    }
+
+
 # #MVP1: `statusCategory.key` is STABLE across every Jira workflow (new / indeterminate /
 # done); the transition + status *names* are per-project and unreliable. So we match a
 # canonical lifecycle target to a category, never to a name.

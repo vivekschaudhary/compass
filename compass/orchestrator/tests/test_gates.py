@@ -515,6 +515,59 @@ class TestTicketLifecycle(unittest.TestCase):
         self.assertTrue(any("KAN-42" in n for n in notes))
 
 
+class TestFixFromJira(unittest.TestCase):
+    """#Phase1a: /fix KAN-99 executes a bug that lives in Jira — reads the ticket as context,
+    refuses loudly when unusable, and (elsewhere) writes no repo fix record."""
+
+    def _patch(self, auth, get):
+        from compass.orchestrator import stores
+        oa, og = stores.jira_auth, stores.jira_get_issue
+        stores.jira_auth, stores.jira_get_issue = auth, get
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa),
+                                 setattr(stores, "jira_get_issue", og)))
+
+    def test_key_detection(self):
+        from compass.orchestrator.run import _looks_like_jira_key
+        self.assertTrue(_looks_like_jira_key("KAN-99"))
+        self.assertTrue(_looks_like_jira_key("PROJ2-1"))
+        self.assertFalse(_looks_like_jira_key("fix the login bug"))
+        self.assertFalse(_looks_like_jira_key("kan-99"))          # lowercase → not a key
+        self.assertFalse(_looks_like_jira_key(None))
+
+    def test_plain_text_passes_through(self):
+        from compass.orchestrator.run import _resolve_jira_work_item
+        self.assertIsNone(_resolve_jira_work_item("login returns 500"))   # not Jira-sourced
+
+    def test_reads_ticket_as_context(self):
+        from compass.orchestrator.run import _resolve_jira_work_item
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "Login 500s",
+                                       "description": "Steps: hit /login → 500", "category": "new",
+                                       "issuetype": "bug", "url": "https://x/browse/" + key})
+        wi = _resolve_jira_work_item("KAN-99")
+        self.assertEqual((wi["key"], wi["issuetype"]), ("KAN-99", "bug"))
+        self.assertIn("Login 500s", wi["context"])
+        self.assertIn("hit /login", wi["context"])
+
+    def test_refuses_done_missing_and_no_creds(self):
+        from compass.orchestrator.run import _resolve_jira_work_item
+        # already Done
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "category": "done",
+                                       "summary": "", "description": "", "issuetype": "bug", "url": "u"})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_work_item("KAN-1")
+        # missing / unreadable
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": False, "status_code": 404})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_work_item("KAN-404")
+        # a key but no creds
+        self._patch(lambda: None, lambda auth, key: {"ok": True})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_work_item("KAN-9")
+
+
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on
     the previous build's branch — the cause of cumulative, conflicting story PRs (a
