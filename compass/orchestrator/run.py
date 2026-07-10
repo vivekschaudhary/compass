@@ -1612,6 +1612,41 @@ def _resolve_jira_work_item(raw):
             "issuetype": issue["issuetype"], "url": issue["url"]}
 
 
+def _source_of_truth(project_dir):
+    """#Phase1b (#127): `external` = instances live in Jira/Confluence (Compass authors them
+    there, no repo record) · `repo` = Compass writes repo records (default, back-compat). Read
+    from `compass/config.yaml`; default `repo` so existing setups are unchanged."""
+    cfg = Path(project_dir) / "compass" / "config.yaml"
+    if cfg.exists():
+        m = re.search(r"^source_of_truth:\s*(\w+)", cfg.read_text(encoding="utf-8"), re.MULTILINE)
+        if m:
+            return m.group(1).strip().lower()
+    return "repo"
+
+
+def _create_jira_bug(raw_text):
+    """#Phase1b: `/fix "<text>"` in external mode → CREATE a Bug in Jira from the free text
+    (the fix's home is the ticket, not `docs/fixes/*.md`). The new key then flows exactly like
+    `/fix KAN-99` (status driven, no repo record). Returns {key, context, url}; refuses LOUD
+    (exit 3) if Jira isn't configured — no dead-ends."""
+    from .stores import jira_auth, jira_push
+    auth = jira_auth()
+    project_key = os.environ.get("JIRA_PROJECT")
+    if not auth or not project_key:
+        print("\nRefuse: `source_of_truth: external` needs Jira configured to file the bug "
+              "(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN + JIRA_PROJECT). Set them, or use "
+              "`source_of_truth: repo`.", file=sys.stderr)
+        sys.exit(3)
+    text = (raw_text or "").strip()
+    summary = (text.splitlines()[0].strip() if text else "Bug")[:120] or "Bug"
+    res = jira_push(auth, project_key, "Bug", summary, text)
+    if not res.get("ok") or not res.get("pointer"):
+        print(f"\nRefuse: could not file the Jira Bug (HTTP {res.get('status')}). Check "
+              f"creds / JIRA_PROJECT.", file=sys.stderr)
+        sys.exit(3)
+    return {"key": res["pointer"], "context": text, "url": res.get("url")}
+
+
 def _advance_ticket(project_dir, bet_id, story_id, target, emit, key=None):
     """#MVP1: transition the run's work-item ticket toward a lifecycle state so the Jira board
     reflects reality (`to_do → in_progress` on start, `→ done` on merge) instead of sitting at
@@ -3357,11 +3392,18 @@ def main(argv=None):
         # as the engineer's context, and drive its status; no repo fix record.
         _work_item_key = None
         if args.workflow == "fix":
-            _ji = _resolve_jira_work_item(args.context)   # None for plain-text /fix
+            _ji = _resolve_jira_work_item(args.context)   # /fix KAN-99 (Phase 1a): read existing
             if _ji:
                 args.context = _ji["context"]
                 _work_item_key = _ji["key"]
                 print(f"[fix ← Jira {_work_item_key} ({_ji['issuetype']})] {_ji['url']}")
+            elif _source_of_truth(project_dir) == "external" and (args.context or "").strip():
+                # #Phase1b: /fix "<text>" in external mode → file the Bug in Jira, then it flows
+                # like /fix KAN-99 (status driven, no docs/fixes/*.md).
+                _nb = _create_jira_bug(args.context)
+                args.context = _nb["context"]
+                _work_item_key = _nb["key"]
+                print(f"[fix → filed Jira Bug {_work_item_key}] {_nb['url']}")
         _run_workflow(
             workflow_name=args.workflow,
             project_dir=project_dir,
