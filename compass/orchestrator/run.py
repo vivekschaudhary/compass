@@ -1669,6 +1669,38 @@ def _resolve_jira_epic(raw):
     return {"key": issue["key"], "context": context, "url": issue["url"]}
 
 
+def _resolve_jira_story_for_tech(raw):
+    """#127 (tech-design): `/tech-design KAN-43` names the Jira **Story** to design. Reads it as
+    the Architect's context. Returns {key, context, url}; None when the input isn't a Jira key.
+    Refuses LOUD (exit 3) on missing/unreadable/no-creds, an already-Done story, or a story that
+    isn't functionally **Ready** (no `ready` label — the AC/design come first, `/create-story`) —
+    you don't design tech for an under-specified story."""
+    ident = (raw or "").strip()
+    if not _looks_like_jira_key(ident):
+        return None
+    from .stores import jira_auth, jira_get_issue
+    auth = jira_auth()
+    if not auth:
+        print(f"\nRefuse: `{ident}` looks like a Jira Story key but no Jira creds are set "
+              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN).", file=sys.stderr)
+        sys.exit(3)
+    issue = jira_get_issue(auth, ident)
+    if not issue.get("ok"):
+        print(f"\nRefuse: Jira story {ident} not found or unreadable "
+              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
+        sys.exit(3)
+    if issue.get("category") == "done":
+        print(f"\nRefuse: {ident} is already Done — no tech design needed.", file=sys.stderr)
+        sys.exit(3)
+    if "ready" not in (issue.get("labels") or []):
+        print(f"\nRefuse: {ident} isn't functionally Ready (no `ready` label) — complete its "
+              f"acceptance criteria / design first (`/create-story`), then tech-design it.",
+              file=sys.stderr)
+        sys.exit(3)
+    context = f"{issue['summary']}\n\n{issue['description']}".strip()
+    return {"key": issue["key"], "context": context, "url": issue["url"]}
+
+
 def _source_of_truth(project_dir):
     """#Phase1b (#127): `external` = instances live in Jira/Confluence (Compass authors them
     there, no repo record) · `repo` = Compass writes repo records (default, back-compat). Read
@@ -1702,6 +1734,67 @@ def _create_jira_bug(raw_text):
               f"creds / JIRA_PROJECT.", file=sys.stderr)
         sys.exit(3)
     return {"key": res["pointer"], "context": text, "url": res.get("url")}
+
+
+def _extract_md_section(text, heading):
+    """#127 (tech-design): return the body of the `## <heading>` section (up to the next `## ` or
+    EOF), stripped; "" if the heading is absent. Used to pull the Architect's authored
+    `## Technical approach` out of its step output before writing it back onto the Jira Story."""
+    m = re.search(r"(?ms)^##[ \t]+" + re.escape(heading) + r"[ \t]*$\n(.*?)(?=^##[ \t]+|\Z)",
+                  text or "")
+    return m.group(1).strip() if m else ""
+
+
+def _splice_md_section(text, heading, body):
+    """#127 (tech-design): replace the body of the `## <heading>` section with `body` (matching to
+    the next `## ` or EOF), or APPEND the section if the heading is absent. Returns the new text.
+    The one primitive the write-back needs (no section-merge helper exists) — it fills a Jira Story
+    description's `## Technical approach`, replacing its `_Pending architecture review._` placeholder."""
+    text = text or ""
+    body = (body or "").strip()
+    section = f"## {heading}\n\n{body}\n"
+    pat = re.compile(r"(?ms)^##[ \t]+" + re.escape(heading) + r"[ \t]*$\n.*?(?=^##[ \t]+|\Z)")
+    if pat.search(text):
+        new = pat.sub(lambda m: section + "\n", text, count=1)   # lambda: body may contain backrefs
+    else:
+        new = text.rstrip() + "\n\n" + section
+    new = re.sub(r"\n{3,}", "\n\n", new)
+    return new.rstrip() + "\n"
+
+
+def _apply_tech_design(story_key, approach_text, transport=None):
+    """#127 (tech-design): write the Architect's authored `## Technical approach` back onto the Jira
+    Story — read the current description, splice the section in (replacing the placeholder or
+    appending), PUT the full updated description, and mark the Story `tech-ready`. Returns
+    {ok, key, action, url}. Refuses LOUD (exit 3) without Jira creds / an unreadable story; NEVER
+    marks tech-ready when no approach text was produced (no false Tech-ready)."""
+    from .stores import jira_auth, jira_get_issue, jira_push, jira_add_labels
+    approach = (approach_text or "").strip()
+    auth = jira_auth()
+    project_key = os.environ.get("JIRA_PROJECT")
+    if not auth or not project_key:
+        print("\nRefuse: tech-design needs Jira configured to write the technical approach back "
+              "onto the story (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN + JIRA_PROJECT).",
+              file=sys.stderr)
+        sys.exit(3)
+    if not approach:
+        print(f"\n⚠ No `## Technical approach` was produced for {story_key} — leaving it "
+              f"un-Tech-ready (nothing to write).", file=sys.stderr)
+        return {"ok": False, "key": story_key, "action": "no_approach"}
+    issue = jira_get_issue(auth, story_key, transport=transport)
+    if not issue.get("ok"):
+        print(f"\nRefuse: {story_key} not found or unreadable (HTTP {issue.get('status_code')}).",
+              file=sys.stderr)
+        sys.exit(3)
+    new_desc = _splice_md_section(issue.get("description") or "", "Technical approach", approach)
+    push = jira_push(auth, project_key, "Story", issue.get("summary") or story_key,
+                     new_desc, key=story_key, transport=transport)
+    if not push.get("ok"):
+        print(f"\nRefuse: could not update {story_key} description (HTTP {push.get('status')}).",
+              file=sys.stderr)
+        sys.exit(3)
+    jira_add_labels(auth, story_key, ["tech-ready"], transport=transport)
+    return {"ok": True, "key": story_key, "action": "tech-ready", "url": push.get("url")}
 
 
 def _advance_ticket(project_dir, bet_id, story_id, target, emit, key=None):
@@ -3282,6 +3375,26 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "--apply-tech-design",
+        metavar="STORY-KEY",
+        default=None,
+        dest="apply_tech_design",
+        help=(
+            "#127 (tech-design): write an authored `## Technical approach` onto Jira Story "
+            "STORY-KEY and mark it `tech-ready`. Reads the approach markdown from --from FILE "
+            "(or stdin). The interactive/manual write-back surface (the orchestrator tech-design "
+            "run auto-applies the Architect's output). Then exit."
+        ),
+    )
+    parser.add_argument(
+        "--from",
+        metavar="FILE",
+        default=None,
+        dest="from_file",
+        help="Source file for --apply-tech-design (the `## Technical approach` markdown). "
+             "'-' or omitted → read stdin.",
+    )
+    parser.add_argument(
         "--approve",
         metavar="PATH",
         default=None,
@@ -3368,6 +3481,22 @@ def main(argv=None):
                           f"story file(s); Jira is the record:")
                     for r in removed:
                         print(f"  ✗ {r}")
+        return
+
+    # ── --apply-tech-design: write an authored ## Technical approach onto a Jira Story (#127) ──
+    if args.apply_tech_design:
+        if args.from_file and args.from_file != "-":
+            approach = Path(args.from_file).read_text(encoding="utf-8")
+        else:
+            approach = sys.stdin.read()
+        # accept either a full `## Technical approach` doc or the bare body
+        body = _extract_md_section(approach, "Technical approach") or approach
+        res = _apply_tech_design(args.apply_tech_design, body)
+        if res.get("ok"):
+            print(f"[tech-design → {res['key']}] ## Technical approach written · marked "
+                  f"tech-ready\n  {res.get('url')}")
+        elif res.get("action") == "no_approach":
+            sys.exit(1)
         return
 
     # ── log / dri / hitl-log / export-audit report modes (no workflow needed) ──
@@ -3481,6 +3610,7 @@ def main(argv=None):
         # as the engineer's context, and drive its status; no repo fix record.
         _work_item_key = None
         _epic_key = None
+        _tech_story_key = None
         if args.workflow == "fix":
             _ji = _resolve_jira_work_item(args.context)   # /fix KAN-99 (Phase 1a): read existing
             if _ji:
@@ -3504,7 +3634,16 @@ def main(argv=None):
                 args.context = _ep["context"]
                 _epic_key = _ep["key"]
                 print(f"[create-story ← Jira Epic {_epic_key}] {_ep['url']}")
-        _run_workflow(
+        elif args.workflow == "tech-design" and _source_of_truth(project_dir) == "external":
+            # #127 (tech-design): `/tech-design <STORY-KEY>` — read the functional Story so the
+            # Architect's context IS the story; after the run its authored `## Technical approach`
+            # is written back onto the ticket + the story is marked `tech-ready`.
+            _st = _resolve_jira_story_for_tech(args.context)
+            if _st:
+                args.context = _st["context"]
+                _tech_story_key = _st["key"]
+                print(f"[tech-design ← Jira Story {_tech_story_key}] {_st['url']}")
+        _wf_outputs, _wf_paths = _run_workflow(
             workflow_name=args.workflow,
             project_dir=project_dir,
             compass_dir=compass_dir,
@@ -3536,6 +3675,16 @@ def main(argv=None):
                   f"(the ticket is the record, no story.md in the repo):\n"
                   f"  python3 -m compass.orchestrator.run --push-bet {_bet} "
                   f"--epic {_epic_key} --external")
+        if _tech_story_key and not args.dry_run and not args.no_write:
+            # capture the Architect's authored ## Technical approach and write it back onto the
+            # ticket (marks tech-ready). No approach produced → _apply_tech_design leaves it un-ready.
+            _arch_out = next((o.get("output", "") for o in reversed(_wf_outputs or [])
+                              if o.get("agent") == "architect"), "")
+            _approach = _extract_md_section(_arch_out, "Technical approach") or (_arch_out or "").strip()
+            _res = _apply_tech_design(_tech_story_key, _approach)
+            if _res.get("ok"):
+                print(f"\n[tech-design → {_res['key']}] ## Technical approach written · marked "
+                      f"tech-ready\n  {_res.get('url')}")
         return
 
     # ── pipeline mode ─────────────────────────────────────────────────────────

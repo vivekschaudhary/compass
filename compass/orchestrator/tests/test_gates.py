@@ -689,6 +689,134 @@ class TestCreateStoryFromEpic(unittest.TestCase):
         self.assertEqual(_remove_local_stories(proj, "KAN-100"), [])   # nothing to remove, no crash
 
 
+class TestTechDesignSplice(unittest.TestCase):
+    """#127 (tech-design): the markdown section-splice/extract primitives that write the authored
+    ## Technical approach onto a story description."""
+
+    def test_replaces_placeholder_section(self):
+        from compass.orchestrator.run import _splice_md_section
+        doc = ("## Description\n\nDo the thing.\n\n"
+               "## Technical approach\n\n_Pending architecture review._\n\n"
+               "## Tests\n\ntbd\n")
+        out = _splice_md_section(doc, "Technical approach", "Use table `foo` (db.py:12).")
+        self.assertIn("Use table `foo` (db.py:12).", out)
+        self.assertNotIn("_Pending architecture review._", out)     # placeholder gone
+        self.assertIn("## Description", out)                        # siblings intact
+        self.assertIn("## Tests", out)
+        self.assertLess(out.index("## Description"), out.index("## Technical approach"))
+        self.assertLess(out.index("## Technical approach"), out.index("## Tests"))
+
+    def test_appends_when_heading_absent(self):
+        from compass.orchestrator.run import _splice_md_section
+        out = _splice_md_section("## Description\n\nDo the thing.\n", "Technical approach", "the how")
+        self.assertIn("## Technical approach", out)
+        self.assertIn("the how", out)
+        self.assertLess(out.index("## Description"), out.index("## Technical approach"))
+
+    def test_extract_section(self):
+        from compass.orchestrator.run import _extract_md_section
+        doc = "## Technical approach\n\nline one\nline two\n\n## Tests\n\nx\n"
+        self.assertEqual(_extract_md_section(doc, "Technical approach"), "line one\nline two")
+        self.assertEqual(_extract_md_section(doc, "Nope"), "")
+
+
+class TestApplyTechDesign(unittest.TestCase):
+    """#127: write the authored ## Technical approach onto the Jira Story + mark tech-ready."""
+
+    def _patch(self):
+        from compass.orchestrator import stores
+        oa = stores.jira_auth
+        stores.jira_auth = lambda: {"base_url": "https://x", "email": "e", "token": "t"}
+        old = os.environ.get("JIRA_PROJECT")
+        os.environ["JIRA_PROJECT"] = "KAN"
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa),
+                                 os.environ.__setitem__("JIRA_PROJECT", old) if old is not None
+                                 else os.environ.pop("JIRA_PROJECT", None)))
+
+    def test_get_splice_push_label(self):
+        from compass.orchestrator.run import _apply_tech_design
+        self._patch()
+        calls = []
+
+        def transport(method, url, headers, body):
+            calls.append((method, url, body))
+            if method == "GET":
+                return (200, {"key": "KAN-43", "fields": {
+                    "summary": "Do the thing",
+                    "description": {"type": "doc", "version": 1, "content": [
+                        {"type": "paragraph", "content": [{"type": "text",
+                         "text": "## Technical approach"}]},
+                        {"type": "paragraph", "content": [{"type": "text",
+                         "text": "_Pending architecture review._"}]}]},
+                    "status": {"name": "To Do", "statusCategory": {"key": "new"}},
+                    "issuetype": {"name": "Story"}, "labels": ["ready"]}})
+            return (204, {})                               # PUT description, then PUT labels
+
+        res = _apply_tech_design("KAN-43", "Use `foo` table (db.py:12).", transport=transport)
+        self.assertEqual((res["ok"], res["action"]), (True, "tech-ready"))
+        self.assertEqual([c[0] for c in calls], ["GET", "PUT", "PUT"])
+        blob = json.dumps(calls[1][2]["fields"]["description"])   # description PUT (ADF)
+        self.assertIn("Use `foo` table", blob)
+        self.assertNotIn("Pending architecture review", blob)     # placeholder replaced
+        self.assertEqual(calls[2][2], {"update": {"labels": [{"add": "tech-ready"}]}})  # additive
+
+    def test_no_approach_leaves_unready(self):
+        from compass.orchestrator.run import _apply_tech_design
+        self._patch()
+        calls = []
+        res = _apply_tech_design("KAN-43", "   ",
+                                 transport=lambda *a: calls.append(a) or (200, {}))
+        self.assertEqual((res["ok"], res["action"]), (False, "no_approach"))
+        self.assertEqual(calls, [])                                # never touched Jira
+
+
+class TestTechDesignStoryResolver(unittest.TestCase):
+    """#127: /tech-design reads a functionally-Ready Jira Story; refuses under-specified/done/no-creds."""
+
+    def _patch(self, auth, get):
+        from compass.orchestrator import stores
+        oa, og = stores.jira_auth, stores.jira_get_issue
+        stores.jira_auth, stores.jira_get_issue = auth, get
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa),
+                                 setattr(stores, "jira_get_issue", og)))
+
+    def test_reads_ready_story(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_tech
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "Do it",
+                                       "description": "AC: ...", "category": "new",
+                                       "issuetype": "story", "labels": ["ready"],
+                                       "url": "https://x/browse/" + key})
+        st = _resolve_jira_story_for_tech("KAN-43")
+        self.assertEqual(st["key"], "KAN-43")
+        self.assertIn("Do it", st["context"])
+
+    def test_refuses_not_ready(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_tech
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "s", "description": "",
+                                       "category": "new", "issuetype": "story",
+                                       "labels": [], "url": "u"})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_tech("KAN-43")
+
+    def test_refuses_done_and_no_creds(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_tech
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "s", "description": "",
+                                       "category": "done", "issuetype": "story",
+                                       "labels": ["ready"], "url": "u"})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_tech("KAN-1")
+        self._patch(lambda: None, lambda auth, key: {"ok": True})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_tech("KAN-9")
+
+    def test_plain_text_passes_through(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_tech
+        self.assertIsNone(_resolve_jira_story_for_tech("design the login flow"))
+
+
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on
     the previous build's branch — the cause of cumulative, conflicting story PRs (a

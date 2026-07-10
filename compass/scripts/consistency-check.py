@@ -52,13 +52,13 @@ def check_dispatch_graph_count(repo_root: Path) -> list:
         if "## Dispatch graph" in p.read_text(encoding="utf-8")
     )
     agents = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
-    m = re.search(r"(\d+) of 17 workflows", agents)
+    m = re.search(r"(\d+) of 18 workflows", agents)
     if not m:
-        return ["AGENTS.md: could not find the 'N of 17 workflows' dispatch-graph claim"]
+        return ["AGENTS.md: could not find the 'N of 18 workflows' dispatch-graph claim"]
     claimed = int(m.group(1))
     if claimed != actual:
         return [
-            f"dispatch-graph count drift: AGENTS.md claims {claimed} of 17, "
+            f"dispatch-graph count drift: AGENTS.md claims {claimed} of 18, "
             f"actual is {actual}. Update AGENTS.md."
         ]
     return []
