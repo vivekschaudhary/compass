@@ -817,6 +817,68 @@ class TestTechDesignStoryResolver(unittest.TestCase):
         self.assertIsNone(_resolve_jira_story_for_tech("design the login flow"))
 
 
+class TestBuildReadyGate(unittest.TestCase):
+    """#127 (Phase 1d): /build reads a Jira Story and builds only when it is both Ready (`ready`)
+    AND Tech-ready (`tech-ready`); the ready-to-build gate read from the ticket."""
+
+    def _patch(self, auth, get):
+        from compass.orchestrator import stores
+        oa, og = stores.jira_auth, stores.jira_get_issue
+        stores.jira_auth, stores.jira_get_issue = auth, get
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa),
+                                 setattr(stores, "jira_get_issue", og)))
+
+    def _story(self, labels, category="new"):
+        return lambda auth, key: {"ok": True, "key": key, "summary": "Ship it",
+                                  "description": "AC: ...", "category": category,
+                                  "issuetype": "story", "labels": labels,
+                                  "url": "https://x/browse/" + key}
+
+    def test_builds_ready_and_tech_ready(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_build
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    self._story(["ready", "tech-ready"]))
+        bs = _resolve_jira_story_for_build("KAN-43")
+        self.assertEqual(bs["key"], "KAN-43")
+        self.assertIn("Ship it", bs["context"])
+
+    def test_refuses_ready_but_not_tech_ready(self):
+        # the load-bearing new gate — DoR met, but no arch review yet → point at /tech-design
+        from compass.orchestrator.run import _resolve_jira_story_for_build
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    self._story(["ready"]))
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_build("KAN-43")
+
+    def test_refuses_not_ready(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_build
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    self._story([]))                       # neither label
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_build("KAN-43")
+
+    def test_refuses_done_and_no_creds(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_build
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    self._story(["ready", "tech-ready"], category="done"))
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_build("KAN-1")
+        self._patch(lambda: None, lambda auth, key: {"ok": True})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_build("KAN-9")
+
+    def test_refuses_missing(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_build
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": False, "status_code": 404})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_story_for_build("KAN-404")
+
+    def test_plain_text_passes_through(self):
+        from compass.orchestrator.run import _resolve_jira_story_for_build
+        self.assertIsNone(_resolve_jira_story_for_build("build the dashboard"))   # repo mode
+
+
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on
     the previous build's branch — the cause of cumulative, conflicting story PRs (a

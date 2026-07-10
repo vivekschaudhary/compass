@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: []
-version: 0.3.39
+version: 0.3.40
 requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
 ---
 
@@ -46,6 +46,7 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 ## Preconditions (workflow-level GATE — checked once at start)
 
 - **Story is `ready`:** AC present (required) · design link present (required if UI work) · **`## Technical approach` present** (the *how*, authored by the code-grounded tech-design step `/tech-design` — NOT the PM; `[functional-story]` + `[architecture-grounded-in-code]`, #127) · dependencies + priority noted.
+- **Where the story lives (`source_of_truth`, #127 — Phase 1d).** When `config.yaml source_of_truth: external`, **`/build <STORY-KEY>`** reads the story from Jira (not a repo `story.md`) and gates on the ticket: it builds only a story that is **both Ready** (`ready` label — DoR met, `/create-story`) **AND Tech-ready** (`tech-ready` label — arch-reviewed, `/tech-design`). Refuses loud otherwise, naming the ONE next move: not Ready → `/create-story`; Ready-but-not-Tech-ready → `/tech-design <KEY>`; already Done → reopen/file new. This **generalizes the #171 design/copy gate into the ticket-read ready-to-build gate**; building a Jira-sourced story drives its status To Do → In Progress → Done (#124). Under the default `source_of_truth: repo`, the classic behavior holds (read `story.md`; the repo design/copy readiness gate applies).
 - **Brief is `status: approved`.** If `proposed` or `superseded`, refuse with: *"Brief <bet-id> is not approved (status: <current>). Approve via PM workflow first."*
 - **If `architecture_required: true` on the bet, bet architecture is `status: approved`.** If missing or unapproved, refuse with: *"Bet architecture missing or unapproved. Run `/create-bet-architecture` first."*
 - **Foundation architecture exists.** If missing, refuse with: *"`docs/foundation/architecture.md` missing. Run `/setup-foundation-architecture` first."*
