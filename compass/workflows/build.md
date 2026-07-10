@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: []
-version: 0.3.37
+version: 0.3.38
 requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
 ---
 
@@ -45,7 +45,7 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 
 ## Preconditions (workflow-level GATE — checked once at start)
 
-- **Story is `ready`:** AC present (required) · design link present (required if UI work) · tech notes present · dependencies + priority noted.
+- **Story is `ready`:** AC present (required) · design link present (required if UI work) · **`## Technical approach` present** (the *how*, authored by the code-grounded architecture review — NOT the PM; `[functional-story]` + `[architecture-grounded-in-code]`, #127) · dependencies + priority noted.
 - **Brief is `status: approved`.** If `proposed` or `superseded`, refuse with: *"Brief <bet-id> is not approved (status: <current>). Approve via PM workflow first."*
 - **If `architecture_required: true` on the bet, bet architecture is `status: approved`.** If missing or unapproved, refuse with: *"Bet architecture missing or unapproved. Run `/create-bet-architecture` first."*
 - **Foundation architecture exists.** If missing, refuse with: *"`docs/foundation/architecture.md` missing. Run `/setup-foundation-architecture` first."*

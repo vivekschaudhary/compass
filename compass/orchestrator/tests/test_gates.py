@@ -619,6 +619,76 @@ class TestFixCreatesBug(unittest.TestCase):
             _create_jira_bug("some bug")
 
 
+class TestCreateStoryFromEpic(unittest.TestCase):
+    """#127 (Phase 1c): /create-story <EPIC-KEY> reads a Jira Epic as decomposition context;
+    refuses a non-Epic / missing key / no creds; and (external mode) leaves no story.md in the
+    repo once the stories are authored into Jira."""
+
+    def _patch(self, auth, get):
+        from compass.orchestrator import stores
+        oa, og = stores.jira_auth, stores.jira_get_issue
+        stores.jira_auth, stores.jira_get_issue = auth, get
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa),
+                                 setattr(stores, "jira_get_issue", og)))
+
+    def test_plain_text_passes_through(self):
+        from compass.orchestrator.run import _resolve_jira_epic
+        self.assertIsNone(_resolve_jira_epic("Onboarding revamp"))   # not a key → repo mode
+
+    def test_reads_epic_as_context(self):
+        from compass.orchestrator.run import _resolve_jira_epic
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "Onboarding revamp",
+                                       "description": "Users abandon signup at step 3.",
+                                       "category": "new", "issuetype": "epic",
+                                       "url": "https://x/browse/" + key})
+        ep = _resolve_jira_epic("KAN-100")
+        self.assertEqual(ep["key"], "KAN-100")
+        self.assertIn("Onboarding revamp", ep["context"])
+        self.assertIn("abandon signup", ep["context"])
+
+    def test_refuses_non_epic(self):
+        # a Story key given where an Epic is required → loud refuse (you decompose Epics)
+        from compass.orchestrator.run import _resolve_jira_epic
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "s", "description": "",
+                                       "category": "new", "issuetype": "story", "url": "u"})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_epic("KAN-43")
+
+    def test_refuses_missing_and_no_creds(self):
+        from compass.orchestrator.run import _resolve_jira_epic
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": False, "status_code": 404})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_epic("KAN-404")
+        self._patch(lambda: None, lambda auth, key: {"ok": True})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_epic("KAN-9")
+
+    def test_remove_local_stories_prunes_tree(self):
+        # external mode: after projection the tickets are the record — the local story.md
+        # files (and now-empty dirs) are removed.
+        from compass.orchestrator.run import _remove_local_stories
+        proj = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(proj, ignore_errors=True))
+        base = proj / "docs" / "bets" / "KAN-100" / "stories"
+        for sid in ("KAN-101", "KAN-102"):
+            (base / sid).mkdir(parents=True)
+            (base / sid / "story.md").write_text(f"---\nid: {sid}\n---\n# {sid}\n", encoding="utf-8")
+        removed = _remove_local_stories(proj, "KAN-100")
+        self.assertEqual(len(removed), 2)
+        self.assertTrue(all(r.endswith("story.md") for r in removed))
+        # the whole bet subtree is gone (nothing else lived there)
+        self.assertFalse((proj / "docs" / "bets" / "KAN-100").exists())
+
+    def test_remove_local_stories_no_stories_dir(self):
+        from compass.orchestrator.run import _remove_local_stories
+        proj = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(proj, ignore_errors=True))
+        self.assertEqual(_remove_local_stories(proj, "KAN-100"), [])   # nothing to remove, no crash
+
+
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on
     the previous build's branch — the cause of cumulative, conflicting story PRs (a

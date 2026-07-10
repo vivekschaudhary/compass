@@ -212,6 +212,21 @@ def jira_links_of(auth, key, transport=None):
     return out
 
 
+def jira_add_labels(auth, key, labels, transport=None):
+    """#127 (Phase 1c): add labels to a Jira issue without disturbing existing ones — the
+    `update.labels: [{add: L}]` verb is idempotent (adding a label the issue already has
+    is a no-op server-side). Used to mark a Definition-of-Ready-met Story `ready`. Returns
+    {ok, status, response}. Best-effort — never raises."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Content-Type": "application/json"}
+    adds = [{"add": l} for l in (labels or []) if l]
+    if not adds:
+        return {"ok": True, "status": 204, "response": None, "action": "noop"}
+    status, resp = transport("PUT", f"{auth['base_url']}/rest/api/3/issue/{key}",
+                             headers, {"update": {"labels": adds}})
+    return {"ok": status in (200, 204), "status": status, "response": resp}
+
+
 def _adf_to_text(adf) -> str:
     """#Phase1a: flatten an Atlassian Document Format doc (Jira v3 `description`) to plain
     text — the inverse of `_adf`. Best-effort: concatenates text nodes, newline after each

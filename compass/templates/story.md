@@ -71,9 +71,16 @@ _`type: copy` stories only (delete otherwise). AI fills the **copy-slot inventor
 | --- | --- | --- |
 | `<slot — AI lists>` | `<e.g. ≤24 chars, sentence case, no jargon>` | `<TBD — human writes>` |
 
-## Tech notes
+## Technical approach
 
-<Reference bet architecture for the load-bearing decisions. Capture story-specific implementation notes here.>
+<!-- Architect-owned — authored at the code-grounded architecture review, NOT by the PM (#127,
+[functional-story] + [architecture-grounded-in-code]). The PM leaves this as the placeholder: the
+story arrives purely functional (the *what*), and the Architect — who reads the actual code — fills
+the *how* (data model, API/contract, file/module names, how it fits existing patterns, test
+strategy) before build. `/build` refuses a story whose Technical approach is still the placeholder
+(not Tech-ready). -->
+
+_Pending architecture review._
 
 ## PRs
 
