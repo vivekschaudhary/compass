@@ -1701,6 +1701,47 @@ def _resolve_jira_story_for_tech(raw):
     return {"key": issue["key"], "context": context, "url": issue["url"]}
 
 
+def _resolve_jira_story_for_build(raw):
+    """#127 (Phase 1d): `/build KAN-43` names the Jira **Story** to build. Reads it as the Engineer's
+    context and enforces the **ready-to-build gate off the ticket**: a story builds only when it is
+    both functionally **Ready** (`ready` — DoR met, `/create-story`) AND **Tech-ready** (`tech-ready`
+    — arch-reviewed, `/tech-design`). Returns {key, context, url}; None when the input isn't a Jira
+    key (repo mode — build reads `story.md`, unchanged). Refuses LOUD (exit 3), each naming the ONE
+    next move (`[refuse-escalate]`, no dead-ends). Generalizes the repo-only #171 design/copy gate
+    into the ticket-read gate for `source_of_truth: external`."""
+    ident = (raw or "").strip()
+    if not _looks_like_jira_key(ident):
+        return None
+    from .stores import jira_auth, jira_get_issue
+    auth = jira_auth()
+    if not auth:
+        print(f"\nRefuse: `{ident}` looks like a Jira Story key but no Jira creds are set "
+              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN).", file=sys.stderr)
+        sys.exit(3)
+    issue = jira_get_issue(auth, ident)
+    if not issue.get("ok"):
+        print(f"\nRefuse: Jira story {ident} not found or unreadable "
+              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
+        sys.exit(3)
+    if issue.get("category") == "done":
+        print(f"\nRefuse: {ident} is already Done — already shipped. Reopen it in Jira or file a "
+              f"new story.", file=sys.stderr)
+        sys.exit(3)
+    labels = issue.get("labels") or []
+    if "ready" not in labels:
+        print(f"\nRefuse: {ident} isn't functionally Ready (no `ready` label) — complete its "
+              f"acceptance criteria / design first (`/create-story`), then build it.",
+              file=sys.stderr)
+        sys.exit(3)
+    if "tech-ready" not in labels:
+        print(f"\nRefuse: {ident} is Ready but not Tech-ready (no `tech-ready` label) — the "
+              f"technical design hasn't been authored. Run `/tech-design {ident}` first, then build.",
+              file=sys.stderr)
+        sys.exit(3)
+    context = f"{issue['summary']}\n\n{issue['description']}".strip()
+    return {"key": issue["key"], "context": context, "url": issue["url"]}
+
+
 def _source_of_truth(project_dir):
     """#Phase1b (#127): `external` = instances live in Jira/Confluence (Compass authors them
     there, no repo record) · `repo` = Compass writes repo records (default, back-compat). Read
@@ -3643,6 +3684,16 @@ def main(argv=None):
                 args.context = _st["context"]
                 _tech_story_key = _st["key"]
                 print(f"[tech-design ← Jira Story {_tech_story_key}] {_st['url']}")
+        elif args.workflow == "build" and _source_of_truth(project_dir) == "external":
+            # #127 (Phase 1d): `/build <STORY-KEY>` — read the Jira Story as the Engineer's context
+            # and gate on the ticket: build only a story that's both Ready (DoR) AND Tech-ready
+            # (arch-reviewed). Setting `_work_item_key` drives the ticket's status (To Do → In
+            # Progress on start, → Done on merge) via the Phase 1a `_advance_ticket` machinery.
+            _bs = _resolve_jira_story_for_build(args.context)
+            if _bs:
+                args.context = _bs["context"]
+                _work_item_key = _bs["key"]
+                print(f"[build ← Jira Story {_work_item_key}] {_bs['url']}")
         _wf_outputs, _wf_paths = _run_workflow(
             workflow_name=args.workflow,
             project_dir=project_dir,

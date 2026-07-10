@@ -5,7 +5,7 @@ required_tools: [filesystem_read, filesystem_write, shell_exec, git, github_writ
 optional_tools: [mcp_github, mcp_sentry, mcp_linear]
 executor_tools: [read_file, glob, grep, write_file, bash]
 participates_in_workflows: [build, fix, ops, triage]
-version: 0.3.55
+version: 0.3.56
 ---
 
 # Agent: Engineer
@@ -47,7 +47,7 @@ Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` 
 
 **Work outline:**
 
-1. **Read context** in order: AGENTS.md → brief → bet architecture (if exists) → story (AC + design + `## Technical approach` — the arch-review output, #127) → copy doc (use verbatim) → foundation architecture (stack-wide rules) → existing code in the area. **On a tool-capable host** (orchestrator grants `executor_tools: read_file/glob/grep`, #87), read these from the real repo via tools — ground the diff in the actual schema/types/conventions; do NOT guess.
+1. **Read context** in order: AGENTS.md → brief → bet architecture (if exists) → story (AC + design + `## Technical approach` — the tech-design output, #127) → copy doc (use verbatim) → foundation architecture (stack-wide rules) → existing code in the area. **In `source_of_truth: external` (#127, Phase 1d)** the story + its `## Technical approach` arrive from the **Jira ticket** (`/build <STORY-KEY>`), not a repo `story.md`; the orchestrator has already gated it Ready **and** Tech-ready before you run, so the technical design is present — build to it. **On a tool-capable host** (orchestrator grants `executor_tools: read_file/glob/grep`, #87), read the code from the real repo via tools — ground the diff in the actual schema/types/conventions; do NOT guess.
 2. **Plan smallest viable diff** — implementation, library use, structural choices logged as Decisions with rationale + area tag.
 3. **Write tests first when possible** (especially for fixes — failing test reproduces the bug).
 4. **Implement** following bet architecture. Do NOT invent architectural decisions.
