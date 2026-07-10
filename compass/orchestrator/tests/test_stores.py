@@ -46,6 +46,42 @@ class TestJiraPush(unittest.TestCase):
         self.assertIn("/issue/PROJ-42", t.calls[0]["url"])
 
 
+class TestJiraGetIssue(unittest.TestCase):
+    """#Phase1a: Compass READS a Jira ticket so it can execute work that lives in Jira
+    (a bug filed in Jira → /fix KAN-99), authored in Compass's own template shape."""
+
+    def _ticket(self, **f):
+        base = {"summary": "Login 500s", "status": {"name": "To Do", "statusCategory": {"key": "new"}},
+                "issuetype": {"name": "Bug"}, "parent": {"key": "KAN-1"}, "labels": ["prod"],
+                "description": {"type": "doc", "version": 1, "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": "Steps: hit /login → 500."}]},
+                    {"type": "heading", "content": [{"type": "text", "text": "Acceptance Criteria"}]},
+                    {"type": "paragraph", "content": [{"type": "text", "text": "Returns 200 with a session."}]}]}}
+        base.update(f)
+        return {"key": "KAN-9", "fields": base}
+
+    def test_reads_and_normalizes(self):
+        t = FakeTransport([(200, self._ticket())])
+        r = stores.jira_get_issue(AUTH, "KAN-9", transport=t)
+        self.assertTrue(r["ok"])
+        self.assertEqual((r["key"], r["summary"], r["issuetype"]), ("KAN-9", "Login 500s", "bug"))
+        self.assertEqual((r["category"], r["parent"]), ("new", "KAN-1"))
+        self.assertIn("Steps: hit /login", r["description"])          # ADF flattened to text
+        self.assertIn("Acceptance Criteria", r["description"])
+        self.assertEqual(t.calls[0]["method"], "GET")
+        self.assertIn("/issue/KAN-9", t.calls[0]["url"])
+
+    def test_not_ok_on_404(self):
+        t = FakeTransport([(404, {"error": "gone"})])
+        r = stores.jira_get_issue(AUTH, "KAN-404", transport=t)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["status_code"], 404)
+
+    def test_adf_to_text_handles_plain_and_empty(self):
+        self.assertEqual(stores._adf_to_text(None), "")
+        self.assertEqual(stores._adf_to_text("already text"), "already text")
+
+
 class TestJiraTransition(unittest.TestCase):
     """#MVP1: the board must tell the truth — tickets transition through the lifecycle,
     matched by STATUS CATEGORY (stable) not transition name (per-project)."""
