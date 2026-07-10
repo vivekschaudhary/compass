@@ -265,6 +265,14 @@ class TestAgentToolsFrontmatter(unittest.TestCase):
             _read_agent_tools(eng), ["read_file", "glob", "grep", "write_file", "bash"]
         )
 
+    def test_real_architect_declares_readonly_tools(self):
+        # The Architect authors the code-grounded technical approach at arch
+        # review, so it gets the #87 read-only grant (read_file/glob/grep) —
+        # and NO write/bash (it does not implement). Load-bearing for the
+        # functional-story → arch-review → build flow.
+        arch = Path(__file__).resolve().parents[2] / "agents" / "architect.md"
+        self.assertEqual(_read_agent_tools(arch), ["read_file", "glob", "grep"])
+
 
 class TestWriteGating(unittest.TestCase):
     """Slice 2: write tools are opt-in (allow_write) at both layers."""
