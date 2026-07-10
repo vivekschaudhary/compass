@@ -25,6 +25,7 @@ Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 - `/create-brief` — `compass/workflows/create-brief.md`
 - `/create-bet-architecture` — `compass/workflows/create-bet-architecture.md`
 - `/create-story` — `compass/workflows/create-story.md`
+- `/tech-design` — `compass/workflows/tech-design.md`
 - `/build` — `compass/workflows/build.md`
 - `/fix` — `compass/workflows/fix.md`
 - `/triage` — `compass/workflows/triage.md`

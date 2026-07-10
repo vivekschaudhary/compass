@@ -48,7 +48,7 @@ class TestDetectsDrift(unittest.TestCase):
         # AGENTS claiming the matching truths + a host table mentioning every
         # router-supported host (chatgpt is the openai-family alias → `openai`)
         (root / "AGENTS.md").write_text(
-            "2 of 17 workflows now in dispatch-graph shape; "
+            "2 of 18 workflows now in dispatch-graph shape; "
             "catalog 7 shapes / 2 patterns.\n"
             "Hosts: `claude` `claude-code` `codex` `openai` `gemini`\n",
             encoding="utf-8",
@@ -68,7 +68,7 @@ class TestDetectsDrift(unittest.TestCase):
     def test_dispatch_count_drift_caught(self):
         root = self._mirror()
         (root / "AGENTS.md").write_text(
-            "5 of 17 workflows; catalog 7 shapes / 2 patterns.\n", encoding="utf-8"
+            "5 of 18 workflows; catalog 7 shapes / 2 patterns.\n", encoding="utf-8"
         )
         probs = cc.check_dispatch_graph_count(root)
         self.assertTrue(any("dispatch-graph count drift" in p for p in probs))
@@ -76,7 +76,7 @@ class TestDetectsDrift(unittest.TestCase):
     def test_catalog_count_drift_caught(self):
         root = self._mirror()
         (root / "AGENTS.md").write_text(
-            "2 of 17 workflows; catalog 7 shapes / 9 patterns.\n", encoding="utf-8"
+            "2 of 18 workflows; catalog 7 shapes / 9 patterns.\n", encoding="utf-8"
         )
         probs = cc.check_catalog_count(root)
         self.assertTrue(any("catalog count drift" in p for p in probs))
