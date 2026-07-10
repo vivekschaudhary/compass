@@ -4,7 +4,7 @@ status: active
 owner: engineer
 auto_invokes: []
 invoked_by: [manual, triage]
-version: 0.3.54
+version: 0.3.55
 requires_approved: []
 ---
 
@@ -27,8 +27,15 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 7th work
 
 ## Preconditions (workflow-level GATE)
 
-- **Trigger present** — `/fix <ticket-id-or-link>` (pull from Jira/Linear via MCP) OR `/fix <free text>` OR a `bug` route handed off from `/triage`.
+- **Trigger present** — `/fix <ticket-id-or-link>` OR `/fix <free text>` OR a `bug` route handed off from `/triage`.
 - **No `requires_approved` gate** — a fix is reactive; it does NOT require an approved brief (hygiene fixes have no bet). Bet-linkage is determined during the engineer's triage.
+- **Where the bug lives (`source_of_truth`, #127).** When `config.yaml source_of_truth: external`:
+  - **`/fix KAN-99`** (a Jira key) → Compass **reads the existing ticket** as the bug context (Phase 1a), and
+  - **`/fix "<free text>"`** → Compass **files a Bug in Jira** from the text (Phase 1b).
+  Either way the **ticket is the single record** — no `docs/fixes/*.md` — and its status is driven To Do →
+  In Progress → Done (#124). Under the default `source_of_truth: repo`, the classic behavior holds (the
+  orchestrator writes a fix record + projects it, #71). Refuses loud if a key/external mode is used without
+  Jira configured.
 
 ## Roles invoked (agents dispatched)
 

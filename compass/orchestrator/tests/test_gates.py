@@ -515,6 +515,110 @@ class TestTicketLifecycle(unittest.TestCase):
         self.assertTrue(any("KAN-42" in n for n in notes))
 
 
+class TestFixFromJira(unittest.TestCase):
+    """#Phase1a: /fix KAN-99 executes a bug that lives in Jira — reads the ticket as context,
+    refuses loudly when unusable, and (elsewhere) writes no repo fix record."""
+
+    def _patch(self, auth, get):
+        from compass.orchestrator import stores
+        oa, og = stores.jira_auth, stores.jira_get_issue
+        stores.jira_auth, stores.jira_get_issue = auth, get
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa),
+                                 setattr(stores, "jira_get_issue", og)))
+
+    def test_key_detection(self):
+        from compass.orchestrator.run import _looks_like_jira_key
+        self.assertTrue(_looks_like_jira_key("KAN-99"))
+        self.assertTrue(_looks_like_jira_key("PROJ2-1"))
+        self.assertFalse(_looks_like_jira_key("fix the login bug"))
+        self.assertFalse(_looks_like_jira_key("kan-99"))          # lowercase → not a key
+        self.assertFalse(_looks_like_jira_key(None))
+
+    def test_plain_text_passes_through(self):
+        from compass.orchestrator.run import _resolve_jira_work_item
+        self.assertIsNone(_resolve_jira_work_item("login returns 500"))   # not Jira-sourced
+
+    def test_reads_ticket_as_context(self):
+        from compass.orchestrator.run import _resolve_jira_work_item
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "summary": "Login 500s",
+                                       "description": "Steps: hit /login → 500", "category": "new",
+                                       "issuetype": "bug", "url": "https://x/browse/" + key})
+        wi = _resolve_jira_work_item("KAN-99")
+        self.assertEqual((wi["key"], wi["issuetype"]), ("KAN-99", "bug"))
+        self.assertIn("Login 500s", wi["context"])
+        self.assertIn("hit /login", wi["context"])
+
+    def test_refuses_done_missing_and_no_creds(self):
+        from compass.orchestrator.run import _resolve_jira_work_item
+        # already Done
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": True, "key": key, "category": "done",
+                                       "summary": "", "description": "", "issuetype": "bug", "url": "u"})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_work_item("KAN-1")
+        # missing / unreadable
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, key: {"ok": False, "status_code": 404})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_work_item("KAN-404")
+        # a key but no creds
+        self._patch(lambda: None, lambda auth, key: {"ok": True})
+        with self.assertRaises(SystemExit):
+            _resolve_jira_work_item("KAN-9")
+
+
+class TestSourceOfTruth(unittest.TestCase):
+    """#Phase1b/#127: source_of_truth toggles where instances live (external=Jira/Confluence
+    vs repo=records in the tree); default repo keeps existing setups unchanged."""
+
+    def test_reads_config_defaults_repo(self):
+        from compass.orchestrator.run import _source_of_truth
+        d = Path(tempfile.mkdtemp())
+        self.assertEqual(_source_of_truth(d), "repo")                     # no config → default
+        (d / "compass").mkdir()
+        (d / "compass" / "config.yaml").write_text("stack: x\nsource_of_truth: external\n", encoding="utf-8")
+        self.assertEqual(_source_of_truth(d), "external")
+        (d / "compass" / "config.yaml").write_text("source_of_truth: repo\n", encoding="utf-8")
+        self.assertEqual(_source_of_truth(d), "repo")
+
+
+class TestFixCreatesBug(unittest.TestCase):
+    """#Phase1b: /fix "<text>" in external mode files a Bug in Jira from the free text; the
+    key then flows like /fix KAN-99 (no docs/fixes/*.md)."""
+
+    def _patch(self, auth, push):
+        from compass.orchestrator import stores
+        oa, op = stores.jira_auth, stores.jira_push
+        stores.jira_auth, stores.jira_push = auth, push
+        old = os.environ.get("JIRA_PROJECT")
+        os.environ["JIRA_PROJECT"] = "KAN"
+        self.addCleanup(lambda: (setattr(stores, "jira_auth", oa), setattr(stores, "jira_push", op),
+                                 os.environ.__setitem__("JIRA_PROJECT", old) if old is not None
+                                 else os.environ.pop("JIRA_PROJECT", None)))
+
+    def test_files_bug_from_text(self):
+        from compass.orchestrator.run import _create_jira_bug
+        seen = {}
+        self._patch(lambda: {"base_url": "x", "email": "e", "token": "t"},
+                    lambda auth, pk, itype, summary, body, **k: (
+                        seen.update(pk=pk, itype=itype, summary=summary, body=body) or
+                        {"ok": True, "pointer": "KAN-77", "url": "https://x/browse/KAN-77"}))
+        nb = _create_jira_bug("Login 500s\nSteps: hit /login → 500")
+        self.assertEqual((nb["key"], seen["pk"], seen["itype"]), ("KAN-77", "KAN", "Bug"))
+        self.assertEqual(seen["summary"], "Login 500s")                  # first line → summary
+        self.assertIn("hit /login", nb["context"])                       # full text → context
+
+    def test_refuses_without_jira(self):
+        from compass.orchestrator.run import _create_jira_bug
+        from compass.orchestrator import stores
+        oa = stores.jira_auth
+        stores.jira_auth = lambda: None
+        self.addCleanup(lambda: setattr(stores, "jira_auth", oa))
+        with self.assertRaises(SystemExit):
+            _create_jira_bug("some bug")
+
+
 class TestWorkBranchIsolation(unittest.TestCase):
     """#173: a build branch must start from a CLEAN fresh base, never silently stack on
     the previous build's branch — the cause of cumulative, conflicting story PRs (a
