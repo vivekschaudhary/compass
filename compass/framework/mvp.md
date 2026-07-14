@@ -35,7 +35,7 @@ The orchestrator is what makes Compass shippable — without it, Compass is a do
 
 ---
 
-## Agent pack — all 14 migrated (v0.3.36)
+## Agent pack — 17 agents (14 coded v0.3.36; gtm + sre + product-owner declared v1.0, not yet coded)
 
 Every agent lives in `compass/agents/` with self-sufficient frontmatter (`preferred_hosts:`, tasks, refusal rules). `compass/roles/` is grace-period only (removed in v0.4).
 

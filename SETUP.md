@@ -358,7 +358,7 @@ For tools with flatter customization (Copilot, Cline's single-file rules), conca
 
 ## Customizing
 
-- **Agents:** edit `compass/agents/<agent>.md` (all 14 agents live here as of v0.3.36). All tools pick up the change.
+- **Agents:** edit `compass/agents/<agent>.md` (all 17 agents live here — 14 coded by v0.3.36; `gtm`, `sre`, `product-owner` declared v1.0, not yet coded). All tools pick up the change.
 - **Workflows:** edit `compass/workflows/<workflow>.md`. Skills reference, don't duplicate.
 - **HITL strictness:** edit `compass/config.yaml` `hitl_level`.
 - **Connectors:** edit `.mcp.json` and `compass/config.yaml` `connectors`.
