@@ -71,6 +71,14 @@ export async function addComment(c: JiraCreds, key: string, text: string): Promi
   return res.ok;
 }
 
+// Attach a URL to an issue as a Web link (the issue's "Web links" section). Idempotent via globalId
+// (the url), so re-running a workflow updates the existing link instead of duplicating it.
+export async function addRemoteLink(c: JiraCreds, key: string, url: string, title: string): Promise<boolean> {
+  const body = { globalId: url, object: { url, title } };
+  const res = await jreq(c, `/issue/${key}/remotelink`, { method: "POST", body: JSON.stringify(body) });
+  return res.ok;
+}
+
 export async function deleteIssue(c: JiraCreds, key: string): Promise<boolean> {
   const res = await jreq(c, `/issue/${key}?deleteSubtasks=true`, { method: "DELETE" });
   return res.ok;

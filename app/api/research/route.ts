@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { readProviderDoc, writeProviderDoc } from "@/app/lib/docstore";
 import { streamExecution } from "@/app/lib/exec";
-import { resolveJira, addComment } from "@/app/lib/jira";
+import { resolveJira, addComment, addRemoteLink } from "@/app/lib/jira";
 import { startWork, handoffForApproval } from "@/app/lib/lifecycle";
 import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
 
@@ -56,8 +56,12 @@ export async function POST(req: Request) {
     const doc = await writeProviderDoc(eng, `Research — ${epic.title}`, draft.html || `<p>${draft.summary}</p>`);
     step(doc ? `✓ page created — ${doc.url}` : `✓ provider not reachable — draft kept in-app`);
 
-    // link the doc back on the Jira ticket so it's visible from the story
-    if (jira && doc?.url) { const ok = await addComment(jira, story.id, `Research doc drafted (${providerName}): ${doc.url}`); step(ok ? `  ✓ linked the doc on ${story.id}` : `  • couldn't add the doc link to ${story.id}`); }
+    // link the doc back on the Jira ticket — a Web link (issue's "Web links") + a comment
+    if (jira && doc?.url) {
+      const linked = await addRemoteLink(jira, story.id, doc.url, `Research — ${epic.title}`);
+      await addComment(jira, story.id, `Research doc drafted (${providerName}): ${doc.url}`);
+      step(linked ? `  ✓ web link + comment added to ${story.id}` : `  • couldn't add the web link to ${story.id}`);
+    }
 
     // record the draft (self-heal the label) + cache the summary on the epic for the Refine gate
     step(`▸ recording draft…`);
