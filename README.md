@@ -6,7 +6,7 @@
 
 ## Why I built this
 
-Enterprises and consultancies run delivery on **status theater**. RAG decks that read green until they're abruptly red, Jira boards anyone can drag to "done," a program that looks fine in the monthly steering review and is on fire by month three. The flaw is structural: the _report_ is divorced from the _work_. A status assembled by hand is one you can shade, delay, or simply get wrong — so the people who most need the truth are the last to get it.
+Enterprises run delivery on **status theater**. RAG decks that read green until they're abruptly red, Jira boards anyone can drag to "done," a program that looks fine in the monthly steering review and is on fire by month three. The flaw is structural: the _report_ is divorced from the _work_. A status assembled by hand is one you can shade, delay, or simply get wrong — so the people who most need the truth are the last to get it.
 
 **Compass inverts it.** Don't _report on_ delivery — _run it on the platform_, and let the truth fall out as a byproduct of doing the work.
 
