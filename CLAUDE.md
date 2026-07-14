@@ -13,7 +13,7 @@ When the user invokes a workflow command (`/<workflow-name>`):
 3. Execute the task in the agent file. Respect the gates. Halt at HITL handoffs.
 4. Move to the next step.
 
-All 14 agents live in `compass/agents/` (source of truth). **`compass/roles/` was removed in v1.0 (#38)** — if any doc still references `compass/roles/<role>.md`, use the migrated `compass/agents/<agent>.md`.
+All 17 agents live in `compass/agents/` (source of truth) — the 14 coded (migrated by v0.3.36) plus `gtm`, `sre`, and `product-owner`, declared new at v1.0 per `[declare-not-implement]` (authored, not yet wired into dispatch graphs; PO split from the merged PM). **`compass/roles/` was removed in v1.0 (#38)** — if any doc still references `compass/roles/<role>.md`, use the migrated `compass/agents/<agent>.md`.
 
 ## Commands available
 

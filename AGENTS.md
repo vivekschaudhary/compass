@@ -8,7 +8,7 @@ Read by every AI tool working in this repo (Claude Code, OpenAI Codex CLI, Curso
 
 The framework lives in `compass/`:
 
-- `compass/agents/` — **self-sufficient, surface-independent agent files** (v0.3.14+). Each declares identity + inlined principles + tools + task definitions + refusal rules + handoffs + `preferred_hosts:`. Paste into any LLM host's system-prompt slot → it works. v0.3.14 ships 3 agents (pm, researcher, engineer); v0.3.25 adds architect; v0.3.28 adds designer + ux-writer; v0.3.31 adds support; v0.3.32 adds scanner; v0.3.33 adds automation (new — no legacy role); v0.3.36 adds enterprise-architect + security-reviewer + tech-writer (final 3 — all 14 agents now migrated).
+- `compass/agents/` — **self-sufficient, surface-independent agent files** (v0.3.14+). Each declares identity + inlined principles + tools + task definitions + refusal rules + handoffs + `preferred_hosts:`. Paste into any LLM host's system-prompt slot → it works. v0.3.14 ships 3 agents (pm, researcher, engineer); v0.3.25 adds architect; v0.3.28 adds designer + ux-writer; v0.3.31 adds support; v0.3.32 adds scanner; v0.3.33 adds automation (new — no legacy role); v0.3.36 adds enterprise-architect + security-reviewer + tech-writer (final 3 — all 14 legacy roles now migrated); v1.0 declares gtm + sre + product-owner (new, no legacy role, not yet coded — 17 agents total, 14 coded; PO split from the merged PM).
 - `compass/agents/` — the 14 self-sufficient, surface-independent agents (source of truth). *(The legacy `compass/roles/` dir was removed in v1.0, #38.)*
 - `compass/workflows/` — phase flows. v0.3.14+ workflows are **thin dispatch graphs** sequencing `<agent>.<task>` references; pre-v0.3.14 workflows still embed full methodology bodies (refactor as their owning agents migrate). **10 of 18 workflows now in dispatch-graph shape** (18 active; `/advance` deprecated): `/setup-product` (v0.3.14, 1st) + `/build` (v0.3.23, 2nd) + `/create-bet-architecture` (v0.3.26, 3rd) + `/create-brief` (v0.3.27, 4th) + `/setup-foundation-architecture` (v0.3.41, 5th) + `/create-story` (v0.3.42, 6th) + `/fix` (v0.3.45 → v0.3.50, 7th — ITIL-tier collapse: the tool-capable Engineer reproduces-from-code + fixes in one `triage-and-fix` step; no repo-blind support triage) + `/ops` (v0.3.45, 8th) + `/triage` (v0.3.48 → v0.3.49, 9th — the **front-door ITIL intake router**: classifies any incoming item and routes it, with both `[conditional-dispatch]` instances — within-graph fix-forward + cross-workflow hand-off to `/fix` `/create-brief` `/ops`) + `/tech-design` (v0.3.1, 10th — #127: the Architect authors ONE Ready story's technical design grounded in the actual code + marks it `tech-ready`, between `/create-story` and `/build`); 8 remaining refactor incrementally — all agents are migrated as of v0.3.36, so workflow refactors are no longer blocked on agent migration. **The full bootstrap→build chain (`/setup-product` → `/setup-foundation-architecture` → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build`) is now end-to-end orchestratable, plus the reactive `/fix`, `/ops`, and `/triage` flows.**
 - `compass/templates/` — artifact templates
@@ -60,13 +60,14 @@ Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent
 
 **Legacy v0.3.8 mechanism (deprecated; grace-period support through v0.3.x).** Pre-v0.3.14, role-to-agent assignment lived in `compass/config.yaml` `tool_assignments:`. That block is now **documentation-only** (audit confirmed: zero programmatic reads; 10 files hardcoded the Claude+Codex split in prose). It remains as a legacy override mechanism during v0.3.x — if a project edits `tool_assignments.pm: openai`, that signals intent but doesn't route anything. Per-agent `preferred_hosts:` (in the agent file itself) is the new source-of-truth. `tool_assignments:` removed in v0.4 alongside `compass/roles/*` once all agents migrate. See `compass/framework/canon.md` → `[agent-as-surface-independent-unit]` for the full migration rationale.
 
-## The 14 agents / roles
+## The 17 agents / roles (14 coded · 3 declared)
 
-v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surface-independent). All 14 agents live in `compass/agents/`; `compass/roles/` was removed in v1.0 (#38).
+v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surface-independent). All 17 agents live in `compass/agents/`; `compass/roles/` was removed in v1.0 (#38). **14 are coded (wired into workflow dispatch graphs); `gtm`, `sre`, and `product-owner` are declared v1.0 per `[declare-not-implement]` — authored contracts, not yet wired, nothing dispatches them yet.**
 
 | Agent / Role                               | Source-of-truth                                                  | Migration status |
 | ------------------------------------------ | ---------------------------------------------------------------- | ---------------- |
-| Product Manager (merged PM + PO)           | `compass/agents/pm.md`                                           | ✅ v0.3.14       |
+| Product Manager (product strategy; PO split out v1.0) | `compass/agents/pm.md`                                | ✅ v0.3.14       |
+| Product Owner (stories · refinement · sprint · review) | `compass/agents/product-owner.md`                   | 🚧 declared v1.0 — not yet coded |
 | Researcher                                 | `compass/agents/researcher.md`                                   | ✅ v0.3.14       |
 | Engineer (writes unit/API/component tests) | `compass/agents/engineer.md`                                     | ✅ v0.3.14       |
 | Support                                    | `compass/agents/support.md`                                      | ✅ v0.3.31       |
@@ -80,6 +81,8 @@ v0.3.14+ source-of-truth is `compass/agents/<agent>.md` (self-sufficient, surfac
 | Tech Writer                                | `compass/agents/tech-writer.md`                                  | ✅ v0.3.36       |
 | Delivery Manager (was Project Manager)     | `compass/agents/delivery-manager.md`                             | ✅ v0.3.15       |
 | Scanner (read-only; produces findings)     | `compass/agents/scanner.md`                                      | ✅ v0.3.32       |
+| GTM (go-to-market: positioning + launch)   | `compass/agents/gtm.md`                                          | 🚧 declared v1.0 — not yet coded |
+| SRE (reliability + ops; also "DevOps")     | `compass/agents/sre.md`                                          | 🚧 declared v1.0 — not yet coded |
 
 When playing an agent, **read its full file from the source-of-truth path above**. For migrated agents (✅), the file is self-sufficient and includes its own task definitions. For legacy roles, load the role file + read the workflow file for task steps (v0.3.0-alpha-shape workflows still embed step bodies).
 
