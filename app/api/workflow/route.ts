@@ -4,6 +4,7 @@ import { streamExecution } from "@/app/lib/exec";
 import { resolveJira, addComment } from "@/app/lib/jira";
 import { writeProviderDoc, stripHtml } from "@/app/lib/docstore";
 import { startWork, resolveWork, handoffForApproval } from "@/app/lib/lifecycle";
+import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,22 +39,15 @@ export const WORKFLOW_SPECS: Record<string, Spec> = {
 };
 
 const SYSTEM = (verb: string, focus: string) => `You are Compass's ${verb} agent working ONE ticket. ${focus}
-Return ONLY valid JSON — no markdown, no prose — with this shape:
-{"summary": string, "html": string}
-- "summary": 2–4 sentences capturing the deliverable + the key decision/recommendation.
-- "html": the full deliverable as HTML with <h2> sections, grounded in the ticket + acceptance. Mark inferences as assumptions. Do NOT invent statistics.`;
-
-function parseJson(t: string) {
-  const c = t.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
-  return JSON.parse(c.slice(c.indexOf("{"), c.lastIndexOf("}") + 1));
-}
+The document is grounded in the ticket + acceptance, with <h2> sections. Mark inferences as assumptions. Do NOT invent statistics.
+${DOC_FORMAT}`;
 
 export async function POST(req: Request) {
   const { engagementId, workflowKey, storyId, actor } = (await req.json().catch(() => ({}))) as
     { engagementId?: string; workflowKey?: string; storyId?: string; actor?: string };
   const spec = workflowKey ? WORKFLOW_SPECS[workflowKey] : undefined;
 
-  return streamExecution({ engagementId: engagementId ?? "", role: spec?.role ?? "engineer", kind: workflowKey ?? "workflow", actor }, async (step) => {
+  return streamExecution({ engagementId: engagementId ?? "", role: spec?.role ?? "engineer", kind: workflowKey ?? "workflow", actor, related: storyId, title: `${spec?.verb ?? "Workflow"} — ${storyId ?? ""}` }, async (step) => {
     const sb = supabaseAdmin();
     const key = process.env.ANTHROPIC_API_KEY;
     if (!sb) throw new Error("Supabase not configured");
@@ -79,8 +73,7 @@ export async function POST(req: Request) {
     const ctx = `Ticket: ${story.title}\nEpic: ${epic?.title ?? "—"}\nAcceptance:\n${story.acceptance || "(none stated — infer a sensible minimal scope)"}`;
     const msg = await client.messages.create({ model, max_tokens: 2500, system: SYSTEM(spec.verb, spec.focus), messages: [{ role: "user", content: ctx }] });
     const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    let out: { summary: string; html: string };
-    try { out = parseJson(text); } catch { throw new Error(`Could not parse the ${spec.verb.toLowerCase()}`); }
+    const out = parseDoc(text);
     step(`✓ draft ready — ${(out.summary || "").slice(0, 90)}…`);
 
     // land the artifact — a provider doc, or a comment on the ticket

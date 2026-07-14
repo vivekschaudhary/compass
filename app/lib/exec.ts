@@ -11,6 +11,8 @@ export type ExecMeta = {
   kind: string;         // activity/run kind: research | refine | bet | story | triage | sprint-review …
   actor?: string;
   persist?: boolean;    // default true; false = stream only (e.g. a preview/propose), no run/history row
+  related?: string;     // ticket/deep-link known up front — kept on FAILURE so a failed run still links
+  title?: string;       // fallback history title used when the body throws before returning one
 };
 export type ExecOutcome = {
   result?: unknown;     // structured result → the [[result]] sentinel for the client
@@ -26,7 +28,8 @@ export function streamExecution(meta: ExecMeta, body: (step: (s: string) => void
       let log = "";
       const step = (s: string) => { const line = s.endsWith("\n") ? s : s + "\n"; log += line; c.enqueue(enc.encode(line)); };
 
-      let outcome: ExecOutcome = { title: meta.kind };
+      // seed with the up-front fallbacks so a FAILED run still carries the ticket + a real title
+      let outcome: ExecOutcome = { title: meta.title ?? meta.kind, related: meta.related };
       let ok = true;
       try {
         outcome = await body(step);

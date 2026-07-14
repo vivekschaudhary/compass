@@ -4,6 +4,7 @@ import { readProviderDoc, writeProviderDoc } from "@/app/lib/docstore";
 import { streamExecution } from "@/app/lib/exec";
 import { resolveJira } from "@/app/lib/jira";
 import { startWork, handoffForApproval } from "@/app/lib/lifecycle";
+import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,19 +14,12 @@ export const dynamic = "force-dynamic";
 // engagement's docs provider → Awaiting HITL approval (a PM sign-off job). The draft summary is
 // cached on the parent epic for the PO's Refine gate.
 const SYSTEM = `You are Compass's research agent. From a product brief + a story, draft a first-cut research doc.
-Return ONLY valid JSON — no markdown, no prose — with this shape:
-{"summary": string, "html": string}
-- "summary": 3–5 sentences of the key findings + the top recommendation (used later to refine the backlog).
-- "html": a Confluence-storage / HTML research doc with <h2> sections: User insights · Competitive landscape · Key findings · Recommendations. Concrete and grounded in the brief. Mark inferences as assumptions. Do NOT invent statistics.`;
-
-function parseJson(t: string) {
-  const c = t.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
-  return JSON.parse(c.slice(c.indexOf("{"), c.lastIndexOf("}") + 1));
-}
+The document has <h2> sections: User insights · Competitive landscape · Key findings · Recommendations. Concrete and grounded in the brief. Mark inferences as assumptions. Do NOT invent statistics.
+${DOC_FORMAT}`;
 
 export async function POST(req: Request) {
   const { engagementId, storyId, actor } = (await req.json().catch(() => ({}))) as { engagementId?: string; storyId?: string; actor?: string };
-  return streamExecution({ engagementId: engagementId ?? "", role: "researcher", kind: "research", actor }, async (step) => {
+  return streamExecution({ engagementId: engagementId ?? "", role: "researcher", kind: "research", actor, related: storyId, title: `Research — ${storyId ?? ""}` }, async (step) => {
     const sb = supabaseAdmin();
     const key = process.env.ANTHROPIC_API_KEY;
     if (!sb) throw new Error("Supabase not configured");
@@ -55,8 +49,7 @@ export async function POST(req: Request) {
     const client = new Anthropic({ apiKey: key });
     const msg = await client.messages.create({ model, max_tokens: 2500, system: SYSTEM, messages: [{ role: "user", content: `Story: ${story.title}\nEpic: ${epic.title}\n\nProduct brief / context:\n${briefText}` }] });
     const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    let draft: { summary: string; html: string };
-    try { draft = parseJson(text); } catch { throw new Error("Could not parse the research draft"); }
+    const draft = parseDoc(text);
     step(`✓ draft ready — ${(draft.summary || "").slice(0, 90)}…`);
 
     step(`▸ writing draft to ${providerName}…`);
