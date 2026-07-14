@@ -33,6 +33,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
 
     const { data: repoRows } = await sb.from("repo").select("*").eq("engagement_id", id).order("ord");
     const { data: activityRows } = await sb.from("activity").select("*").eq("engagement_id", id).order("created_at", { ascending: false }).limit(60);
+    const { data: metricRows } = await sb.from("metric").select("*").eq("engagement_id", id).order("ord");
 
     const deliverables = dels ?? [];
     const epicRows = epics ?? [];
@@ -151,6 +152,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       })),
       deliverables: deliverables.map((d) => ({ code: d.code, title: d.title, status: d.status })),
       epics: epicRows.map((e) => ({ id: e.id, title: e.title, discipline: e.discipline, stories: storyRows.filter((s) => s.epic_id === e.id).length, research: e.research_status ?? "none" })),
+      metrics: (metricRows ?? []).map((m) => ({ id: m.id, epicId: m.epic_id ?? null, scope: m.scope ?? "", category: m.category ?? "", name: m.name ?? "", target: m.target ?? "", value: m.value ?? "" })),
       atlassianBase: eng.atlassian_base_url || process.env.ATLASSIAN_BASE_URL || "",
       activity: (activityRows ?? []).map((a) => ({ id: a.id, role: a.role ?? "", actor: a.actor ?? "", kind: a.kind ?? "", title: a.title ?? "", related: a.related ?? "", status: a.status ?? "done", created_at: a.created_at, run_id: a.run_id ?? null })),
       source: "supabase",

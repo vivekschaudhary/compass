@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveJira, createIssue } from "@/app/lib/jira";
 import { streamExecution } from "@/app/lib/exec";
+import { seedEngagementMetrics, seedEpicMetrics } from "@/app/lib/metrics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,7 +97,9 @@ export async function POST(req: Request) {
       .map((s, i) => ({ id: storyIds[i], epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.estimate_pts ?? 3, ac_pass_pct: 0 }))
       .filter((s) => s.id);
     if (stories.length) await sb.from("story").insert(stories);
-    step(`✓ ${epicId} + ${stories.length} stories on the board`);
+    await seedEngagementMetrics(sb, engagementId!);
+    await seedEpicMetrics(sb, engagementId!, epicId);
+    step(`✓ ${epicId} + ${stories.length} stories on the board · metrics captured`);
 
     return { result: { ok: true, epic: epicId, epicTitle, stories: stories.length, jira: jiraCreated }, title: `Created epic — ${epicTitle}`, related: epicId };
   });

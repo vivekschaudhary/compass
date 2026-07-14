@@ -149,11 +149,14 @@ export type ProgramModel = {
   deliverables: { code: string; title: string; status: string }[];
   epics: { id: string; title: string; discipline: string; stories: number; research: string }[];
   activity: Activity[];
+  metrics: Metric[];
   atlassianBase: string; // effective Atlassian base URL (per-engagement → env) for deep links
 };
 
 // A completed task in the history — logged per role + actor.
 export type Activity = { id: number; role: string; actor: string; kind: string; title: string; related: string; status: string; created_at: string; run_id: string | null };
+// A metric definition, captured per project (epicId null) or per epic (bet outcome). Value empty until instrumented.
+export type Metric = { id: string; epicId: string | null; scope: string; category: string; name: string; target: string; value: string };
 
 // ── The seed: Acme Customer Portal, one cross-functional scrum team ────────
 export const FIXTURE: ProgramModel = {
@@ -232,6 +235,7 @@ export const FIXTURE: ProgramModel = {
   deliverables: [{ code: "D3", title: "Dashboard", status: "in-progress" }, { code: "D4", title: "Reporting", status: "planned" }],
   epics: [{ id: "KAN-30", title: "Dashboard", discipline: "Engineering", stories: 3, research: "none" }],
   activity: [],
+  metrics: [],
   atlassianBase: "",
   repos: [],
 };

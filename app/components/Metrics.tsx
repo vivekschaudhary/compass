@@ -1,36 +1,29 @@
 "use client";
 
-import { ProgramModel } from "@/app/lib/data";
+import { ProgramModel, Metric } from "@/app/lib/data";
 
-// Product + engineering metric taxonomy — instrumentation lands next; for now we show the
-// categories + the metrics captured under each, values empty ("—").
-const PRODUCT_METRICS: { category: string; metrics: string[] }[] = [
-  { category: "Acquisition", metrics: ["New users", "Sign-up conversion", "Traffic / visitors", "CAC"] },
-  { category: "Activation", metrics: ["Activation rate", "Time to first value", "Onboarding completion"] },
-  { category: "Engagement", metrics: ["DAU", "WAU", "MAU", "Stickiness (DAU/MAU)", "Sessions / user", "Feature adoption"] },
-  { category: "Retention", metrics: ["Day-1 retention", "Day-7 retention", "Day-30 retention", "Churn rate"] },
-  { category: "Revenue", metrics: ["MRR", "ARPU", "Free → paid conversion", "LTV"] },
-  { category: "Satisfaction", metrics: ["NPS", "CSAT", "CES"] },
-];
+// Metric definitions come from the DB now (table `metric`), captured per project + per epic.
+const BET_COLS_FALLBACK = ["Primary outcome", "Adoption", "Impact vs baseline"];
 
-// "Delivery performance" = the four delivery signals (deploy freq · lead time · change-fail rate ·
-// time to restore); "Flow & quality" = supporting engineering metrics.
-const ENG_METRICS: { category: string; metrics: string[] }[] = [
-  { category: "Delivery performance", metrics: ["Deployment frequency", "Lead time for changes", "Change failure rate", "Time to restore service"] },
-  { category: "Flow & quality", metrics: ["PR cycle time", "Review turnaround", "Test coverage", "Build success rate", "Escaped defects"] },
-];
+function groupByCategory(metrics: Metric[]): { category: string; metrics: Metric[] }[] {
+  const out: { category: string; metrics: Metric[] }[] = [];
+  for (const m of metrics) {
+    let g = out.find((x) => x.category === m.category);
+    if (!g) { g = { category: m.category, metrics: [] }; out.push(g); }
+    g.metrics.push(m);
+  }
+  return out;
+}
 
-const BET_METRICS = ["Primary outcome", "Adoption", "Impact vs baseline"];
-
-function CategoryCard({ category, metrics }: { category: string; metrics: string[] }) {
+function CategoryCard({ category, metrics }: { category: string; metrics: Metric[] }) {
   return (
     <div className="overflow-hidden rounded-tile border border-line bg-card">
       <div className="border-b border-line bg-shell/40 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-faint">{category}</div>
       <div>
         {metrics.map((m) => (
-          <div key={m} className="flex items-center justify-between border-t border-line px-3 py-1.5 text-[12.5px] first:border-t-0">
-            <span className="text-body">{m}</span>
-            <span className="mono text-[11.5px] text-faint">—</span>
+          <div key={m.id} className="flex items-center justify-between border-t border-line px-3 py-1.5 text-[12.5px] first:border-t-0">
+            <span className="text-body">{m.name}{m.target ? <span className="ml-1.5 text-[11px] text-faint">· target {m.target}</span> : null}</span>
+            <span className="mono text-[11.5px] text-faint">{m.value || "—"}</span>
           </div>
         ))}
       </div>
@@ -38,54 +31,69 @@ function CategoryCard({ category, metrics }: { category: string; metrics: string
   );
 }
 
+function Header({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+        <p className="mt-0.5 text-[12.5px] text-muted">{sub}</p>
+      </div>
+      <span className="rounded-pill bg-shell px-2.5 py-1 text-[11px] font-medium text-muted">not tracked yet</span>
+    </div>
+  );
+}
+
 export function Metrics({ model }: { model: ProgramModel }) {
+  const product = groupByCategory(model.metrics.filter((m) => m.scope === "product"));
+  const engineering = groupByCategory(model.metrics.filter((m) => m.scope === "engineering"));
+  const bet = model.metrics.filter((m) => m.scope === "bet");
+  const betCols = [...new Set(bet.map((m) => m.name))];
+  const cols = betCols.length ? betCols : BET_COLS_FALLBACK;
+  const valueFor = (epicId: string, name: string) => bet.find((m) => m.epicId === epicId && m.name === name)?.value || "—";
+  const gridStyle = { gridTemplateColumns: `1fr repeat(${cols.length}, 120px)` };
+
   return (
     <div className="flex flex-col gap-5">
-      <section className="rounded-card border border-line bg-card p-5 rise">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-[15px] font-semibold text-ink">Product metrics</h2>
-            <p className="mt-0.5 text-[12.5px] text-muted">Overall product health across the funnel. Instrumentation lands next — categories + metrics shown.</p>
-          </div>
-          <span className="rounded-pill bg-shell px-2.5 py-1 text-[11px] font-medium text-muted">not tracked yet</span>
+      {model.metrics.length === 0 && (
+        <div className="rounded-card border border-dashed border-line bg-shell/40 px-5 py-8 text-center">
+          <p className="text-[13.5px] font-medium text-ink">Metrics not captured yet</p>
+          <p className="mt-1 text-[12.5px] text-muted">Run <span className="mono">011_metrics.sql</span> + the backfill to capture the metric definitions for this engagement. Structure preview below.</p>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {PRODUCT_METRICS.map((c) => <CategoryCard key={c.category} {...c} />)}
-        </div>
-      </section>
+      )}
+
+      {product.length > 0 && (
+        <section className="rounded-card border border-line bg-card p-5 rise">
+          <Header title="Product metrics" sub="Overall product health across the funnel — captured per project (SOW)." />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{product.map((c) => <CategoryCard key={c.category} {...c} />)}</div>
+        </section>
+      )}
 
       <section className="rounded-card border border-line bg-card p-5 rise" style={{ animationDelay: "80ms" }}>
         <h2 className="text-[15px] font-semibold text-ink">Bet outcomes</h2>
-        <p className="mt-0.5 text-[12.5px] text-muted">Each epic is a measurable bet — its outcome metrics vs target.</p>
+        <p className="mt-0.5 text-[12.5px] text-muted">Each epic is a measurable bet — its outcome metrics, captured per epic.</p>
         <div className="mt-4 overflow-x-auto">
           <div className="min-w-[560px]">
-            <div className="grid grid-cols-[1fr_repeat(3,120px)] gap-3 border-b border-line px-1 pb-2 text-[10.5px] font-medium uppercase tracking-wide text-faint">
-              <span>Epic</span>{BET_METRICS.map((m) => <span key={m} className="text-right">{m}</span>)}
+            <div className="grid items-center gap-3 border-b border-line px-1 pb-2 text-[10.5px] font-medium uppercase tracking-wide text-faint" style={gridStyle}>
+              <span>Epic</span>{cols.map((m) => <span key={m} className="text-right">{m}</span>)}
             </div>
             {model.epics.length === 0 ? (
               <p className="py-6 text-center text-[12.5px] text-muted">No epics yet — create one to track its outcome.</p>
             ) : model.epics.map((e) => (
-              <div key={e.id} className="grid grid-cols-[1fr_repeat(3,120px)] items-center gap-3 border-b border-line px-1 py-2.5 text-[12.5px]">
+              <div key={e.id} className="grid items-center gap-3 border-b border-line px-1 py-2.5 text-[12.5px]" style={gridStyle}>
                 <span className="min-w-0 truncate"><span className="mono text-[11px] text-faint">{e.id}</span> <span className="text-body">{e.title}</span></span>
-                {BET_METRICS.map((m) => <span key={m} className="mono text-right text-[11.5px] text-faint">—</span>)}
+                {cols.map((m) => <span key={m} className="mono text-right text-[11.5px] text-faint">{valueFor(e.id, m)}</span>)}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="rounded-card border border-line bg-card p-5 rise" style={{ animationDelay: "160ms" }}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-[15px] font-semibold text-ink">Engineering delivery</h2>
-            <p className="mt-0.5 text-[12.5px] text-muted">Delivery performance + flow &amp; quality — the signals of a healthy delivery pipeline.</p>
-          </div>
-          <span className="rounded-pill bg-shell px-2.5 py-1 text-[11px] font-medium text-muted">not tracked yet</span>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {ENG_METRICS.map((c) => <CategoryCard key={c.category} {...c} />)}
-        </div>
-      </section>
+      {engineering.length > 0 && (
+        <section className="rounded-card border border-line bg-card p-5 rise" style={{ animationDelay: "160ms" }}>
+          <Header title="Engineering delivery" sub="Delivery performance + flow & quality — the signals of a healthy delivery pipeline." />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">{engineering.map((c) => <CategoryCard key={c.category} {...c} />)}</div>
+        </section>
+      )}
     </div>
   );
 }

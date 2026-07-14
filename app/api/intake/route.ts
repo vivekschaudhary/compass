@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { scaffoldDocs } from "@/app/lib/doctree";
+import { seedEngagementMetrics } from "@/app/lib/metrics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,6 +88,8 @@ export async function POST(req: Request) {
 
   // scaffold the standard Confluence doc tree (records structure; creates for real if a space is wired)
   await scaffoldDocs(id);
+  // capture the SOW-level product + engineering metric definitions
+  await seedEngagementMetrics(sb, id);
 
   return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length });
 }
