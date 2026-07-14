@@ -31,24 +31,37 @@ async function jreq(c: JiraCreds, path: string, init?: RequestInit) {
 }
 
 // Create an issue. `type` is the issue-type name (Epic | Story | Task | Bug). For a Story
-// under an Epic in a team-managed project, pass parentKey = the Epic key.
-export async function createIssue(c: JiraCreds, opts: { type: string; summary: string; description?: string; parentKey?: string }): Promise<{ key: string } | null> {
+// under an Epic in a team-managed project, pass parentKey = the Epic key. `labels` mirror the
+// story's owning role (single tokens, no spaces) so tickets are filterable by role in Jira.
+export async function createIssue(c: JiraCreds, opts: { type: string; summary: string; description?: string; parentKey?: string; labels?: string[] }): Promise<{ key: string } | null> {
   const fields: Record<string, unknown> = { project: { key: c.project }, issuetype: { name: opts.type }, summary: opts.summary.slice(0, 240) };
   if (opts.description) fields.description = adf(opts.description);
   if (opts.parentKey) fields.parent = { key: opts.parentKey };
+  const labels = (opts.labels ?? []).map((l) => l.trim().replace(/\s+/g, "-")).filter(Boolean);
+  if (labels.length) fields.labels = labels;
   const res = await jreq(c, "/issue", { method: "POST", body: JSON.stringify({ fields }) });
   if (!res.ok) return null;
   return { key: (await res.json()).key };
 }
 
-// Move an issue to a target status by name (e.g. "In Progress", "Done"). No-op if already there.
+// Move an issue to a target status by name (e.g. "In Progress", "Awaiting HITL approval", "Done").
+// Honest about the outcome: returns true only if the issue actually ENDS UP in the target
+// (transitioned, or already there); false if the status is unreachable — e.g. it hasn't been added
+// to the board yet — so the caller can log an honest "(skipped)" instead of a false success.
 export async function transitionIssue(c: JiraCreds, key: string, toStatus: string): Promise<boolean> {
+  const want = toStatus.toLowerCase();
+  // Already in the target? (the transitions list only shows OTHER reachable statuses, so we must
+  // read the current status to distinguish "already there" from "status doesn't exist".)
+  const cur = await jreq(c, `/issue/${key}?fields=status`);
+  if (cur.ok) {
+    const name = (await cur.json())?.fields?.status?.name;
+    if (typeof name === "string" && name.toLowerCase() === want) return true;
+  }
   const t = await jreq(c, `/issue/${key}/transitions`);
   if (!t.ok) return false;
-  const want = toStatus.toLowerCase();
   const list = (await t.json()).transitions ?? [];
   const tr = list.find((x: { to?: { name?: string } }) => x.to?.name?.toLowerCase() === want);
-  if (!tr) return true; // already in that status (no transition offered) — treat as success
+  if (!tr) return false; // target status not reachable from here (likely not on the board)
   const res = await jreq(c, `/issue/${key}/transitions`, { method: "POST", body: JSON.stringify({ transition: { id: tr.id } }) });
   return res.ok;
 }

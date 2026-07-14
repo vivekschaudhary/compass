@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { logActivity } from "@/app/lib/activity";
+import { resolveJira, transitionIssue } from "@/app/lib/jira";
+import { STATUS } from "@/app/lib/lifecycle";
 
 // Job actions — the web analog of the Python cockpit's /decide + /run: a role's button
 // writes back to Supabase (the source of truth) and the board recomputes on refresh.
@@ -15,16 +17,33 @@ export async function POST(req: Request) {
   if (!sb) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 400 });
 
   const { jobId, action, actor } = (await req.json()) as { jobId: string; action: "primary" | "secondary"; actor?: string };
-  const { data: job } = await sb.from("job").select("engagement_id, role, kind, title, related, primary_label, secondary_label").eq("id", jobId).maybeSingle();
+  const { data: job } = await sb.from("job").select("engagement_id, role, kind, title, related, meta, primary_label, secondary_label").eq("id", jobId).maybeSingle();
 
-  // PM approves a research draft → unlocks the PO's Refine on that epic.
-  if (jobId.startsWith("research-approve-")) {
-    const epicId = jobId.replace("research-approve-", "");
-    await sb.from("epic").update({ research_status: "approved" }).eq("id", epicId);
-    const { data: ep } = await sb.from("epic").select("engagement_id, title").eq("id", epicId).maybeSingle();
-    if (ep) await logActivity(sb, { engagementId: ep.engagement_id, role: "pm", actor, kind: "approve", title: `Approved research — ${ep.title}`, related: epicId });
+  // The GENERIC human gate: any `approve-<ticket>` job (with `research-approve-<id>` alias) →
+  // move the ticket to Done + run the workflow's post-approve hook (stored in job.meta as
+  // "<hook>:<id>", e.g. "research:<epicId>"). One path for every role's sign-off.
+  if (jobId.startsWith("approve-") || jobId.startsWith("research-approve-")) {
+    const ticket = jobId.replace(/^(research-)?approve-/, "");
+    const engId = job?.engagement_id ?? "";
+    // resolve per-engagement Jira creds and move the ticket → Done
+    let moved = false;
+    if (engId) {
+      const { data: eng } = await sb.from("engagement")
+        .select("atlassian_base_url, atlassian_email, atlassian_api_token, jira_project").eq("id", engId).maybeSingle();
+      const jira = resolveJira(eng ?? {});
+      if (jira && /^[A-Z][A-Z0-9]+-\d+$/.test(ticket)) moved = await transitionIssue(jira, ticket, STATUS.done);
+    }
+    // post-approve hook: research → unlock the PO's Refine on the parent epic
+    const hook = String(job?.meta ?? "");
+    let note = "Approved — moved to Done";
+    if (hook.startsWith("research:")) {
+      const epicId = hook.slice("research:".length);
+      await sb.from("epic").update({ research_status: "approved" }).eq("id", epicId);
+      note = "Research approved — refinement unlocked";
+    }
+    await logActivity(sb, { engagementId: engId, role: job?.role ?? "pm", actor, kind: "approve", title: job?.title ? `Approved — ${job.title}` : `Approved ${ticket}`, related: ticket, status: "done" });
     await sb.from("job").delete().eq("id", jobId);
-    return NextResponse.json({ ok: true, complete: true, note: "Research approved — refinement unlocked" });
+    return NextResponse.json({ ok: true, complete: true, note: moved ? note : `${note} (Jira status skipped)` });
   }
 
   const effects: Record<string, (a: string) => Promise<Result>> = {

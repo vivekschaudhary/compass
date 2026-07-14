@@ -148,11 +148,24 @@ export type ProgramModel = {
   repos: RepoRef[];
   deliverables: { code: string; title: string; status: string }[];
   epics: { id: string; title: string; discipline: string; stories: number; research: string }[];
+  storyList: StorySummary[]; // the epics' stories with their owning role — drives per-role ticket pickers
   activity: Activity[];
   metrics: Metric[];
   atlassianBase: string; // effective Atlassian base URL (per-engagement → env) for deep links
 };
 
+// A story surfaced to the client so a role can pick its own labeled tickets to run a workflow on.
+export type StorySummary = { id: string; epicId: string; title: string; role: string | null; status: string };
+
+// Workflow keys the generic runner (/api/workflow) can execute → their human label. Client-safe
+// mirror of WORKFLOW_SPECS in app/api/workflow/route.ts (keep the keys in sync). These flip their
+// ROLE_WORKFLOWS entry to "ready" and run through the per-role ticket picker.
+export const GENERIC_WORKFLOWS: Record<string, string> = {
+  "design-spec": "Design spec", "copy": "UX copy", "tech-design": "Tech design", "bet-architecture": "Epic architecture",
+  "launch-plan": "Launch plan", "release-comms": "Release comms", "execute-change": "Change plan",
+  "e2e": "E2E test plan", "review-pr": "PR review", "scan": "Security scan", "docs": "Docs update",
+  "runbook": "Runbook", "status": "Status roll-up",
+};
 // A completed task in the history — logged per role + actor.
 export type Activity = { id: number; role: string; actor: string; kind: string; title: string; related: string; status: string; created_at: string; run_id: string | null };
 // A metric definition, captured per project (epicId null) or per epic (bet outcome). Value empty until instrumented.
@@ -234,6 +247,7 @@ export const FIXTURE: ProgramModel = {
   connectors: { figma_url: "", docs_provider: "confluence", confluence_space: "", confluence_root_page_id: "", atlassian_base_url: "", atlassian_email: "", teams_site: "", graph_tenant_id: "", graph_client_id: "", jira_project: "", jira_board_id: "", has_atlassian_token: false, has_graph_secret: false },
   deliverables: [{ code: "D3", title: "Dashboard", status: "in-progress" }, { code: "D4", title: "Reporting", status: "planned" }],
   epics: [{ id: "KAN-30", title: "Dashboard", discipline: "Engineering", stories: 3, research: "none" }],
+  storyList: [],
   activity: [],
   metrics: [],
   atlassianBase: "",

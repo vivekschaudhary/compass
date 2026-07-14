@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveJira, createIssue } from "@/app/lib/jira";
 import { streamExecution } from "@/app/lib/exec";
 import { seedEngagementMetrics, seedEpicMetrics } from "@/app/lib/metrics";
+import { normalizeRole } from "@/app/lib/lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,10 +14,11 @@ export const dynamic = "force-dynamic";
 const SYSTEM = `You are Compass's PM agent creating ONE bet (a coherent slice of product value) from a short brief.
 Return ONLY valid JSON — no markdown, no prose — with this shape:
 {"epic":{"title":string,"discipline":"Product"|"Engineering"|"QA"|"Design","phase":"Discovery"|"Build"|"QA"|"Launch"},
- "stories":[{"title":string,"discipline":"Product"|"Engineering"|"QA"|"Design","estimate_pts":number}]}
+ "stories":[{"title":string,"role":"researcher"|"designer"|"ux-writer"|"engineer"|"automation","estimate_pts":number}]}
 Rules:
 - The epic IS the bet. Produce 3–6 FUNCTIONAL stories — the user-observable *what*, never technical tasks.
-- Spread stories across disciplines when the bet genuinely needs design/QA, not only Engineering.
+- Give each story the ONE delivery role that owns it. If the bet needs discovery, include ONE "researcher" story FIRST.
+- Spread roles when the bet genuinely needs design/copy/QA, not only engineering.
 - Right-size estimates (1–8 pts). Do NOT invent scope beyond what the brief implies.`;
 
 function parseJson(t: string) {
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
       messages: [{ role: "user", content: `Bet title: ${title}\nBrief: ${brief?.trim() || "(none — infer a sensible minimal slice from the title)"}\nGrounds to deliverable: ${deliverableCode || "(none)"}` }],
     });
     const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    let plan: { epic?: { title?: string; discipline?: string; phase?: string }; stories?: { title: string; estimate_pts?: number }[] };
+    let plan: { epic?: { title?: string; discipline?: string; phase?: string }; stories?: { title: string; role?: string; estimate_pts?: number }[] };
     try { plan = parseJson(text); } catch { throw new Error("Could not parse the plan"); }
 
     const epicTitle = plan.epic?.title || title;
@@ -70,9 +72,9 @@ export async function POST(req: Request) {
         epicId = ep.key; jiraCreated = true;
         step(`  ✓ ${epicId}`);
         step(`▸ creating ${storyPlans.length} Stories under ${epicId}…`);
-        const created = await Promise.all(storyPlans.map((s) => createIssue(jira, { type: "Story", summary: s.title, parentKey: epicId })));
+        const created = await Promise.all(storyPlans.map((s) => createIssue(jira, { type: "Story", summary: s.title, parentKey: epicId, labels: [normalizeRole(s.role)] })));
         storyIds = created.map((r) => r?.key ?? "");
-        created.forEach((r, i) => step(`  ✓ ${r?.key ?? "(local)"} — ${storyPlans[i].title}`));
+        created.forEach((r, i) => step(`  ✓ ${r?.key ?? "(local)"} — ${storyPlans[i].title} · ${normalizeRole(storyPlans[i].role)}`));
       }
     }
     if (!epicId) {
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
       note: brief?.trim() ? brief.trim().slice(0, 160) : null, ord: (existing?.length ?? 0) + 1,
     });
     const stories = storyPlans
-      .map((s, i) => ({ id: storyIds[i], epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.estimate_pts ?? 3, ac_pass_pct: 0 }))
+      .map((s, i) => ({ id: storyIds[i], epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.estimate_pts ?? 3, ac_pass_pct: 0, role: normalizeRole(s.role) }))
       .filter((s) => s.id);
     if (stories.length) await sb.from("story").insert(stories);
     await seedEngagementMetrics(sb, engagementId!);

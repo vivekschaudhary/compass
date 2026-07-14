@@ -152,6 +152,9 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       })),
       deliverables: deliverables.map((d) => ({ code: d.code, title: d.title, status: d.status })),
       epics: epicRows.map((e) => ({ id: e.id, title: e.title, discipline: e.discipline, stories: storyRows.filter((s) => s.epic_id === e.id).length, research: e.research_status ?? "none" })),
+      storyList: storyRows
+        .filter((s) => epicRows.some((e) => e.id === s.epic_id))
+        .map((s) => ({ id: s.id, epicId: s.epic_id, title: s.title, role: s.role ?? null, status: s.status ?? "idle" })),
       metrics: (metricRows ?? []).map((m) => ({ id: m.id, epicId: m.epic_id ?? null, scope: m.scope ?? "", category: m.category ?? "", name: m.name ?? "", target: m.target ?? "", value: m.value ?? "" })),
       atlassianBase: eng.atlassian_base_url || process.env.ATLASSIAN_BASE_URL || "",
       activity: (activityRows ?? []).map((a) => ({ id: a.id, role: a.role ?? "", actor: a.actor ?? "", kind: a.kind ?? "", title: a.title ?? "", related: a.related ?? "", status: a.status ?? "done", created_at: a.created_at, run_id: a.run_id ?? null })),

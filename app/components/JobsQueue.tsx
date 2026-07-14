@@ -2,27 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Job, JobKind, Role, Activity } from "@/app/lib/data";
-
-function timeAgo(iso: string): string {
-  if (!iso) return "";
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
-const HIST_DOT: Record<string, string> = { done: "bg-good", failed: "bg-bad", filed: "bg-brand" };
-
-// A job's `related` reference → a deep link: a Jira key (KAN-12) → the Jira issue; a full URL
-// (e.g. a Confluence page) → itself. Returns null when it isn't linkable (a deliverable code).
-function relatedLink(related: string | undefined, base: string): string | null {
-  if (!related) return null;
-  if (/^https?:\/\//i.test(related)) return related;
-  if (/^[A-Z][A-Z0-9]+-\d+$/.test(related) && base) return `${base.replace(/\/+$/, "")}/browse/${related}`;
-  return null;
-}
+import { Job, JobKind, Role, Activity, GENERIC_WORKFLOWS } from "@/app/lib/data";
+import { relatedLink } from "@/app/lib/format";
+import { HistoryTable } from "./HistoryTable";
 
 function KindIcon({ kind }: { kind: JobKind }) {
   const p: Record<JobKind, React.ReactNode> = {
@@ -190,7 +172,7 @@ const ROLE_WORKFLOWS: Record<string, Workflow[]> = {
 };
 
 export function JobsQueue({
-  role, jobs, onGetHelp, onAction, busy, onCreateBet, onDecompose, onTriage, decomposing, activity, onCreateStory, onSprintReview, atlassianBase, onRunResearch, onRefine,
+  role, jobs, onGetHelp, onAction, busy, onCreateBet, onDecompose, onTriage, decomposing, activity, onCreateStory, onSprintReview, atlassianBase, onRunResearch, onRunWorkflow, onRefine,
 }: {
   role: Role;
   jobs: Job[];
@@ -206,15 +188,19 @@ export function JobsQueue({
   onSprintReview?: () => void;
   atlassianBase?: string;
   onRunResearch?: () => void;
+  onRunWorkflow?: (key: string) => void;
   onRefine?: () => void;
 }) {
   const mine = jobs.filter((j) => j.role === role.roleCode);
   const actionable = mine.filter((j) => j.kind !== "drafting").length;
   const workflows = ROLE_WORKFLOWS[role.roleCode] ?? [];
   const history = (activity ?? []).filter((a) => a.role === role.roleCode);
+  // Dedicated modals for the bespoke workflows; everything else routes through the generic runner.
   const HANDLERS: Record<string, (() => void) | undefined> = {
     bet: onCreateBet, story: onCreateStory, refine: onRefine, "sprint-review": onSprintReview, research: onRunResearch, triage: onTriage,
   };
+  const handlerFor = (key: string): (() => void) | undefined =>
+    HANDLERS[key] ?? (GENERIC_WORKFLOWS[key] && onRunWorkflow ? () => onRunWorkflow(key) : undefined);
 
   return (
     <section className="rounded-card border border-line bg-card rise">
@@ -230,8 +216,8 @@ export function JobsQueue({
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-shell/40 px-5 py-3">
           <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Workflows</span>
           {workflows.map((w) => {
-            const handler = HANDLERS[w.key];
-            if (w.ready && handler) {
+            const handler = handlerFor(w.key);
+            if (handler) {
               return (
                 <button key={w.key} onClick={handler} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-medium text-body hover:border-brand hover:bg-shell">
                   <span className="inline-block size-1.5 rounded-pill bg-good" />{w.label}
@@ -264,22 +250,12 @@ export function JobsQueue({
       )}
 
       {history.length > 0 && (
-        <div className="border-t border-line px-3 py-3">
-          <div className="flex items-center justify-between px-2 pb-1.5">
+        <div className="border-t border-line py-3">
+          <div className="flex items-center justify-between px-5 pb-1.5">
             <span className="text-[11px] font-medium uppercase tracking-wide text-faint">History · {role.title}</span>
             <span className="tnum text-[11px] text-faint">{history.length}</span>
           </div>
-          <div className="flex flex-col">
-            {history.map((a) => (
-              <div key={a.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] hover:bg-shell/50">
-                <span className={`inline-block size-1.5 shrink-0 rounded-pill ${HIST_DOT[a.status] ?? "bg-faint"}`} title={a.status} />
-                <span className="min-w-0 flex-1 truncate text-body">{a.title}</span>
-                {a.related && <span className="mono shrink-0 text-[11px] text-faint">{a.related}</span>}
-                {a.actor && <span className="shrink-0 text-[11px] text-muted">{a.actor}</span>}
-                <span className="shrink-0 text-[11px] text-faint">{timeAgo(a.created_at)}</span>
-              </div>
-            ))}
-          </div>
+          <HistoryTable rows={history} atlassianBase={atlassianBase} />
         </div>
       )}
     </section>

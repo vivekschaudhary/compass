@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
-import { resolveJira, createIssue } from "@/app/lib/jira";
+import { resolveJira, createIssue, transitionIssue } from "@/app/lib/jira";
 import { streamExecution } from "@/app/lib/exec";
+import { normalizeRole, STATUS } from "@/app/lib/lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,15 +12,16 @@ export const dynamic = "force-dynamic";
 // `accept` creates the PO-selected stories under the epic — additive only, persisted as a run.
 const SYSTEM = `You are Compass's refinement agent. Given approved research findings and the epic's EXISTING stories,
 propose the NEW functional build stories the findings imply are now needed. Return ONLY valid JSON:
-{"stories":[{"title": string, "acceptance": string, "points": number}]}
+{"stories":[{"title": string, "acceptance": string, "points": number, "role":"engineer"|"designer"|"ux-writer"|"automation"}]}
 - Functional stories (user-observable *what*), grounded in the findings. Right-size points (1–8).
+- Give each story the ONE delivery role that owns it (default "engineer"; use design/copy/QA when the work calls for it).
 - Do NOT duplicate an existing story. Propose 2–6 that genuinely add value. If none, return {"stories":[]}.`;
 
 function parseJson(t: string) {
   const c = t.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
   return JSON.parse(c.slice(c.indexOf("{"), c.lastIndexOf("}") + 1));
 }
-type ProposedStory = { title: string; acceptance?: string; points?: number };
+type ProposedStory = { title: string; acceptance?: string; points?: number; role?: string };
 
 export async function POST(req: Request) {
   const { engagementId, epicId, mode, stories, actor } = (await req.json().catch(() => ({}))) as
@@ -46,11 +48,14 @@ export async function POST(req: Request) {
       let n = (existing?.length ?? 0) + 1;
       const rows = [];
       for (const s of clean) {
+        const storyRole = normalizeRole(s.role);
         let id = "";
-        if (jira) { const iss = await createIssue(jira, { type: "Story", summary: s.title, description: s.acceptance || undefined, parentKey: epicId }); if (iss) id = iss.key; }
+        if (jira) { const iss = await createIssue(jira, { type: "Story", summary: s.title, description: s.acceptance || undefined, parentKey: epicId, labels: [storyRole] }); if (iss) id = iss.key; }
         if (!id) id = `${epicId}-s${n++}`;
-        step(`  ✓ ${id} — ${s.title}`);
-        rows.push({ id, epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.points && s.points > 0 ? s.points : 0, ac_pass_pct: 0, acceptance: s.acceptance || null });
+        step(`  ✓ ${id} — ${s.title} · ${storyRole}`);
+        // Refined from approved research → Ready. Move off the Backlog to To Do.
+        if (jira && /^[A-Z][A-Z0-9]+-\d+$/.test(id)) { const ok = await transitionIssue(jira, id, STATUS.ready); step(`    ${ok ? "✓" : "•"} → ${STATUS.ready}${ok ? "" : " (skipped)"}`); }
+        rows.push({ id, epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.points && s.points > 0 ? s.points : 0, ac_pass_pct: 0, acceptance: s.acceptance || null, role: storyRole });
       }
       if (rows.length) await sb.from("story").insert(rows);
       return { result: { ok: true, created: rows.length }, title: `Refined ${epic.title} — added ${rows.length} ${rows.length === 1 ? "story" : "stories"} from research`, related: epicId };
