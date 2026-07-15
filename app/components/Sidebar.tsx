@@ -2,7 +2,7 @@
 
 import { Role, Program } from "@/app/lib/data";
 
-type View = "dashboard" | "jobs" | "activity" | "metrics";
+type View = "dashboard" | "jobs" | "playbook" | "activity" | "metrics";
 
 function Icon({ path }: { path: React.ReactNode }) {
   return (
@@ -16,6 +16,7 @@ const NAV = [
   { id: "dashboard", label: "Dashboard", icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></> },
   { id: "plan", label: "Plan", icon: <><path d="M3 6h18M3 12h18M3 18h18" /><circle cx="8" cy="6" r="1.6" fill="currentColor" stroke="none" /><circle cx="16" cy="12" r="1.6" fill="currentColor" stroke="none" /><circle cx="11" cy="18" r="1.6" fill="currentColor" stroke="none" /></> },
   { id: "jobs", label: "Jobs to do", icon: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8.5 12l2.2 2.2 4.8-4.8" /></> },
+  { id: "playbook", label: "Playbook", icon: <><path d="M10 6h10M10 12h10M10 18h10" /><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></> },
   { id: "activity", label: "Activity", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
   { id: "metrics", label: "Metrics", icon: <><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="5" rx="0.5" /><rect x="12" y="8" width="3" height="9" rx="0.5" /><rect x="17" y="5" width="3" height="12" rx="0.5" /></> },
   { id: "help", label: "Execution help", icon: <><path d="M21 11.5a8.5 8.5 0 0 1-12.2 7.7L3 20.5l1.4-5.4A8.5 8.5 0 1 1 21 11.5Z" /><path d="M9 11h.01M12 11h.01M15 11h.01" /></> },
@@ -51,10 +52,11 @@ export function Sidebar({
 
       <nav className="flex flex-col gap-0.5 px-3">
         {NAV.filter((n) => n.id !== "activity" || ["pm", "delivery-manager"].includes(role.roleCode)).map((n) => {
-          const active = (n.id === "dashboard" && view === "dashboard") || (n.id === "jobs" && view === "jobs") || (n.id === "activity" && view === "activity") || (n.id === "metrics" && view === "metrics");
+          const active = (n.id === "dashboard" && view === "dashboard") || (n.id === "jobs" && view === "jobs") || (n.id === "playbook" && view === "playbook") || (n.id === "activity" && view === "activity") || (n.id === "metrics" && view === "metrics");
           const onClick = () => {
             if (n.id === "dashboard") setView("dashboard");
             else if (n.id === "jobs") setView("jobs");
+            else if (n.id === "playbook") setView("playbook");
             else if (n.id === "activity") setView("activity");
             else if (n.id === "metrics") setView("metrics");
             else if (n.id === "help") onExecutionHelp();

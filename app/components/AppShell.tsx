@@ -12,6 +12,7 @@ import { AssistantDock } from "./AssistantDock";
 import { JobsQueue } from "./JobsQueue";
 import { ActivityLog } from "./ActivityLog";
 import { Metrics } from "./Metrics";
+import { Playbook } from "./Playbook";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { EngagementSwitcher } from "./EngagementSwitcher";
 import { BetModal } from "./modals/BetModal";
@@ -22,8 +23,8 @@ import { ResearchModal } from "./modals/ResearchModal";
 import { WorkflowModal } from "./modals/WorkflowModal";
 import { RefineModal } from "./modals/RefineModal";
 
-type View = "dashboard" | "jobs" | "activity" | "metrics";
-const VIEWS: View[] = ["dashboard", "jobs", "activity", "metrics"];
+type View = "dashboard" | "jobs" | "playbook" | "activity" | "metrics";
+const VIEWS: View[] = ["dashboard", "jobs", "playbook", "activity", "metrics"];
 // PM + Delivery Manager get the cross-role, all-users program history.
 const OVERSIGHT_ROLES = ["pm", "delivery-manager"];
 
@@ -99,6 +100,8 @@ export function AppShell({ model }: { model: Model }) {
           <div className="mx-auto flex max-w-[880px] flex-col gap-4 px-6 py-6">
             {view === "metrics" ? (
               <Metrics model={model} />
+            ) : view === "playbook" ? (
+              <Playbook storyList={storyList} />
             ) : view === "activity" && canSeeHistory ? (
               <ActivityLog activity={model.activity} atlassianBase={model.atlassianBase} />
             ) : view === "dashboard" || (view === "activity" && !canSeeHistory) ? (
