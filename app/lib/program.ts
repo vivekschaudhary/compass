@@ -48,34 +48,44 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
     const lateStories = storyRows.filter((s) => s.status === "warn" || s.status === "bad").length;
 
     // ── pillars, computed from the engagement row + counts ──────────────────
+    // A brand-new engagement (no epics/stories/spend) is UNMEASURED — don't paint it green.
+    // The pillars only compute real health once there's actual work to measure.
+    const started = epicRows.length > 0 || storyRows.length > 0 || (eng.cost_spent ?? 0) > 0;
     const costPct = Math.round((eng.cost_spent / Math.max(eng.cost_budget, 1)) * 100);
     const totalDel = deliverables.length || 5;
-    const pillars: Pillar[] = [
-      {
-        key: "cost", label: "Cost", status: costPct <= 45 ? "good" : costPct <= 75 ? "warn" : "bad",
-        headline: `$${Math.round(eng.cost_spent / 1000)}k`,
-        sub: `of $${Math.round(eng.cost_budget / 1000)}k · ${costPct}% burned · on curve`,
-        pct: costPct, spark: eng.cost_spark ?? [],
-      },
-      {
-        key: "scope", label: "Scope", status: pendingCRs.length ? "warn" : "good",
-        headline: `${totalDel} / ${totalDel}`,
-        sub: `deliverables grounded · ${pendingCRs.length} crossing${pendingCRs.length === 1 ? "" : "s"} pending`,
-        pct: 100, spark: eng.scope_spark ?? [],
-      },
-      {
-        key: "time", label: "Time", status: eng.time_days_left <= 7 || eng.stories_late > 0 ? "warn" : "good",
-        headline: `${eng.time_milestone} in ${eng.time_days_left}d`,
-        sub: `milestone at risk · ${eng.stories_late} stories late`,
-        pct: eng.time_spark?.slice(-1)[0] ?? 60, spark: eng.time_spark ?? [],
-      },
-      {
-        key: "quality", label: "Quality", status: eng.quality_ac_pass >= 90 && eng.quality_criticals === 0 ? "good" : "warn",
-        headline: `${eng.quality_ac_pass}%`,
-        sub: `AC pass · ${eng.quality_criticals} criticals open`,
-        pct: eng.quality_ac_pass, spark: eng.quality_spark ?? [],
-      },
-    ];
+    const pillars: Pillar[] = started
+      ? [
+          {
+            key: "cost", label: "Cost", status: costPct <= 45 ? "good" : costPct <= 75 ? "warn" : "bad",
+            headline: `$${Math.round(eng.cost_spent / 1000)}k`,
+            sub: `of $${Math.round(eng.cost_budget / 1000)}k · ${costPct}% burned · on curve`,
+            pct: costPct, spark: eng.cost_spark ?? [],
+          },
+          {
+            key: "scope", label: "Scope", status: pendingCRs.length ? "warn" : "good",
+            headline: `${totalDel} / ${totalDel}`,
+            sub: `deliverables grounded · ${pendingCRs.length} crossing${pendingCRs.length === 1 ? "" : "s"} pending`,
+            pct: 100, spark: eng.scope_spark ?? [],
+          },
+          {
+            key: "time", label: "Time", status: eng.time_days_left <= 7 || eng.stories_late > 0 ? "warn" : "good",
+            headline: `${eng.time_milestone} in ${eng.time_days_left}d`,
+            sub: `milestone at risk · ${eng.stories_late} stories late`,
+            pct: eng.time_spark?.slice(-1)[0] ?? 60, spark: eng.time_spark ?? [],
+          },
+          {
+            key: "quality", label: "Quality", status: eng.quality_ac_pass >= 90 && eng.quality_criticals === 0 ? "good" : "warn",
+            headline: `${eng.quality_ac_pass}%`,
+            sub: `AC pass · ${eng.quality_criticals} criticals open`,
+            pct: eng.quality_ac_pass, spark: eng.quality_spark ?? [],
+          },
+        ]
+      : [
+          { key: "cost", label: "Cost", status: "idle", headline: `$0k`, sub: `of $${Math.round(eng.cost_budget / 1000)}k · not started`, pct: 0, spark: [] },
+          { key: "scope", label: "Scope", status: "idle", headline: `${totalDel}`, sub: `deliverables defined · not measured yet`, pct: 0, spark: [] },
+          { key: "time", label: "Time", status: "idle", headline: `Kickoff`, sub: `${eng.months}-month program · not started`, pct: 0, spark: [] },
+          { key: "quality", label: "Quality", status: "idle", headline: `—`, sub: `no acceptance measured yet`, pct: 0, spark: [] },
+        ];
 
     // ── needs attention ─────────────────────────────────────────────────────
     const attention: Attention[] = [];
@@ -132,7 +142,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       program: {
         name: eng.name, sow: eng.sow, client: eng.client, pricing: eng.pricing,
         budget: eng.budget, months: eng.months, qualityBar: eng.quality_bar,
-        phase: eng.phase, overall: (eng.overall as Health) ?? "warn",
+        phase: eng.phase, overall: started ? ((eng.overall as Health) ?? "warn") : "idle",
       },
       pillars, attention, lanes,
       discoveryDone: DISCIPLINES,

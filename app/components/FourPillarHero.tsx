@@ -7,7 +7,7 @@ export function FourPillarHero({ program, pillars }: { program: Program; pillars
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="flex items-center gap-3">
           <h2 className="text-[15px] font-semibold text-ink">Delivery health</h2>
-          <HealthPill status={program.overall} label={program.overall === "good" ? "On track" : program.overall === "warn" ? "At risk" : "Breach"} />
+          <HealthPill status={program.overall} label={program.overall === "good" ? "On track" : program.overall === "warn" ? "At risk" : program.overall === "bad" ? "Breach" : "Kickoff · not started"} />
         </div>
         <p className="text-[12.5px] text-muted">
           Measured against <span className="mono text-body">{program.sow}</span> ·{" "}
@@ -32,8 +32,8 @@ export function FourPillarHero({ program, pillars }: { program: Program; pillars
             </div>
             <div className="mt-auto flex items-center gap-2.5 pt-1">
               <Gauge pct={p.pct} status={p.status} />
-              <span className={`shrink-0 text-[11.5px] font-medium ${p.status === "good" ? "text-good" : p.status === "warn" ? "text-warn" : "text-bad"}`}>
-                {p.status === "good" ? "On track" : p.status === "warn" ? "At risk" : "Breach"}
+              <span className={`shrink-0 text-[11.5px] font-medium ${p.status === "good" ? "text-good" : p.status === "warn" ? "text-warn" : p.status === "bad" ? "text-bad" : "text-faint"}`}>
+                {p.status === "good" ? "On track" : p.status === "warn" ? "At risk" : p.status === "bad" ? "Breach" : "Not measured"}
               </span>
             </div>
           </div>
