@@ -13,6 +13,7 @@ import { JobsQueue } from "./JobsQueue";
 import { ActivityLog } from "./ActivityLog";
 import { Metrics } from "./Metrics";
 import { Playbook } from "./Playbook";
+import { Milestones } from "./Milestones";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { EngagementSwitcher } from "./EngagementSwitcher";
 import { BetModal } from "./modals/BetModal";
@@ -108,6 +109,7 @@ export function AppShell({ model }: { model: Model }) {
               <>
                 <FourPillarHero program={program} pillars={pillars} />
                 <NeedsAttention attention={attention} />
+                <Milestones milestones={model.milestones} />
                 <PlanGrid lanes={lanes} discoveryDone={discoveryDone} />
               </>
             ) : (

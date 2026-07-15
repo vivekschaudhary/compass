@@ -152,6 +152,7 @@ export type ProgramModel = {
   tasks: TaskItem[];         // tracked tasks + AC checklist items under the stories (the playbook)
   activity: Activity[];
   metrics: Metric[];
+  milestones: Milestone[]; // the SOW's plan — read-only ground truth
   atlassianBase: string; // effective Atlassian base URL (per-engagement → env) for deep links
 };
 
@@ -175,6 +176,8 @@ export const GENERIC_WORKFLOWS: Record<string, string> = {
 export type Activity = { id: number; role: string; actor: string; kind: string; title: string; related: string; status: string; created_at: string; run_id: string | null };
 // A metric definition, captured per project (epicId null) or per epic (bet outcome). Value empty until instrumented.
 export type Metric = { id: string; epicId: string | null; scope: string; category: string; name: string; target: string; value: string };
+// A plan milestone extracted from the SOW — read-only ground truth (the app never edits it).
+export type Milestone = { id: number; code: string; title: string; timeframe: string; detail: string };
 
 // ── The seed: Acme Customer Portal, one cross-functional scrum team ────────
 export const FIXTURE: ProgramModel = {
@@ -256,6 +259,7 @@ export const FIXTURE: ProgramModel = {
   tasks: [],
   activity: [],
   metrics: [],
+  milestones: [],
   atlassianBase: "",
   repos: [],
 };

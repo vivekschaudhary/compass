@@ -3,6 +3,7 @@ import { generate } from "@/app/lib/dispatch";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { scaffoldDocs } from "@/app/lib/doctree";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
+import { COMPASS_ROLES } from "@/app/lib/data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,14 +17,36 @@ type Extracted = {
   months: number;
   quality_bar: string;
   deliverables: { code: string; title: string; acceptance: string }[];
+  milestones?: { code: string; title: string; timeframe: string; detail: string }[];
+  staffing?: { role: string; count: number }[];
 };
+
+const ROLE_LABEL: Record<string, string> = Object.fromEntries(COMPASS_ROLES.map((r) => [r.code, r.label]));
+const ROLE_CODES = COMPASS_ROLES.map((r) => r.code);
+// The standard cross-functional scrum team, seeded when the SOW doesn't state staffing.
+const DEFAULT_TEAM = ["delivery-manager", "pm", "researcher", "designer", "ux-writer", "engineer", "automation", "gtm", "sre"];
+
+function normTeamRole(raw: string): string | null {
+  const r = (raw || "").toLowerCase().trim().replace(/\s+/g, "-");
+  if (ROLE_CODES.includes(r)) return r;
+  const byLabel = COMPASS_ROLES.find((x) => x.label.toLowerCase() === (raw || "").toLowerCase().trim());
+  return byLabel?.code ?? null;
+}
+function initialsFor(code: string): string {
+  return (ROLE_LABEL[code] ?? code).split(/[\s-]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+}
 
 const SYSTEM = `You are Compass's intake analyst. Extract a Statement of Work into a structured delivery engagement.
 Return ONLY valid JSON — no markdown, no prose — with this exact shape:
 {"name":string,"client":string,"sow":string,"pricing":"Fixed-bid"|"T&M","budget":number,"months":number,"quality_bar":string,
- "deliverables":[{"code":"D1","title":string,"acceptance":string}]}
-Rules: be faithful to the SOW — do NOT invent scope or deliverables it doesn't imply. Number deliverables D1..Dn.
-budget is an integer in USD (0 if not stated). months is an integer best-estimate. Keep any inference conservative and clearly bounded.`;
+ "deliverables":[{"code":"D1","title":string,"acceptance":string}],
+ "milestones":[{"code":"M1","title":string,"timeframe":string,"detail":string}],
+ "staffing":[{"role":string,"count":number}]}
+Rules: be faithful to the SOW — do NOT invent scope it doesn't imply. Number deliverables D1..Dn.
+budget is an integer in USD (0 if not stated). months is an integer best-estimate.
+- "milestones": the SOW's timeline / phases / milestones — code M1.., title, timeframe (e.g. "Month 3" / "Sprint 6" / "Phase 2"), a short detail of what closes it. Empty array if the SOW states none.
+- "staffing": the delivery team — role + count. Use ONLY these role codes: ${ROLE_CODES.join(", ")}. Empty array if the SOW states none.
+Keep any inference conservative and clearly bounded.`;
 
 function parseJson(text: string): Extracted {
   const cleaned = text.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
@@ -78,10 +101,24 @@ export async function POST(req: Request) {
   }));
   if (rows.length) await sb.from("deliverable").insert(rows);
 
+  // the plan/milestones from the SOW — read-only ground truth (M#, timeframe, what closes it)
+  const ms = (d.milestones || []).map((m, i) => ({
+    engagement_id: id, code: m.code || `M${i + 1}`, title: m.title, timeframe: m.timeframe || null, detail: m.detail || null, ord: i + 1,
+  })).filter((m) => m.title);
+  if (ms.length) await sb.from("milestone").insert(ms);
+
+  // auto-seed the team roster (from the SOW's staffing model, else the standard scrum team) so
+  // role routing works from day 1 — one member per distinct role, unstaffed until named.
+  const codes = (d.staffing?.length ? d.staffing.map((s) => normTeamRole(s.role)).filter((c): c is string => !!c) : DEFAULT_TEAM);
+  const members = [...new Set(codes)].map((code) => ({
+    id: `${id}-${code}`, engagement_id: id, role: code, name: "Unassigned", initials: initialsFor(code), title: ROLE_LABEL[code] ?? code,
+  }));
+  if (members.length) await sb.from("member").insert(members);
+
   // scaffold the standard Confluence doc tree (records structure; creates for real if a space is wired)
   await scaffoldDocs(id);
   // capture the SOW-level product + engineering metric definitions
   await seedEngagementMetrics(sb, id);
 
-  return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length });
+  return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length, milestones: ms.length, team: members.length });
 }
