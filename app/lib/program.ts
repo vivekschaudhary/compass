@@ -34,14 +34,16 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
     const { data: repoRows } = await sb.from("repo").select("*").eq("engagement_id", id).order("ord");
     const { data: activityRows } = await sb.from("activity").select("*").eq("engagement_id", id).order("created_at", { ascending: false }).limit(60);
     const { data: metricRows } = await sb.from("metric").select("*").eq("engagement_id", id).order("ord");
-    const storyIds = (stories ?? []).map((s) => s.id);
+    const deliverables = dels ?? [];
+    const epicRows = epics ?? [];
+    // Scope stories to THIS engagement's epics. The `story` fetch above is unfiltered (global), so
+    // without this a warn/bad story from another engagement (e.g. the Acme fixture's KAN-112) leaks
+    // into a brand-new engagement's "Needs attention" as a phantom "1 story slipping".
+    const storyRows = (stories ?? []).filter((s) => epicRows.some((e) => e.id === s.epic_id));
+    const storyIds = storyRows.map((s) => s.id);
     const { data: taskRows } = storyIds.length
       ? await sb.from("task").select("*").in("story_id", storyIds).order("ord")
       : { data: [] as { id: number; story_id: string; title: string; role: string | null; kind: string; done: boolean; ord: number }[] };
-
-    const deliverables = dels ?? [];
-    const epicRows = epics ?? [];
-    const storyRows = stories ?? [];
     const pendingCRs = (crs ?? []).filter((c) => c.status === "pending");
     const lateStories = storyRows.filter((s) => s.status === "warn" || s.status === "bad").length;
 
@@ -93,7 +95,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       attention.push({ id: c.id, pillar: "scope", tone: "bad", title: c.title, detail: c.detail, actions: ["Raise change request", "Map to a deliverable"] });
     }
     if (lateStories > 0) {
-      attention.push({ id: "late", pillar: "time", tone: "warn", title: `Engineering — ${lateStories} stories slipping`, detail: "Stories behind their phase target; the roll-up has D3 amber.", actions: ["See plan"] });
+      attention.push({ id: "late", pillar: "time", tone: "warn", title: `Engineering — ${lateStories} ${lateStories === 1 ? "story" : "stories"} slipping`, detail: "Stories behind their phase target.", actions: ["See plan"] });
     }
 
     // ── plan grid: epics grouped by discipline, then phase ──────────────────
