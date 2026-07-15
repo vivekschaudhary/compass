@@ -33,13 +33,22 @@ export async function POST(req: Request) {
       const jira = resolveJira(eng ?? {});
       if (jira && /^[A-Z][A-Z0-9]+-\d+$/.test(ticket)) moved = await transitionIssue(jira, ticket, STATUS.done);
     }
-    // post-approve hook: research → unlock the PO's Refine on the parent epic
+    // post-approve hook (stored in job.meta as "<hook>:<id>")
     const hook = String(job?.meta ?? "");
     let note = "Approved — moved to Done";
     if (hook.startsWith("research:")) {
       const epicId = hook.slice("research:".length);
       await sb.from("epic").update({ research_status: "approved" }).eq("id", epicId);
       note = "Research approved — refinement unlocked";
+    } else if (hook.startsWith("build:") || hook.startsWith("fix:")) {
+      // PR approved (= reviewed + merged) → the story is good + Done; heal the epic if all sibs are good
+      await sb.from("story").update({ status: "good", ac_pass_pct: 100, blocked_reason: null }).eq("id", ticket);
+      const { data: st } = await sb.from("story").select("epic_id").eq("id", ticket).maybeSingle();
+      if (st?.epic_id) {
+        const { data: sibs } = await sb.from("story").select("status").eq("epic_id", st.epic_id);
+        if (sibs && sibs.every((s) => s.status === "good")) await sb.from("epic").update({ status: "good", note: null }).eq("id", st.epic_id);
+      }
+      note = "PR approved — story merged + Done";
     }
     await logActivity(sb, { engagementId: engId, role: job?.role ?? "pm", actor, kind: "approve", title: job?.title ? `Approved — ${job.title}` : `Approved ${ticket}`, related: ticket, status: "done" });
     await sb.from("job").delete().eq("id", jobId);

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveRunPlan } from "@/app/lib/repo";
 import { transitionIssue, jiraForStory } from "@/app/lib/jira";
 import { logActivity } from "@/app/lib/activity";
+import { gateOnPr } from "@/app/lib/lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,17 +65,12 @@ export async function POST(req: Request) {
           });
           await logActivity(sb, { engagementId: engId, role: "engineer", actor, kind: "build", title: `Build ${story}${plan.repoName ? ` · ${plan.repoName}` : ""}`, related: story, status: failed ? "failed" : "done", runId });
         }
-        if (sb && code === 0) {
-          if (jira) { const ok = await transitionIssue(jira, story, "Done"); push(`[jira] ${story} → Done${ok ? "" : " (skipped)"}\n`); }
-          await sb.from("story").update({ status: "good", ac_pass_pct: 100, blocked_reason: null }).eq("id", story);
-          const { data: st } = await sb.from("story").select("epic_id").eq("id", story).maybeSingle();
-          if (st?.epic_id) {
-            const { data: sibs } = await sb.from("story").select("status").eq("epic_id", st.epic_id);
-            if (sibs && sibs.every((s) => s.status === "good")) {
-              await sb.from("epic").update({ status: "good", note: null }).eq("id", st.epic_id);
-            }
-          }
-          await sb.from("job").delete().eq("id", jobId);
+        if (sb && engId && code === 0) {
+          // green → the deliverable is a PR; gate on it (parallel to a doc's approval), not auto-Done.
+          // The story is marked good + the epic heals only on APPROVE (see action/route.ts build hook).
+          const step = (s: string) => push(s.endsWith("\n") ? s : s + "\n");
+          await gateOnPr(sb, jira, { ticket: story, engagementId: engId, workflow: "build", log }, step);
+          await sb.from("job").delete().eq("id", jobId); // the build ran; the approve job takes over
         }
         c.close();
       });

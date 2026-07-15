@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { transitionIssue, type JiraCreds } from "./jira";
+import { transitionIssue, addRemoteLink, addComment, type JiraCreds } from "./jira";
 
 // The AI-native ticket lifecycle — the cross-cutting spine EVERY role's workflow uses so Jira
 // reflects ground truth in real time. Status = phase (this small stable set); role = a label
@@ -41,6 +41,31 @@ export function startWork(jira: JiraCreds | null, ticket: string, step: Step) {
 // Work is complete and needs no human gate → Done.
 export function resolveWork(jira: JiraCreds | null, ticket: string, step: Step) {
   return moveTo(jira, ticket, STATUS.done, step);
+}
+
+// A build/fix run went green → the Engineer agent's deliverable is a PR. Treat the PR as the HITL
+// gate exactly like a doc's approval: link the PR on the ticket, move it to Awaiting HITL approval,
+// and file the generic approve-<ticket> job. Approve (= merge reviewed) → Done, via the same handler.
+export async function gateOnPr(
+  sb: SupabaseClient,
+  jira: JiraCreds | null,
+  opts: { ticket: string; engagementId: string; workflow: "build" | "fix"; log: string },
+  step: Step,
+) {
+  const pr = (opts.log.match(/https?:\/\/github\.com\/[^\s)\]]+\/pull\/\d+/) || [])[0];
+  if (jira && pr) {
+    await addRemoteLink(jira, opts.ticket, pr, `PR — ${opts.ticket}`);
+    await addComment(jira, opts.ticket, `${opts.workflow === "fix" ? "Fix" : "Build"} complete — PR ready for review: ${pr}`);
+    step(`  ✓ PR linked on ${opts.ticket} — ${pr}`);
+  } else {
+    step(`  • no PR URL found in the run output`);
+  }
+  await handoffForApproval(sb, jira, {
+    ticket: opts.ticket, engagementId: opts.engagementId, gateRole: "engineer",
+    title: `Review PR — ${opts.ticket}`,
+    subtitle: pr ? "The engineer agent built it and opened a PR. Review + merge, then approve." : `${opts.workflow} complete — review, then approve.`,
+    related: pr ?? opts.ticket, hook: `${opts.workflow}:${opts.ticket}`,
+  }, step);
 }
 
 // AI produced a deliverable and a human must sign off → Awaiting HITL approval, and a generic

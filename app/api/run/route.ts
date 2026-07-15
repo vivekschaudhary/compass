@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveRunPlan } from "@/app/lib/repo";
 import { transitionIssue, jiraForStory } from "@/app/lib/jira";
 import { logActivity } from "@/app/lib/activity";
+import { gateOnPr } from "@/app/lib/lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,14 +49,20 @@ export async function POST(req: Request) {
       });
       child.on("close", async (code: number | null) => {
         push(`\n[compass-run exit ${code}]\n`);
-        if (jira && code === 0) { const ok = await transitionIssue(jira, storyKey, "Done"); push(`[jira] ${storyKey} → Done${ok ? "" : " (skipped)"}\n`); }
         const sb = supabaseAdmin();
+        const failed = code !== 0;
+        let engId: string | null = null;
         if (sb) {
-          const failed = code !== 0;
           await sb.from("run").update({ status: failed ? "failed" : "resolved", workflow, log, error: failed ? `exit ${code}` : null }).eq("id", runId);
           const { data: st } = await sb.from("story").select("epic_id").eq("id", storyKey).maybeSingle();
           const { data: ep } = st?.epic_id ? await sb.from("epic").select("engagement_id").eq("id", st.epic_id).maybeSingle() : { data: null };
-          if (ep?.engagement_id) await logActivity(sb, { engagementId: ep.engagement_id, role: "engineer", kind: workflow, title: `${workflow === "fix" ? "Fix" : "Re-run"} ${storyKey}`, related: storyKey, status: failed ? "failed" : "done", runId });
+          engId = ep?.engagement_id ?? null;
+          if (engId) await logActivity(sb, { engagementId: engId, role: "engineer", kind: workflow, title: `${workflow === "fix" ? "Fix" : "Re-run"} ${storyKey}`, related: storyKey, status: failed ? "failed" : "done", runId });
+        }
+        // green → gate on the PR (same as build; parallel to a doc's approval), not auto-Done
+        if (sb && engId && code === 0) {
+          const step = (s: string) => push(s.endsWith("\n") ? s : s + "\n");
+          await gateOnPr(sb, jira, { ticket: storyKey, engagementId: engId, workflow, log }, step);
         }
         c.close();
       });
