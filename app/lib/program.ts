@@ -34,6 +34,10 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
     const { data: repoRows } = await sb.from("repo").select("*").eq("engagement_id", id).order("ord");
     const { data: activityRows } = await sb.from("activity").select("*").eq("engagement_id", id).order("created_at", { ascending: false }).limit(60);
     const { data: metricRows } = await sb.from("metric").select("*").eq("engagement_id", id).order("ord");
+    const storyIds = (stories ?? []).map((s) => s.id);
+    const { data: taskRows } = storyIds.length
+      ? await sb.from("task").select("*").in("story_id", storyIds).order("ord")
+      : { data: [] as { id: number; story_id: string; title: string; role: string | null; kind: string; done: boolean; ord: number }[] };
 
     const deliverables = dels ?? [];
     const epicRows = epics ?? [];
@@ -155,6 +159,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       storyList: storyRows
         .filter((s) => epicRows.some((e) => e.id === s.epic_id))
         .map((s) => ({ id: s.id, epicId: s.epic_id, title: s.title, role: s.role ?? null, status: s.status ?? "idle" })),
+      tasks: (taskRows ?? []).map((t) => ({ id: t.id, storyId: t.story_id, title: t.title, role: t.role ?? null, kind: (t.kind === "ac" ? "ac" : "task") as "task" | "ac", done: !!t.done, ord: t.ord ?? 0 })),
       metrics: (metricRows ?? []).map((m) => ({ id: m.id, epicId: m.epic_id ?? null, scope: m.scope ?? "", category: m.category ?? "", name: m.name ?? "", target: m.target ?? "", value: m.value ?? "" })),
       atlassianBase: eng.atlassian_base_url || process.env.ATLASSIAN_BASE_URL || "",
       activity: (activityRows ?? []).map((a) => ({ id: a.id, role: a.role ?? "", actor: a.actor ?? "", kind: a.kind ?? "", title: a.title ?? "", related: a.related ?? "", status: a.status ?? "done", created_at: a.created_at, run_id: a.run_id ?? null })),

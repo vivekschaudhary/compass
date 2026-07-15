@@ -77,6 +77,6 @@ export async function POST(req: Request) {
       related: doc?.url ?? story.id, hook: `research:${epic.id}`,
     }, step);
 
-    return { result: { ok: true, story: story.id, url: doc?.url ?? null, wrote: Boolean(doc) }, title: `Drafted research — ${epic.title}`, related: story.id, status: "filed" };
+    return { result: { ok: true, story: story.id, url: doc?.url ?? null, wrote: Boolean(doc), actions: draft.actions }, title: `Drafted research — ${epic.title}`, related: story.id, status: "filed" };
   });
 }

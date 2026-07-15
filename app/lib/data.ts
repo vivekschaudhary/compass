@@ -149,6 +149,7 @@ export type ProgramModel = {
   deliverables: { code: string; title: string; status: string }[];
   epics: { id: string; title: string; discipline: string; stories: number; research: string }[];
   storyList: StorySummary[]; // the epics' stories with their owning role — drives per-role ticket pickers
+  tasks: TaskItem[];         // tracked tasks + AC checklist items under the stories (the playbook)
   activity: Activity[];
   metrics: Metric[];
   atlassianBase: string; // effective Atlassian base URL (per-engagement → env) for deep links
@@ -156,6 +157,10 @@ export type ProgramModel = {
 
 // A story surfaced to the client so a role can pick its own labeled tickets to run a workflow on.
 export type StorySummary = { id: string; epicId: string; title: string; role: string | null; status: string };
+
+// A tracked task under a story — kind='task' (promoted playbook action item) or kind='ac'
+// (an acceptance-criteria checklist item). The on-platform, checkable form of a doc's action items.
+export type TaskItem = { id: number; storyId: string; title: string; role: string | null; kind: "task" | "ac"; done: boolean; ord: number };
 
 // Workflow keys the generic runner (/api/workflow) can execute → their human label. Client-safe
 // mirror of WORKFLOW_SPECS in app/api/workflow/route.ts (keep the keys in sync). These flip their
@@ -248,6 +253,7 @@ export const FIXTURE: ProgramModel = {
   deliverables: [{ code: "D3", title: "Dashboard", status: "in-progress" }, { code: "D4", title: "Reporting", status: "planned" }],
   epics: [{ id: "KAN-30", title: "Dashboard", discipline: "Engineering", stories: 3, research: "none" }],
   storyList: [],
+  tasks: [],
   activity: [],
   metrics: [],
   atlassianBase: "",
