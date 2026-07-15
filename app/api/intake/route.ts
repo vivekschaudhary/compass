@@ -43,6 +43,8 @@ Return ONLY valid JSON — no markdown, no prose — with this exact shape:
  "milestones":[{"code":"M1","title":string,"timeframe":string,"detail":string}],
  "staffing":[{"role":string,"count":number}]}
 Rules: be faithful to the SOW — do NOT invent scope it doesn't imply. Number deliverables D1..Dn.
+- "name": the engagement/project name EXACTLY as stated (e.g. the text after "Engagement:"), NOT a summary you invent.
+- "sow": a SHORT reference label only — an SOW number/code if the doc states one, else a 2–4 word short title (e.g. "Compass DPP"). NEVER the full SOW text.
 budget is an integer in USD (0 if not stated). months is an integer best-estimate.
 - "milestones": the SOW's timeline / phases / milestones — code M1.., title, timeframe (e.g. "Month 3" / "Sprint 6" / "Phase 2"), a short detail of what closes it. Empty array if the SOW states none.
 - "staffing": the delivery team — role + count. Use ONLY these role codes: ${ROLE_CODES.join(", ")}. Empty array if the SOW states none.
@@ -85,8 +87,13 @@ export async function POST(req: Request) {
   const id = `${slug(d.client || d.name || "engagement")}-${suffix}`;
   const days = Math.max(7, Math.round((d.months || 3) * 30));
 
+  // `sow` is a SHORT reference chip, never the full doc — guard against the agent dumping prose.
+  const sowRef = d.sow && d.sow.trim().length > 0 && d.sow.trim().length <= 60
+    ? d.sow.trim()
+    : (d.name || d.client || "SOW").split(/\s+/).slice(0, 3).join(" ");
+
   const { error: e1 } = await sb.from("engagement").insert({
-    id, name: d.name, client: d.client, sow: d.sow, pricing: d.pricing,
+    id, name: d.name, client: d.client, sow: sowRef, pricing: d.pricing,
     budget: d.budget, months: d.months, quality_bar: d.quality_bar,
     phase: "Kickoff · Phase 1", overall: "good",
     cost_budget: d.budget, cost_spent: 0, cost_spark: [0],
