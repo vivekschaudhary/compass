@@ -13,10 +13,13 @@ export const dynamic = "force-dynamic";
 // deliverable, written straight to the backlog. Downstream Build still runs the real orchestrator.
 const SYSTEM = `You are Compass's PM agent creating ONE bet (a coherent slice of product value) from a short brief.
 Return ONLY valid JSON — no markdown, no prose — with this shape:
-{"epic":{"title":string,"discipline":"Product"|"Engineering"|"QA"|"Design","phase":"Discovery"|"Build"|"QA"|"Launch"},
- "stories":[{"title":string,"role":"researcher"|"designer"|"ux-writer"|"engineer"|"automation","estimate_pts":number}]}
+{"epic":{"title":string,"description":string,"discipline":"Product"|"Engineering"|"QA"|"Design","phase":"Discovery"|"Build"|"QA"|"Launch"},
+ "stories":[{"title":string,"role":"researcher"|"designer"|"ux-writer"|"engineer"|"automation","description":string,"acceptance":string,"estimate_pts":number}]}
 Rules:
 - The epic IS the bet. Produce 3–6 FUNCTIONAL stories — the user-observable *what*, never technical tasks.
+- "epic.description": 2–3 sentences — the problem, who it's for, and the outcome.
+- "story.description": 1–3 sentences — the user-observable what + why (never technical tasks).
+- "story.acceptance": 2–4 acceptance criteria as short "Given/When/Then" lines, one per line.
 - Give each story the ONE delivery role that owns it. If the bet needs discovery, include ONE "researcher" story FIRST.
 - Spread roles when the bet genuinely needs design/copy/QA, not only engineering.
 - Right-size estimates (1–8 pts). Do NOT invent scope beyond what the brief implies.`;
@@ -31,6 +34,13 @@ function prefix(name: string) {
 }
 const DISCIPLINES = ["Product", "Engineering", "QA", "Design"];
 const PHASES = ["Discovery", "Build", "QA", "Launch"];
+
+// Compose a Jira Story description from the AI's what/why + its acceptance criteria (so the ticket
+// isn't empty). Returns undefined when there's nothing — createIssue then omits the field.
+function storyDescription(s: { description?: string; acceptance?: string }): string | undefined {
+  const parts = [s.description?.trim(), s.acceptance?.trim() ? `Acceptance criteria:\n${s.acceptance.trim()}` : ""].filter(Boolean);
+  return parts.length ? parts.join("\n\n") : undefined;
+}
 
 export async function POST(req: Request) {
   const { engagementId, title, brief, deliverableCode, actor } = (await req.json().catch(() => ({}))) as
@@ -54,7 +64,7 @@ export async function POST(req: Request) {
       messages: [{ role: "user", content: `Bet title: ${title}\nBrief: ${brief?.trim() || "(none — infer a sensible minimal slice from the title)"}\nGrounds to deliverable: ${deliverableCode || "(none)"}` }],
     });
     const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    let plan: { epic?: { title?: string; discipline?: string; phase?: string }; stories?: { title: string; role?: string; estimate_pts?: number }[] };
+    let plan: { epic?: { title?: string; description?: string; discipline?: string; phase?: string }; stories?: { title: string; role?: string; description?: string; acceptance?: string; estimate_pts?: number }[] };
     try { plan = parseJson(text); } catch { throw new Error("Could not parse the plan"); }
 
     const epicTitle = plan.epic?.title || title;
@@ -67,12 +77,12 @@ export async function POST(req: Request) {
     let epicId = "", storyIds: string[] = [], jiraCreated = false;
     if (jira) {
       step(`▸ creating Jira Epic…`);
-      const ep = await createIssue(jira, { type: "Epic", summary: epicTitle, description: brief?.trim() || epicTitle });
+      const ep = await createIssue(jira, { type: "Epic", summary: epicTitle, description: plan.epic?.description?.trim() || brief?.trim() || epicTitle });
       if (ep) {
         epicId = ep.key; jiraCreated = true;
         step(`  ✓ ${epicId}`);
         step(`▸ creating ${storyPlans.length} Stories under ${epicId}…`);
-        const created = await Promise.all(storyPlans.map((s) => createIssue(jira, { type: "Story", summary: s.title, parentKey: epicId, labels: [normalizeRole(s.role)] })));
+        const created = await Promise.all(storyPlans.map((s) => createIssue(jira, { type: "Story", summary: s.title, parentKey: epicId, labels: [normalizeRole(s.role)], description: storyDescription(s) })));
         storyIds = created.map((r) => r?.key ?? "");
         created.forEach((r, i) => step(`  ✓ ${r?.key ?? "(local)"} — ${storyPlans[i].title} · ${normalizeRole(storyPlans[i].role)}`));
       }
@@ -96,7 +106,7 @@ export async function POST(req: Request) {
       note: brief?.trim() ? brief.trim().slice(0, 160) : null, ord: (existing?.length ?? 0) + 1,
     });
     const stories = storyPlans
-      .map((s, i) => ({ id: storyIds[i], epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.estimate_pts ?? 3, ac_pass_pct: 0, role: normalizeRole(s.role) }))
+      .map((s, i) => ({ id: storyIds[i], epic_id: epicId, title: s.title, assignee: "—", status: "idle", estimate_pts: s.estimate_pts ?? 3, ac_pass_pct: 0, role: normalizeRole(s.role), acceptance: s.acceptance?.trim() || null }))
       .filter((s) => s.id);
     if (stories.length) await sb.from("story").insert(stories);
     await seedEngagementMetrics(sb, engagementId!);
