@@ -43,7 +43,9 @@ function generateCli({ system, user, model }: { system: string; user: string; mo
       // surface stdout too — the CLI often writes the real error there while stderr stays empty
       if (code !== 0) return reject(new Error(`claude exit ${code}: ${(err || out).slice(-300) || "(no output)"}`));
       try {
-        const j = JSON.parse(out);
+        // parse leniently — skip any leading non-JSON noise (e.g. CLI trust/permission warnings)
+        const start = out.indexOf("{");
+        const j = JSON.parse(start >= 0 ? out.slice(start) : out);
         if (j.is_error || typeof j.result !== "string") return reject(new Error(`claude returned an error: ${String(j.subtype ?? j.result ?? "").slice(0, 200)}`));
         resolve(j.result);
       } catch {
