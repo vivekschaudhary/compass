@@ -130,14 +130,14 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       .sort((a, b) => rank(a.role) - rank(b.role) || (a.name ?? "").localeCompare(b.name ?? ""))
       .map((m) => ({ id: m.id, name: m.name, title: m.title, initials: m.initials, roleCode: m.role }));
 
-    const jobs = jobRows && jobRows.length
-      ? jobRows.map((j) => ({ id: j.id, role: j.role, kind: j.kind, title: j.title, subtitle: j.subtitle, meta: j.meta ?? undefined, related: j.related ?? undefined, primary: j.primary_label ?? undefined, secondary: j.secondary_label ?? undefined, tone: j.tone ?? undefined }))
-      : FIXTURE.jobs;
+    // Real engagement (Supabase) → real data only. No FIXTURE fallback here, or the Acme demo's
+    // jobs/failed-run leak into every fresh engagement (the "D3/D4/KAN-112" phantom cards).
+    const jobs = (jobRows ?? []).map((j) => ({ id: j.id, role: j.role, kind: j.kind, title: j.title, subtitle: j.subtitle, meta: j.meta ?? undefined, related: j.related ?? undefined, primary: j.primary_label ?? undefined, secondary: j.secondary_label ?? undefined, tone: j.tone ?? undefined }));
 
     const run = runs?.[0];
     const failedRun = run
       ? { runId: run.id, role: run.role, story: run.story, failedStep: run.failed_step, error: run.error, diagnosis: run.diagnosis, fix: run.fix, resumeFrom: run.resume_from }
-      : FIXTURE.failedRun;
+      : { runId: "", role: "", story: "", failedStep: "", error: "", diagnosis: "", fix: "", resumeFrom: "" };
 
     return {
       program: {
@@ -147,7 +147,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
       },
       pillars, attention, lanes,
       discoveryDone: DISCIPLINES,
-      roles: roles.length ? roles : FIXTURE.roles,
+      roles,
       jobs,
       failedRun,
       engagements,
