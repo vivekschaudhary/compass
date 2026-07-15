@@ -1,9 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveJira, createIssue } from "@/app/lib/jira";
 import { streamExecution } from "@/app/lib/exec";
 import { seedEngagementMetrics, seedEpicMetrics } from "@/app/lib/metrics";
 import { normalizeRole } from "@/app/lib/lifecycle";
+import { generate, AI_MODEL } from "@/app/lib/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,22 +48,14 @@ export async function POST(req: Request) {
 
   return streamExecution({ engagementId: engagementId ?? "", role: "pm", kind: "bet", actor }, async (step) => {
     const sb = supabaseAdmin();
-    const key = process.env.ANTHROPIC_API_KEY;
     if (!sb) throw new Error("Supabase not configured");
-    if (!key) throw new Error("ANTHROPIC_API_KEY not set");
     if (!title?.trim()) throw new Error("An epic title is required");
 
     const { data: eng } = await sb.from("engagement")
       .select("name, atlassian_base_url, atlassian_email, atlassian_api_token, jira_project").eq("id", engagementId).maybeSingle();
 
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-    step(`▸ PM agent drafting the epic (${model})…`);
-    const client = new Anthropic({ apiKey: key });
-    const msg = await client.messages.create({
-      model, max_tokens: 2000, system: SYSTEM,
-      messages: [{ role: "user", content: `Bet title: ${title}\nBrief: ${brief?.trim() || "(none — infer a sensible minimal slice from the title)"}\nGrounds to deliverable: ${deliverableCode || "(none)"}` }],
-    });
-    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    step(`▸ PM agent drafting the epic (${AI_MODEL})…`);
+    const text = await generate({ system: SYSTEM, user: `Bet title: ${title}\nBrief: ${brief?.trim() || "(none — infer a sensible minimal slice from the title)"}\nGrounds to deliverable: ${deliverableCode || "(none)"}`, maxTokens: 2000 });
     let plan: { epic?: { title?: string; description?: string; discipline?: string; phase?: string }; stories?: { title: string; role?: string; description?: string; acceptance?: string; estimate_pts?: number }[] };
     try { plan = parseJson(text); } catch { throw new Error("Could not parse the plan"); }
 

@@ -1,10 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { streamExecution } from "@/app/lib/exec";
 import { resolveJira, addComment, addRemoteLink } from "@/app/lib/jira";
 import { writeProviderDoc, stripHtml } from "@/app/lib/docstore";
 import { startWork, resolveWork, handoffForApproval } from "@/app/lib/lifecycle";
 import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
+import { generate, AI_MODEL } from "@/app/lib/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,9 +49,7 @@ export async function POST(req: Request) {
 
   return streamExecution({ engagementId: engagementId ?? "", role: spec?.role ?? "engineer", kind: workflowKey ?? "workflow", actor, related: storyId, title: `${spec?.verb ?? "Workflow"} — ${storyId ?? ""}` }, async (step) => {
     const sb = supabaseAdmin();
-    const key = process.env.ANTHROPIC_API_KEY;
     if (!sb) throw new Error("Supabase not configured");
-    if (!key) throw new Error("ANTHROPIC_API_KEY not set");
     if (!spec) throw new Error(`Workflow "${workflowKey}" isn't runnable yet`);
     if (!storyId) throw new Error("Pick a ticket to run this on");
 
@@ -67,12 +65,9 @@ export async function POST(req: Request) {
     // pick it up → In Progress
     await startWork(jira, story.id, step);
 
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-    step(`▸ ${spec.role} agent producing the ${spec.verb.toLowerCase()} (${model})…`);
-    const client = new Anthropic({ apiKey: key });
+    step(`▸ ${spec.role} agent producing the ${spec.verb.toLowerCase()} (${AI_MODEL})…`);
     const ctx = `Ticket: ${story.title}\nEpic: ${epic?.title ?? "—"}\nAcceptance:\n${story.acceptance || "(none stated — infer a sensible minimal scope)"}`;
-    const msg = await client.messages.create({ model, max_tokens: 2500, system: SYSTEM(spec.verb, spec.focus), messages: [{ role: "user", content: ctx }] });
-    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    const text = await generate({ system: SYSTEM(spec.verb, spec.focus), user: ctx, maxTokens: 2500 });
     const out = parseDoc(text);
     step(`✓ draft ready — ${(out.summary || "").slice(0, 90)}…`);
 

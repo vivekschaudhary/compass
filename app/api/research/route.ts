@@ -1,10 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { readProviderDoc, writeProviderDoc } from "@/app/lib/docstore";
 import { streamExecution } from "@/app/lib/exec";
 import { resolveJira, addComment, addRemoteLink } from "@/app/lib/jira";
 import { startWork, handoffForApproval } from "@/app/lib/lifecycle";
 import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
+import { generate, AI_MODEL } from "@/app/lib/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,9 +21,7 @@ export async function POST(req: Request) {
   const { engagementId, storyId, actor } = (await req.json().catch(() => ({}))) as { engagementId?: string; storyId?: string; actor?: string };
   return streamExecution({ engagementId: engagementId ?? "", role: "researcher", kind: "research", actor, related: storyId, title: `Research — ${storyId ?? ""}` }, async (step) => {
     const sb = supabaseAdmin();
-    const key = process.env.ANTHROPIC_API_KEY;
     if (!sb) throw new Error("Supabase not configured");
-    if (!key) throw new Error("ANTHROPIC_API_KEY not set");
     if (!storyId) throw new Error("Pick a research ticket to run");
 
     const { data: story } = await sb.from("story").select("id, title, epic_id").eq("id", storyId).maybeSingle();
@@ -44,11 +42,8 @@ export async function POST(req: Request) {
       || [`Engagement: ${eng.name} (${eng.sow ?? ""})`, epic.note ? `Epic brief: ${epic.note}` : "", `Story: ${story.title}`].filter(Boolean).join("\n");
     step(brief && briefText ? `✓ brief loaded — ${briefText.length} chars` : `✓ no brief page — using story/epic context (${briefText.length} chars)`);
 
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-    step(`▸ research agent drafting (${model})…`);
-    const client = new Anthropic({ apiKey: key });
-    const msg = await client.messages.create({ model, max_tokens: 2500, system: SYSTEM, messages: [{ role: "user", content: `Story: ${story.title}\nEpic: ${epic.title}\n\nProduct brief / context:\n${briefText}` }] });
-    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    step(`▸ research agent drafting (${AI_MODEL})…`);
+    const text = await generate({ system: SYSTEM, user: `Story: ${story.title}\nEpic: ${epic.title}\n\nProduct brief / context:\n${briefText}`, maxTokens: 2500 });
     const draft = parseDoc(text);
     step(`✓ draft ready — ${(draft.summary || "").slice(0, 90)}…`);
 

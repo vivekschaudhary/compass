@@ -1,7 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveJira, createIssue, transitionIssue } from "@/app/lib/jira";
 import { streamExecution } from "@/app/lib/exec";
+import { generate } from "@/app/lib/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,14 +18,9 @@ Rules: P1 = outage/data-loss/security; P2 = major broken flow; P3 = minor/limite
 type Triage = { issueType: string; severity: string; area: string; recommendation: string; note: string };
 
 async function classify(title: string, description: string): Promise<Triage> {
-  const key = process.env.ANTHROPIC_API_KEY;
   const fallback: Triage = { issueType: "Bug", severity: "P3", area: "Engineering", recommendation: "backlog", note: "Filed without AI triage." };
-  if (!key) return fallback;
   try {
-    const client = new Anthropic({ apiKey: key });
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-    const msg = await client.messages.create({ model, max_tokens: 500, system: SYSTEM, messages: [{ role: "user", content: `Title: ${title}\n\n${description}` }] });
-    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    const text = await generate({ system: SYSTEM, user: `Title: ${title}\n\n${description}`, maxTokens: 500 });
     const c = text.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
     return { ...fallback, ...JSON.parse(c.slice(c.indexOf("{"), c.lastIndexOf("}") + 1)) };
   } catch { return fallback; }

@@ -1,8 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { resolveJira, createIssue, transitionIssue } from "@/app/lib/jira";
 import { streamExecution } from "@/app/lib/exec";
 import { normalizeRole, STATUS } from "@/app/lib/lifecycle";
+import { generate, AI_MODEL } from "@/app/lib/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,18 +62,10 @@ export async function POST(req: Request) {
     }
 
     // PROPOSE — read findings + existing stories, propose (write nothing)
-    const key = process.env.ANTHROPIC_API_KEY;
-    if (!key) throw new Error("ANTHROPIC_API_KEY not set");
     const { data: existingStories } = await sb.from("story").select("title").eq("epic_id", epicId);
     step(`▸ reading approved research + ${(existingStories ?? []).length} existing stories…`);
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-    step(`▸ refinement agent proposing (${model})…`);
-    const client = new Anthropic({ apiKey: key });
-    const msg = await client.messages.create({
-      model, max_tokens: 2000, system: SYSTEM,
-      messages: [{ role: "user", content: `Epic: ${epic.title}\n\nApproved research findings:\n${epic.research_summary ?? "(none)"}\n\nExisting stories:\n${(existingStories ?? []).map((s) => `- ${s.title}`).join("\n") || "(none)"}` }],
-    });
-    const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    step(`▸ refinement agent proposing (${AI_MODEL})…`);
+    const text = await generate({ system: SYSTEM, user: `Epic: ${epic.title}\n\nApproved research findings:\n${epic.research_summary ?? "(none)"}\n\nExisting stories:\n${(existingStories ?? []).map((s) => `- ${s.title}`).join("\n") || "(none)"}`, maxTokens: 2000 });
     let plan: { stories: ProposedStory[] };
     try { plan = parseJson(text); } catch { throw new Error("Could not parse the proposals"); }
     const proposals = (plan.stories ?? []).slice(0, 8);

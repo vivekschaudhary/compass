@@ -1,5 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { generate } from "@/app/lib/dispatch";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { scaffoldDocs } from "@/app/lib/doctree";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
@@ -33,15 +33,7 @@ function parseJson(text: string): Extracted {
 }
 
 async function analyze(sow: string): Promise<Extracted> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY not set — add it to .env.local to analyze a SOW.");
-  const client = new Anthropic({ apiKey: key });
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
-  const msg = await client.messages.create({
-    model, max_tokens: 1500, system: SYSTEM,
-    messages: [{ role: "user", content: `Statement of Work:\n\n${sow}` }],
-  });
-  const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  const text = await generate({ system: SYSTEM, user: `Statement of Work:\n\n${sow}`, maxTokens: 1500 });
   return parseJson(text);
 }
 
