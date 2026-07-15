@@ -9,9 +9,16 @@ create table if not exists task (
   title         text not null,
   role          text,                       -- owning delivery role (nullable for AC items)
   kind          text not null default 'task', -- task | ac
-  status        text not null default 'todo', -- todo | doing | done (tasks); ac uses `done`
+  status        text not null default 'todo',
   done          boolean not null default false,
   ord           int default 0,
-  created_at    timestamptz default now()
+  created_at    timestamptz default now(),
+  constraint task_kind_check
+    check (kind in ('task', 'ac')),
+  constraint task_status_check
+    check (
+      (kind = 'task' and status in ('todo', 'doing', 'done'))
+      or (kind = 'ac' and status = 'done')
+    )
 );
 create index if not exists task_story_idx on task(story_id);

@@ -107,9 +107,9 @@ export async function POST(req: Request) {
         subtitle: `The ${spec.role} produced the ${spec.verb.toLowerCase()}. Review it, then approve to move to Done.`,
         related, hook: `${workflowKey}:${story.id}`,
       }, step);
-      return { result: { ok: true, story: story.id, gated: true, related }, title: `${spec.verb} — ${story.title}`, related: story.id, status: "filed" };
+      return { result: { ok: true, story: story.id, gated: true, related, actions: out.actions }, title: `${spec.verb} — ${story.title}`, related: story.id, status: "filed" };
     }
     await resolveWork(jira, story.id, step);
-    return { result: { ok: true, story: story.id, gated: false, related }, title: `${spec.verb} — ${story.title}`, related: story.id };
+    return { result: { ok: true, story: story.id, gated: false, related, actions: out.actions }, title: `${spec.verb} — ${story.title}`, related: story.id };
   });
 }

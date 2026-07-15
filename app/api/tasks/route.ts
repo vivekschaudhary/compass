@@ -30,7 +30,11 @@ export async function POST(req: Request) {
 
   if (body.action === "toggle") {
     if (body.taskId == null) return NextResponse.json({ ok: false, error: "taskId required" }, { status: 400 });
-    await sb.from("task").update({ done: !!body.done, status: body.done ? "done" : "todo" }).eq("id", body.taskId);
+    // AC rows are pinned to status='done' by a CHECK constraint (their real state is `done`); only
+    // task rows move their status. Update the right columns per kind so neither constraint trips.
+    const { data: row } = await sb.from("task").select("kind").eq("id", body.taskId).maybeSingle();
+    const patch = row?.kind === "ac" ? { done: !!body.done } : { done: !!body.done, status: body.done ? "done" : "todo" };
+    await sb.from("task").update(patch).eq("id", body.taskId);
     return NextResponse.json({ ok: true });
   }
 
@@ -43,7 +47,8 @@ export async function POST(req: Request) {
     const { data: st } = await sb.from("story").select("acceptance").eq("id", storyId).maybeSingle();
     const lines = String(st?.acceptance ?? "").split(/\r?\n/).map((l: string) => l.replace(/^\s*[-*•\d.]+\s*/, "").trim()).filter(Boolean);
     if (!lines.length) return NextResponse.json({ ok: true, seeded: 0 });
-    const rows = lines.map((title: string, i: number) => ({ story_id: storyId, title, kind: "ac", ord: i }));
+    // AC rows are pinned to status='done' by a CHECK constraint; their real state is the `done` flag.
+    const rows = lines.map((title: string, i: number) => ({ story_id: storyId, title, kind: "ac", status: "done", done: false, ord: i }));
     await sb.from("task").insert(rows);
     return NextResponse.json({ ok: true, seeded: rows.length });
   }
