@@ -43,6 +43,12 @@ Gates + postconditions = load-bearing. Work = guidance.
 **Work:** for each refined story, record the **agreed story-point estimate** (from the team, not invented) → sharpen the acceptance where refinement clarified it → mark `Ready` only when the story is clear + estimated + unblocked → flag stories still `unestimated` or needing more info.
 **Postcondition:** refined stories carry the team's agreed points (or `unestimated`) · Ready flag set only for clear + estimated + unblocked stories · no PO-invented estimates · unresolved stories flagged, not force-readied.
 
+### `draft-playbook` — a deliverable's action items → tracked tasks (declared, #139)
+
+**Gate:** An approved AI deliverable (research recommendations, design-spec next steps, …) exists for a story.
+**Work:** read the deliverable's action items → draft them as concrete next-step tasks, each role-labeled (the AI's ~80%) → present at the **HITL gate** for the human to edit + add the last ~20% → on sign-off, create the accepted items as tracked tasks on the story; separately map the story's acceptance criteria to a **definition-of-done checklist** (verification, not new work). Nothing is auto-created — the human gates the draft.
+**Postcondition:** accepted action items are tracked tasks on the story (role-labeled) · acceptance criteria mirrored as a checklist · nothing created without human sign-off · see `compass/framework/delivery-lifecycle.md`.
+
 ### `manage-sprint` — commit + track the sprint's deliverables
 
 **Gate:** A sprint boundary + a set of Ready, estimated stories. Team capacity known OR noted absent.

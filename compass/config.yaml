@@ -12,6 +12,18 @@ framework_version: 1.0.0-rc.1
 # - merge_only   : approve only at PR merge (lightest)
 hitl_level: milestones
 
+# ─── Delivery lifecycle (#139) ────────────────────────────────────────
+# The ordered ticket statuses work moves through. `Awaiting HITL approval` is a
+# FIRST-CLASS status (not just a workflow mechanic), so the human gate is a
+# visible board column you can filter for — the action-half of
+# [actionability-before-trust] made observable. Dogfood-proven in compass-app.
+# Spec: compass/framework/delivery-lifecycle.md.
+delivery_lifecycle:
+  statuses:     [Backlog, Ready, In Progress, Awaiting HITL approval, Done]
+  gate_status:  Awaiting HITL approval   # where an AI hands off → a human decision
+  # Ready = refined + role-labeled (an agent can pick it up); In Progress = an
+  # agent is executing; gate_status = AI done, a human must approve; Done = accepted.
+
 # ─── Agent registry ───────────────────────────────────────────────────
 # Per [agent-agnostic-role-assignment] (compass/framework/canon.md, v0.3.8).
 # Declares each supported agent's invocation pattern + context-loading

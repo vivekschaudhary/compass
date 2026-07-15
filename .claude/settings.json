@@ -1,11 +1,20 @@
 {
   "permissions": {
-     "defaultMode": "plan",
     "allow": [
       "Edit(/.claude/skills/status/**)",
       "Edit(/.claude/skills/plan/**)",
       "Bash(awk '/^## \\\\[0\\\\.3\\\\.15\\\\]/,/^## \\\\[0\\\\.3\\\\.14\\\\]/' CHANGELOG.md)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(env -u ATLASSIAN_API_TOKEN -u ATLASSIAN_EMAIL -u JIRA_API_TOKEN -u JIRA_BASE_URL -u JIRA_PROJECT python3 -m unittest discover -s compass/orchestrator/tests)",
+      "Bash(grep -n '\"--external\"\\\\|dest=\"external\"\\\\|action=\"store_true\",$' compass/orchestrator/run.py)",
+      "Read(//Volumes/VivekSSD/apps/compass-app/**)",
+      "Bash(npm run *)"
+    ],
+    "defaultMode": "plan",
+    "additionalDirectories": [
+      "/Volumes/VivekSSD/apps/compass-app/app/lib",
+      "/Volumes/VivekSSD/apps/compass-app/app/api/build",
+      "/Volumes/VivekSSD/apps/compass-app/app/components"
     ]
   }
 }
