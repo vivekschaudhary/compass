@@ -46,9 +46,11 @@ export async function resolveRunPlan(storyKey: string, workflow: "build" | "fix"
     const compassDir = existsSync(`${repoPath}/compass`) ? "" : COMPASS_DIR;
     const compassArg = compassDir ? ["--compass-dir", compassDir] : [];
     return {
-      args: ["-m", "compass.orchestrator.run", workflow, "--project-dir", repoPath, ...compassArg, "--story", storyKey],
+      // --non-interactive: the app spawns this headless (no stdin), so the orchestrator must never
+      // prompt for per-step context — otherwise input() deadlocks the run at step 2+ (run.py:854).
+      args: ["-m", "compass.orchestrator.run", workflow, "--project-dir", repoPath, ...compassArg, "--story", storyKey, "--non-interactive"],
       cwd: REPO, scrubCreds: false, real: true, repoName,
-      header: `$ compass.orchestrator.run ${workflow} --project-dir ${repoPath}${compassDir ? ` --compass-dir ${compassDir}` : ""} --story ${storyKey}\n$ cwd ${REPO}\n\n`,
+      header: `$ compass.orchestrator.run ${workflow} --project-dir ${repoPath}${compassDir ? ` --compass-dir ${compassDir}` : ""} --story ${storyKey} --non-interactive\n$ cwd ${REPO}\n\n`,
     };
   }
   return {
