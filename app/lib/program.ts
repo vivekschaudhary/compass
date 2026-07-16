@@ -132,7 +132,27 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
 
     // Real engagement (Supabase) → real data only. No FIXTURE fallback here, or the Acme demo's
     // jobs/failed-run leak into every fresh engagement (the "D3/D4/KAN-112" phantom cards).
-    const jobs = (jobRows ?? []).map((j) => ({ id: j.id, role: j.role, kind: j.kind, title: j.title, subtitle: j.subtitle, meta: j.meta ?? undefined, related: j.related ?? undefined, primary: j.primary_label ?? undefined, secondary: j.secondary_label ?? undefined, tone: j.tone ?? undefined }));
+    const realJobs = (jobRows ?? []).map((j) => ({ id: j.id, role: j.role, kind: j.kind, title: j.title, subtitle: j.subtitle, meta: j.meta ?? undefined, related: j.related ?? undefined, primary: j.primary_label ?? undefined, secondary: j.secondary_label ?? undefined, tone: j.tone ?? undefined }));
+
+    // Surface a Build card for every story that's ready to build. A refined, unbuilt story owned by
+    // a build role IS the build job — so it's derived here, not filed separately (the old flow had no
+    // path to file build jobs for a real engagement, so nothing was buildable). Clicking Build runs
+    // the real orchestrator against the repo and opens a PR (the HITL gate). Excludes stories that
+    // already have a real job (e.g. an approval gate) or a completed build run, so a story that's
+    // mid-gate or done doesn't re-offer Build; a failed build stays offered so it can be retried.
+    const BUILD_ROLES = new Set(["engineer", "automation"]);
+    const jobbedStories = new Set(realJobs.map((j) => j.related).filter(Boolean));
+    const builtStories = new Set((runs ?? []).filter((r) => r.workflow === "build" && r.status === "resolved").map((r) => r.story));
+    const buildJobs = storyRows
+      .filter((s) => BUILD_ROLES.has(s.role) && (s.status ?? "idle") === "idle" && (s.acceptance ?? "").trim() && !jobbedStories.has(s.id) && !builtStories.has(s.id))
+      .map((s) => ({
+        id: `build-${s.id}`, role: s.role, kind: "build" as const,
+        title: `Build — ${s.id} · ${s.title}`,
+        subtitle: "Ready to build. Your engineer agent implements it against the repo, runs the checks, and opens a PR for your approval.",
+        meta: s.estimate_pts ? `${s.estimate_pts}pt · ready` : "ready",
+        related: s.id, primary: "Build", secondary: undefined, tone: undefined,
+      }));
+    const jobs = [...realJobs, ...buildJobs];
 
     const run = runs?.[0];
     const failedRun = run

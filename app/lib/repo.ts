@@ -1,6 +1,10 @@
+import { existsSync } from "fs";
 import { supabaseAdmin } from "./supabase";
 
 const REPO = process.env.COMPASS_REPO || "/Volumes/VivekSSD/apps/compass";
+// The framework's compass/ dir — where workflows/agents load from when a project doesn't vendor its
+// own projection (e.g. compass-app building itself). Consumers that DO vendor one aren't affected.
+const COMPASS_DIR = process.env.COMPASS_DIR || `${REPO}/compass`;
 const FALLBACK_ARGS = ["-m", "unittest", "discover", "-s", "compass/orchestrator/tests"];
 
 // discipline → candidate repo areas (Design/Product don't build code)
@@ -35,10 +39,16 @@ export async function resolveRunPlan(storyKey: string, workflow: "build" | "fix"
   }
 
   if (repoPath) {
+    // Workflows/agents load from <project-dir>/compass by default. A project that doesn't vendor the
+    // framework projection (compass-app building itself) has none → point --compass-dir at the
+    // framework the app runs from so the orchestrator finds build.md et al. A project that vendors
+    // its own projection is left untouched (no flag → default project-local resolution + overrides).
+    const compassDir = existsSync(`${repoPath}/compass`) ? "" : COMPASS_DIR;
+    const compassArg = compassDir ? ["--compass-dir", compassDir] : [];
     return {
-      args: ["-m", "compass.orchestrator.run", workflow, "--project-dir", repoPath, "--story", storyKey],
+      args: ["-m", "compass.orchestrator.run", workflow, "--project-dir", repoPath, ...compassArg, "--story", storyKey],
       cwd: REPO, scrubCreds: false, real: true, repoName,
-      header: `$ compass.orchestrator.run ${workflow} --project-dir ${repoPath} --story ${storyKey}\n$ cwd ${REPO}\n\n`,
+      header: `$ compass.orchestrator.run ${workflow} --project-dir ${repoPath}${compassDir ? ` --compass-dir ${compassDir}` : ""} --story ${storyKey}\n$ cwd ${REPO}\n\n`,
     };
   }
   return {
