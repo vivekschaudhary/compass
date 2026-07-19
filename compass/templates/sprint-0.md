@@ -38,6 +38,11 @@ is Done only when its artifact is actually approved.
 - **Ordered + `depends-on`.** A ticket can't start until its dependency is Done — foundation
   architecture needs the product approved; both need systems connected. (Ticket 1 is the enabler:
   until the adapters are wired, tickets 2–3 live on the local board and mirror to `@tickets` once wired.)
+- **`docs.wired` includes the workspace scaffold.** Ticket 1 is Done only when the docs adapter is
+  wired **and** the workspace doc structure is created. That structure is seeded per-engagement from
+  the default in `compass/templates/doc-tree.md`, **refined** by the user (add / remove / rename
+  nodes), then created on approve — the refined copy is what gets scaffolded, so an engagement can
+  diverge from the default without changing it (`[sprint-0-materializes-refinable-defaults]`).
 - **Lean by design.** Only load-bearing setup. Roster + milestones are seeded by intake directly
   (not tickets).
 - **This table is editable — and load-bearing.** To change what a new engagement starts with, add /

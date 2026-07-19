@@ -7,13 +7,14 @@ const LEAD: Record<string, string> = { Product: "Jen", Engineering: "Maria", QA:
 
 // Read the engagement from Supabase and compute the model. Falls back to FIXTURE on any
 // miss (unconfigured / empty / error) so the dashboard never white-screens.
-export async function getProgram(): Promise<ProgramModel & { source: "supabase" | "fixture" }> {
+export async function getProgram(engagementId?: string): Promise<ProgramModel & { source: "supabase" | "fixture" }> {
   const sb = supabaseAdmin();
   if (!sb) return { ...FIXTURE, source: "fixture" };
 
   try {
     const cookieStore = await cookies();
-    const wanted = cookieStore.get("compass_eng")?.value;
+    // An explicit engagement id (e.g. from the URL) wins over the active-engagement cookie.
+    const wanted = engagementId || cookieStore.get("compass_eng")?.value;
     const { data: engList } = await sb.from("engagement").select("*").order("updated_at", { ascending: false });
     if (!engList || !engList.length) return { ...FIXTURE, source: "fixture" };
     const eng = engList.find((e) => e.id === wanted) ?? engList[0];
