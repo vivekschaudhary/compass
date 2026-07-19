@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getProgram } from "../lib/program";
 import { supabaseAdmin } from "../lib/supabase";
 import { SettingsForm } from "../components/SettingsForm";
@@ -5,8 +6,11 @@ import { DocTreePanel } from "../components/DocTreePanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
-  const model = await getProgram();
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
+  const { e } = await searchParams;
+  const model = await getProgram(e);
+  // Canonicalize the URL so it always names the engagement being configured (readable + shareable).
+  if (!e && model.activeEngagementId) redirect(`/settings?e=${encodeURIComponent(model.activeEngagementId)}`);
   const sb = supabaseAdmin();
   const res = sb ? await sb.from("doc_page").select("*").eq("engagement_id", model.activeEngagementId).order("ord") : { data: [] };
   const docs = (res.data ?? []).map((d) => ({ path: d.path, title: d.title, kind: d.kind, status: d.status, url: d.external_url ?? d.confluence_url }));
