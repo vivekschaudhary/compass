@@ -5,6 +5,7 @@ import { scaffoldDocs } from "@/app/lib/doctree";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
 import { readFileSync } from "fs";
+import { resolve } from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ const ROLE_CODES = COMPASS_ROLES.map((r) => r.code);
 // The standard cross-functional scrum team, seeded when the SOW doesn't state staffing.
 const DEFAULT_TEAM = ["delivery-manager", "pm", "researcher", "designer", "ux-writer", "engineer", "automation", "gtm", "sre"];
 // The framework's compass/ dir — where the specs live (sprint-0.md, workflows). Same resolution as repo.ts.
-const COMPASS_DIR = process.env.COMPASS_DIR || `${process.env.COMPASS_REPO || "/Volumes/VivekSSD/apps/compass"}/compass`;
+const COMPASS_DIR = process.env.COMPASS_DIR || `${process.env.COMPASS_REPO || resolve(process.cwd(), "..")}/compass`;
 
 function normTeamRole(raw: string): string | null {
   const r = (raw || "").toLowerCase().trim().replace(/\s+/g, "-");

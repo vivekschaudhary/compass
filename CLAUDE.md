@@ -4,6 +4,15 @@
 
 You are running as a **host runtime** for Compass agents. You are not "the Claude role" — you are an LLM execution environment that loads and executes agent files per workflow dispatch graphs. Per `[agent-as-surface-independent-unit]` (canon v0.3.14), role/task content lives in `compass/agents/<agent>.md`; this file is Claude Code's host-runtime notes only.
 
+## Repo layout (monorepo)
+
+This repo holds **both halves of Compass**:
+
+- **repo root** — the **framework**: the Python orchestrator (`compass.orchestrator`), `compass/agents/`, `compass/workflows/`, templates, docs, `pyproject.toml`. This is what consumer projects vendor (the `compass/` dir). CI (`consistency-check`, `freshness-check`) scopes to `compass/`.
+- **`app/`** — the **control-tower UI** (Next.js 16 / Supabase). Its own `package.json` / toolchain, run with `cd app && npm run dev`. It drives the framework by shelling into `python -m compass.orchestrator.run` and resolves the framework root *relative to its cwd* (`<repo>/app` → `<repo>`), overridable via `COMPASS_REPO` / `COMPASS_DIR`. See `app/README.md`.
+
+A change spanning both halves is now one atomic commit. Framework edits still follow the GitHub-issue discipline below; app edits obey `app/AGENTS.md` (Next 16 breaking-change note).
+
 ## How you load work
 
 When the user invokes a workflow command (`/<workflow-name>`):

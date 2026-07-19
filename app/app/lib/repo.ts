@@ -1,7 +1,10 @@
 import { existsSync } from "fs";
+import { resolve } from "path";
 import { supabaseAdmin } from "./supabase";
 
-const REPO = process.env.COMPASS_REPO || "/Volumes/VivekSSD/apps/compass";
+// Monorepo layout: the app lives at <repo>/app and the framework at <repo>. Default the framework
+// root to the app cwd's parent so it isn't pinned to one machine; COMPASS_REPO still overrides.
+const REPO = process.env.COMPASS_REPO || resolve(process.cwd(), "..");
 // The framework's compass/ dir — where workflows/agents load from when a project doesn't vendor its
 // own projection (e.g. compass-app building itself). Consumers that DO vendor one aren't affected.
 const COMPASS_DIR = process.env.COMPASS_DIR || `${REPO}/compass`;
