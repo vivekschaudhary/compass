@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generate } from "@/app/lib/dispatch";
 import { supabaseAdmin } from "@/app/lib/supabase";
-import { scaffoldDocs } from "@/app/lib/doctree";
+import { seedDocTreeSpec } from "@/app/lib/doctree";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
 import { readFileSync } from "fs";
@@ -166,8 +166,10 @@ export async function POST(req: Request) {
   }));
   if (members.length) await sb.from("member").insert(members);
 
-  // scaffold the standard Confluence doc tree (records structure; creates for real if a space is wired)
-  await scaffoldDocs(id);
+  // seed the engagement's OWN (refinable) copy of the doc tree from the framework default. Folders
+  // are NOT created yet — the user refines the tree in Sprint 0 ("Connect systems of record") and
+  // approves it; /api/scaffold then creates the structure. [sprint-0-materializes-refinable-defaults]
+  await seedDocTreeSpec(id);
   // capture the SOW-level product + engineering metric definitions
   await seedEngagementMetrics(sb, id);
   // spec-driven kickoff: materialize the Sprint 0 foundation backlog from sprint-0.md

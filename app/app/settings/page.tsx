@@ -1,6 +1,7 @@
 import { getProgram } from "../lib/program";
 import { supabaseAdmin } from "../lib/supabase";
 import { SettingsForm } from "../components/SettingsForm";
+import { DocTreePanel } from "../components/DocTreePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +16,18 @@ export default async function SettingsPage() {
     start_date: m.start_date ?? "", end_date: m.end_date ?? "", comments: m.comments ?? "",
   }));
   return (
-    <SettingsForm
-      engagementId={model.activeEngagementId}
-      engagementName={model.program.name}
-      initialConnectors={model.connectors}
-      initialRepos={model.repos}
-      initialDocs={docs}
-      initialMembers={members}
-    />
+    <div className="space-y-6">
+      <SettingsForm
+        engagementId={model.activeEngagementId}
+        engagementName={model.program.name}
+        initialConnectors={model.connectors}
+        initialRepos={model.repos}
+        initialDocs={docs}
+        initialMembers={members}
+      />
+      <div className="mx-auto max-w-3xl px-6">
+        <DocTreePanel engagementId={model.activeEngagementId} />
+      </div>
+    </div>
   );
 }
