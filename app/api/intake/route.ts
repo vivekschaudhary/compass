@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/app/lib/supabase";
 import { scaffoldDocs } from "@/app/lib/doctree";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
+import { readFileSync } from "fs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,8 @@ const ROLE_LABEL: Record<string, string> = Object.fromEntries(COMPASS_ROLES.map(
 const ROLE_CODES = COMPASS_ROLES.map((r) => r.code);
 // The standard cross-functional scrum team, seeded when the SOW doesn't state staffing.
 const DEFAULT_TEAM = ["delivery-manager", "pm", "researcher", "designer", "ux-writer", "engineer", "automation", "gtm", "sre"];
+// The framework's compass/ dir — where the specs live (sprint-0.md, workflows). Same resolution as repo.ts.
+const COMPASS_DIR = process.env.COMPASS_DIR || `${process.env.COMPASS_REPO || "/Volumes/VivekSSD/apps/compass"}/compass`;
 
 function normTeamRole(raw: string): string | null {
   const r = (raw || "").toLowerCase().trim().replace(/\s+/g, "-");
@@ -64,6 +67,46 @@ async function analyze(sow: string): Promise<Extracted> {
 
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 18);
+}
+
+// ── Sprint 0 (spec-driven kickoff backlog) ──────────────────────────────────
+// Read compass/templates/sprint-0.md and materialize its ticket TABLE onto the board:
+// a "Sprint 0" epic + one story per row. The SPEC is the source of truth — add a row there
+// and every new engagement starts with that ticket, no code change. Created locally at intake
+// (systems-of-record aren't connected yet — that's literally ticket #1); mirror to Jira on connect.
+type Sprint0Row = { ticket: string; workflow: string; owner: string; gate: string };
+function readSprint0(): Sprint0Row[] {
+  let md = "";
+  try { md = readFileSync(`${COMPASS_DIR}/templates/sprint-0.md`, "utf8"); } catch { return []; }
+  const section = md.split(/^##\s+/m).find((s) => /^tickets/i.test(s.trim())) ?? "";
+  const rows: Sprint0Row[] = [];
+  for (const line of section.split("\n")) {
+    const t = line.trim();
+    if (!t.startsWith("|")) continue;
+    const c = t.split("|").slice(1, -1).map((x) => x.trim());
+    if (c.length < 5 || !/^\d+$/.test(c[0])) continue;   // data rows only (skip header + separator)
+    rows.push({ ticket: c[1], workflow: c[2], owner: c[3], gate: c[4] });
+  }
+  return rows;
+}
+
+async function createSprint0(sb: NonNullable<ReturnType<typeof supabaseAdmin>>, engagementId: string): Promise<number> {
+  const rows = readSprint0();
+  if (!rows.length) return 0;
+  const epicId = `${engagementId}-S0`;
+  await sb.from("epic").insert({
+    id: epicId, engagement_id: engagementId, title: "Sprint 0 · Foundation & Setup",
+    deliverable_code: null, discipline: "Product", phase: "Kickoff", status: "idle",
+    note: "Foundation setup — created from the sprint-0.md spec at kickoff.", ord: 0,
+  });
+  const stories = rows.map((r, i) => ({
+    id: `${epicId}-s${i + 1}`, epic_id: epicId, title: r.ticket, assignee: "—", status: "idle",
+    estimate_pts: 0, ac_pass_pct: 0,
+    acceptance: `Done: ${r.gate}${r.workflow.startsWith("/") ? ` · via ${r.workflow}` : ""}`,
+    role: normTeamRole(r.owner) ?? "delivery-manager",
+  }));
+  await sb.from("story").insert(stories);
+  return stories.length;
 }
 
 export async function POST(req: Request) {
@@ -126,6 +169,8 @@ export async function POST(req: Request) {
   await scaffoldDocs(id);
   // capture the SOW-level product + engineering metric definitions
   await seedEngagementMetrics(sb, id);
+  // spec-driven kickoff: materialize the Sprint 0 foundation backlog from sprint-0.md
+  const sprint0 = await createSprint0(sb, id);
 
-  return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length, milestones: ms.length, team: members.length });
+  return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length, milestones: ms.length, team: members.length, sprint0 });
 }
