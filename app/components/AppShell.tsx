@@ -7,7 +7,8 @@ import { useUrlState } from "@/app/lib/useUrlState";
 import { Sidebar } from "./Sidebar";
 import { FourPillarHero } from "./FourPillarHero";
 import { NeedsAttention } from "./NeedsAttention";
-import { PlanGrid } from "./PlanGrid";
+// PlanGrid hidden for now — re-enable in AppShell once a real "phase complete" signal exists.
+// import { PlanGrid } from "./PlanGrid";
 import { AssistantDock } from "./AssistantDock";
 import { JobsQueue } from "./JobsQueue";
 import { ActivityLog } from "./ActivityLog";
@@ -34,7 +35,7 @@ type Model = ProgramModel & { source: "supabase" | "fixture" };
 type ModalState = null | "bet" | "triage" | "story" | "review" | "research" | "refine" | { workflow: string };
 
 export function AppShell({ model }: { model: Model }) {
-  const { program, pillars, attention, lanes, discoveryDone, roles, failedRun, engagements, activeEngagementId, deliverables, epics, storyList } = model;
+  const { program, pillars, attention, roles, failedRun, engagements, activeEngagementId, deliverables, epics, storyList } = model;
   const router = useRouter();
   const { params, set } = useUrlState();
 
@@ -110,7 +111,9 @@ export function AppShell({ model }: { model: Model }) {
                 <FourPillarHero program={program} pillars={pillars} />
                 <NeedsAttention attention={attention} />
                 <Milestones milestones={model.milestones} />
-                <PlanGrid lanes={lanes} discoveryDone={discoveryDone} />
+                {/* Plan grid hidden for now — the by-discipline × phase view needs a real
+                    "phase complete" signal before it can be trusted (see discoveryDone). */}
+                {/* <PlanGrid lanes={lanes} discoveryDone={discoveryDone} /> */}
               </>
             ) : (
               role && <JobsQueue role={role} jobs={model.jobs} onGetHelp={() => setDockOpen(true)} onAction={onAction} busy={busy}

@@ -49,9 +49,16 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
     const lateStories = storyRows.filter((s) => s.status === "warn" || s.status === "bad").length;
 
     // ── pillars, computed from the engagement row + counts ──────────────────
-    // A brand-new engagement (no epics/stories/spend) is UNMEASURED — don't paint it green.
-    // The pillars only compute real health once there's actual work to measure.
-    const started = epicRows.length > 0 || storyRows.length > 0 || (eng.cost_spent ?? 0) > 0;
+    // A brand-new engagement is UNMEASURED — don't paint it green. "Measured" means real
+    // execution has happened, NOT merely that a backlog was seeded: intake now materializes a
+    // Sprint 0 epic + stories at creation time, so `epicRows.length > 0` is true immediately on
+    // a fresh SOW and can't stand in for "work has started". Gate on actual progress instead —
+    // spend, a story/epic that moved off idle, or a resolved run.
+    const started =
+      (eng.cost_spent ?? 0) > 0 ||
+      storyRows.some((s) => (s.status ?? "idle") !== "idle") ||
+      epicRows.some((e) => (e.status ?? "idle") !== "idle") ||
+      (runs ?? []).some((r) => r.status === "resolved");
     const costPct = Math.round((eng.cost_spent / Math.max(eng.cost_budget, 1)) * 100);
     const totalDel = deliverables.length || 5;
     const pillars: Pillar[] = started
@@ -166,7 +173,13 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
         phase: eng.phase, overall: started ? ((eng.overall as Health) ?? "warn") : "idle",
       },
       pillars, attention, lanes,
-      discoveryDone: DISCIPLINES,
+      // Only disciplines whose Discovery is ACTUALLY complete — at least one Discovery epic present
+      // and all on-track. Don't hardcode all disciplines (that painted a phantom "✓ done" on every
+      // fresh SOW, which has no Discovery epics at all).
+      discoveryDone: DISCIPLINES.filter((disc) => {
+        const discovery = epicRows.filter((e) => e.discipline === disc && (e.phase as Phase) === "Discovery");
+        return discovery.length > 0 && discovery.every((e) => e.status === "good");
+      }),
       roles,
       jobs,
       failedRun,
