@@ -95,7 +95,19 @@ export type FailedRun = {
   resumeFrom: string;
 };
 
-export type JobKind = "review" | "approve" | "deliver" | "blocked" | "drafting" | "build";
+export type JobKind = "review" | "approve" | "deliver" | "blocked" | "drafting" | "build" | "question" | "staffing";
+// A structured clarifying question carried on a `question` job — the agent asked, the human answers
+// with a pick/field, applied directly ([agent-asks-structured-questions]). See app/lib/questions.ts.
+export type JobQuestion = {
+  id: string; // the agent_question row id
+  key: string;
+  type: "choice" | "number" | "text";
+  options?: string[];
+  target: { table: string; id: string; column: string };
+};
+// A `staffing` job bundles every open "who fills this role?" question into ONE card (each row is an
+// agent_question by id) — answered together, so intake doesn't flood the DM queue with per-role asks.
+export type StaffingItem = { id: string; role: string; title: string };
 export type Job = {
   id: string;
   role: string; // pm | eng | qa | design | exec
@@ -107,6 +119,8 @@ export type Job = {
   primary?: string; // primary action label
   secondary?: string; // secondary action label
   tone?: "default" | "warn" | "bad";
+  question?: JobQuestion; // present on kind === "question"
+  staffing?: StaffingItem[]; // present on kind === "staffing"
 };
 
 export type EngagementRef = { id: string; name: string; sow: string };

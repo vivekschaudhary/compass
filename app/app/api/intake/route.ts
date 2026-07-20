@@ -4,11 +4,24 @@ import { supabaseAdmin } from "@/app/lib/supabase";
 import { seedDocTreeSpec } from "@/app/lib/doctree";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
+import { raiseQuestions, initialsFor as nameInitials, type AgentQuestion } from "@/app/lib/questions";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// A gap the intake agent couldn't resolve from the SOW. `field` is a LOGICAL target the create step
+// resolves to a concrete allowlisted patch (engagement column, or member:<role> → that member's name).
+// [agent-asks-structured-questions]
+type IntakeQuestion = {
+  key: string;
+  prompt: string;
+  type: "choice" | "number" | "text";
+  options?: string[];
+  field: "budget" | "pricing" | "months" | "quality_bar" | "name" | "client" | string; // or "member:<role>"
+  because?: string;
+};
 
 type Extracted = {
   name: string;
@@ -21,6 +34,8 @@ type Extracted = {
   deliverables: { code: string; title: string; acceptance: string }[];
   milestones?: { code: string; title: string; timeframe: string; detail: string }[];
   staffing?: { role: string; count: number }[];
+  team?: { name: string; role: string; title?: string }[];   // named people the SOW states
+  questions?: IntakeQuestion[];                                // gaps → the DM's jobs-to-do
 };
 
 const ROLE_LABEL: Record<string, string> = Object.fromEntries(COMPASS_ROLES.map((r) => [r.code, r.label]));
@@ -40,18 +55,27 @@ function initialsFor(code: string): string {
   return (ROLE_LABEL[code] ?? code).split(/[\s-]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
-const SYSTEM = `You are Compass's intake analyst. Extract a Statement of Work into a structured delivery engagement.
+const SYSTEM = `You are Compass's Delivery Manager agent running intake. Extract a Statement of Work into a structured delivery engagement.
 Return ONLY valid JSON — no markdown, no prose — with this exact shape:
 {"name":string,"client":string,"sow":string,"pricing":"Fixed-bid"|"T&M","budget":number,"months":number,"quality_bar":string,
  "deliverables":[{"code":"D1","title":string,"acceptance":string}],
  "milestones":[{"code":"M1","title":string,"timeframe":string,"detail":string}],
- "staffing":[{"role":string,"count":number}]}
+ "staffing":[{"role":string,"count":number}],
+ "team":[{"name":string,"role":string,"title":string}],
+ "questions":[{"key":string,"prompt":string,"type":"choice"|"number"|"text","options":[string],"field":string,"because":string}]}
 Rules: be faithful to the SOW — do NOT invent scope it doesn't imply. Number deliverables D1..Dn.
 - "name": the engagement/project name EXACTLY as stated (e.g. the text after "Engagement:"), NOT a summary you invent.
 - "sow": a SHORT reference label only — an SOW number/code if the doc states one, else a 2–4 word short title (e.g. "Compass DPP"). NEVER the full SOW text.
 budget is an integer in USD (0 if not stated). months is an integer best-estimate.
 - "milestones": the SOW's timeline / phases / milestones — code M1.., title, timeframe (e.g. "Month 3" / "Sprint 6" / "Phase 2"), a short detail of what closes it. Empty array if the SOW states none.
 - "staffing": the delivery team — role + count. Use ONLY these role codes: ${ROLE_CODES.join(", ")}. Empty array if the SOW states none.
+- "team": named INDIVIDUALS the SOW states, each mapped to ONE of the role codes above (e.g. {"name":"Sam Okoro","role":"engineer","title":"Engineer"}). Empty array if the SOW names no people.
+- "questions": DO NOT silently guess or default. For every ENGAGEMENT field you had to infer/default because the SOW doesn't state it clearly, emit ONE structured clarifying question:
+    • "field" is the field the answer sets — one of budget|pricing|months|quality_bar|name|client.
+    • "type": "choice" with "options" for a small fixed set (e.g. pricing → ["Fixed-bid","T&M"]); "number" for budget/months; "text" for free text.
+    • "key": a short stable slug (e.g. "budget","pricing"). "because": the gap in one line.
+  Emit an EMPTY questions array when the SOW states every field. Prefer asking over guessing.
+  (Do NOT ask for individual people's names here — extract the ones the SOW names into "team"; the app asks who fills every remaining role automatically.)
 Keep any inference conservative and clearly bounded.`;
 
 function parseJson(text: string): Extracted {
@@ -158,12 +182,26 @@ export async function POST(req: Request) {
   })).filter((m) => m.title);
   if (ms.length) await sb.from("milestone").insert(ms);
 
-  // auto-seed the team roster (from the SOW's staffing model, else the standard scrum team) so
-  // role routing works from day 1 — one member per distinct role, unstaffed until named.
-  const codes = (d.staffing?.length ? d.staffing.map((s) => normTeamRole(s.role)).filter((c): c is string => !!c) : DEFAULT_TEAM);
-  const members = [...new Set(codes)].map((code) => ({
-    id: `${id}-${code}`, engagement_id: id, role: code, name: "Unassigned", initials: initialsFor(code), title: ROLE_LABEL[code] ?? code,
-  }));
+  // auto-seed the team roster so role routing works from day 1. Real names where the SOW states them
+  // (d.team, mapped to role codes); "Unassigned" otherwise. Any role a clarifying question will name
+  // (`member:<role>`) is seeded too, so the question has a member row to patch.
+  const namedByRole = new Map<string, string[]>();
+  for (const t of d.team ?? []) {
+    const code = normTeamRole(t.role); const nm = (t.name || "").trim();
+    if (code && nm) namedByRole.set(code, [...(namedByRole.get(code) ?? []), nm]);
+  }
+  const baseCodes = d.staffing?.length ? d.staffing.map((s) => normTeamRole(s.role)).filter((c): c is string => !!c) : DEFAULT_TEAM;
+  const qRoles = (d.questions ?? []).filter((q) => q.field.startsWith("member:")).map((q) => normTeamRole(q.field.slice(7))).filter((c): c is string => !!c);
+  // Always seed the delivery-manager (owns intake + kickoff visibility) AND every Sprint 0 ticket
+  // owner (pm, architect, …) — else those roles have no roster entry, no role view, and their
+  // Sprint 0 tickets + clarifying questions would be invisible in the switcher.
+  const s0Roles = readSprint0().map((r) => normTeamRole(r.owner)).filter((c): c is string => !!c);
+  const roleCodes = [...new Set(["delivery-manager", ...baseCodes, ...namedByRole.keys(), ...qRoles, ...s0Roles])];
+  const members = roleCodes.flatMap((code) => {
+    const names = namedByRole.get(code) ?? [];
+    if (!names.length) return [{ id: `${id}-${code}`, engagement_id: id, role: code, name: "Unassigned", initials: initialsFor(code), title: ROLE_LABEL[code] ?? code }];
+    return names.map((nm, i) => ({ id: i === 0 ? `${id}-${code}` : `${id}-${code}-${i + 1}`, engagement_id: id, role: code, name: nm, initials: nameInitials(nm), title: ROLE_LABEL[code] ?? code }));
+  });
   if (members.length) await sb.from("member").insert(members);
 
   // seed the engagement's OWN (refinable) copy of the doc tree from the framework default. Folders
@@ -175,5 +213,34 @@ export async function POST(req: Request) {
   // spec-driven kickoff: materialize the Sprint 0 foundation backlog from sprint-0.md
   const sprint0 = await createSprint0(sb, id);
 
-  return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length, milestones: ms.length, team: members.length, sprint0 });
+  // file the DM agent's still-open clarifying questions into its jobs-to-do — resolving each logical
+  // `field` to a concrete allowlisted target now that ids exist. Answered ones were already applied
+  // to `data` in the /new wizard. [agent-asks-structured-questions]
+  const qs: AgentQuestion[] = (d.questions ?? []).map((q) => {
+    const isMember = q.field.startsWith("member:");
+    const mrole = isMember ? (normTeamRole(q.field.slice(7)) ?? "delivery-manager") : "";
+    const target = isMember
+      ? { table: "member", id: `${id}-${mrole}`, column: "name" }
+      : { table: "engagement", id, column: q.field };
+    return { key: q.key, prompt: q.prompt, type: q.type, options: q.options, target, because: q.because };
+  });
+
+  // Completeness: ask WHO fills every seeded-but-unnamed role — not just the few the LLM flagged.
+  // The roster loads the standard team; leaving some members "Unassigned" with no ask is exactly the
+  // silent-default this primitive exists to prevent. One name question per Unassigned member (deduped
+  // against any the LLM already raised), all owned by the DM (staffing is the DM's kickoff work).
+  const askedRoles = new Set(qs.filter((q) => q.target.table === "member").map((q) => q.target.id));
+  const nameQs: AgentQuestion[] = members
+    .filter((m) => m.name === "Unassigned" && !askedRoles.has(m.id))
+    .map((m) => ({
+      key: `lead-${m.role}`,
+      prompt: `Who is the ${m.title} on this engagement?`,
+      type: "text" as const,
+      target: { table: "member", id: m.id, column: "name" },
+      because: `${m.title} is on the team but unnamed — assign a person, or skip to staff later.`,
+    }));
+
+  const questions = await raiseQuestions(sb, { engagementId: id, role: "delivery-manager", source: "intake" }, [...qs, ...nameQs]);
+
+  return NextResponse.json({ ok: true, engagementId: id, deliverables: rows.length, milestones: ms.length, team: members.length, sprint0, questions });
 }

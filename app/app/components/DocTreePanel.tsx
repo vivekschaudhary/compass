@@ -42,7 +42,13 @@ export function DocTreePanel({ engagementId }: { engagementId: string }) {
     const r = await fetch("/api/scaffold", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engagementId }) });
     const j = await r.json();
     setBusy(""); setApproved(Boolean(j.approved));
-    setMsg(j.ok ? `Approved & scaffolded — ${j.created ?? 0} created, ${j.pending ?? 0} pending (${j.provider}).` : (j.error || "scaffold failed"));
+    if (!j.ok) { setMsg(j.error || "scaffold failed"); return; }
+    // Pending = recorded but not created because the docs provider isn't wired for this engagement.
+    // Say so + point at the fix (Settings → Documentation) rather than a bare "0 created".
+    const created = j.created ?? 0, pending = j.pending ?? 0;
+    setMsg(created === 0 && pending > 0
+      ? `Approved — ${pending} pages recorded but 0 created: ${j.provider === "teams" ? "Teams/SharePoint" : "Confluence"} isn't connected for this engagement yet. Add the ${j.provider === "teams" ? "site + Graph credentials" : "space + Atlassian credentials"} in Settings → Documentation, then re-approve to create them.`
+      : `Approved & scaffolded — ${created} created, ${pending} pending (${j.provider}).`);
   }
 
   if (loading) return <p className="text-[12.5px] text-muted">Loading doc tree…</p>;

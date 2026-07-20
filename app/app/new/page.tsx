@@ -3,10 +3,27 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type IntakeQuestion = {
+  key: string; prompt: string; type: "choice" | "number" | "text"; options?: string[]; field: string; because?: string;
+};
 type Extracted = {
   name: string; client: string; sow: string; pricing: string; budget: number; months: number;
   quality_bar: string; deliverables: { code: string; title: string; acceptance: string }[];
+  team?: { name: string; role: string; title?: string }[];
+  questions?: IntakeQuestion[];
 };
+
+// Engagement-column fields patch `data` directly; a "member:<role>" field adds a named person to team.
+function applyAnswer(data: Extracted, q: IntakeQuestion, value: string): Extracted {
+  const v = value.trim();
+  if (q.field.startsWith("member:")) {
+    const role = q.field.slice(7);
+    const team = [...(data.team ?? []).filter((t) => t.role !== role), { name: v, role }];
+    return { ...data, team };
+  }
+  if (q.field === "budget" || q.field === "months") return { ...data, [q.field]: Number(v.replace(/[^0-9.]/g, "")) || 0 };
+  return { ...data, [q.field]: v };
+}
 
 const SAMPLE = `STATEMENT OF WORK — SOW-3187
 Client: Northwind Retail  |  Vendor: (consultancy)  |  Pricing: Fixed-bid, $620,000  |  Term: 5 months
@@ -23,9 +40,12 @@ Quality: WCAG 2.1 AA, 99.9% uptime, p95 < 400ms. Any scope beyond the above is a
 export default function NewEngagement() {
   const router = useRouter();
   const [sow, setSow] = useState("");
-  const [phase, setPhase] = useState<"input" | "analyzing" | "preview" | "creating">("input");
+  const [phase, setPhase] = useState<"input" | "analyzing" | "preview" | "clarify" | "creating">("input");
   const [data, setData] = useState<Extracted | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+
+  const openQuestions = data?.questions ?? [];
 
   async function analyze() {
     setPhase("analyzing"); setError("");
@@ -38,15 +58,26 @@ export default function NewEngagement() {
   }
 
   async function create() {
+    const prev = phase;
     setPhase("creating");
     try {
-      const r = await fetch("/api/intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "create", data }) });
+      // apply the answered questions to the payload; carry only the UNanswered forward — those
+      // persist as the Delivery Manager agent's jobs-to-do. [agent-asks-structured-questions]
+      let finalData = data!;
+      const unanswered: IntakeQuestion[] = [];
+      for (const q of openQuestions) {
+        const a = answers[q.key];
+        if (a && a.trim()) finalData = applyAnswer(finalData, q, a);
+        else unanswered.push(q);
+      }
+      finalData = { ...finalData, questions: unanswered };
+      const r = await fetch("/api/intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "create", data: finalData }) });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || "create failed");
       document.cookie = `compass_eng=${j.engagementId}; path=/; max-age=31536000`;
       router.push("/");
       router.refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : "failed"); setPhase("preview"); }
+    } catch (e) { setError(e instanceof Error ? e.message : "failed"); setPhase(prev === "clarify" ? "clarify" : "preview"); }
   }
 
   return (
@@ -129,8 +160,59 @@ export default function NewEngagement() {
 
             <div className="flex items-center justify-between border-t border-line px-5 py-4">
               <button onClick={() => setPhase("input")} className="text-[12.5px] font-medium text-muted hover:text-ink">← Re-analyze</button>
-              <button onClick={create} disabled={phase === "creating"} className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
-                {phase === "creating" ? "Creating…" : "Create engagement →"}
+              {openQuestions.length > 0 ? (
+                <button onClick={() => setPhase("clarify")} disabled={phase === "creating"} className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+                  {`Continue — ${openQuestions.length} question${openQuestions.length === 1 ? "" : "s"} →`}
+                </button>
+              ) : (
+                <button onClick={create} disabled={phase === "creating"} className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+                  {phase === "creating" ? "Creating…" : "Create engagement →"}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        {phase === "clarify" && data && (
+          <section className="rise rounded-card border border-line bg-card">
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <div>
+                <h1 className="text-[15px] font-semibold text-ink">The Delivery Manager agent has questions</h1>
+                <p className="mt-0.5 text-[12.5px] text-muted">Compass won&apos;t guess what the SOW doesn&apos;t state. Answer what you can — anything you skip becomes a job in the Delivery Manager&apos;s queue.</p>
+              </div>
+              <span className="rounded-pill bg-warn-weak px-2.5 py-1 text-[12px] font-medium text-warn">{openQuestions.length} to clarify</span>
+            </div>
+
+            <div className="flex flex-col gap-3 px-5 py-4">
+              {openQuestions.map((q) => (
+                <div key={q.key} className="rounded-tile border border-line px-4 py-3">
+                  <div className="text-[13px] font-medium text-ink">{q.prompt}</div>
+                  {q.because && <div className="mt-0.5 text-[12px] text-muted">{q.because}</div>}
+                  <div className="mt-2">
+                    {q.type === "choice" ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(q.options ?? []).map((o) => (
+                          <button key={o} onClick={() => setAnswers((a) => ({ ...a, [q.key]: o }))} className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${answers[q.key] === o ? "border-brand bg-brand-weak text-brand-ink" : "border-line bg-card text-body hover:bg-shell"}`}>{o}</button>
+                        ))}
+                      </div>
+                    ) : (
+                      <input
+                        type={q.type === "number" ? "number" : "text"}
+                        value={answers[q.key] ?? ""}
+                        onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
+                        placeholder={q.type === "number" ? "Enter a number" : "Type your answer…"}
+                        className="w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand"
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-line px-5 py-4">
+              <button onClick={() => setPhase("preview")} className="text-[12.5px] font-medium text-muted hover:text-ink">← Back</button>
+              <button onClick={create} className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+                Create engagement →
               </button>
             </div>
           </section>
