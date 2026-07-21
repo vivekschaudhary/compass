@@ -67,22 +67,27 @@ export async function raiseQuestions(
   return error ? 0 : rows.length;
 }
 
-// Answer side — apply ONE answered question's structured value to its allowlisted target, then mark
-// the row answered. Returns {ok, error?}. Shared by the /api/questions/answer endpoint (+ tests).
-export async function applyAnswer(sb: Sb, questionId: string, value: string): Promise<{ ok: boolean; error?: string }> {
-  const { data: q } = await sb.from("agent_question").select("*").eq("id", questionId).maybeSingle();
-  if (!q) return { ok: false, error: "no such question" };
-  const target = q.target as QuestionTarget;
+// Apply a structured value to ONE allowlisted target (table+id+column) — the single write path the
+// allowlist guards. Shared by applyAnswer (answered questions) and the agent's patch_field tool, so
+// the ALLOW map is the ONE place either can write. Returns {ok, error?}; never touches an off-map field.
+export async function applyPatch(sb: Sb, target: QuestionTarget, value: string): Promise<{ ok: boolean; error?: string }> {
   if (!isAllowed(target)) return { ok: false, error: "target not allowed" };
-
   const raw = (value ?? "").trim();
   const coerced: string | number = NUMERIC.has(target.column) ? Number(raw.replace(/[^0-9.]/g, "")) || 0 : raw;
   const patch: Record<string, unknown> = { [target.column]: coerced };
   // a member's name change also refreshes its initials (kept consistent with intake seeding)
   if (target.table === "member" && target.column === "name") patch.initials = initialsFor(raw);
+  const { error } = await sb.from(target.table).update(patch).eq("id", target.id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
 
-  const { error: e1 } = await sb.from(target.table).update(patch).eq("id", target.id);
-  if (e1) return { ok: false, error: e1.message };
-  await sb.from("agent_question").update({ answer: raw, status: "answered" }).eq("id", questionId);
+// Answer side — apply ONE answered question's structured value to its allowlisted target, then mark
+// the row answered. Returns {ok, error?}. Shared by the /api/questions/answer endpoint (+ tests).
+export async function applyAnswer(sb: Sb, questionId: string, value: string): Promise<{ ok: boolean; error?: string }> {
+  const { data: q } = await sb.from("agent_question").select("*").eq("id", questionId).maybeSingle();
+  if (!q) return { ok: false, error: "no such question" };
+  const res = await applyPatch(sb, q.target as QuestionTarget, value);
+  if (!res.ok) return res;
+  await sb.from("agent_question").update({ answer: (value ?? "").trim(), status: "answered" }).eq("id", questionId);
   return { ok: true };
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Job, JobKind, Role, Activity, GENERIC_WORKFLOWS } from "@/app/lib/data";
+import type { Anchor } from "@/app/lib/agent-client";
 import { relatedLink } from "@/app/lib/format";
 import { HistoryTable } from "./HistoryTable";
 
@@ -39,7 +40,7 @@ function JobCard({
   job, onGetHelp, onAction, busy, actor, atlassianBase,
 }: {
   job: Job;
-  onGetHelp: () => void;
+  onGetHelp: (anchor?: Anchor) => void;
   onAction: (jobId: string, which: "primary" | "secondary") => void;
   busy: boolean;
   actor?: string;
@@ -119,7 +120,7 @@ function JobCard({
               {job.primary && (
                 <button
                   disabled={busy}
-                  onClick={() => (blocked ? onGetHelp() : onAction(job.id, "primary"))}
+                  onClick={() => (blocked ? onGetHelp(job.related ? { kind: "ticket", id: job.related } : { kind: "job", id: job.id }) : onAction(job.id, "primary"))}
                   className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-opacity disabled:opacity-50 ${
                     job.tone === "bad" ? "bg-bad text-white hover:opacity-90" : blocked ? "border border-line-2 bg-card text-body hover:bg-shell" : "bg-brand text-white hover:opacity-90"
                   }`}
@@ -273,7 +274,7 @@ export function JobsQueue({
 }: {
   role: Role;
   jobs: Job[];
-  onGetHelp: () => void;
+  onGetHelp: (anchor?: Anchor) => void;
   onAction: (jobId: string, which: "primary" | "secondary") => void;
   busy: string | null;
   onCreateBet?: () => void;

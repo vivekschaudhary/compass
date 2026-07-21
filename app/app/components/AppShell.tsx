@@ -10,6 +10,7 @@ import { NeedsAttention } from "./NeedsAttention";
 // PlanGrid hidden for now — re-enable in AppShell once a real "phase complete" signal exists.
 // import { PlanGrid } from "./PlanGrid";
 import { AssistantDock } from "./AssistantDock";
+import type { Anchor } from "@/app/lib/agent-client";
 import { JobsQueue } from "./JobsQueue";
 import { ActivityLog } from "./ActivityLog";
 import { Metrics } from "./Metrics";
@@ -35,7 +36,7 @@ type Model = ProgramModel & { source: "supabase" | "fixture" };
 type ModalState = null | "bet" | "triage" | "story" | "review" | "research" | "refine" | { workflow: string };
 
 export function AppShell({ model }: { model: Model }) {
-  const { program, pillars, attention, roles, failedRun, engagements, activeEngagementId, deliverables, epics, storyList } = model;
+  const { program, pillars, attention, roles, engagements, activeEngagementId, deliverables, epics, storyList } = model;
   const router = useRouter();
   const { params, set } = useUrlState();
 
@@ -47,6 +48,8 @@ export function AppShell({ model }: { model: Model }) {
   const providerLabel = model.connectors.docs_provider === "teams" ? "Teams/SharePoint" : "Confluence";
 
   const [dockOpen, setDockOpen] = useState(false);
+  const [dockAnchor, setDockAnchor] = useState<Anchor | null>(null);
+  const openDock = (anchor?: Anchor) => { setDockAnchor(anchor ?? null); setDockOpen(true); };
   const [busy, setBusy] = useState<string | null>(null);
   const [decomposing, setDecomposing] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
@@ -71,7 +74,7 @@ export function AppShell({ model }: { model: Model }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar role={role} program={program} view={view} setView={(v) => set({ view: v === "dashboard" ? null : v })} onExecutionHelp={() => setDockOpen(true)} />
+      <Sidebar role={role} program={program} view={view} setView={(v) => set({ view: v === "dashboard" ? null : v })} onExecutionHelp={() => openDock()} />
 
       <div className="flex min-w-0 flex-1">
         <main className="flex-1 overflow-y-auto">
@@ -90,7 +93,7 @@ export function AppShell({ model }: { model: Model }) {
             </div>
             <div className="flex items-center gap-2">
               {!dockOpen && (
-                <button onClick={() => setDockOpen(true)} className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] font-medium text-body hover:bg-shell">
+                <button onClick={() => openDock()} className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] font-medium text-body hover:bg-shell">
                   <span className="inline-block size-1.5 rounded-pill bg-bad pulse-dot" />
                   Execution help
                 </button>
@@ -116,7 +119,7 @@ export function AppShell({ model }: { model: Model }) {
                 {/* <PlanGrid lanes={lanes} discoveryDone={discoveryDone} /> */}
               </>
             ) : (
-              role && <JobsQueue role={role} jobs={model.jobs} onGetHelp={() => setDockOpen(true)} onAction={onAction} busy={busy}
+              role && <JobsQueue role={role} jobs={model.jobs} onGetHelp={(anchor) => openDock(anchor)} onAction={onAction} busy={busy}
                 onCreateBet={() => setModal("bet")} onDecompose={onDecompose}
                 onTriage={() => setModal("triage")} decomposing={decomposing} activity={model.activity}
                 onCreateStory={() => setModal("story")} onSprintReview={() => setModal("review")} atlassianBase={model.atlassianBase}
@@ -127,8 +130,9 @@ export function AppShell({ model }: { model: Model }) {
         </main>
 
         {dockOpen && role && (
-          <div className="fixed inset-y-0 right-0 z-30 w-full max-w-[340px] lg:static lg:z-auto lg:max-w-none">
-            <AssistantDock role={role} failedRun={failedRun} onClose={() => setDockOpen(false)} />
+          <div className="fixed inset-y-0 right-0 z-30 w-full max-w-[360px] lg:static lg:z-auto lg:max-w-none">
+            <AssistantDock key={`${dockAnchor?.kind ?? "none"}:${dockAnchor?.id ?? ""}`}
+              role={role} engagementId={activeEngagementId} anchor={dockAnchor} onClose={() => setDockOpen(false)} />
           </div>
         )}
       </div>
