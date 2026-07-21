@@ -26,9 +26,9 @@ export type AgentEvent =
 
 export type TurnInput = { message?: string; confirm?: { toolUseId: string; approved: boolean } };
 
-const MAX_ITERS = 8;       // tool round-trips before we force a pause (runaway backstop)
-const MAX_TOKENS = 1024;   // per assistant turn
-const MAX_HISTORY = 50;    // rows fed to the model (older turns trimmed at a human boundary)
+const MAX_MODEL_TURNS = 14; // model calls per user turn before we force a pause (runaway backstop)
+const MAX_TOKENS = 1024;    // per assistant turn
+const MAX_HISTORY = 50;     // rows fed to the model (older turns trimmed at a human boundary)
 
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
@@ -89,6 +89,7 @@ Operating rules:
 - Ground every claim in tool reads. Never invent ticket ids, statuses, errors, or run output — call a read tool (get_ticket, get_run_log, list_stories, get_engagement_state) first.
 - You are scoped to the ACTIVE engagement only. Never reference or touch another engagement.
 - Read tools run automatically. For a write (transition_ticket, patch_field, post_comment, file_question, rerun_workflow), CALL THE TOOL directly once you've decided on it — do NOT ask for permission in prose first. The system automatically shows the user a confirmation card for every write and executes it only if they approve, so your tool call is already gated. Asking "shall I?" in text just wastes a round-trip. If the user declines, don't retry it — suggest an alternative or ask.
+- Gather context efficiently: call each read once with the right arguments; don't repeat the same read with trivially different filters. A couple of targeted reads beat a broad sweep.
 - Prefer the smallest safe action. Re-run the orchestrator only after you have actually diagnosed the failure.
 - When you can't resolve a gap from state, file_question instead of guessing or defaulting.
 - Be concise and concrete: the root cause (not the symptom) and the single next move. No preamble, no greeting.`;
@@ -162,31 +163,38 @@ export async function runAgentTurn(opts: { thread: ChatThread; ctx: ToolContext;
   const system = await buildSystem(ctx);
   const tools = cachedTools();
 
-  try {
-    for (let iter = 0; iter < MAX_ITERS; iter++) {
-      const rows = await getMessages(sb, thread.id);
-      const pending = pendingToolCalls(rows);
-
-      if (pending.length) {
-        for (const p of pending) {
-          if (isWriteTool(p.name)) {
-            // pause — the client shows a confirm card and re-POSTs with an approve/deny
-            send({ type: "confirm", toolUseId: p.id, name: p.name, input: p.input, summary: describeToolCall(p.name, p.input) });
-            send({ type: "done" });
-            return;
-          }
-          send({ type: "tool", name: p.name, phase: "start", summary: readSummary(p.name, p.input) });
-          const res = await execTool(p.name, p.input, ctx, () => {});
-          await appendMessage(sb, thread.id, { author: "tool", tool_result: { tool_use_id: p.id, content: res.content, is_error: res.is_error } });
-          send({ type: "tool", name: p.name, phase: res.is_error ? "error" : "done" });
-        }
-        continue; // reads resolved → next iteration calls the model
+  // Resolve a batch of tool calls: run reads inline (append their results), and pause at the FIRST
+  // write with a confirm event. Returns true if it paused (the caller must stop and await approval).
+  const resolvePending = async (calls: { id: string; name: string; input: Record<string, unknown> }[]): Promise<boolean> => {
+    for (const p of calls) {
+      if (isWriteTool(p.name)) {
+        send({ type: "confirm", toolUseId: p.id, name: p.name, input: p.input, summary: describeToolCall(p.name, p.input) });
+        send({ type: "done" });
+        return true;
       }
+      send({ type: "tool", name: p.name, phase: "start", summary: readSummary(p.name, p.input) });
+      const res = await execTool(p.name, p.input, ctx, () => {});
+      await appendMessage(sb, thread.id, { author: "tool", tool_result: { tool_use_id: p.id, content: res.content, is_error: res.is_error } });
+      send({ type: "tool", name: p.name, phase: res.is_error ? "error" : "done" });
+    }
+    return false;
+  };
+
+  try {
+    // Each iteration = ONE model call plus resolving the tools it asked for. Reads don't consume
+    // extra iterations, so the cap bounds model calls (the real runaway/cost risk), not tool reads.
+    for (let turn = 0; turn < MAX_MODEL_TURNS; turn++) {
+      const rows = await getMessages(sb, thread.id);
+      // clear anything left pending from a resume/prior turn before the next model call
+      const leftover = pendingToolCalls(rows);
+      if (leftover.length) { if (await resolvePending(leftover)) return; continue; }
 
       const assistant = await streamAssistant(client, { system, tools, messages: toApiMessages(trimRows(rows)) }, send);
       await appendMessage(sb, thread.id, { author: "assistant", content: assistant.text || null, tool_calls: assistant.toolUses.length ? assistant.toolUses : null });
       if (!assistant.toolUses.length) { send({ type: "done" }); return; }
-      // next iteration resolves the requested tool calls
+      // resolve this turn's tools immediately (reads inline; pause at a write)
+      const calls = assistant.toolUses.map((t) => ({ id: t.id, name: t.name, input: (t.input ?? {}) as Record<string, unknown> }));
+      if (await resolvePending(calls)) return;
     }
     send({ type: "error", message: "Reached the tool-iteration limit for one turn. Ask me to continue if needed." });
     send({ type: "done" });
