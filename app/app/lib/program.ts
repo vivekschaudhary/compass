@@ -7,13 +7,14 @@ const LEAD: Record<string, string> = { Product: "Jen", Engineering: "Maria", QA:
 
 // Read the engagement from Supabase and compute the model. Falls back to FIXTURE on any
 // miss (unconfigured / empty / error) so the dashboard never white-screens.
-export async function getProgram(): Promise<ProgramModel & { source: "supabase" | "fixture" }> {
+export async function getProgram(engagementId?: string): Promise<ProgramModel & { source: "supabase" | "fixture" }> {
   const sb = supabaseAdmin();
   if (!sb) return { ...FIXTURE, source: "fixture" };
 
   try {
     const cookieStore = await cookies();
-    const wanted = cookieStore.get("compass_eng")?.value;
+    // An explicit engagement id (e.g. from the URL) wins over the active-engagement cookie.
+    const wanted = engagementId || cookieStore.get("compass_eng")?.value;
     const { data: engList } = await sb.from("engagement").select("*").order("updated_at", { ascending: false });
     if (!engList || !engList.length) return { ...FIXTURE, source: "fixture" };
     const eng = engList.find((e) => e.id === wanted) ?? engList[0];
@@ -35,6 +36,7 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
     const { data: activityRows } = await sb.from("activity").select("*").eq("engagement_id", id).order("created_at", { ascending: false }).limit(60);
     const { data: metricRows } = await sb.from("metric").select("*").eq("engagement_id", id).order("ord");
     const { data: milestoneRows } = await sb.from("milestone").select("*").eq("engagement_id", id).order("ord");
+    const { data: questionRows } = await sb.from("agent_question").select("*").eq("engagement_id", id).eq("status", "open").order("ord");
     const deliverables = dels ?? [];
     const epicRows = epics ?? [];
     // Scope stories to THIS engagement's epics. The `story` fetch above is unfiltered (global), so
@@ -159,7 +161,59 @@ export async function getProgram(): Promise<ProgramModel & { source: "supabase" 
         meta: s.estimate_pts ? `${s.estimate_pts}pt · ready` : "ready",
         related: s.id, primary: "Build", secondary: undefined, tone: undefined,
       }));
-    const jobs = [...realJobs, ...buildJobs];
+    // Sprint 0 · Foundation & Setup — the DM-owned kickoff backlog, seeded at intake as the `<id>-S0`
+    // epic + one story per sprint-0.md row. Surface each open ticket as a job in its OWNING role's
+    // queue (mostly delivery-manager; pm/architect for tickets 2–3) — its visible home. The story's
+    // acceptance is "Done: <gate> · via <workflow>"; offer the workflow as the primary action.
+    // Informational (no fake action button) — the Sprint 0 workflows (/setup-product, …) aren't
+    // app-runnable yet; the card's job is to make the kickoff backlog VISIBLE in its owner's queue
+    // and name the gate. `meta` carries the workflow that closes it.
+    const s0Epic = epicRows.find((e) => e.id === `${id}-S0`);
+    const sprint0Jobs = s0Epic
+      ? storyRows
+          .filter((s) => s.epic_id === s0Epic.id && (s.status ?? "idle") !== "done")
+          .map((s) => {
+            const wf = (s.acceptance ?? "").match(/via (\/[a-z-]+)/)?.[1];
+            return {
+              id: `s0-${s.id}`, role: s.role || "delivery-manager", kind: "deliver" as const,
+              title: `Sprint 0 — ${s.title}`,
+              subtitle: (s.acceptance ?? "Foundation setup ticket.").replace(/^Done:\s*/, "Done when: "),
+              meta: wf ? `kickoff · ${wf}` : "kickoff", related: s.id,
+              primary: undefined, secondary: undefined, tone: undefined,
+            };
+          })
+      : [];
+
+    // The agent-asks-questions primitive — every open question surfaces in the ASKING role's
+    // jobs-to-do, answered inline with a structured pick/field. [agent-asks-structured-questions]
+    // Roster-name questions ("who fills this role?") are the exception: they'd flood the DM queue
+    // one-per-role, so they're bundled into a single "Staff the team" card per asking role.
+    const isName = (q: { target?: { table?: string; column?: string } }) => q.target?.table === "member" && q.target?.column === "name";
+    const nameRows = (questionRows ?? []).filter(isName);
+    const otherRows = (questionRows ?? []).filter((q) => !isName(q));
+
+    const questionJobs = otherRows.map((q) => ({
+      id: `q-${q.id}`, role: q.role || "delivery-manager", kind: "question" as const,
+      title: q.prompt, subtitle: q.because ?? "The agent needs this to proceed.",
+      meta: "needs answer", related: q.related ?? undefined, tone: "warn" as const,
+      question: { id: q.id, key: q.key, type: q.type, options: q.options ?? undefined, target: q.target },
+    }));
+
+    // one grouped staffing card per asking role (usually just the DM)
+    const nameByRole = new Map<string, typeof nameRows>();
+    for (const q of nameRows) { const r = q.role || "delivery-manager"; nameByRole.set(r, [...(nameByRole.get(r) ?? []), q]); }
+    const staffingJobs = [...nameByRole.entries()].map(([role, rows]) => ({
+      id: `staffing-${id}-${role}`, role, kind: "staffing" as const,
+      title: "Staff the team",
+      subtitle: `${rows.length} role${rows.length === 1 ? "" : "s"} unnamed — assign a person to each, or skip to staff later.`,
+      meta: "needs answer", tone: "warn" as const,
+      staffing: rows.map((q) => {
+        const m = (mems ?? []).find((x) => x.id === q.target?.id);
+        return { id: q.id, role: m?.role ?? "", title: m?.title ?? (q.prompt ?? "").replace(/^Who is the |\?.*$/g, "") };
+      }),
+    }));
+
+    const jobs = [...realJobs, ...buildJobs, ...sprint0Jobs, ...questionJobs, ...staffingJobs];
 
     const run = runs?.[0];
     const failedRun = run

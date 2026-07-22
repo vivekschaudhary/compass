@@ -91,13 +91,31 @@ create table if not exists run (
   created_at    timestamptz default now()
 );
 
+-- Agentic Execution-Help threads (see 017_agent_chat.sql).
+create table if not exists chat_thread (
+  id            text primary key,
+  engagement_id text references engagement(id) on delete cascade,
+  role          text,                      -- role lens that owns the thread (COMPASS_ROLES code)
+  anchor_kind   text default 'none',       -- ticket | run | job | none
+  anchor_id     text,
+  title         text,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
 create table if not exists chat_message (
   id            bigint generated always as identity primary key,
-  run_id        text references run(id) on delete cascade,
-  author        text,                      -- ai | human
+  thread_id     text references chat_thread(id) on delete cascade,
+  run_id        text references run(id) on delete cascade,  -- legacy/optional run anchor
+  author        text,                      -- human | assistant | tool
   content       text,
+  tool_calls    jsonb,                     -- assistant turn: [{id,name,input}]
+  tool_result   jsonb,                     -- tool turn: {tool_use_id, content, is_error}
   created_at    timestamptz default now()
 );
+
+create index if not exists chat_thread_eng_role on chat_thread(engagement_id, role, updated_at desc);
+create index if not exists chat_message_thread  on chat_message(thread_id, created_at);
 
 -- Local demo: reads go through the server (service role). RLS left off for simplicity;
 -- enable + add policies before any multi-tenant / hosted use.

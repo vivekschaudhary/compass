@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Job, JobKind, Role, Activity, GENERIC_WORKFLOWS } from "@/app/lib/data";
+import type { Anchor } from "@/app/lib/agent-client";
 import { relatedLink } from "@/app/lib/format";
 import { HistoryTable } from "./HistoryTable";
 
@@ -14,6 +15,8 @@ function KindIcon({ kind }: { kind: JobKind }) {
     blocked: <><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></>,
     drafting: <><path d="M12 3a9 9 0 1 0 9 9" /></>,
     build: <><polygon points="6 3 20 12 6 21 6 3" /></>,
+    question: <><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.7.3-1.2.9-1.2 1.6v.5" /><path d="M12 17h.01" /></>,
+    staffing: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
   };
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -29,13 +32,15 @@ const ICON_WRAP: Record<JobKind, string> = {
   blocked: "bg-bad-weak text-bad",
   drafting: "bg-shell text-faint",
   build: "bg-ink text-white",
+  question: "bg-brand-weak text-brand-ink",
+  staffing: "bg-brand-weak text-brand-ink",
 };
 
 function JobCard({
   job, onGetHelp, onAction, busy, actor, atlassianBase,
 }: {
   job: Job;
-  onGetHelp: () => void;
+  onGetHelp: (anchor?: Anchor) => void;
   onAction: (jobId: string, which: "primary" | "secondary") => void;
   busy: boolean;
   actor?: string;
@@ -46,6 +51,8 @@ function JobCard({
   const drafting = job.kind === "drafting";
   const blocked = job.kind === "blocked";
   const isBuild = job.kind === "build";
+  const isQuestion = job.kind === "question";
+  const isStaffing = job.kind === "staffing";
   const [bstate, setBstate] = useState<"idle" | "running" | "done" | "failed">("idle");
   const [log, setLog] = useState("");
   const logRef = useRef<HTMLPreElement>(null);
@@ -113,7 +120,7 @@ function JobCard({
               {job.primary && (
                 <button
                   disabled={busy}
-                  onClick={() => (blocked ? onGetHelp() : onAction(job.id, "primary"))}
+                  onClick={() => (blocked ? onGetHelp(job.related ? { kind: "ticket", id: job.related } : { kind: "job", id: job.id }) : onAction(job.id, "primary"))}
                   className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-opacity disabled:opacity-50 ${
                     job.tone === "bad" ? "bg-bad text-white hover:opacity-90" : blocked ? "border border-line-2 bg-card text-body hover:bg-shell" : "bg-brand text-white hover:opacity-90"
                   }`}
@@ -125,6 +132,12 @@ function JobCard({
           )}
         </div>
       </div>
+
+      {/* the agent asked — answer inline; the structured value patches state directly */}
+      {isQuestion && job.question && <QuestionControl q={job.question} />}
+
+      {/* one grouped card to name every unstaffed role — answer together, skip any to staff later */}
+      {isStaffing && job.staffing && <StaffingControl items={job.staffing} />}
 
       {/* live build log — a real process spawned in the compass repo */}
       {isBuild && bstate !== "idle" && (
@@ -143,6 +156,91 @@ function JobCard({
           <pre ref={logRef} className="mono max-h-36 overflow-y-auto bg-[#0e1420] px-3 py-2 text-[10px] leading-relaxed text-[#c8cdd6]">{log || "starting…"}</pre>
         </div>
       )}
+    </div>
+  );
+}
+
+// The inline answer control on a `question` job — a structured pick (choice) / field (number|text)
+// that patches the allowlisted target directly and clears the question on save. [agent-asks-structured-questions]
+function QuestionControl({ q }: { q: NonNullable<Job["question"]> }) {
+  const router = useRouter();
+  const [value, setValue] = useState(q.type === "choice" ? (q.options?.[0] ?? "") : "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!value.trim() || saving) return;
+    setSaving(true);
+    try {
+      await fetch("/api/questions/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ questionId: q.id, value }) });
+      router.refresh();
+    } catch { setSaving(false); }
+  }
+
+  return (
+    <div className="mx-3 mb-3 flex flex-wrap items-center gap-2 rounded-tile border border-line bg-shell/40 px-3 py-2.5">
+      {q.type === "choice" ? (
+        <div className="flex flex-wrap gap-1.5">
+          {(q.options ?? []).map((o) => (
+            <button key={o} onClick={() => setValue(o)} className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${value === o ? "border-brand bg-brand-weak text-brand-ink" : "border-line bg-card text-body hover:bg-shell"}`}>{o}</button>
+          ))}
+        </div>
+      ) : (
+        <input
+          type={q.type === "number" ? "number" : "text"}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+          placeholder={q.type === "number" ? "Enter a number" : "Type your answer…"}
+          className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-[13px] text-body outline-none focus:border-brand"
+        />
+      )}
+      <button onClick={save} disabled={!value.trim() || saving} className="ml-auto rounded-lg bg-brand px-3 py-2 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+        {saving ? "Saving…" : "Save answer"}
+      </button>
+    </div>
+  );
+}
+
+// The grouped "Staff the team" card — one row per unnamed role, saved together. Empty rows are
+// skipped (staff later); each filled name patches that member via the batch answer endpoint.
+function StaffingControl({ items }: { items: NonNullable<Job["staffing"]> }) {
+  const router = useRouter();
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const filled = items.filter((it) => (names[it.id] ?? "").trim()).length;
+
+  async function save() {
+    if (!filled || saving) return;
+    setSaving(true);
+    try {
+      const answers = items.map((it) => ({ questionId: it.id, value: names[it.id] ?? "" })).filter((a) => a.value.trim());
+      await fetch("/api/questions/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers }) });
+      router.refresh();
+    } catch { setSaving(false); }
+  }
+
+  return (
+    <div className="mx-3 mb-3 rounded-tile border border-line bg-shell/40 px-3 py-2.5">
+      <div className="flex flex-col gap-1.5">
+        {items.map((it) => (
+          <div key={it.id} className="flex items-center gap-2">
+            <span className="w-40 shrink-0 truncate text-[12.5px] font-medium text-body">{it.title}</span>
+            <input
+              value={names[it.id] ?? ""}
+              onChange={(e) => setNames((n) => ({ ...n, [it.id]: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+              placeholder="Name…"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-1.5 text-[13px] text-body outline-none focus:border-brand"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2.5 flex items-center justify-end gap-2">
+        <span className="text-[11.5px] text-muted">{filled} of {items.length} named</span>
+        <button onClick={save} disabled={!filled || saving} className="rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+          {saving ? "Saving…" : "Save team"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -176,7 +274,7 @@ export function JobsQueue({
 }: {
   role: Role;
   jobs: Job[];
-  onGetHelp: () => void;
+  onGetHelp: (anchor?: Anchor) => void;
   onAction: (jobId: string, which: "primary" | "secondary") => void;
   busy: string | null;
   onCreateBet?: () => void;

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase";
 import { logActivity } from "./activity";
+import { raiseQuestions, type AgentQuestion } from "./questions";
 
 // A streamed, step-logged execution — the shared spine behind every AI action. The body emits
 // granular steps via step(); this streams them live to the client, persists the full log as a
@@ -19,6 +20,8 @@ export type ExecOutcome = {
   title: string;        // history/activity title
   related?: string;     // jira key / epic / url — the "task #" + deep link
   status?: "done" | "failed" | "filed";
+  questions?: AgentQuestion[];  // gaps this agent couldn't resolve → filed to ITS role's jobs-to-do
+                                // ([agent-asks-structured-questions]); persisted here for every streamed agent
 };
 
 export function streamExecution(meta: ExecMeta, body: (step: (s: string) => void) => Promise<ExecOutcome>): Response {
@@ -50,6 +53,11 @@ export function streamExecution(meta: ExecMeta, body: (step: (s: string) => void
             error: ok ? null : "exec failed", log, created_at: new Date().toISOString(),
           });
           await logActivity(sb, { engagementId: meta.engagementId, role: meta.role, actor: meta.actor, kind: meta.kind, title: outcome.title, related: outcome.related, status, runId });
+          // any agent can raise structured questions into ITS OWN role's jobs-to-do just by
+          // returning them — one hook covers every streamed agent ([agent-asks-structured-questions])
+          if (ok && outcome.questions?.length) {
+            await raiseQuestions(sb, { engagementId: meta.engagementId, role: meta.role, source: meta.kind }, outcome.questions);
+          }
         } catch { /* persistence best-effort */ }
       }
 
