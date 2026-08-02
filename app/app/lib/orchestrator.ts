@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import { supabaseAdmin } from "./supabase";
 import { resolveRunPlan } from "./repo";
-import { transitionIssue, jiraForStory, type JiraCreds } from "./jira";
+import { transitionIssue, issueStatus, jiraForStory, type JiraCreds } from "./jira";
 import { logActivity } from "./activity";
 import { gateOnPr } from "./lifecycle";
 
@@ -24,7 +24,12 @@ export async function runOrchestrator(opts: {
   push(plan.header);
 
   const jira = await jiraForStory(storyKey);
+  // #123: remember where the ticket was. The transition below happens BEFORE the spawn, so a
+  // run the orchestrator refuses at a pre-dispatch gate would otherwise strand the board at
+  // "In Progress" for work that never began — the same lie those gates exist to prevent.
+  let priorStatus: string | null = null;
   if (jira) {
+    priorStatus = await issueStatus(jira, storyKey);
     const ok = await transitionIssue(jira, storyKey, "In Progress");
     push(`[jira] ${storyKey} → In Progress${ok ? "" : " (skipped)"}\n\n`);
   }
@@ -46,6 +51,15 @@ export async function runOrchestrator(opts: {
     child.on("close", (c: number | null) => resolve(c));
   });
   push(`\n[compass-run exit ${code}]\n`);
+
+  // #123: exit 3 is a pre-dispatch ENTRY gate — the orchestrator refused before dispatching an
+  // agent, creating a branch, or touching the repo. Nothing ran, so nothing should look started:
+  // put the ticket back where it was.
+  if (code === 3 && jira && priorStatus) {
+    const reverted = await transitionIssue(jira, storyKey, priorStatus);
+    push(`[jira] ${storyKey} → ${priorStatus} (reverted — the run never started)` +
+         `${reverted ? "" : " (skipped)"}\n`);
+  }
 
   // finalize — persist the run + gate on the PR when green (same handshake as build)
   await finalize({ runId, storyKey, workflow, code, log, jira, push });
