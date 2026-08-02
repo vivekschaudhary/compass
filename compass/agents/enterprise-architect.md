@@ -182,13 +182,18 @@ Third `/setup-foundation-architecture` task (the legacy workflow's "Phase B — 
 
 1. **Plan the scaffold** — present every file to be created, grouped by purpose (entrypoints, configs, CI). **Wait for explicit user confirmation before writing anything** (no silent writes).
 2. **Scaffold** — boundary folders, CI/CD configs, base configs, strictly from the locked elicited picks (no new decisions at scaffold time).
-3. **Populate `compass/config.yaml`** — anchor + 4 layer picks, fitness-function thresholds, tool selections.
+3. **Populate `compass/config.yaml`** — anchor + 4 layer picks, fitness-function thresholds, tool selections, **plus these two top-level keys by name (#122 — load-bearing, not optional):**
+   - **`stack:`** — the profile the delivery agents read build/test contracts from. A shipped profile name (`nextjs-ts` · `dotnet-blazor`), or a new one you author at `compass-overrides/stacks/<name>.md` when the elicited stack is neither. Map it from the Layer-1/2 picks; unquoted.
+   - **`checks:`** — a block list of CI-parity commands that **mirrors the CI workflow you scaffolded in step 2, command-for-command**. This is what the orchestrator runs in the worktree to VERIFY a branch before opening a PR; it is read from the project's own config and never inherited from the framework's.
+
+   Writing neither is a setup failure, not a stylistic gap: **a code workflow that resolves zero checks HALTS** (#123), so `/build` and `/fix` cannot run at all on a project whose setup skipped this.
 4. **Deploy canaries — one per target (load-bearing).** For each deploy target in the ops pick (web | mobile | container | other), produce a canary proving the stack composes for THAT target; record `{kind, url, verified_at, notes?}` in `config.yaml` `ci_cd.canary_artifacts[]`. **Any failing target is an architecture blocker:** loop back — ADR/Amendments entry naming what changed, re-scaffold the affected pieces, re-canary. Multi-round deploy debugging mid-project is the most expensive failure class this gate prevents; one green target does NOT cover another.
 5. **Summarize** — table of files written + purpose + canary URLs.
 
 **Postconditions:**
 - File plan was presented and explicitly confirmed BEFORE any write; no files beyond the confirmed plan
 - `compass/config.yaml` populated with the elicited decisions
+- `compass/config.yaml` declares top-level **`stack:`** and **`checks:`**, and `checks:` matches the scaffolded CI workflow command-for-command (#122). Mechanically verifiable: `_resolve_checks(project_dir, compass_dir)` returns a non-empty suite
 - Every deploy target named in the ops pick has a `canary_artifacts[]` entry with `verified_at` — partial coverage fails
 - Summary table presented
 

@@ -72,7 +72,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 **Dispatches:** Enterprise Architect agent
 **Task definition:** `compass/agents/enterprise-architect.md` → Task `scaffold-foundation`
-**What it covers:** file plan presented → explicit user confirmation → scaffold boundary folders + CI/CD + base configs from locked picks → populate `compass/config.yaml` → **deploy canaries, one per target** (`ci_cd.canary_artifacts[]`; any failing target = architecture blocker → ADR + loop, partial coverage fails) → written-files + canary summary.
+**What it covers:** file plan presented → explicit user confirmation → scaffold boundary folders + CI/CD + base configs from locked picks → populate `compass/config.yaml` **including top-level `stack:` + `checks:` (#122 — `checks:` mirrors the scaffolded CI command-for-command; without them every later `/build` and `/fix` HALTS, #123)** → **deploy canaries, one per target** (`ci_cd.canary_artifacts[]`; any failing target = architecture blocker → ADR + loop, partial coverage fails) → written-files + canary summary.
 **Host note:** requires a filesystem-capable host. On text-only API dispatch the task degrades per its Host-capability rule: file plan + full contents as text, canaries marked "pending human verification" — never claimed green.
 
 ### Step 6. `delivery-manager.update-status` (Delivery Manager agent owns)
@@ -89,6 +89,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 - [ ] (Step 3) Auth model aligns with product Access & Data Posture (divergence = DRI Risk, not silent) · DB pick cites the data model · ops targets map to canary kinds
 - [ ] (Step 3) Alternatives evaluated against fitness functions (no strawmen) · DRI ≥1 Decision AND ≥1 Risk · mirror done or skip DRI-logged
 - [ ] (Step 5) File plan confirmed BEFORE writes · no files beyond plan · config.yaml populated · **every deploy target has a green canary entry with `verified_at` — partial coverage fails**
+- [ ] (Step 5) config.yaml declares top-level `stack:` + `checks:`, `checks:` mirroring the scaffolded CI command-for-command — mechanically: `_resolve_checks(project_dir, compass_dir)` non-empty (#122; empty ⇒ every later code run halts, #123)
 - [ ] If amend (v2+): superseded file renamed with `status: superseded` · ADR/Amendments has ≥1 new entry citing the trigger
 - [ ] Principle #16: neither gate self-approved; nothing scaffolded before Step 4 approval
 

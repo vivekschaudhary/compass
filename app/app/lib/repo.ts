@@ -46,7 +46,13 @@ export async function resolveRunPlan(storyKey: string, workflow: "build" | "fix"
     // framework projection (compass-app building itself) has none → point --compass-dir at the
     // framework the app runs from so the orchestrator finds build.md et al. A project that vendors
     // its own projection is left untouched (no flag → default project-local resolution + overrides).
-    const compassDir = existsSync(`${repoPath}/compass`) ? "" : COMPASS_DIR;
+    //
+    // #122: probe compass/WORKFLOWS, not compass/. A project that vendors nothing but still needs a
+    // compass/config.yaml — which every project now does, to declare the CI-parity `checks:` a code
+    // run halts without (#123) — has a compass/ dir with no workflows/ in it. Probing the bare dir
+    // dropped --compass-dir for those projects and the run died with "workflow file not found",
+    // i.e. following the halt's own remediation broke the launcher.
+    const compassDir = existsSync(`${repoPath}/compass/workflows`) ? "" : COMPASS_DIR;
     const compassArg = compassDir ? ["--compass-dir", compassDir] : [];
     return {
       // --non-interactive: the app spawns this headless (no stdin), so the orchestrator must never
