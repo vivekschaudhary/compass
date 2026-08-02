@@ -11,6 +11,17 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+# #149: git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE to its hooks, and those OVERRIDE cwd
+# for every `git` subprocess that inherits them. The orchestrator tests shell out to git — including
+# `stash`, `checkout`, `clean` and `worktree` — inside temp fixture repos, so leaking this context
+# retargets them at THIS repo: ~16 tests fail with nonsense, and the destructive ones run against
+# the real working tree (observed: a clobbered core.worktree, fixture branches, deleted untracked
+# files). Hand the checks a clean environment. The suite scrubs these itself too — belt and braces,
+# so a future step added here can't re-inherit the trap.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX \
+      GIT_OBJECT_DIRECTORY GIT_COMMON_DIR GIT_ALTERNATE_OBJECT_DIRECTORIES \
+      GIT_NAMESPACE GIT_CEILING_DIRECTORIES
+
 echo "[pre-commit] consistency-check …"
 python3 compass/scripts/consistency-check.py --repo-root "$repo_root"
 
