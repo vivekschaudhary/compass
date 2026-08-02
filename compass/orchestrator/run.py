@@ -1486,17 +1486,42 @@ def _resolve_compass_file(compass_dir: Path, project_dir: Path, rel_path: str):
     return default if default.exists() else None
 
 
-def _read_stack_from_config(compass_dir: Path):
+def _config_candidates(compass_dir: Path, project_dir=None) -> list:
+    """#122: the config files that may declare framework-level settings, in precedence
+    order — the PROJECT's `compass/config.yaml` first, the framework's second. The two
+    are the same file only when a project vendors the framework; under the documented
+    one-framework-many-projects layout (SETUP.md) they differ, which is exactly the case
+    that made a consumer's `stack:` inert. Existing files only, deduped."""
+    candidates, seen = [], set()
+    ordered = ([Path(project_dir) / "compass" / "config.yaml"] if project_dir is not None else [])
+    ordered.append(Path(compass_dir) / "config.yaml")
+    for path in ordered:
+        if not path.exists():
+            continue
+        key = path.resolve()
+        if key not in seen:
+            seen.add(key)
+            candidates.append(path)
+    return candidates
+
+
+def _read_stack_from_config(compass_dir: Path, project_dir=None):
     """Read the `stack:` field from compass/config.yaml — selects which stack profile
     (`compass/stacks/<stack>.md`) is injected into the delivery agents. None if unset
     (agents run stack-neutral). The stack is pluggable config, never hardcoded in an
-    agent file."""
-    config_file = compass_dir / "config.yaml"
-    if not config_file.exists():
-        return None
-    m = re.search(r'^stack:\s*([^\s#]+)', config_file.read_text(encoding="utf-8"),
-                  re.MULTILINE)
-    return m.group(1).strip() if m else None
+    agent file.
+
+    #122: the PROJECT's config wins, then the framework's. `/setup-foundation-architecture`
+    writes `stack:` into the CONSUMER's config.yaml; reading only `compass_dir` meant that
+    write never activated anything (the stack-default check suite stayed empty → the
+    'NO CHECKS DECLARED' class). Quotes are stripped so `stack: "nextjs-ts"` resolves the
+    same as bare — an unstripped quote silently missed the profile lookup."""
+    for config_file in _config_candidates(compass_dir, project_dir):
+        m = re.search(r'^stack:\s*([^\s#]+)', config_file.read_text(encoding="utf-8"),
+                      re.MULTILINE)
+        if m:
+            return m.group(1).strip().strip("\"'")
+    return None
 
 
 def _load_stack_context(compass_dir: Path, project_dir: Path, stack: str) -> str:
@@ -1933,7 +1958,14 @@ def _parent_fix_under_epic(project_dir, bet_id, fix_rel):
 
 def _read_checks_from_config(project_dir):
     """#92: read a `checks:` list (inline `[a, b]` or block `- a`) from the PROJECT's
-    config.yaml — the CI-parity commands the orchestrator runs before opening a PR."""
+    config.yaml — the CI-parity commands the orchestrator runs before opening a PR.
+
+    #122: deliberately reads the PROJECT's config ONLY — never the framework's. Checks
+    mirror the project's own CI, so inheriting them across projects is always wrong: a
+    consumer with no config of its own would silently run the FRAMEWORK's suite (e.g.
+    Compass's `python3 -m unittest …`) against the consumer's codebase. `stack:` falls
+    back to the framework config; `checks:` must not. A zero-indent list (`checks:\\n- a`)
+    is valid YAML and is accepted."""
     config = Path(project_dir) / "compass" / "config.yaml"
     if not config.exists():
         return []
@@ -1947,7 +1979,7 @@ def _read_checks_from_config(project_dir):
             in_block = True
             continue
         if in_block:
-            m = re.match(r"^\s+-\s*(.+)$", s)
+            m = re.match(r"^\s*-\s*(.+)$", s)
             if m:
                 cmds.append(m.group(1).strip().strip("\"'"))
             elif s and not s[0].isspace():
@@ -1958,9 +1990,30 @@ def _read_checks_from_config(project_dir):
 def _resolve_checks(project_dir, compass_dir):
     """#92: the CI-parity check commands. Prefers the project's `config.yaml checks:`
     (set to mirror its CI); falls back to the active stack's default suite. Empty →
-    nothing declared (a warning, not a silent skip)."""
+    nothing declared (a warning, not a silent skip).
+
+    #122: asymmetric by design — `checks:` come from the project alone, while `stack:`
+    resolves project-first-then-framework. See each reader's docstring."""
     return (_read_checks_from_config(project_dir)
-            or list(_STACK_CHECKS.get(_read_stack_from_config(compass_dir) or "", [])))
+            or list(_STACK_CHECKS.get(
+                _read_stack_from_config(compass_dir, project_dir) or "", [])))
+
+
+def _scaffold_checks_warning(project_dir, compass_dir):
+    """#122: after `scaffold-foundation`, the project must be able to VERIFY its own code.
+    That task owns writing `stack:` + `checks:`; when it didn't, say so HERE — at setup
+    time, where the fix is one config edit — instead of at the first `/build` or `/fix`,
+    which halts (#123). Returns the warning text, or None when checks resolve.
+
+    Warn, not halt: setup is legitimately re-runnable and a human gate follows it."""
+    if _resolve_checks(project_dir, compass_dir):
+        return None
+    config = Path(project_dir) / "compass" / "config.yaml"
+    return ("⚠ SETUP INCOMPLETE — scaffold-foundation finished but "
+            f"{config} still resolves ZERO CI-parity checks. Add a top-level `checks:` "
+            "block mirroring the CI workflow just scaffolded (or a `stack:` naming a "
+            "shipped profile for its default suite). Until then EVERY /build and /fix on "
+            "this project halts — a code run must be verifiable (#122/#123).")
 
 
 def _run_checks(exec_dir, checks, runner=None):
@@ -2311,7 +2364,9 @@ def _run_workflow(
     # read the project's build/test/runtime contracts from a pluggable profile selected
     # by config.yaml `stack:` (override-resolved). Loaded once here; injected per
     # delivery step below. No `stack:` (or no profile) → agents run stack-neutral.
-    stack = _read_stack_from_config(compass_dir)
+    # #122: pass project_dir so the injected PROFILE and the stack-default CHECK SUITE
+    # can never disagree about which stack is active (both resolve project-first).
+    stack = _read_stack_from_config(compass_dir, project_dir)
     stack_profile_text = _load_stack_context(compass_dir, project_dir, stack) if stack else ""
     if stack and stack_profile_text:
         print(f"[stack] Loaded stack profile '{stack}'")
@@ -2991,6 +3046,15 @@ def _run_workflow(
                 if pr:
                     print(f"[PR opened on green checks → {pr}]")
                     emit(ev.NOTE, text=f"PR opened on green checks → {pr}")
+
+        # #122: setup owns leaving the project verifiable. Surface a miss at setup time,
+        # not at the first code run (which halts, #123) — [fail-loud-not-silent], and the
+        # cheapest possible moment to fix it.
+        if step.task == "scaffold-foundation" and allow_write and not no_write:
+            _setup_warn = _scaffold_checks_warning(project_dir, compass_dir)
+            if _setup_warn:
+                print("\n" + _setup_warn, file=sys.stderr)
+                emit(ev.NOTE, text=_setup_warn)
 
     # #145: a write-mode run that did real work but left it uncommitted hasn't
     # DELIVERED it (no commit → no PR → no deploy — the "I didn't see a deployment"

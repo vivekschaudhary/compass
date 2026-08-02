@@ -14,6 +14,8 @@ The delivery agents are stack-agnostic; this profile supplies the .NET/Blazor sp
 - **unit / component tests:** `dotnet test`
 - **E2E / component framework:** detected from the **test `.csproj` `<PackageReference>`s** (there is NO `package.json`) — **bUnit** (Blazor component tests), **xUnit / NUnit / MSTest** (unit/integration), **Playwright for .NET / Selenium** (browser E2E).
 
+**Orchestrator CI-parity check suite (#92):** the default commands the orchestrator runs in the worktree to verify a branch *before it opens the PR* — `dotnet format --verify-no-changes · dotnet build -c Release · dotnet test`. (No explicit `restore` step: `dotnet build` restores implicitly.) Override to match your exact CI via `config.yaml` `checks:`. Selecting this profile requires `stack: dotnet-blazor` in config.yaml — without a `stack:` or an explicit `checks:` list, a code workflow resolves zero checks and **halts** (#122/#123).
+
 ## Production-build runtime-artifact inspection (`[mechanical-output-verification]`)
 Inspect what actually runs, not just the exit code:
 - **Compiled output:** `bin/Release/net*/<assembly>.dll` exists; verify referenced dependency versions in `*.deps.json`.

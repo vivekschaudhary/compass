@@ -164,12 +164,25 @@ tool_assignments:
 # self-reported by the agent, and a PR is only ever opened on green (clean by construction).
 # Set this to MIRROR your CI workflow exactly (so local and CI can't diverge). When unset,
 # the orchestrator falls back to the active stack's default suite (see compass/stacks/).
-# checks:
-#   - pnpm install --frozen-lockfile
-#   - pnpm lint
-#   - pnpm typecheck
-#   - pnpm test
-#   - pnpm build
+#
+# LOAD-BEARING (#122/#123): a code workflow (build/fix/ops) that resolves ZERO checks
+# HALTS — it cannot verify what it wrote, so it must not open a PR or claim it shipped.
+# This block is read from the PROJECT's config only; it is never inherited from the
+# framework's (your checks are yours — see run.py `_read_checks_from_config`). So a
+# consumer project MUST declare its own here, or set `stack:` above for the default suite.
+#
+# The values below are COMPASS'S OWN, mirroring .github/workflows/consistency-check.yml
+# (`python` on the CI runner, `python3` locally — same interpreter). Replace them with
+# your project's CI commands. A typical Next.js/TypeScript project would use:
+#   checks:
+#     - pnpm install --frozen-lockfile
+#     - pnpm lint
+#     - pnpm typecheck
+#     - pnpm test
+#     - pnpm build
+checks:
+  - python3 -m unittest discover -s compass/orchestrator/tests
+  - python3 compass/scripts/consistency-check.py
 
 # ─── Connectors (MCP) ─────────────────────────────────────────────────
 # Wire these up in .mcp.json. The framework references them by name here.

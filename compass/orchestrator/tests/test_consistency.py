@@ -55,6 +55,11 @@ class TestDetectsDrift(unittest.TestCase):
         )
         (root / "README.md").write_text("orchestrator v0.4-alpha ships\n", encoding="utf-8")
         (root / "CLAUDE.md").write_text("notes\n", encoding="utf-8")
+        # #122: a config declaring a resolvable CI-parity suite. The shipped config is
+        # also every consumer's template, so it must never regress to commented examples.
+        (root / "compass" / "config.yaml").write_text(
+            "checks:\n  - make verify\n", encoding="utf-8"
+        )
         return root
 
     def tearDown(self):
@@ -121,6 +126,28 @@ class TestDetectsDrift(unittest.TestCase):
         (root / "pyproject.toml").write_text(
             '[project]\nversion = "1.0.0rc1"\n', encoding="utf-8")
         self.assertEqual(cc.check_version_unified(root), [])
+
+    # ── #122: the shipped config is also every consumer's template. It shipped with
+    # `checks:` commented out, so every project began life resolving zero checks — and
+    # a code workflow resolving zero checks now HALTS (#123).
+    def test_config_checks_commented_out_caught(self):
+        root = self._mirror()
+        (root / "compass" / "config.yaml").write_text(
+            "# checks:\n#   - pnpm lint\n#   - pnpm build\n", encoding="utf-8")
+        probs = cc.check_config_declares_checks(root)
+        self.assertTrue(any("config-checks drift" in p for p in probs), probs)
+
+    def test_config_missing_entirely_caught(self):
+        root = self._mirror()
+        (root / "compass" / "config.yaml").unlink()
+        probs = cc.check_config_declares_checks(root)
+        self.assertTrue(any("config-checks drift" in p for p in probs), probs)
+
+    def test_stack_alone_satisfies_the_check(self):
+        """A `stack:` with a shipped default suite is a valid way to declare checks."""
+        root = self._mirror()
+        (root / "compass" / "config.yaml").write_text("stack: nextjs-ts\n", encoding="utf-8")
+        self.assertEqual(cc.check_config_declares_checks(root), [])
 
 
 if __name__ == "__main__":

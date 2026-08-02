@@ -63,6 +63,119 @@ class TestResolveChecks(unittest.TestCase):
         d = self._proj("stack: cobol-9000\n")
         self.assertEqual(R._resolve_checks(d, d / "compass"), [])
 
+    # ── #122: parser shape edges. Post-#123 a mis-parse is a HARD HALT whose message
+    # says "declare checks:" while checks: is visibly present — maximally confusing.
+    def test_zero_indent_block_is_accepted(self):
+        """`checks:` followed by an unindented `- cmd` list is valid YAML; the old
+        `^\\s+-` pattern required indentation and silently dropped the whole block."""
+        d = self._proj("checks:\n- pnpm lint\n- pnpm build\n")
+        self.assertEqual(R._read_checks_from_config(d), ["pnpm lint", "pnpm build"])
+
+    def test_blank_line_inside_block_does_not_end_it(self):
+        d = self._proj("checks:\n  - pnpm lint\n\n  - pnpm build\n")
+        self.assertEqual(R._read_checks_from_config(d), ["pnpm lint", "pnpm build"])
+
+    def test_next_top_level_key_ends_the_block(self):
+        d = self._proj("checks:\n  - pnpm lint\nconnectors:\n  - github\n")
+        self.assertEqual(R._read_checks_from_config(d), ["pnpm lint"])
+
+    def test_quoted_stack_value_still_resolves(self):
+        """`stack: "nextjs-ts"` kept its quotes, so the profile/suite lookup missed and
+        the run went silently stack-neutral."""
+        d = self._proj('stack: "nextjs-ts"\n')
+        self.assertEqual(R._read_stack_from_config(d / "compass"), "nextjs-ts")
+        self.assertIn("pnpm build", R._resolve_checks(d, d / "compass"))
+
+
+class TestResolveChecksSplitDirs(unittest.TestCase):
+    """#122: the one-framework-many-projects layout (SETUP.md) — project_dir and
+    compass_dir are DIFFERENT trees. `checks:` was read from the project's config but
+    `stack:` from the framework's, so setup-foundation-architecture writing `stack:`
+    into the CONSUMER's config activated nothing. TestResolveChecks' `_proj` helper
+    passes `d, d/"compass"` so the two coincide — which is exactly why this was
+    invisible. These cases keep them apart."""
+
+    def _split(self, project_config=None, framework_config=None):
+        root = Path(tempfile.mkdtemp())
+        proj = root / "client-repo"
+        (proj / "compass").mkdir(parents=True)
+        fw = root / "framework" / "compass"
+        fw.mkdir(parents=True)
+        if project_config is not None:
+            (proj / "compass" / "config.yaml").write_text(project_config)
+        if framework_config is not None:
+            (fw / "config.yaml").write_text(framework_config)
+        return proj, fw
+
+    def test_project_stack_activates_the_default_suite(self):
+        """THE regression: `stack:` in the consumer's config — where setup writes it."""
+        proj, fw = self._split(project_config="stack: nextjs-ts\n",
+                               framework_config="framework_version: 1.0.0\n")
+        checks = R._resolve_checks(proj, fw)
+        self.assertEqual(checks[0], "pnpm install --frozen-lockfile")
+        self.assertIn("pnpm build", checks)
+
+    def test_project_checks_win_over_framework_stack(self):
+        proj, fw = self._split(project_config="checks:\n  - make verify\n",
+                               framework_config="stack: nextjs-ts\n")
+        self.assertEqual(R._resolve_checks(proj, fw), ["make verify"])
+
+    def test_framework_stack_is_the_fallback(self):
+        proj, fw = self._split(project_config="framework_version: 1.0.0\n",
+                               framework_config="stack: dotnet-blazor\n")
+        self.assertIn("dotnet test", R._resolve_checks(proj, fw))
+
+    def test_project_stack_wins_over_framework_stack(self):
+        proj, fw = self._split(project_config="stack: dotnet-blazor\n",
+                               framework_config="stack: nextjs-ts\n")
+        self.assertIn("dotnet test", R._resolve_checks(proj, fw))
+
+    def test_framework_checks_are_never_inherited(self):
+        """The asymmetry guard. `checks:` mirror a project's OWN CI, so inheriting them
+        across projects is always wrong — a consumer with no config of its own would
+        silently run the FRAMEWORK's suite (Compass's `python3 -m unittest …`) against
+        the consumer's codebase and call the result verification."""
+        proj, fw = self._split(
+            project_config="framework_version: 1.0.0\n",
+            framework_config="checks:\n  - python3 -m unittest discover -s compass\n")
+        self.assertEqual(R._resolve_checks(proj, fw), [])
+
+    def test_framework_checks_not_inherited_when_project_has_no_config(self):
+        proj, fw = self._split(
+            project_config=None,
+            framework_config="checks:\n  - python3 -m unittest discover -s compass\n")
+        self.assertEqual(R._resolve_checks(proj, fw), [])
+
+    def test_readers_still_accept_a_single_argument(self):
+        """Back-compat: existing call sites and tests pass one dir."""
+        proj, fw = self._split(project_config="checks:\n  - make verify\n",
+                               framework_config="stack: nextjs-ts\n")
+        self.assertEqual(R._read_checks_from_config(proj), ["make verify"])
+        self.assertEqual(R._read_stack_from_config(fw), "nextjs-ts")
+
+
+class TestScaffoldChecksWarning(unittest.TestCase):
+    """#122: scaffold-foundation owns leaving the project verifiable. A miss surfaces at
+    setup time (warn, re-runnable) rather than at the first code run (halt, #123)."""
+
+    def _proj(self, config_text):
+        d = Path(tempfile.mkdtemp())
+        (d / "compass").mkdir()
+        (d / "compass" / "config.yaml").write_text(config_text)
+        return d
+
+    def test_silent_when_checks_resolve(self):
+        d = self._proj("checks:\n  - make verify\n")
+        self.assertIsNone(R._scaffold_checks_warning(d, d / "compass"))
+
+    def test_warns_and_names_the_config_when_empty(self):
+        d = self._proj("framework_version: 1.0.0\n")
+        warn = R._scaffold_checks_warning(d, d / "compass")
+        self.assertIsNotNone(warn)
+        self.assertIn("SETUP INCOMPLETE", warn)
+        self.assertIn("config.yaml", warn)
+        self.assertIn("halts", warn)
+
 
 class TestDirtyPrNote(unittest.TestCase):
     """#109: on a FAILED check gate the halt message must not falsely claim 'no dirty

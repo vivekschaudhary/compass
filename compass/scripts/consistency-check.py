@@ -21,6 +21,12 @@ Checks (all COMPUTABLE, no human input):
      "Supported: ..." dispatch error string) is documented in AGENTS.md's host
      table. Added after Retro #025 caught `claude-code` missing from the table
      by hand — a new host must be added in code AND docs together.
+  5. Version unified — config.yaml `framework_version` (the single source, #38)
+     agrees with pyproject's `version`, normalized for rc/dash formatting.
+  6. Config declares checks — the shipped compass/config.yaml resolves a
+     non-empty CI-parity suite. It is also the consumer template, and a code
+     workflow resolving zero checks HALTS (#122/#123), so shipping it as
+     commented-out examples means every new project's first /build or /fix dies.
 
 Exit 0 = consistent; exit 1 = drift (prints each problem). Importable check
 functions return a list of problem strings for testing.
@@ -155,6 +161,42 @@ def check_host_list(repo_root: Path) -> list:
     return problems
 
 
+def check_config_declares_checks(repo_root: Path) -> list:
+    """#122: the shipped compass/config.yaml must declare a resolvable CI-parity suite.
+
+    This file is simultaneously the framework's own config AND the template every
+    consumer starts from (sync-into-consumer.py PRESERVES it, so a consumer's copy
+    never receives framework updates). It shipped with `stack:` and `checks:` as
+    COMMENTS, so every project began life resolving zero checks — and a code workflow
+    that resolves zero checks now HALTS (#123). Regressing this block back to comments
+    would ship a framework that cannot build itself, silently.
+
+    Imports the orchestrator's own resolver rather than reimplementing the parse — a
+    second parser is precisely the drift this script exists to prevent. The resolver is
+    imported from THIS script's own tree, then applied to `repo_root`: the target may be
+    any directory (including a synthetic test fixture) and need not be an importable
+    package. No config.yaml at all counts as drift — it is the file the check is about."""
+    self_root = Path(__file__).resolve().parents[2]
+    inserted = str(self_root) not in sys.path
+    if inserted:
+        sys.path.insert(0, str(self_root))
+    try:
+        from compass.orchestrator.run import _resolve_checks
+    except Exception as e:  # pragma: no cover - import failure is itself the drift
+        return [f"config-checks: could not import _resolve_checks to verify the "
+                f"shipped config ({e.__class__.__name__}: {e})."]
+    finally:
+        if inserted and sys.path and sys.path[0] == str(self_root):
+            sys.path.pop(0)
+
+    if _resolve_checks(repo_root, repo_root / "compass"):
+        return []
+    return ["config-checks drift: compass/config.yaml resolves ZERO CI-parity checks. "
+            "Declare a top-level `checks:` block (or a `stack:` with a shipped default "
+            "suite). This file is also the consumer template — shipping it empty means "
+            "every new project's first /build or /fix halts (#122/#123)."]
+
+
 def run_all(repo_root: Path) -> list:
     return (
         check_dispatch_graph_count(repo_root)
@@ -162,6 +204,7 @@ def run_all(repo_root: Path) -> list:
         + check_version_self_claims(repo_root)
         + check_version_unified(repo_root)
         + check_host_list(repo_root)
+        + check_config_declares_checks(repo_root)
     )
 
 
@@ -173,7 +216,8 @@ def main(argv=None) -> int:
 
     problems = run_all(repo_root)
     if not problems:
-        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims, version unified, host list all check out.")
+        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims, "
+              "version unified, host list, config checks all check out.")
         return 0
     print(f"DRIFT FOUND ({len(problems)}):\n", file=sys.stderr)
     for p in problems:
