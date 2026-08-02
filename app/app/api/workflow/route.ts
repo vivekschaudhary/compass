@@ -5,6 +5,7 @@ import { writeProviderDoc, stripHtml } from "@/app/lib/docstore";
 import { startWork, resolveWork, handoffForApproval } from "@/app/lib/lifecycle";
 import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
 import { generate, AI_MODEL } from "@/app/lib/dispatch";
+import { WORKFLOW_SPECS } from "@/app/lib/workflow-specs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,32 +13,8 @@ export const dynamic = "force-dynamic";
 // The generic per-role workflow runner — ONE path that drives every declared role workflow through
 // the AI-native ticket lifecycle. A spec says who owns it, what artifact it produces, and whether a
 // human must gate it; the runner does startWork → produce artifact → handoff (gated) | resolve.
-// New workflows go live by adding a spec entry here, not a new endpoint.
-type Spec = {
-  role: string;               // roleCode that owns the workflow
-  verb: string;               // human label for the artifact ("Design spec", "Security scan"…)
-  artifact: "confluence" | "comment";
-  gate: boolean;              // true = a human must approve → Awaiting HITL approval
-  gateRole?: string;          // who approves (default pm)
-  focus: string;              // the role-specific instruction handed to the agent
-};
-
-export const WORKFLOW_SPECS: Record<string, Spec> = {
-  "design-spec":    { role: "designer",     verb: "Design spec",      artifact: "confluence", gate: true,  gateRole: "pm",       focus: "Produce a design spec: user flows, key screens (described), states, and interaction notes. Functional, not visual pixel-detail." },
-  "copy":           { role: "ux-writer",    verb: "UX copy",          artifact: "confluence", gate: true,  gateRole: "pm",       focus: "Produce the UX copy deck: screen-by-screen microcopy, empty/error/success states, and voice notes. Exact strings, ready to paste." },
-  "tech-design":    { role: "architect",    verb: "Tech design",      artifact: "confluence", gate: true,  gateRole: "engineer", focus: "Produce a technical design: approach, key components/interfaces, data shape, risks, and a build sequence. No code." },
-  "bet-architecture":{ role: "architect",   verb: "Epic architecture",artifact: "confluence", gate: true,  gateRole: "engineer", focus: "Produce the epic-level architecture: boundaries, sequencing of the stories, and cross-cutting concerns." },
-  "launch-plan":    { role: "gtm",          verb: "Launch plan",      artifact: "confluence", gate: true,  gateRole: "pm",       focus: "Produce a go-to-market launch plan: audience, positioning, channels, timeline, and success metrics." },
-  "release-comms":  { role: "gtm",          verb: "Release comms",    artifact: "confluence", gate: true,  gateRole: "pm",       focus: "Produce release communications: changelog-style highlights, an internal note, and a customer-facing announcement." },
-  "execute-change": { role: "sre",          verb: "Change plan",      artifact: "comment",    gate: true,  gateRole: "delivery-manager", focus: "Produce a change-execution plan: steps, blast radius, rollback, and verification checks. Concise, checklist-style." },
-  "e2e":            { role: "automation",   verb: "E2E test plan",    artifact: "comment",    gate: false,                       focus: "Produce an end-to-end test plan: the critical user journeys, cases, and expected assertions. Checklist-style." },
-  "review-pr":      { role: "reviewer",     verb: "PR review",        artifact: "comment",    gate: false,                       focus: "Produce a code-review summary against the acceptance criteria: risks, gaps, and a clear approve/needs-work call." },
-  "scan":           { role: "scanner",      verb: "Security scan",    artifact: "comment",    gate: false,                       focus: "Produce a security scan summary: likely risk areas for this work, severity, and recommended mitigations." },
-  "docs":           { role: "tech-writer",  verb: "Docs update",      artifact: "confluence", gate: false,                       focus: "Produce the docs update this work implies: what pages change and the new/updated content." },
-  "runbook":        { role: "sre",          verb: "Runbook",          artifact: "confluence", gate: false,                       focus: "Produce an operational runbook: alerts, dashboards, common failures, and step-by-step responses." },
-  "status":         { role: "delivery-manager", verb: "Status roll-up", artifact: "comment", gate: false,                       focus: "Produce a crisp delivery status roll-up for this ticket: state, risks, and next step." },
-};
-
+// New workflows go live by adding a spec entry to lib/workflow-specs.ts, not a new endpoint.
+// #148: the specs moved to lib/ so the client imports them directly instead of mirroring them.
 const SYSTEM = (verb: string, focus: string) => `You are Compass's ${verb} agent working ONE ticket. ${focus}
 The document is grounded in the ticket + acceptance, with <h2> sections. Mark inferences as assumptions. Do NOT invent statistics.
 ${DOC_FORMAT}`;
