@@ -44,6 +44,16 @@ export async function createIssue(c: JiraCreds, opts: { type: string; summary: s
   return { key: (await res.json()).key };
 }
 
+// The issue's current status NAME, or null when it can't be read. Used to remember where a ticket
+// was before a speculative transition, so it can be put back if the work never actually started
+// (#123 — the orchestrator's pre-dispatch gates refuse before running anything).
+export async function issueStatus(c: JiraCreds, key: string): Promise<string | null> {
+  const r = await jreq(c, `/issue/${key}?fields=status`);
+  if (!r.ok) return null;
+  const name = (await r.json())?.fields?.status?.name;
+  return typeof name === "string" ? name : null;
+}
+
 // Move an issue to a target status by name (e.g. "In Progress", "Awaiting HITL approval", "Done").
 // Honest about the outcome: returns true only if the issue actually ENDS UP in the target
 // (transitioned, or already there); false if the status is unreachable — e.g. it hasn't been added
