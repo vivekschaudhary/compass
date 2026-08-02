@@ -67,5 +67,39 @@ class TestFixProjection(unittest.TestCase):
         self.assertIn("fallback", label)
 
 
+class TestUnshippedFixRecord(unittest.TestCase):
+    """#123: a /fix that opened NO pull request shipped nothing. The record is still
+    filed — it is the audit trail of the attempt — but it must never read as delivered.
+    The live failure filed KAN-17 with `status: in_review` and `pr: null`."""
+
+    def test_no_pr_renders_unshipped(self):
+        c = R._render_fix_record("FIX-1", "bug", None, "P1", "", "Broken login", "2026-08-02")
+        self.assertIn("status: unshipped", c)
+        self.assertNotIn("status: in_review", c)
+        self.assertIn("pr: null", c)
+        self.assertIn("UNSHIPPED", c)
+        self.assertIn("NO pull request", c)
+
+    def test_pr_present_renders_in_review(self):
+        c = R._render_fix_record("FIX-1", "bug", None, "P1",
+                                 "https://github.com/x/y/pull/9", "Broken login", "2026-08-02")
+        self.assertIn("status: in_review", c)
+        self.assertNotIn("status: unshipped", c)
+        self.assertNotIn("UNSHIPPED", c)
+        self.assertIn("pull/9", c)
+
+    def test_unshipped_record_does_not_claim_the_pr_carries_the_triage(self):
+        """The shipped body says 'the full triage is in the PR'. With no PR that line
+        points at nothing — the reader is sent to a document that does not exist."""
+        c = R._render_fix_record("FIX-1", "bug", None, "P2", "", "t", "2026-08-02")
+        self.assertNotIn("is in the PR", c)
+
+    def test_issue_type_is_unaffected_by_shipped_state(self):
+        """An unshipped enhancement is still a Story — the halt must not mislabel."""
+        c = R._render_fix_record("FIX-1", "enhancement", "WLT-9", "P2", "", "t", "2026-08-02")
+        self.assertIn("type: enhancement", c)
+        self.assertIn("Jira Story", c)
+
+
 if __name__ == "__main__":
     unittest.main()
