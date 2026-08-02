@@ -1513,8 +1513,8 @@ def _read_stack_from_config(compass_dir: Path, project_dir=None):
 
     #122: the PROJECT's config wins, then the framework's. `/setup-foundation-architecture`
     writes `stack:` into the CONSUMER's config.yaml; reading only `compass_dir` meant that
-    write never activated anything (the stack-default check suite stayed empty → the
-    'NO CHECKS DECLARED' class). Quotes are stripped so `stack: "nextjs-ts"` resolves the
+    write never activated anything — the stack-default check suite stayed empty, so every
+    code run was unverifiable (#123). Quotes are stripped so `stack: "nextjs-ts"` resolves the
     same as bare — an unstripped quote silently missed the profile lookup."""
     for config_file in _config_candidates(compass_dir, project_dir):
         m = re.search(r'^stack:\s*([^\s#]+)', config_file.read_text(encoding="utf-8"),
@@ -1590,24 +1590,38 @@ def _fix_title(output: str) -> str:
 
 def _render_fix_record(fid, ftype, bet_id, severity, pr_url, title, today) -> str:
     """#71: a minimal fix record (Compass-primary). `type:` drives the Jira issue type
-    (bug→Bug, enhancement→Story). The PR carries the full triage; this is the tracked item."""
+    (bug→Bug, enhancement→Story). The PR carries the full triage; this is the tracked item.
+
+    #123: with NO PR the record is `status: unshipped`, not `in_review`. A run that
+    produced no pull request shipped nothing, and a board item reading "in review" with
+    `pr: null` is the exact status theater this record exists to prevent. The record is
+    still filed — it is the audit trail of an attempt — but it never implies delivery."""
     jira_type = "Story" if ftype == "enhancement" else "Bug"
+    shipped = bool(pr_url)
+    body = (
+        "Tracked fix record (#71). Full triage — symptom/repro, root cause, regression "
+        "test, and the minimum fix — is in the PR.\n\n"
+        if shipped else
+        "**⚠ UNSHIPPED — this run produced NO pull request.** Nothing was delivered for "
+        "this item: no branch reached review, so there is no code to merge and nothing "
+        "to deploy. The record is filed as the audit trail of the attempt (#123). Re-run "
+        "the fix, or close this item, before treating it as done.\n\n"
+    )
     return (
         "---\n"
         f"id: {fid}\n"
         f"type: {ftype}\n"
         f"bet: {bet_id or 'null'}\n"
         f"hygiene: {'false' if bet_id else 'true'}\n"
-        "status: in_review\n"
+        f"status: {'in_review' if shipped else 'unshipped'}\n"
         f"severity: {severity}\n"
         f"pr: {pr_url or 'null'}\n"
         "author: Engineer\n"
         f"created: {today}\n"
         "---\n\n"
         f"# Fix: {title or fid}\n\n"
-        "Tracked fix record (#71). Full triage — symptom/repro, root cause, regression "
-        "test, and the minimum fix — is in the PR.\n\n"
-        f"- **PR:** {pr_url or '(none yet)'}\n"
+        + body
+        + f"- **PR:** {pr_url or '**none — nothing shipped**'}\n"
         f"- **type:** {ftype} → Jira {jira_type}\n"
         f"- **severity:** {severity}\n"
     )
@@ -2016,6 +2030,77 @@ def _scaffold_checks_warning(project_dir, compass_dir):
             "this project halts — a code run must be verifiable (#122/#123).")
 
 
+def _no_checks_halt_message(project_dir, compass_dir, workflow_name,
+                            resume_step=None, allow_write=True) -> str:
+    """#123: the halt text for a code workflow that resolved ZERO CI-parity checks.
+
+    One source of truth for the wording (rule 8's grep sweep gets a single target), used
+    by BOTH the pre-dispatch entry gate and the in-loop backstop. Carries diagnostics —
+    which config was read and how many commands parsed out of it — because the failure
+    modes are otherwise indistinguishable: a config with no `checks:` and a config whose
+    `checks:` block failed to parse produce the same empty list, and telling someone to
+    "add `checks:`" when `checks:` is visibly present is a maximally confusing first
+    contact."""
+    proj_config = Path(project_dir) / "compass" / "config.yaml"
+    stack = _read_stack_from_config(compass_dir, project_dir)
+    candidates = _config_candidates(compass_dir, project_dir)
+
+    lines = [
+        "Error: No checks declared for a code workflow. Add `stack:` + `checks:` to "
+        "config.yaml (CI-parity) so the orchestrator can verify before opening a PR. "
+        "Halting — a code run must be verifiable.",
+        "",
+        "  Inspected:",
+        "    `checks:` ← {} → {}".format(
+            proj_config,
+            "{} command(s)".format(len(_read_checks_from_config(project_dir)))
+            if proj_config.exists() else "no such file"),
+    ]
+    if candidates:
+        for path in candidates:
+            lines.append(f"    `stack:`  ← {path}")
+    else:
+        lines.append("    `stack:`  ← no config.yaml found in the project or the framework")
+
+    if stack:
+        lines += ["", f"  `stack: {stack}` has no built-in default check suite "
+                      f"(shipped: {' · '.join(sorted(_STACK_CHECKS))}) — declare "
+                      f"`checks:` explicitly for this stack."]
+
+    lines += ["", "  Note: `checks:` is read from the PROJECT's config only — never "
+                  "inherited from the framework's, since they mirror YOUR CI (#122)."]
+
+    if resume_step is not None:
+        lines += ["", "  Declare them, then resume:",
+                  f"    python3 -m compass.orchestrator.run {workflow_name} "
+                  f"--from-step {resume_step}"
+                  + (" --allow-write" if allow_write else "")]
+    else:
+        lines += ["", "  Declare them, then re-run the workflow."]
+    return "\n".join(lines)
+
+
+def _code_run_needs_checks(steps, workflow_name, allow_write, no_write,
+                           only_step=None, from_step=None) -> bool:
+    """#123: does THIS invocation reach a step that must be mechanically verified?
+
+    Knowable pre-dispatch — the graph is parsed before any gate runs — which is what
+    lets the halt land before a single agent is dispatched. Honors the same `only_step`
+    / `from_step` filters the run loop applies, so resume semantics stay correct:
+    `--from-step 4` on build still reaches `respond-to-review` and still gates, while
+    `--only-step 2` (a step that produces no code) does not."""
+    if workflow_name not in _CODE_WORKFLOWS or not allow_write or no_write:
+        return False
+    for step in steps:
+        if only_step is not None and step.number != only_step:
+            continue
+        if from_step is not None and step.number < from_step:
+            continue
+        if step.task in _CHECK_TASKS:
+            return True
+    return False
+
+
 def _run_checks(exec_dir, checks, runner=None):
     """#92: run each CI-parity check IN THE WORKTREE. Returns (ok, failed_cmd, tail).
     Stops at the first failure. `runner` injectable for tests. Never raises."""
@@ -2257,6 +2342,27 @@ def _run_workflow(
                       "into the listed story(ies) and flip them to `status: ready` before this UI "
                       "feature can build. Halting — design/copy gates are load-bearing (#171).",
                       file=sys.stderr)
+                sys.exit(3)
+            print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
+
+    # ── zero-checks gate (#123) — a code run must be verifiable ────────────────────
+    # A code workflow that resolves NO CI-parity checks runs no verification AND opens no
+    # PR (the orchestrator opens one only on green), yet used to warn-and-continue and
+    # finish as "completed" — a run that looked done while nothing shipped
+    # ([done-by-outcome-not-activity], Principle #20). Zero checks is a SETUP ERROR, not
+    # a soft warning.
+    #
+    # Pre-dispatch on purpose: build and fix hit their check task at STEP 1, so the
+    # in-loop backstop below would burn a full engineer dispatch — the single largest
+    # cost in a run — to learn something the parsed graph already knows, and would strand
+    # a work branch + worktree behind it. Nothing is created before this point.
+    if _code_run_needs_checks(steps, workflow_name, allow_write, no_write,
+                              only_step, from_step):
+        if not _resolve_checks(project_dir, compass_dir):
+            print("\n" + _no_checks_halt_message(project_dir, compass_dir, workflow_name,
+                                                 allow_write=allow_write),
+                  file=sys.stderr)
+            if not dry_run:
                 sys.exit(3)
             print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
 
@@ -3020,11 +3126,19 @@ def _run_workflow(
                 and step.task in _CHECK_TASKS):
             checks = _resolve_checks(project_dir, compass_dir)
             if not checks:
-                warn = ("⚠ NO CHECKS DECLARED — add a `checks:` list to config.yaml "
-                        "(CI-parity) so the orchestrator verifies lint/typecheck/test/build "
-                        "before the PR. Mechanical verification skipped this run.")
-                print("\n" + warn, file=sys.stderr)
-                emit(ev.NOTE, text=warn)
+                # #123: the BACKSTOP. The entry gate above catches this before any agent
+                # runs, but it is bypassable — a direct _run_workflow() call, the pipeline
+                # path, or a config edited mid-run. This is the only point that can
+                # STRUCTURALLY guarantee a code run never reports "completed" without
+                # verifying anything, so it halts rather than warns. Exit 1 (not 3): the
+                # event spine exists here, so a RUN_END is owed.
+                halt = _no_checks_halt_message(project_dir, compass_dir, workflow_name,
+                                               resume_step=step.number,
+                                               allow_write=allow_write)
+                print("\n" + halt, file=sys.stderr)
+                emit(ev.RUN_END, status="halted",
+                     reason="no checks declared for a code workflow")
+                sys.exit(1)
             else:
                 print(f"\n[checks] running {len(checks)} CI-parity check(s) in {exec_dir} …")
                 ok, failed, tail = _run_checks(exec_dir, checks)
@@ -3105,6 +3219,17 @@ def _run_workflow(
             if "fallback" in _fix_label and "not configured" not in _fix_label:
                 warn = (f"⚠ TRACKING INCOMPLETE — /fix produced no Jira item "
                         f"({_fix_label}). The work isn't on the board.")
+                print("\n" + warn, file=sys.stderr)
+                emit(ev.NOTE, text=warn)
+            # #123: the record is filed either way (audit trail of the attempt), but a
+            # run with no PR shipped NOTHING — say so where the operator reads the run,
+            # not only in the record's frontmatter. Silence here is how "ticket created"
+            # got mistaken for "work delivered".
+            if not _pr_url_any_state(project_dir, work_branch):
+                warn = (f"⚠ UNSHIPPED — {_fix_label} was filed with NO pull request. "
+                        f"Nothing was delivered: no branch reached review, so there is "
+                        f"nothing to merge or deploy. The item is on the board as an "
+                        f"ATTEMPT, not as work done.")
                 print("\n" + warn, file=sys.stderr)
                 emit(ev.NOTE, text=warn)
 
