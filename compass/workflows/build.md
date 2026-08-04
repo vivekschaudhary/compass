@@ -20,7 +20,7 @@ requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md
 What this workflow operationalizes. Full entries in `compass/framework/canon.md`.
 
 - **Compass-originals operationalized:** `[agent-as-surface-independent-unit]` (v0.3.14 — agent files own task content) · `[mechanical-output-verification]` (v0.3.6 — Engineer's runtime-artifact inspection in `implement-story`; Reviewer's framework-registration check in `review-pr` Step 0) · `[freshness-check]` (v0.3.3 → v0.3.11 — Phase 5 reviewer.md freshness gate; review-time freshness on NEW load-bearing claims) · `[agent-handoff]` (v0.3.5 — Engineer → Reviewer via `agent-handoff.yml` template, automated when consuming repo installs it) · `[role-boundary]` (v0.3.4 — Engineer writes code/unit/component tests; Reviewer writes E2E; PM arbitrates disputes; no overlap) · `[refuse-escalate]` (Engineer refuses to improvise architectural decisions) · `[soft-spec-hardening]` (vague AC pushes back to PM)
-- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization — `polished-but-broken` failure mode hardened via mechanical-output-verification) · Principle #16 (refuse + escalate to upstream) · Cross-host independence — Engineer (Claude) implements; Reviewer (Codex, deliberately different model per `preferred_hosts: [codex, gemini]`) reviews
+- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization — `polished-but-broken` failure mode hardened via mechanical-output-verification) · Principle #16 (refuse + escalate to upstream) · Maker ≠ checker — the Engineer implements; the Reviewer is a separate agent with no implementation history (#156); host is configurable
 
 ## Purpose
 
@@ -55,17 +55,17 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 ## Roles invoked (agents dispatched)
 
 - `compass/agents/engineer.md` — implementation + commit/push (the orchestrator opens the PR on green, #92) + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
-- `compass/agents/reviewer.md` — PR code review (migrated v0.3.16; `preferred_hosts: [codex, gemini]` deliberately excludes claude per cross-host integrity; task: `review-pr`. E2E authoring split to Automation in v0.3.33)
+- `compass/agents/reviewer.md` — PR code review (migrated v0.3.16; `preferred_hosts: [claude, codex, gemini]` — any host, #156; task: `review-pr`. E2E authoring split to Automation in v0.3.33)
 - `compass/agents/automation.md` — E2E tests + test framework + CI configs (NEW agent v0.3.33, split from Reviewer; task: `write-e2e-tests`)
 - `compass/agents/pm.md` — arbitrate Engineer-vs-Reviewer disputes (ad-hoc; fires only when Engineer adds `## Dispute` to PR; task: `arbitrate-dispute`)
-- `compass/agents/security-reviewer.md` (migrated v0.3.36; `preferred_hosts: [codex, gemini]` deliberately excludes claude) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions; task: `review-pr-security`
+- `compass/agents/security-reviewer.md` (migrated v0.3.36; `preferred_hosts: [claude, codex, gemini]` — any host, #156) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions; task: `review-pr-security`
 - `compass/agents/tech-writer.md` (migrated v0.3.36) — post-merge changelog accumulation (Phase 7); task: `accumulate-changelog`
 
 ## Dispatch graph
 
 The workflow walks this sequence. The runtime mechanism is one of:
 
-- **Today (no orchestrator):** human dispatcher — opens the right agent's host (e.g., Claude Code for Engineer; Codex CLI for Reviewer per its `preferred_hosts: [codex, gemini]`), pastes the workflow command, agent runs its task, halts at the next handoff, human transitions to the next agent's host. If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml`), the Engineer → Reviewer handoff is automated on CI-green per `[agent-handoff]` (canon v0.3.5).
+- **Today (no orchestrator):** human dispatcher — opens the right agent's host (e.g., Claude Code for Engineer; whichever host the engagement configures for Reviewer), pastes the workflow command, agent runs its task, halts at the next handoff, human transitions to the next agent's host. If `.github/workflows/ai-review.yml` is installed in the consuming repo (per `compass/scripts/agent-handoff.yml`), the Engineer → Reviewer handoff is automated on CI-green per `[agent-handoff]` (canon v0.3.5).
 - **v0.4 (orchestrator):** orchestrator walks the graph, dispatches each step to its assigned agent on its assigned host automatically; cross-host loops (Step 3 ↔ Step 4) handled natively.
 
 Either way, the GRAPH is the same.
@@ -230,7 +230,7 @@ After completion (or refusal), report in this exact shape:
 
 ## Discipline always
 
-No shortcuts under pressure. Full Reviewer review + Architect compliance + Security review (if applicable) on every PR including drafts and hotfixes. The cross-host integrity (Engineer ≠ Reviewer model) is structurally enforced via Reviewer's `preferred_hosts: [codex, gemini]` (claude deliberately excluded). Do NOT run Reviewer on Claude Code against code Claude Code wrote.
+No shortcuts under pressure. Full Reviewer review + Architect compliance + Security review (if applicable) on every PR including drafts and hotfixes. **Maker ≠ checker is structurally enforced (#156):** the Reviewer is a separate agent dispatched with no implementation history — the orchestrator withholds prior step outputs from review steps. The reviewer's HOST is configurable; what is never allowed is the implementer reviewing its own work or review collapsing into the build step.
 
 ## Notes
 
@@ -258,14 +258,14 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 - **Post-merge bug on shipped story** — reopen the story; do NOT create a separate "fix" story for the same defect. Handled at workflow-level pattern section above.
 - **`.github/workflows/ai-review.yml` installed** — Engineer → Reviewer handoff automated on CI-green per `[agent-handoff]` (canon v0.3.5). Either path (automated OR manual `codex` invocation) terminates at the same place (PR comment); automation removes the tool-switch only.
 - **Security-Reviewer auto-engages** in parallel with Reviewer when diff touches sensitive surfaces. Two reviews + two PR comments; both must clear (zero BLOCKERs + zero CRITICALs) before Step 7 mechanical merge constraints pass.
-- **Single-host run (everything on Claude Code)** — works but VIOLATES cross-host integrity per Reviewer's `preferred_hosts: [codex, gemini]`. Engineer can run on Claude Code; Reviewer task must dispatch to Codex CLI (or Gemini CLI) for a fresh model perspective. Do NOT run Reviewer-on-Claude against Claude-written code.
+- **Single-host run (everything on Claude)** — fully supported (#156). The Reviewer is a separate agent dispatched with **no implementation history** (the orchestrator withholds prior step outputs from review steps), so independence holds on one model. What is NOT allowed: folding review into the implementing step, or letting the engineer grade its own work. Do NOT run Reviewer-on-Claude against Claude-written code.
 - **Tech Writer / Security Reviewer migrated v0.3.36** — workflow references `compass/agents/tech-writer.md` (Task `accumulate-changelog`) + `compass/agents/security-reviewer.md` (Task `review-pr-security`). Legacy `compass/roles/` copies were removed in v1.0 (#38).
 
 ### Migration (v0.3.0-alpha → v0.3.23)
 
 - **v0.3.0-alpha:** gate/work/postcondition step content lived in this workflow file (7 phases, 164 lines, methodology embedded).
 - **v0.3.23:** content moved to `compass/agents/engineer.md` + `compass/agents/reviewer.md` + `compass/agents/pm.md` as task definitions. This file became a dispatch graph. **No behavior change.** Per Principle #16, every refusal case + verification gate preserved.
-- **Why:** `[agent-as-surface-independent-unit]` — agents are self-sufficient surface-independent units; tasks live in agents; workflows sequence tasks. Enables cross-host orchestration (Engineer on Claude Code + Reviewer on Codex CLI today; full orchestrator dispatch in v0.4).
+- **Why:** `[agent-as-surface-independent-unit]` — agents are self-sufficient surface-independent units; tasks live in agents; workflows sequence tasks. Enables cross-host orchestration (any agent on any configured host; full orchestrator dispatch in v0.4).
 - **What still works the same:** workflow-level preconditions, verification checklist, HITL gates, mechanical merge constraints, output summary contract, story → multiple PRs, post-merge bugs, Scanner at phase boundaries, COMPASS_ROLE_BOUNDARY markers (relocated from per-phase markers to per-dispatch-step markers — same token-attribution semantics).
 - **Companion workflow refactor expected:** `/fix` is the natural next workflow to refactor since its primary agent (Engineer) is migrated + has `fix-bug` task. `[workflow-as-dispatch-graph]` at 2 instances after v0.3.23 → 3rd instance with `/fix` refactor would trigger codification per Compass 3-instance rule.
 

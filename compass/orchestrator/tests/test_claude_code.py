@@ -335,7 +335,7 @@ class TestRemap(unittest.TestCase):
         self.assertEqual(runmod._remap_claude_cli(["claude"]), ["claude-code"])
 
     def test_reviewers_untouched(self):
-        # cross-model review independence: codex/gemini must NOT become claude-code
+        # --claude-cli remaps ONLY `claude`; other hosts pass through untouched
         self.assertEqual(runmod._remap_claude_cli(["codex", "gemini"]),
                          ["codex", "gemini"])
 

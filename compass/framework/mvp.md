@@ -47,7 +47,7 @@ Every agent lives in `compass/agents/` with self-sufficient frontmatter (`prefer
 | Delivery | `delivery-manager` |
 | Security | `security-reviewer` (codex/gemini) |
 
-Reviewer + security-reviewer declare `preferred_hosts: [codex, gemini]` — cross-model review independence enforced at the file level.
+Reviewer + security-reviewer declare `preferred_hosts: [claude, codex, gemini]` — any host (#156); review independence is maker ≠ checker on a fresh context, enforced at the file level.
 
 ---
 

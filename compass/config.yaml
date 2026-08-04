@@ -111,14 +111,16 @@ agents:
     note: "Declare your own invocation pattern. Use for agents not in the registry (self-hosted model, custom CLI wrapper, internal API, etc.)."
 
 # ─── Defaults ─────────────────────────────────────────────────────────
-# Sensible defaults matching Compass's empirically-validated split per
-# AGENTS.md "Tool division of labor" (Claude implements; Codex reviews —
-# different-model reviewer is structurally load-bearing per v0.3.5
-# same-day extension; CB-1.4 empirically validated). Any role not set
-# below in tool_assignments falls back to the appropriate default here.
+# Any role not set below in tool_assignments falls back to the default here.
+# #156: `reviews` was pinned to codex to force a DIFFERENT MODEL than the
+# implementer. That requirement is dropped — research did not support it.
+# Review independence is now structural (maker ≠ checker: a separate agent
+# dispatched with NO implementation history, whose findings gate the merge),
+# so the reviewer host is a free choice. Set it to whatever the engagement
+# has credentials for.
 defaults:
   implements:   claude              # for builder/maker roles
-  reviews:      codex               # for independent-model review roles
+  reviews:      claude              # any host; see the Agent registry above
   product:      claude              # for PM/discovery/visibility roles
   tech-writes:  claude              # for documentation roles
 
@@ -130,11 +132,21 @@ defaults:
 #   Example: pm: openai           ← use ChatGPT / GPT API for PM role
 #            designer: gemini     ← use Gemini for designer role
 #
-# IMPORTANT — reviewer/security_reviewer constraint: must use a
-# DIFFERENT MODEL than the implementer. Same-model reviewer + same-model
-# author share aesthetic priors and miss what an independent-model
-# reviewer catches. See AGENTS.md "Tool division of labor" for the
-# structural rationale + CB-1.4 empirical validation.
+# reviewer / security_reviewer may use ANY host, including the same one as
+# the implementer (#156). What is load-bearing is that they are SEPARATE
+# AGENTS run on a FRESH context — the orchestrator withholds prior step
+# outputs from review steps so the reviewer never inherits the engineer's
+# account of its own work. A client that prefers Codex, Gemini, or its own
+# model just changes the value here.
+#
+# BRING YOUR OWN MODEL: `claude`, `codex`, `codex-cli`, `gemini`, `openai`,
+# and `claude-code` have shipped host modules. Anything else is a seam, not
+# a capability — implementing it means adding a module under
+# `compass/orchestrator/hosts/` that exposes the same `dispatch(...)`
+# contract as `hosts/claude.py`, and registering it in `hosts/router.py`.
+# Declared, not implemented (`[declare-not-implement]`) — no adapter is
+# shipped for arbitrary providers, and pointing a role at an unregistered
+# host fails loudly at dispatch rather than silently degrading.
 tool_assignments:
   pm:                       claude    # defaults.product
   researcher:               claude    # defaults.product
@@ -144,8 +156,8 @@ tool_assignments:
   architect:                claude    # defaults.implements
   enterprise_architect:     claude    # defaults.implements
   engineer:                 claude    # defaults.implements — writes unit/API/component tests too
-  reviewer:                 codex     # defaults.reviews — writes E2E + automation framework
-  security_reviewer:        codex     # defaults.reviews
+  reviewer:                 claude    # defaults.reviews — any host; separate agent + fresh context is the control
+  security_reviewer:        claude    # defaults.reviews — any host
   tech_writer:              claude    # defaults.tech-writes
   delivery_manager:         claude    # defaults.product — renamed from project_manager in v0.3.15 (block deprecated for v0.4 removal anyway)
 

@@ -12,7 +12,7 @@ Enterprises run delivery on **status theater**. RAG decks that read green until 
 
 **Why this is possible now:** a platform can only ever _report on_ work that happens somewhere else — in people's heads, their IDEs, the meeting room — which is exactly why status theater was, until recently, the best anyone could do. Now that AI agents do the delivery itself — briefs, architecture, code, reviews — the work genuinely _runs on the platform_: the doing and the telling become one act. The control tower isn't a better dashboard; it's what becomes possible once those two collapse into one.
 
-Compass is a **multi-model delivery control tower**. The work — briefs, architecture, stories, builds, cross-model reviews, gated merges — **runs _on_ the platform**. So transparency isn't a status report you ask for; it's a **byproduct of execution**. The board can't lie, because the board _is_ the work.
+Compass is a **multi-model delivery control tower**. The work — briefs, architecture, stories, builds, independent reviews, gated merges — **runs _on_ the platform**. So transparency isn't a status report you ask for; it's a **byproduct of execution**. The board can't lie, because the board _is_ the work.
 
 That one property is the whole idea: a delivery exec opens one screen and knows the **ground truth** of every program — what's done, what's stuck, what decided what, what it cost, where the risk is — without asking anyone for a status, and without anyone being able to game it. And because the work runs on the platform, the tower can **prove every control the engagement must hit was met, with evidence** — governance and conformance as a _byproduct of execution_, not a report assembled after the fact.
 
@@ -60,9 +60,9 @@ A markdown-based framework that any AI tool can read. The framework lives in `co
 
 The control-tower capabilities are built and on `main` — early alpha, but real and tested:
 
-- **The delivery spine** — dispatch-graph workflows → per-role agents → HITL gates → **cross-model gated review** → merge. Plus a live **cockpit**: portfolio view of runs, awaiting gates (with age), per-step ✓/✗, live logs, cost, one-tap approve/reject. An append-only **event spine** is the orchestration-state + audit ledger.
+- **The delivery spine** — dispatch-graph workflows → per-role agents → HITL gates → **independent gated review** → merge. Plus a live **cockpit**: portfolio view of runs, awaiting gates (with age), per-step ✓/✗, live logs, cost, one-tap approve/reject. An append-only **event spine** is the orchestration-state + audit ledger.
 - **Stack-agnostic core** — agents carry the _methodology_; the stack is a pluggable profile (`compass/stacks/<stack>.md`). A project/engagement overrides templates, workflows, or stack **without forking** — _opinionated defaults, fully overridable_.
-- **Governed-delivery audit** — actor identity (who ran / who approved), a **cross-model-independence verdict** (the reviewer was a different model than the implementer), and the full Decision/Risk/Issue trail — exportable (`--export-audit`).
+- **Governed-delivery audit** — actor identity (who ran / who approved), a **review-independence verdict** (a separate reviewer agent ran on a fresh context with no implementation history; the models used are recorded as evidence), and the full Decision/Risk/Issue trail — exportable (`--export-audit`).
 - **Conformance to a control framework** — a control set (`controls.md`) maps each control → the delivery evidence that satisfies it → **met / at-risk / unmet**. _Prove every control was met — the audit can't lie, because it's drawn from the actual run._
 - **Canonical store + one-way projection** — deliverables are canonical _on Compass_ (plain markdown + an append-only ledger), then projected — idempotently, on draft creation and on approval — to your tracker and your docs space. Your tools stay in sync; Compass stays the source of truth.
 - **Exec control-tower view** (`--wbs`) — the live **program → bet → story** Work Breakdown Structure with ground-truth status, **manage-by-exception** (awaiting / stalled / blocked / conformance gaps), and the conformance rollup.
@@ -158,7 +158,7 @@ python3 -m compass.orchestrator.run create-product-brief \
   --context "We are building <your product description>."
 ```
 
-For cross-model review (Engineer → Claude, Reviewer → OpenAI):
+To put the Reviewer on a different provider (Engineer → Claude, Reviewer → OpenAI):
 
 ```bash
 export OPENAI_API_KEY=sk-...

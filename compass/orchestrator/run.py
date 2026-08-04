@@ -269,8 +269,9 @@ def _with_review_context(user_message: str, diff: str) -> str:
 def _remap_claude_cli(preferred_hosts: list) -> list:
     """#120: route Claude steps to the subscription-backed CLI host when opted in
     (--claude-cli / COMPASS_CLAUDE_HOST=cli). Remaps ONLY `claude` → `claude-code`;
-    reviewer hosts (codex/gemini) are untouched, preserving cross-model review
-    independence (the no-same-host-self-review principle)."""
+    Every host in the list is remapped uniformly; since #156 the reviewer may run on
+    claude too, and routing it to the subscription CLI is desirable, not a violation —
+    review independence is fresh context (see `_FRESH_CONTEXT_AGENTS`), not the host."""
     return ["claude-code" if h == "claude" else h for h in preferred_hosts]
 
 
@@ -1124,6 +1125,15 @@ def _condense_output(text: str) -> str:
     # no structured summary — fall back to a short head slice
     head = (text or "").strip()
     return head[:800] + ("\n[... truncated ...]" if len(head) > 800 else "")
+
+
+# #156: agents that must run with NO history of the work they are checking. Compass
+# used to buy reviewer independence by forcing a different MODEL (`preferred_hosts:
+# [codex, gemini]`); research did not support that, so the model is now configurable
+# and independence is bought STRUCTURALLY instead — a fresh agent, a clean context, and
+# only the diff + specs to go on. Keep this list in sync with the review steps in
+# build/fix/ops/triage.
+_FRESH_CONTEXT_AGENTS = ("reviewer", "security-reviewer")
 
 
 def _build_user_message(task: str, user_context: str, prior_outputs: list) -> str:
@@ -3007,7 +3017,18 @@ def _run_workflow(
             user_context = stack_profile_text + "\n" + user_context
             print(f"[stack] injected '{stack}' profile for {step.agent}")
 
-        user_message = _build_user_message(step.task, user_context, prior_outputs)
+        # #156: a review step runs as a FRESH agent with NO implementation history.
+        # Prior step outputs carry the Engineer's own account of what it built and why;
+        # feeding that to the reviewer anchors it to the implementer's narrative and it
+        # reviews the story rather than the code. Since the cross-MODEL requirement was
+        # dropped, context independence is the ONLY independence left — so it is enforced
+        # here, mechanically, not left to prose. The reviewer sees the diff (injected
+        # above), the specs, and the stack profile. Nothing else.
+        step_prior = [] if step.agent in _FRESH_CONTEXT_AGENTS else prior_outputs
+        if step.agent in _FRESH_CONTEXT_AGENTS and prior_outputs:
+            print(f"[review] fresh context — withheld {len(prior_outputs)} prior step "
+                  f"output(s) from {step.agent} (maker ≠ checker)")
+        user_message = _build_user_message(step.task, user_context, step_prior)
 
         agent_tools = _read_agent_tools(agent_file)
         if agent_tools and host == "claude":
@@ -3535,7 +3556,7 @@ def main(argv=None):
         "--export-audit",
         action="store_true",
         dest="export_audit",
-        help="Export the governance audit (who-did-what lineage · cross-model "
+        help="Export the governance audit (who-did-what lineage · review-"
              "independence · gate approvals + approver) and exit. Scope with "
              "--bet / --run-id; format with --audit-format.",
     )

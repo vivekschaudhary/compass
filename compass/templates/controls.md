@@ -13,7 +13,9 @@ control to the delivery evidence that satisfies it and reports its status
 **Format:** each control is a `## <ID> — <title>` heading followed by `- key: value`
 fields. `check:` binds the control to evidence Compass verifies automatically:
 
-- `cross-model-review` — an independent reviewer on a different model than the implementer
+- `independent-review` — a separate review agent, dispatched with no implementation
+  history, whose findings gate the merge (maker ≠ checker). Model disjointness is
+  reported as evidence but is not required (#156). Legacy alias: `cross-model-review`.
 - `human-approval` — a human approved the gated deliverable
 - `security-review` — a security-review step ran
 - `tests-present` — a test/automation step ran
@@ -22,10 +24,10 @@ fields. `check:` binds the control to evidence Compass verifies automatically:
 Place this file at `docs/controls.md` (engagement-wide) or `docs/bets/<bet-id>/controls.md`
 (per bet). Override the shipped defaults via `compass-overrides/templates/controls.md`.
 
-## CTRL-1 — Independent cross-model code review
+## CTRL-1 — Independent code review
 - category: governance
-- requirement: Every change is independently reviewed by a different model than the implementer.
-- check: cross-model-review
+- requirement: Every change is reviewed by an agent other than the implementer, running with no implementation history, whose blocking findings must be resolved before merge.
+- check: independent-review
 
 ## CTRL-2 — Human approval gate
 - category: governance

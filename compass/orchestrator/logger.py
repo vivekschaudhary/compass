@@ -280,8 +280,8 @@ def print_run_table(project_dir: Path) -> None:
 # Actor identity + governance audit (the SOW-conformance wedge — provenance half)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Map an agent name → its delivery ROLE, so the audit can assert cross-model
-# independence (the reviewer role on a different model than the implementer).
+# Map an agent name → its delivery ROLE, so the audit can assert review
+# independence (maker ≠ checker: a reviewer role distinct from the implementer).
 # Unknown agents fall back to their own name.
 _ROLE_BY_AGENT = {
     "engineer": "implementer",
@@ -465,7 +465,7 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
                 controls_path: str = None) -> dict:
     """Assemble the governance audit for a bet (or a single run): the who-did-what
     lineage the SOW-conformance wedge needs — per-step agent/role/host/model, gate
-    decisions + approver identity, and the **cross-model-independence verdict**
+    decisions + approver identity, and the **review-independence verdict**
     (reviewer-role model(s) disjoint from the implementer's). Reads runs.jsonl +
     hitl.jsonl (per-project) + the user-local event spine (the run launcher's
     identity). The control→evidence mapping is layered on in #2b."""
@@ -557,13 +557,23 @@ def format_audit_markdown(audit: dict) -> str:
                          f"{c.get('status')} | {c.get('evidence') or '—'} |")
         lines.append("")
 
+    # #156: independence is maker ≠ checker — a separate review agent on a FRESH
+    # context (the orchestrator withholds prior step outputs from review steps), whose
+    # findings gate the merge. Model disjointness is reported as evidence, not asserted
+    # as the control: the cross-model requirement was dropped for lack of supporting
+    # research, so a same-model run is conformant, not a breach.
     ind = audit.get("cross_model_independence", {})
-    verdict = "✅ independent" if ind.get("independent") else "⚠ NOT verified"
+    roles = [s.get("role") for s in audit.get("steps", [])]
+    reviewed = "reviewer" in roles or "security-reviewer" in roles
+    verdict = "✅ independent (maker ≠ checker)" if reviewed else "⚠ no review step recorded"
     lines += [
-        "## Cross-model review independence",
-        f"- **Verdict:** {verdict} (reviewer model(s) disjoint from the implementer's)",
-        f"- Implementer: {ind.get('implementer') or '—'}",
-        f"- Reviewer: {ind.get('reviewer') or '—'}",
+        "## Review independence",
+        f"- **Verdict:** {verdict} — the reviewer is a separate agent, dispatched with "
+        f"no implementation history, whose findings gate the merge",
+        f"- Implementer model(s): {ind.get('implementer') or '—'}",
+        f"- Reviewer model(s): {ind.get('reviewer') or '—'}",
+        f"- Models disjoint: {'yes' if ind.get('independent') else 'no'} "
+        f"(recorded as evidence; not required — see #156)",
         "",
         "## Runs",
     ]
@@ -633,12 +643,23 @@ def evaluate_conformance(audit: dict, controls: list) -> dict:
 
     def _eval(ctrl):
         check = (ctrl.get("check") or "manual").lower()
-        if check == "cross-model-review":
+        # #156: `cross-model-review` is the LEGACY name — consumer `docs/controls.md`
+        # files in the wild still carry it, so it stays accepted as an alias. What it
+        # asserts changed: independence is maker ≠ checker (a separate review agent, on
+        # a fresh context, whose findings gate the merge), NOT a different model. The
+        # cross-model requirement was dropped because research did not support it;
+        # evaluating it as a pass condition would now fail every Claude-only run and
+        # report a permanent breach on a client-facing compliance artifact.
+        if check in ("independent-review", "cross-model-review"):
             if "reviewer" not in roles and "security-reviewer" not in roles:
                 return "unmet", "no independent review step recorded"
-            if ind.get("independent"):
-                return "met", f"reviewer {ind.get('reviewer')} ≠ implementer {ind.get('implementer')}"
-            return "unmet", "reviewer shares a model with the implementer"
+            if "implementer" in roles and roles.count("implementer") and (
+                    "reviewer" in roles or "security-reviewer" in roles):
+                note = "reviewer ran as a separate agent on a fresh context (maker ≠ checker)"
+                if ind.get("independent"):
+                    note += f"; models also disjoint — reviewer {ind.get('reviewer')} ≠ implementer {ind.get('implementer')}"
+                return "met", note
+            return "met", "independent review step recorded (maker ≠ checker)"
         if check == "human-approval":
             if not gates:
                 return "at-risk", "no gate decision recorded yet"

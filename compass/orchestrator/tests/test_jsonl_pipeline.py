@@ -297,7 +297,7 @@ class TestParseStepOutput(unittest.TestCase):
 
 class TestGovernanceAudit(unittest.TestCase):
     """#2a: actor identity on gate decisions + build_audit assembling the
-    who-did-what lineage with a cross-model-independence verdict."""
+    who-did-what lineage with a review-independence verdict."""
 
     def setUp(self):
         self.project_dir = Path(tempfile.mkdtemp())
@@ -373,12 +373,19 @@ class TestGovernanceAudit(unittest.TestCase):
                  host="claude", model="claude-opus", output=FAKE_OUTPUT)
         md = format_audit_markdown(build_audit(self.project_dir, bet_id="CB-4"))
         self.assertIn("Governance audit", md)
-        self.assertIn("Cross-model review independence", md)
+        self.assertIn("Review independence", md)
+        # #156: models are reported as EVIDENCE, never asserted as the control
+        self.assertIn("Models disjoint:", md)
         self.assertIn("engineer.implement-story", md)
 
 
 class TestSowConformance(unittest.TestCase):
-    """#2b: hand-authored control framework + controls→evidence conformance mapping."""
+    """#2b: hand-authored control framework + controls→evidence conformance mapping.
+
+    NOTE (#156): this fixture deliberately uses the LEGACY `cross-model-review` check
+    name and its old title — consumer `docs/controls.md` files in the wild still carry
+    them, so parsing + evaluating them must keep working. The current name is
+    `independent-review` (see test_review_independence.py)."""
 
     CONTROLS = (
         "# Control framework\n\n"
@@ -428,7 +435,7 @@ class TestSowConformance(unittest.TestCase):
         self._write_controls(self.CONTROLS)
         conf = build_audit(self.project_dir, bet_id="CB-4")["conformance"]
         by_id = {c["id"]: c["status"] for c in conf["controls"]}
-        self.assertEqual(by_id["CTRL-1"], "met")      # cross-model independent
+        self.assertEqual(by_id["CTRL-1"], "met")      # maker ≠ checker
         self.assertEqual(by_id["CTRL-2"], "met")      # human approved
         self.assertEqual(by_id["CTRL-3"], "unmet")    # no security-review step
         self.assertEqual(by_id["CTRL-5"], "at-risk")  # manual, pending

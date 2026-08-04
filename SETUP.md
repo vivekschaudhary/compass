@@ -308,7 +308,7 @@ As of v0.3.14, **each agent file declares its own `preferred_hosts:` in its fron
 preferred_hosts: [claude, codex, gemini]   # Claude first
 
 # Inside compass/agents/reviewer.md frontmatter
-preferred_hosts: [codex, gemini]           # NOT claude — enforces cross-model independence
+preferred_hosts: [claude, codex, gemini]   # any host — independence is fresh-context, not cross-model
 ```
 
 **To use the orchestrator** (recommended):
@@ -330,7 +330,7 @@ COMPASS_CLAUDE_HOST=cli python3 -m compass.orchestrator.run triage \
     --project-dir . --compass-dir $COMPASS_FW/compass --context "subscriptions panel empty"
 ```
 
-**Reviewer on your Codex subscription — flat-cost, no API key (#155).** The Reviewer (and Security Reviewer) declare `preferred_hosts: [codex, gemini]` so the reviewer is never the same model as the implementer. If you're CLI-only (no `OPENAI_API_KEY`), add `--codex-cli` (or export `COMPASS_CODEX_HOST=cli`) and `codex` steps dispatch via your **logged-in `codex` CLI** (`codex exec`) — `codex ≠ claude`, so review independence holds. Needs the `codex` CLI installed + logged in. Combine both env vars before `cockpit --serve --allow-actions` for a fully subscription-backed loop (implementer on `claude`, reviewer on `codex`, both flat-cost):
+**Reviewer on your Codex subscription — flat-cost, no API key (#155).** The Reviewer (and Security Reviewer) declare `preferred_hosts: [claude, codex, gemini]`; if you want the reviewer on Codex, put `codex` first or set `tool_assignments.reviewer: codex`. If you're CLI-only (no `OPENAI_API_KEY`), add `--codex-cli` (or export `COMPASS_CODEX_HOST=cli`) and `codex` steps dispatch via your **logged-in `codex` CLI** (`codex exec`) — `codex ≠ claude`, so review independence holds. Needs the `codex` CLI installed + logged in. Combine both env vars before `cockpit --serve --allow-actions` for a fully subscription-backed loop (implementer on `claude`, reviewer on `codex`, both flat-cost):
 
 ```bash
 COMPASS_CLAUDE_HOST=cli COMPASS_CODEX_HOST=cli python3 -m compass.orchestrator.cockpit \
@@ -341,7 +341,7 @@ COMPASS_CLAUDE_HOST=cli COMPASS_CODEX_HOST=cli python3 -m compass.orchestrator.c
 
 Paste any `compass/agents/<agent>.md` file into your LLM host's system-prompt slot. Agent files are self-sufficient — identity + principles + tasks + refusal rules + handoffs are all inlined.
 
-**Reviewer constraint:** `reviewer` and `security_reviewer` must use a **different model** than the implementer. `reviewer.md` declares `preferred_hosts: [codex, gemini]` (NOT claude) — enforcing cross-model independence at the file level, not config. Same-model reviewer + same-model author share aesthetic priors and miss what an independent-model reviewer catches.
+**Reviewer independence (#156):** `reviewer` and `security_reviewer` may run on **any** host, including the implementer's. Review independence is **maker ≠ checker, on a fresh context**: the reviewer is a separate agent, dispatched with **no implementation history** (the orchestrator withholds prior step outputs from review steps), seeing only the diff and the specs, and its BLOCKERs gate the merge. The **model** is a free choice — the cross-model requirement was dropped in #156 because research did not support it. Config. Same-model reviewer + same-model author share aesthetic priors and miss what an independent-model reviewer catches.
 
 **Legacy:** `compass/config.yaml tool_assignments:` is deprecated since v0.3.14. Per-agent `preferred_hosts:` is the source-of-truth. Existing `tool_assignments:` entries are ignored by the orchestrator but harmless to leave.
 

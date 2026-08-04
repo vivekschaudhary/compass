@@ -26,7 +26,7 @@ requires: # entry gate = predicates (was: prose Preconditions + requires_approve
 
 ## Purpose
 
-Engineer implements ONE tech-ready story end-to-end; a different-model reviewer checks it; a human approves the merge.
+Engineer implements ONE tech-ready story end-to-end; a separate reviewer agent with no implementation history checks it; a human approves the merge.
 
 ## Dispatch graph
 

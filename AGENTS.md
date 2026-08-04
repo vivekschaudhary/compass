@@ -4,7 +4,7 @@ Read by every AI tool working in this repo (Claude Code, OpenAI Codex CLI, Curso
 
 ## What this project uses
 
-**Compass** — a product development framework where every initiative is a measurable bet. Work flows: brief → architecture → story → build → review → release → measure. **Agents own tasks; workflows sequence agents across hosts.** One agent implements; a different-host agent reviews (independent-model review for blind-spot coverage).
+**Compass** — a product development framework where every initiative is a measurable bet. Work flows: brief → architecture → story → build → review → release → measure. **Agents own tasks; workflows sequence agents across hosts.** One agent implements; a **separate** agent reviews, dispatched with no implementation history (maker ≠ checker).
 
 The framework lives in `compass/`:
 
@@ -24,16 +24,16 @@ Artifacts the framework produces live in `docs/`:
 
 ## Host division of labor
 
-**Configurable per agent; default = Claude implements, Codex reviews, ChatGPT supports product/research/UX.** Per `[agent-as-surface-independent-unit]` (`compass/framework/canon.md`, v0.3.14). Each agent declares `preferred_hosts:` in its own file's frontmatter — that's the source-of-truth. The host is an LLM runtime, not a role authority.
+**Configurable per agent; default = Claude for every role.** Per `[agent-as-surface-independent-unit]` (`compass/framework/canon.md`, v0.3.14). Each agent declares `preferred_hosts:` in its own file's frontmatter — that's the source-of-truth. The host is an LLM runtime, not a role authority.
 
 **Supported hosts (LLM runtimes — same hosts that v0.3.8's `agents:` registry enumerated; the registry stays valid as the catalog of runtimes that agents can be paste-targeted into):**
 
 | Host | Invocation | Production-ready? |
 | ----- | ---------- | ----------------- |
 | `claude` (Claude Code) | CLI / IDE plugin; reads local files automatically; auto-loads `CLAUDE.md` | Yes |
-| `claude-code` (Claude CLI, subscription) | Orchestrator host (#120): dispatches via `claude -p` on the logged-in CLI subscription — **no `ANTHROPIC_API_KEY`, flat marginal cost**. Opt-in via `--claude-cli` / `COMPASS_CLAUDE_HOST=cli`, which remaps a step's `claude` host → `claude-code` (reviewers on codex/gemini untouched) | Yes |
+| `claude-code` (Claude CLI, subscription) | Orchestrator host (#120): dispatches via `claude -p` on the logged-in CLI subscription — **no `ANTHROPIC_API_KEY`, flat marginal cost**. Opt-in via `--claude-cli` / `COMPASS_CLAUDE_HOST=cli`, which remaps a step's `claude` host → `claude-code` | Yes |
 | `codex` (Codex CLI) | CLI; reads `.codex/prompts/<agent>.md` | Yes |
-| `codex-cli` (Codex CLI, subscription) | Orchestrator host (#155): dispatches via `codex exec` on the logged-in CLI subscription — **no `OPENAI_API_KEY`, flat marginal cost**. Opt-in via `--codex-cli` / `COMPASS_CODEX_HOST=cli`, which remaps a step's `codex` host → `codex-cli`. This makes the **Reviewer** (`[codex, gemini]`) reachable for a CLI-only operator with no API key — `codex ≠ claude`, so review independence holds | Yes |
+| `codex-cli` (Codex CLI, subscription) | Orchestrator host (#155): dispatches via `codex exec` on the logged-in CLI subscription — **no `OPENAI_API_KEY`, flat marginal cost**. Opt-in via `--codex-cli` / `COMPASS_CODEX_HOST=cli`, which remaps a step's `codex` host → `codex-cli`. Lets a CLI-only operator with no API key run any step configured for `codex`, including the Reviewer | Yes |
 | `openai` (ChatGPT / GPT API) | Custom GPT Instructions = paste agent file; API call with agent file as system prompt; manual paste | Yes — Custom GPT is the recommended path for new projects |
 | `gemini` (Google Gemini CLI) | CLI; reads `.gemini/prompts/<agent>.md` | Yes |
 | `deepseek` | DeepSeek API | API mature |
@@ -46,7 +46,7 @@ Artifacts the framework produces live in `docs/`:
 | Agent | `preferred_hosts:` (default) | Why |
 | ------------- | ------------- | --- |
 | `engineer`, `architect`, `enterprise-architect`, `scanner`, `automation`, `tech-writer` | `[claude, codex, gemini]` — CLI-class hosts | Filesystem + shell access required for build/test/scaffold/changelog-append work; pure-chat hosts are degraded |
-| `reviewer`, `security-reviewer` | `[codex, gemini]` — explicitly EXCLUDES claude | **Independent-model review** — must be a different model than the implementer (see structural rationale below) |
+| `reviewer`, `security-reviewer` | `[claude, codex, gemini]` — any host (#156) | Independence is **fresh context**, not a different model: a separate agent with no implementation history (see rationale below). Point it at a client's own host freely |
 | `ux-writer`, `designer` | `[chatgpt, claude, codex, gemini]` | Product / UX work runs on any host; ChatGPT often picked for browse + product-strategy strengths; Claude Code if filesystem-write needed |
 | `delivery-manager` | `[claude, codex, gemini, chatgpt]` — Claude-first, ChatGPT last fallback | Visibility/status work writes files (Claude Code), so Claude-first; ChatGPT kept as a last resort |
 | `pm`, `researcher` | `[claude, codex, gemini]` — chatgpt dropped (pm v0.3.42, researcher v0.3.53) | ChatGPT dropped per `[host-preference-validation]` (2nd instance): pm underperformed + hit the 8000-char cap; researcher on ChatGPT had **no `web_search`** and **can't write the artifact** (no file tools) — so research came back half `n/a` and undelivered. Claude-first (CLI host has web + filesystem) |
@@ -54,7 +54,9 @@ Artifacts the framework produces live in `docs/`:
 
 Reviewer findings are real. Disputes go to PM, not auto-resolved by either agent.
 
-**Why the reviewer split is structurally load-bearing, not procedural.** Same-model reviewer + same-model author share aesthetic priors — blind spots, assumptions about "clean code," default architectural patterns, "looks right" intuitions. A reviewer with identical priors can miss what an independent-model reviewer catches. **Empirically validated during aura-app CB-1.4 (2026-06-01):** user ran the same diff through both Codex (different model than Engineer) and Claude (same model as Engineer) as reviewers; Codex outperformed. This is not "pick whichever reviewer is cheaper" — switching to a same-model reviewer for cost reasons re-introduces the blind-spot overlap the framework exists to close. **The reviewer agent's `preferred_hosts:` must EXCLUDE the engineer agent's preferred hosts** — enforced structurally at the agent file level (not via config validator). The `compass/scripts/agent-handoff.yml` template ships Codex default-enabled for this structural reason, not ergonomic preference; the Claude-headless block is documented as a fallback for teams without Codex access, **not an equivalent alternative**. Same logic applies to any future agent-pairing — Engineer + Reviewer is the canonical instance; Architect-pair, Researcher-pair, or other multi-agent reviews inherit the same constraint.
+**Why the reviewer split is structurally load-bearing, not procedural.** The reviewer is a **separate agent** dispatched with **no implementation history** — the orchestrator withholds prior step outputs from review steps (`_FRESH_CONTEXT_AGENTS` in `run.py`), so the reviewer never inherits the engineer's account of its own work. It sees the diff, the specs, and the stack profile; its BLOCKERs gate the merge. That is **maker ≠ checker**, and it is what the governance control CTRL-1 (`independent-review`) audits. Folding review into the implementing step, or letting the implementer grade its own work, breaks it.
+
+**What changed in #156 — the reviewer no longer has to be a different MODEL.** Compass previously pinned `reviewer.preferred_hosts: [codex, gemini]` to exclude Claude, on the theory that same-model reviewer and author share aesthetic priors. Research did not bear that out: an independent-model reviewer did not catch materially more than a same-model reviewer running the reviewer's own prompt and gates. The host is now a **free, per-engagement choice** (`preferred_hosts: [claude, codex, gemini]`, default Claude), so a client can point it at Codex, Gemini, or their own model. *Superseded evidence, kept for lineage:* aura-app CB-1.4 (2026-06-01) ran one diff through Codex and Claude as reviewers and Codex outperformed — a single-diff observation that the later research outweighs.
 
 **How to override defaults.** Edit the agent file's frontmatter directly — `compass/agents/<agent>.md` → change `preferred_hosts: [...]` line. Cross-host orchestration today is human-dispatched (open the right host for the active step); v0.4 orchestrator will walk dispatch graphs and dispatch agents per step automatically.
 

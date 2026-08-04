@@ -38,7 +38,7 @@ estimate:
 
 ## Problem
 
-A delivery exec's view of a program today is **status theater**: RAG decks and Jira boards report *self-asserted* status (gameable), and the truth surfaces too late (red at month 3, not week 1). Compass already executes the delivery spine (brief → architecture → stories → build → cross-model review → gated merge), but the picture **goes dark exactly where it matters** — past the merge line (deploy, migrate, runtime) there's no visibility, and the deliverables aren't held on a canonical store the tower can treat as truth. So the "control tower" can't yet make its one promise: *the status can't lie, because the status IS the work.*
+A delivery exec's view of a program today is **status theater**: RAG decks and Jira boards report *self-asserted* status (gameable), and the truth surfaces too late (red at month 3, not week 1). Compass already executes the delivery spine (brief → architecture → stories → build → independent review → gated merge), but the picture **goes dark exactly where it matters** — past the merge line (deploy, migrate, runtime) there's no visibility, and the deliverables aren't held on a canonical store the tower can treat as truth. So the "control tower" can't yet make its one promise: *the status can't lie, because the status IS the work.*
 
 ## User
 

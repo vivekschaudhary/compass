@@ -107,8 +107,7 @@ Pre-v0.3.14, this file declared "you play every Compass role EXCEPT Reviewer / S
 
 Under `[agent-as-surface-independent-unit]` (canon v0.3.14):
 - **Role authority moved to agent files.** Each `compass/agents/<agent>.md` declares its own `preferred_hosts: [...]`. Workflow dispatch graphs name `<agent>.<task>` per step. The host (Claude Code, here) just runs whatever the dispatch graph names.
-- **Cross-host independence preserved structurally.** The Reviewer agent (migrated v0.3.16) declares `preferred_hosts: [codex, gemini]` (NOT claude) — making the implementer/reviewer model split enforced at the agent-frontmatter level, not via CLAUDE.md prose. Security Reviewer migrated v0.3.36 with the same exclusion: `compass/agents/security-reviewer.md` declares `preferred_hosts: [codex, gemini]`; `.codex/prompts/security-reviewer.md` is the Codex CLI entry wrapper.
-- **No same-host self-review.** Even though Claude Code CAN execute any agent file, do not run reviewer / security-reviewer tasks against code Claude Code wrote. The cross-model review independence is a Compass design principle; respect it at runtime.
+- **Review independence is structural, not host-based (#156).** Reviewer and Security Reviewer declare `preferred_hosts: [claude, codex, gemini]` — any host, configurable per engagement. Review independence is **maker ≠ checker, on a fresh context**: the reviewer is a separate agent, dispatched with **no implementation history** (the orchestrator withholds prior step outputs from review steps), seeing only the diff and the specs, and its BLOCKERs gate the merge. The **model** is a free choice — the cross-model requirement was dropped in #156 because research did not support it. So running the reviewer on Claude against Claude-written code is fine; **folding review into the implementing step, or having the implementer grade its own work, is not**.
 
 ## Notes on the orchestrator (shipped — `compass/orchestrator/`)
 
