@@ -20,7 +20,7 @@ stories) is **pulled from state** after the foundation is approved; it is NOT pr
 | # | ticket | workflow | owner | done (gate) | depends-on |
 |---|--------|----------|-------|-------------|------------|
 | 1 | Connect systems of record | — (intake/settings) | delivery-manager | tickets.wired && docs.wired && scm.wired | — |
-| 2 | Create product foundation | /setup-product | pm | product@docs == approved | 1 |
+| 2 | Create product foundation | /create-product-brief | pm | product@docs == approved | 1 |
 | 3 | Foundation architecture | /setup-foundation-architecture | architect | foundation-arch@docs == approved | 2 |
 
 ## How a ticket is worked
@@ -28,7 +28,7 @@ Run its `workflow`; that drives the ticket through the lifecycle:
 
 ```
 Create product foundation   ● Backlog → In Progress → Awaiting HITL → Done
-   run /setup-product  ────────────────┘           (product@docs approved)
+   run /create-product-brief  ────────────────┘           (product@docs approved)
 ```
 
 The ticket's **definition-of-done IS the workflow's `produces` gate** — no status theater; a ticket

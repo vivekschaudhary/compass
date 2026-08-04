@@ -27,7 +27,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 ## Preconditions (workflow-level GATE)
 
-- **Foundational product approved** — `docs/foundation/product.md` with an approved HITL record or `status: approved` (machine-checked via `requires_approved:` frontmatter; orchestrator halts exit 3 if unmet). **On failure:** *"Run `/setup-product` and get the product bet approved first."*
+- **Foundational product approved** — `docs/foundation/product.md` with an approved HITL record or `status: approved` (machine-checked via `requires_approved:` frontmatter; orchestrator halts exit 3 if unmet). **On failure:** *"Run `/create-product-brief` and get the product bet approved first."*
 - **No in-review architecture** — `docs/foundation/architecture.md` with `status: proposed` → refuse: *"Existing architecture.md is in review. Approve, reject, or amend before re-invoking."*
 - **Amend mode** — an existing `status: approved` architecture is allowed: EA confirms intent, renames it `architecture-v<N>.md` with `status: superseded`; the new version runs all three steps again and its ADR/Amendments section must cite the triggering source.
 - **State routing** — approved architecture + scaffold already done → no-op (or amend creates v2). Scaffold-done detected via boundary folders + populated `compass/config.yaml` stack decisions.

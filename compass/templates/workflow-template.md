@@ -16,7 +16,7 @@
 -->
 
 ---
-name: <workflow-name>            # e.g., setup-product, create-brief
+name: <workflow-name>            # e.g., create-product-brief, create-brief
 status: active                   # active | deprecated | experimental
 owner: <role>                    # primary role (e.g., pm, enterprise-architect, delivery-manager)
 auto_invokes: []                 # workflows this one calls at its end (e.g., [plan, dashboard])
@@ -129,7 +129,7 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   The markers are anchors for the reference parser at
   `compass/scripts/token-usage.py`, which attributes Claude Code session
   tokens to roles. Add markers when role transitions are meaningful
-  (multi-role workflows like /build, /setup-product, /create-brief);
+  (multi-role workflows like /build, /create-product-brief, /create-brief);
   optional for single-role workflows. PM-owned by convention.
 
   AGENT-HANDOFF: when a workflow routes work between AI agents (e.g.,

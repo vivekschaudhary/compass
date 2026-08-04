@@ -27,7 +27,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 ## Preconditions (workflow-level GATE)
 
-- **Foundation approved** — `docs/foundation/product.md` AND `docs/foundation/architecture.md` both `status: approved`. **On failure:** *"Foundation not approved. Run `/setup-product` and `/setup-foundation-architecture` first."*
+- **Foundation approved** — `docs/foundation/product.md` AND `docs/foundation/architecture.md` both `status: approved`. **On failure:** *"Foundation not approved. Run `/create-product-brief` and `/setup-foundation-architecture` first."*
 - **Source or stub present** — user provides ≥1 source (link, free text, or existing stub bet-id with `portfolio_stub: true`). **On failure:** *"Provide a source link, description, or stub bet-id to begin."*
 - **Brief not already drafted** — if `docs/bets/<bet-id>/brief.md` exists with `portfolio_stub: false`, refuse: *"Brief already drafted. Use `/create-story <bet-id>` or `/create-bet-architecture <bet-id>` next."*
 - **Not a slice of an existing bet** (`[right-size-the-path-to-the-work]`, v0.3.51) — if the request is really a slice/addition to an already-approved bet (check the existing bets under `docs/bets/`), **refuse** and right-size: *"This looks like a slice of bet `<id>`. Run `/create-story <id>` instead of minting a new bet."* Only genuinely new capabilities/hypotheses get a fresh brief. (Enforced in the PM task gate, per `[refuse-escalate]` spirit — don't silently create a redundant bet.)

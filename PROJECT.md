@@ -1,7 +1,7 @@
 # PROJECT.md
 
 <!--
-Compass populates this file via `/setup-product` and `/setup-foundation-architecture`.
+Compass populates this file via `/create-product-brief` and `/setup-foundation-architecture`.
 This file is a thin overview pointing to the foundation docs.
 -->
 

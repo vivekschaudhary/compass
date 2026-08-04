@@ -11,7 +11,7 @@ The dispatch-graph + agent-file substrate already separates the **plan** (`compa
 Three execution surfaces over one substrate:
 
 1. **Deterministic orchestrator** — `run.py`. Plain control flow; no LLM in the driver's seat. Shipped (v0.4-alpha). Its Claude implementer steps now run a **tool loop** (read + opt-in write/bash) per #91/#92 — still a deterministic driver, but the steps are agentic.
-2. **Claude Code interactive** — Claude reads the workflow + agent files, executes tasks, halts at gates; a human drives cadence + approvals. Shipped (the `/setup-product` etc. skills).
+2. **Claude Code interactive** — Claude reads the workflow + agent files, executes tasks, halts at gates; a human drives cadence + approvals. Shipped (the `/create-product-brief` etc. skills).
 3. **Claude as autonomous orchestrator** — Claude (Agent SDK / Task-style subagents) walks the graph and spawns one subagent per step with `compass/agents/<agent>.md` as system prompt, collecting outputs and advancing. **This design.**
 
 ## The load-bearing constraint: the mechanical gate floor

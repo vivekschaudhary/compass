@@ -28,7 +28,7 @@ All 17 agents live in `compass/agents/` (source of truth) — the 14 coded (migr
 
 Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 
-- `/setup-product` — `compass/workflows/setup-product.md`
+- `/create-product-brief` — `compass/workflows/create-product-brief.md`
 - `/setup-foundation-architecture` — `compass/workflows/setup-foundation-architecture.md`
 - `/create-bet-portfolio` — `compass/workflows/create-bet-portfolio.md`
 - `/create-brief` — `compass/workflows/create-brief.md`

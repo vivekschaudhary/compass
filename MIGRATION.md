@@ -131,7 +131,7 @@ Expected: step list prints with `compass/agents/<agent>.md` references. No error
 
 **All 14 legacy roles are now migrated as of v0.3.36.** `compass/agents/` contains the full set — the 14 migrated roles plus `gtm`, `sre`, `product-owner`, declared new at v1.0 (not yet coded; 17 agents total). `compass/roles/` is kept for the v0.3.x grace period and removed in v0.4.
 
-**Interactive Claude Code after migration.** Once `compass/agents/` is present, Claude Code loads agent discipline from there. Verify your `CLAUDE.md` points to the workflows correctly (the `/setup-product`, `/create-brief`, etc. commands should still work — workflow filenames are unchanged).
+**Interactive Claude Code after migration.** Once `compass/agents/` is present, Claude Code loads agent discipline from there. Verify your `CLAUDE.md` points to the workflows correctly (the `/create-product-brief`, `/create-brief`, etc. commands should still work — workflow filenames are unchanged).
 
 ---
 

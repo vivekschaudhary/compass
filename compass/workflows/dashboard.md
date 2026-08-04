@@ -15,14 +15,16 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
 
 ## State detection
 
-| State                                          | Action                                                                  |
-| ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `docs/foundation/product.md` missing           | **Refuse.** Nothing meaningful to dashboard yet — run `/setup-product` first. |
-| `docs/foundation/product.md` exists            | Render available artifacts; show "not yet generated" placeholder for any missing section. |
+**The foundation check is mode-aware (#154).** Under the default `source_of_truth: repo` the product brief is `docs/foundation/product.md`. Under `source_of_truth: external` it is a **page in the docs system with no repo file at all**, and its existence is evidenced by the **product-brief gate ticket** (`product-brief@tickets`). Checking only for the repo file would make `/dashboard` refuse forever on a docs-primary engagement.
+
+| State                                                       | Action                                                                  |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| No product brief — repo mode: `docs/foundation/product.md` missing · external mode: no product-brief gate ticket recorded | **Refuse.** Nothing meaningful to dashboard yet — run `/create-product-brief` first. |
+| A product brief exists in either form                        | Render available artifacts; show "not yet generated" placeholder for any missing section. Docs-primary artifacts render as titled links to their page + gate ticket, not as inlined content. |
 
 ## Process
 
-1. **Verify gate:** `docs/foundation/product.md` exists (any status). If not, refuse with pointer to `/setup-product`.
+1. **Verify gate (mode-aware):** a product brief exists — `docs/foundation/product.md` (repo mode, any status) **OR** a recorded product-brief gate ticket (external mode). If neither, refuse with a pointer to `/create-product-brief`.
 2. **Load Delivery Manager agent** (`compass/agents/delivery-manager.md`) — Delivery Manager owns rolling visibility; dashboard fits the role. (Migrated + renamed v0.3.15; legacy role file at `compass/roles/project-manager.md` removed in v1.0 (#38).)
 3. **Discover source artifacts:**
    - **Foundation:** `docs/foundation/product.md`, `architecture.md`, `architecture-research.md` (if exists)
@@ -67,7 +69,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
 
    Emit a brief paragraph describing where the project is. Compute from artifact existence + statuses:
 
-   - **Empty project** (no `docs/foundation/product.md`): "**No foundation yet.** Start with `/setup-product`." — and skip directly to a single highlighted launcher row containing only `/setup-product`. Omit sections 8b–8d.
+   - **Empty project** (no product brief in either form — see the mode-aware gate above): "**No foundation yet.** Start with `/create-product-brief`." — and skip directly to a single highlighted launcher row containing only `/create-product-brief`. Omit sections 8b–8d.
    - **Foundation product approved, no architecture:** "**Product foundation approved.** Next: `/setup-foundation-architecture`."
    - **Foundation approved, no portfolio:** "**Foundations approved.** Next: `/create-bet-portfolio` (bootstrap MVP wedge) or `/create-brief <id>` (single bet)."
    - **Portfolio approved, bets in flight:** "**N bets in flight.**" + bullet list per bet showing bet-id + current phase (from brief's `status` and presence of architecture / stories).
@@ -80,7 +82,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
    </div>
    ```
 
-   **8b. Pending HITL gates** (omit section entirely if none): scan all bet artifacts (`docs/foundation/product.md`, `docs/foundation/architecture.md`, `docs/foundation/portfolio.md`, `docs/bets/*/brief.md`, `docs/bets/*/architecture.md`, `docs/bets/*/stories/*.md`) for frontmatter `status: proposed`. Each surfaces as:
+   **8b. Pending HITL gates** (omit section entirely if none): scan all bet artifacts for frontmatter `status: proposed` **and, under `source_of_truth: external`, every recorded gate ticket not yet in the `done` status category** (a docs-primary artifact has no frontmatter to scan — its ticket is the pending signal). Repo-side artifacts: (`docs/foundation/product.md`, `docs/foundation/architecture.md`, `docs/foundation/portfolio.md`, `docs/bets/*/brief.md`, `docs/bets/*/architecture.md`, `docs/bets/*/stories/*.md`) for frontmatter `status: proposed`. Each surfaces as:
 
    ```html
    <div class="action-section">
@@ -108,7 +110,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
      <!-- Bootstrap (only shown when foundation incomplete) -->
      <div class="action-row">
        <span class="label">Bootstrap</span>
-       <button class="action-btn" onclick="compassCopy('/setup-product', this)">Start product foundation <span class="cmd">/setup-product</span></button>
+       <button class="action-btn" onclick="compassCopy('/create-product-brief', this)">Start product foundation <span class="cmd">/create-product-brief</span></button>
        <button class="action-btn" onclick="compassCopy('/setup-foundation-architecture', this)">Start architecture foundation <span class="cmd">/setup-foundation-architecture</span></button>
        <button class="action-btn" onclick="compassCopy('/create-bet-portfolio', this)">MVP bet portfolio <span class="cmd">/create-bet-portfolio</span></button>
      </div>
@@ -202,7 +204,7 @@ The `<div class="rendered"></div>` is where marked.js writes the rendered HTML (
 - [ ] Marked.js + Mermaid.js CDN `<script>` tags present in `<head>`
 - [ ] Tab navigation present with all seven tabs (v0.3.13): **Actions** / Foundation / Plan / Portfolio / Scan / Metrics / Status — Actions tab is the default initially-active tab
 - [ ] **Actions tab** present with `<!-- COMPASS-INSERT:actions-block -->` marker filled in (not literal marker text remaining)
-- [ ] **Actions tab** contains at least one workflow-launcher `<button class="action-btn" onclick="compassCopy('/...', this)">` (minimum: `/setup-product` for empty projects; full action grid for post-foundation projects)
+- [ ] **Actions tab** contains at least one workflow-launcher `<button class="action-btn" onclick="compassCopy('/...', this)">` (minimum: `/create-product-brief` for empty projects; full action grid for post-foundation projects)
 - [ ] **Clipboard-copy JS** present in `<script>` block: `compassCopy` function defined and uses `navigator.clipboard.writeText`
 - [ ] **Project state summary** at top of Actions tab matches actual project state (empty / foundation-only / portfolio-approved / bets-in-flight / all-shipped)
 - [ ] **Pending HITL gates** section appears IFF at least one artifact has `status: proposed` in its frontmatter; section omitted entirely when none pending
@@ -221,7 +223,7 @@ The `<div class="rendered"></div>` is where marked.js writes the rendered HTML (
 
 ## Refusal cases
 
-- `docs/foundation/product.md` missing — pointer to `/setup-product`.
+- No product brief in either form (repo file, or a recorded gate ticket under `source_of_truth: external`) — pointer to `/create-product-brief`.
 
 ## Notes
 

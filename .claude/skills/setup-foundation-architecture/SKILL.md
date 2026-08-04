@@ -1,6 +1,6 @@
 ---
 name: setup-foundation-architecture
-description: Create foundational architecture bet (Enterprise/Solution Architect). Scaffolds repo. Requires /setup-product approved first.
+description: Create foundational architecture bet (Enterprise/Solution Architect). Scaffolds repo. Requires /create-product-brief approved first.
 ---
 
 Execute the workflow at `compass/workflows/setup-foundation-architecture.md`.

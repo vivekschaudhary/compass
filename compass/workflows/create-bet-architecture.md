@@ -32,7 +32,7 @@ This workflow is a **thin dispatch graph** per `[workflow-as-dispatch-graph]` (c
 ## Preconditions (workflow-level GATE — checked once at start)
 
 - **Brief approved** — `docs/bets/<bet-id>/brief.md` must exist with `status: approved`. **On failure, refuse:** *"Brief for `<bet-id>` is not approved. Run `/create-brief` and obtain approval before creating the bet architecture."*
-- **Foundation docs present** — `docs/foundation/product.md` and `docs/foundation/architecture.md` must exist with `status: approved`. **On failure, refuse:** *"Foundation docs missing or unapproved. Run `/setup-product` and `/setup-foundation-architecture` first."*
+- **Foundation docs present** — `docs/foundation/product.md` and `docs/foundation/architecture.md` must exist with `status: approved`. **On failure, refuse:** *"Foundation docs missing or unapproved. Run `/create-product-brief` and `/setup-foundation-architecture` first."*
 - **Not already approved** — if `docs/bets/<bet-id>/architecture.md` exists with `status: approved`, refuse unless the user explicitly requests amend mode.
 
 ## Roles invoked (agents dispatched)

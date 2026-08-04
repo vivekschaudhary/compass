@@ -214,7 +214,7 @@ _STACK_CHECKS = {
 # #159: workflows whose WHOLE JOB is to author a doc artifact (brief, story,
 # foundation/portfolio/architecture docs), reviewed via their HITL gate — not a PR.
 _AUTHORING_WORKFLOWS = (
-    "setup-product", "setup-foundation-architecture", "create-bet-portfolio",
+    "create-product-brief", "setup-foundation-architecture", "create-bet-portfolio",
     "create-brief", "create-bet-architecture", "create-story",
 )
 
@@ -957,13 +957,32 @@ def _requirement_met(project_dir: Path, rel_path: str) -> tuple:
     """
     Check whether an artifact requirement is approved (#70 dual acceptance).
 
-    Returns (met: bool, how: str|None). PASS via either mechanism:
-      - hitl.jsonl: latest record whose canonical_path or artifact_path
-        matches has decision "approved"
-      - frontmatter: the file exists with `status: approved`
+    Returns (met: bool, how: str|None). Two requirement FORMS:
+
+      - `<name>@tickets` (#154, docs-primary): the artifact lives in the docs system
+        and has no repo file, so the gate is the Jira approval ticket recorded when
+        the gate was opened. Resolved via `docs_primary.slot_approved`.
+      - a repo path (the original form): PASS via either mechanism —
+          · hitl.jsonl: latest record whose canonical_path or artifact_path
+            matches has decision "approved"
+          · frontmatter: the file exists with `status: approved`
+
+    Under `source_of_truth: external` a repo path that names a docs-primary artifact
+    (`docs/foundation/product.md`) is REWRITTEN to its ticket slot before checking —
+    there is no such file in that mode, so checking for one would fail every gate.
+    Repo mode is unaffected, so existing consumers keep their exact behaviour.
     """
     from .connector import read_frontmatter_status
+    from .docs_primary import is_ticket_slot, slot_approved, ticket_slot_for_path
     from .logger import load_hitl_log
+
+    if is_ticket_slot(rel_path):
+        return slot_approved(project_dir, rel_path.strip())
+
+    if _source_of_truth(project_dir) == "external":
+        slot = ticket_slot_for_path(rel_path)
+        if slot:
+            return slot_approved(project_dir, slot)
 
     latest = None
     for r in load_hitl_log(project_dir):
@@ -979,9 +998,11 @@ def _requirement_met(project_dir: Path, rel_path: str) -> tuple:
 
 
 def _producer_hint(rel_path: str) -> str:
-    """Name the workflow that produces a required artifact path."""
+    """Name the workflow that produces a required artifact path (or ticket slot)."""
+    if rel_path.startswith("product-brief@") or rel_path.startswith("research@"):
+        return "create-product-brief"      # #154: docs-primary, gated on its ticket
     if rel_path.endswith("foundation/product.md"):
-        return "setup-product"
+        return "create-product-brief"
     if rel_path.endswith("foundation/architecture.md"):
         return "setup-foundation-architecture"
     if rel_path.endswith("brief.md"):
@@ -2284,7 +2305,7 @@ def _run_workflow(
             if ok:
                 print(f"  ✓ {rel}  ({how})")
             else:
-                print(f"  ✗ {rel}  (no approval found)")
+                print(f"  ✗ {rel}  ({how or 'no approval found'})")
                 unmet.append(rel)
         if unmet and not dry_run:
             print(
@@ -2292,15 +2313,29 @@ def _run_workflow(
                 f"Halting — gates are load-bearing.",
                 file=sys.stderr,
             )
+            from .docs_primary import is_ticket_slot, resolve_gate_ticket
             for path in unmet:
                 hint = _producer_hint(path)
                 if hint:
                     print(f"  {path} → produced by: python3 -m compass.orchestrator.run {hint}", file=sys.stderr)
-            print(
-                f"  Already approved outside the orchestrator? Record it:\n"
-                f"    python3 -m compass.orchestrator.run --approve <path>",
-                file=sys.stderr,
-            )
+            # #154: the two forms have different remedies — name the right ONE per
+            # `[refuse-escalate]`, never a remedy that cannot apply.
+            if any(is_ticket_slot(p) for p in unmet):
+                for path in (p for p in unmet if is_ticket_slot(p)):
+                    ticket = resolve_gate_ticket(project_dir, path)
+                    print(
+                        f"  {path} → approve it in Jira: move "
+                        f"{ticket or 'its gate ticket'} to Done "
+                        f"(the ticket IS the approval record; the artifact lives in "
+                        f"the docs system, not the repo).",
+                        file=sys.stderr,
+                    )
+            if any(not is_ticket_slot(p) for p in unmet):
+                print(
+                    f"  Already approved outside the orchestrator? Record it:\n"
+                    f"    python3 -m compass.orchestrator.run --approve <path>",
+                    file=sys.stderr,
+                )
             sys.exit(3)
         if unmet and dry_run:
             print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
@@ -3275,8 +3310,8 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Single workflow:
-              python3 -m compass.orchestrator.run setup-product --dry-run
-              python3 -m compass.orchestrator.run setup-product \\
+              python3 -m compass.orchestrator.run create-product-brief --dry-run
+              python3 -m compass.orchestrator.run create-product-brief \\
                 --context "Personal finance app for millennials."
 
             Pipeline — PM → Architect → Build (cross-workflow handoff):
@@ -3285,7 +3320,7 @@ def main(argv=None):
                 --context "We are building a crypto portfolio tracker."
 
             Resume after HITL rejection on step 3:
-              python3 -m compass.orchestrator.run setup-product --from-step 3
+              python3 -m compass.orchestrator.run create-product-brief --from-step 3
 
             Multi-host (Reviewer → Codex when OPENAI_API_KEY set):
               export ANTHROPIC_API_KEY=sk-ant-...
@@ -3296,7 +3331,7 @@ def main(argv=None):
     parser.add_argument(
         "workflow",
         nargs="?",
-        help="Workflow name (e.g., setup-product). Omit when using --pipeline.",
+        help="Workflow name (e.g., create-product-brief). Omit when using --pipeline.",
     )
     parser.add_argument("--project-dir", default=".", metavar="PATH")
     parser.add_argument(

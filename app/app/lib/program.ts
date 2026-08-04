@@ -165,7 +165,7 @@ export async function getProgram(engagementId?: string): Promise<ProgramModel & 
     // epic + one story per sprint-0.md row. Surface each open ticket as a job in its OWNING role's
     // queue (mostly delivery-manager; pm/architect for tickets 2–3) — its visible home. The story's
     // acceptance is "Done: <gate> · via <workflow>"; offer the workflow as the primary action.
-    // Informational (no fake action button) — the Sprint 0 workflows (/setup-product, …) aren't
+    // Informational (no fake action button) — the Sprint 0 workflows (/create-product-brief, …) aren't
     // app-runnable yet; the card's job is to make the kickoff backlog VISIBLE in its owner's queue
     // and name the gate. `meta` carries the workflow that closes it.
     const s0Epic = epicRows.find((e) => e.id === `${id}-S0`);

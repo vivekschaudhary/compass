@@ -21,20 +21,20 @@ Run from the Compass repo root:
 
 ```bash
 # Print dispatch graph with host routing (no API calls):
-python3 -m compass.orchestrator.run setup-product --dry-run
+python3 -m compass.orchestrator.run create-product-brief --dry-run
 
 # Run full workflow — each step routes to its preferred host:
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...    # optional — enables Reviewer steps
-python3 -m compass.orchestrator.run setup-product \
+python3 -m compass.orchestrator.run create-product-brief \
   --context "We are building a personal finance app for millennials."
 
 # Run a single step with inline context:
-python3 -m compass.orchestrator.run setup-product --step 1 \
+python3 -m compass.orchestrator.run create-product-brief --step 1 \
   --context "We are building a personal finance app for millennials."
 
 # Stdout only — no file writes:
-python3 -m compass.orchestrator.run setup-product --no-write \
+python3 -m compass.orchestrator.run create-product-brief --no-write \
   --context "..."
 
 # Full /build run — Engineer → Claude, Reviewer → OpenAI (codex):
@@ -42,7 +42,7 @@ python3 -m compass.orchestrator.run build \
   --context "story-id: PROJ-43"
 
 # Use a specific model override (applied to whichever host is selected):
-python3 -m compass.orchestrator.run setup-product --step 1 \
+python3 -m compass.orchestrator.run create-product-brief --step 1 \
   --model claude-haiku-4-5-20251001 \
   --context "..."
 ```

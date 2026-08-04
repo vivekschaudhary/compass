@@ -214,15 +214,15 @@ class TestHitlJsonl(unittest.TestCase):
         log_hitl(
             project_dir=self.project_dir,
             run_id="r1",
-            workflow="setup-product",
+            workflow="create-product-brief",
             bet_id=None,
             step=3,
-            artifact_path="docs/orchestrator-runs/setup-product/step-02-pm-setup-product-foundation.md",
+            artifact_path="docs/orchestrator-runs/create-product-brief/step-02-pm-draft-product-brief.md",
             decision="approved",
         )
         records = load_hitl_log(self.project_dir)
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0]["workflow"], "setup-product")
+        self.assertEqual(records[0]["workflow"], "create-product-brief")
         self.assertIsNone(records[0]["bet_id"])
 
     def test_load_hitl_log_empty(self):

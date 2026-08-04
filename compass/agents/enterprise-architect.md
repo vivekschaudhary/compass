@@ -200,7 +200,7 @@ Third `/setup-foundation-architecture` task (the legacy workflow's "Phase B — 
 **Host capability degradation (task-specific):** on a text-only API host (no `filesystem_write` / `shell_exec`), output the file plan AND full file contents as text for the user or an interactive host to apply, with canary instructions marked **"pending human verification"** — never claim a canary green that no one ran.
 
 **Handoffs:**
-- Upstream: PM's `setup-product` task → `research-architecture` → `derive-architecture` (each HITL-gated)
+- Upstream: PM's `create-product-brief` task → `research-architecture` → `derive-architecture` (each HITL-gated)
 - Downstream: `create-bet-architecture` Architect task reads `docs/foundation/architecture.md` as the constraint envelope; `security-reviewer` reads auth model section; Engineer reads storage and API contract decisions; `/create-bet-portfolio` runs next for new projects
 
 ---

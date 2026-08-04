@@ -114,10 +114,12 @@ class TestArtifactTargetParsing(unittest.TestCase):
             p.unlink()
 
     def test_real_workflows(self):
-        sp = load_workflow(WORKFLOWS / "setup-product.md")
+        # #154: /create-product-brief is docs-primary — its gates target `@docs` adapter
+        # SLOTS, not repo paths, because the artifact has no repo file at all.
+        cpb = load_workflow(WORKFLOWS / "create-product-brief.md")
         self.assertEqual(
-            next(s for s in sp if s.is_hitl).artifact_target,
-            "docs/foundation/product.md",
+            [s.artifact_target for s in cpb if s.is_hitl],
+            ["research@docs", "product-brief@docs"],
         )
         cb = load_workflow(WORKFLOWS / "create-brief.md")
         self.assertEqual(

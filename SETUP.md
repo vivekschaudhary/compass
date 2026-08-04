@@ -39,7 +39,7 @@ compass-cockpit --serve --allow-actions \
 
 **5. Do the work.** From the cockpit (or `compass-run <workflow>`), run the lifecycle, approving at each human gate:
 ```
-/setup-product  →  approve
+/create-product-brief  →  approve
 /setup-foundation-architecture  →  approve
 /create-brief <bet>  →  approve
 /create-story <bet>
@@ -128,7 +128,7 @@ git commit -m "chore: bootstrap Compass"
 In the Claude Code panel:
 
 ```
-/setup-product
+/create-product-brief
 ```
 
 You'll be asked for source material (Confluence link, GDrive doc, or free text describing what you're building). Compass drafts `docs/foundation/product.md` as a measurable bet.
@@ -369,7 +369,7 @@ For tools with flatter customization (Copilot, Cline's single-file rules), conca
 
 If you delete a Compass project folder and recreate it at the same path, **AI tools may carry stale memory from the previous project**. This is a quirk of how Claude Code, Cursor, and other tools store project context — keyed to absolute folder path, not folder identity.
 
-Symptom: you start `/setup-product` in an empty repo and Claude references a project name, OKRs, or roles that aren't yours.
+Symptom: you start `/create-product-brief` in an empty repo and Claude references a project name, OKRs, or roles that aren't yours.
 
 ### Fix it (Claude Code)
 
@@ -395,7 +395,7 @@ Easiest workaround: don't reuse folder paths. Start each Compass project in a fr
 In an empty branch after install:
 
 ```
-/setup-product
+/create-product-brief
 ```
 
 (Use defaults; this is just to verify the loop works.)

@@ -116,10 +116,27 @@ class TestStepParsing(unittest.TestCase):
 class TestRealWorkflows(unittest.TestCase):
     """Integration: the four dispatch-graph workflows parse with their gates intact."""
 
-    def test_setup_product(self):
-        steps = load_workflow(WORKFLOWS / "setup-product.md")
-        self.assertEqual(len(steps), 4)
-        self.assertEqual([s.is_hitl for s in steps], [False, False, True, False])
+    def test_create_product_brief(self):
+        steps = load_workflow(WORKFLOWS / "create-product-brief.md")
+        self.assertEqual(len(steps), 5)
+        # two gates: research review, then brief approval
+        self.assertEqual([s.is_hitl for s in steps], [False, True, False, True, False])
+
+    def test_create_product_brief_researches_before_drafting(self):
+        """#154 regression guard. Its predecessor `/create-product-brief` dispatched the PM at
+        step 1 while the PM's own gate required the Researcher's findings — so an
+        orchestrator walking the graph in order stalled on step 1, forever. The evidence
+        step MUST precede the drafting step; pin it so the inversion cannot return."""
+        steps = load_workflow(WORKFLOWS / "create-product-brief.md")
+        agents = [(s.agent, s.task) for s in steps if not s.is_hitl]
+        self.assertEqual(agents[0][0], "researcher")
+        self.assertEqual(agents[1], ("pm", "draft-product-brief"))
+        self.assertEqual(agents[2], ("delivery-manager", "update-status"))
+
+    def test_create_product_brief_gates_name_their_artifacts(self):
+        steps = load_workflow(WORKFLOWS / "create-product-brief.md")
+        targets = [s.artifact_target for s in steps if s.is_hitl]
+        self.assertEqual(targets, ["research@docs", "product-brief@docs"])
 
     def test_build(self):
         steps = load_workflow(WORKFLOWS / "build.md")
@@ -607,7 +624,7 @@ class TestAllowWriteResolution(unittest.TestCase):
 
     def test_authoring_workflows_default_on(self):
         for wf in ("create-brief", "create-story", "create-bet-architecture",
-                   "setup-product", "setup-foundation-architecture",
+                   "create-product-brief", "setup-foundation-architecture",
                    "create-bet-portfolio"):
             self.assertTrue(self.resolve(wf, False), wf)   # forced on even when caller said False
             self.assertTrue(self.resolve(wf, True), wf)
@@ -763,7 +780,7 @@ class TestDeliveryCheck(unittest.TestCase):
         from compass.orchestrator import run as runmod
         self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops"})
         for doc in ("create-brief", "create-bet-architecture", "create-story",
-                    "setup-product", "setup-foundation-architecture"):
+                    "create-product-brief", "setup-foundation-architecture"):
             self.assertNotIn(doc, runmod._CODE_WORKFLOWS)
 
     def test_delivery_warning_workflow_aware(self):

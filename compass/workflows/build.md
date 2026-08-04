@@ -37,7 +37,7 @@ This workflow is a **thin dispatch graph** per `[agent-as-surface-independent-un
 
 The per-step gate/work/postcondition detail is NOT in this file. Read the named task in the named agent file for that.
 
-**v0.3.23 is the 2nd workflow refactored to dispatch-graph shape** (joining `/setup-product` v0.3.14). 12 of the 14 workflows still embed full methodology bodies (v0.3.0-alpha shape); they refactor as their owning agents migrate.
+**v0.3.23 is the 2nd workflow refactored to dispatch-graph shape** (joining `/create-product-brief` v0.3.14). 12 of the 14 workflows still embed full methodology bodies (v0.3.0-alpha shape); they refactor as their owning agents migrate.
 
 ## Trigger
 
@@ -241,7 +241,7 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 - **NEW task `engineer.respond-to-review`** added so the Phase 5 review-response loop has an explicit dispatch surface (previously inline guidance in engineer.md's "Addressing reviewer findings" section).
 - **PM agent now participates in `/build`** (frontmatter `participates_in_workflows:` updated) — explicit recognition of the existing `arbitrate-dispute` task that fires in `/build` disputes.
 - **Cross-host orchestration enabled.** Same workflow file works whether Engineer runs on Claude Code and Reviewer runs on Codex CLI (today, with human dispatcher) or whether v0.4 orchestrator dispatches across hosts (later). The graph is the contract.
-- **Second workflow refactored to dispatch-graph shape** (joining `/setup-product` v0.3.14). `[workflow-as-dispatch-graph]` now at 2 instances → codification-ready candidate. `[task-ownership-locality]` now at 2 instances → codification-ready candidate. Both surface in v0.3.23 release notes; codification decision deferred to Retro #008.
+- **Second workflow refactored to dispatch-graph shape** (joining `/create-product-brief` v0.3.14). `[workflow-as-dispatch-graph]` now at 2 instances → codification-ready candidate. `[task-ownership-locality]` now at 2 instances → codification-ready candidate. Both surface in v0.3.23 release notes; codification decision deferred to Retro #008.
 
 ### Anti-patterns
 
@@ -271,4 +271,4 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 
 ---
 
-_Workflow refactored 2026-06-08 (v0.3.23) per `[agent-as-surface-independent-unit]` (canon v0.3.14). 2nd workflow refactored to thin dispatch graph shape (joining `/setup-product` v0.3.14); 12 of 14 workflows still embed full methodology bodies (refactor as their owning agents migrate)._
+_Workflow refactored 2026-06-08 (v0.3.23) per `[agent-as-surface-independent-unit]` (canon v0.3.14). 2nd workflow refactored to thin dispatch graph shape (joining `/create-product-brief` v0.3.14); 12 of 14 workflows still embed full methodology bodies (refactor as their owning agents migrate)._

@@ -22,7 +22,13 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
+
+
+def _q(s: str) -> str:
+    """Percent-encode a query-string value (page titles carry spaces + punctuation)."""
+    return urllib.parse.quote(str(s), safe="")
 
 
 def _auth(prefix: str):
@@ -323,9 +329,34 @@ def jira_transition(auth, key, target, transport=None):
             "to": (match.get("to") or {}).get("name") or target, "status": pstatus, "response": presp}
 
 
-def confluence_push(auth, space, title, body, page_id=None, transport=None):
+def confluence_find_page(auth, space, title, transport=None):
+    """Find a page by exact title within a space. Returns {pointer, url, ok, found,
+    status, response} — `found` False (with ok True) when the space has no such page.
+    Used to make parent-page creation idempotent without storing a pointer."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Accept": "application/json"}
+    status, resp = transport(
+        "GET",
+        f"{auth['base_url']}/wiki/rest/api/content"
+        f"?spaceKey={_q(space)}&title={_q(title)}&limit=1",
+        headers, None)
+    if status != 200:
+        return {"pointer": None, "url": None, "ok": False, "found": False,
+                "status": status, "response": resp}
+    results = resp.get("results") or []
+    if not results:
+        return {"pointer": None, "url": None, "ok": True, "found": False,
+                "status": status, "response": resp}
+    pid = results[0].get("id")
+    return {"pointer": pid, "url": _conf_url(auth, resp, pid), "ok": bool(pid),
+            "found": bool(pid), "status": status, "response": resp}
+
+
+def confluence_push(auth, space, title, body, page_id=None, parent_id=None, transport=None):
     """Create (or update, when `page_id` is set) a Confluence page. Idempotent via
-    `page_id`. Returns {pointer, url, action, ok, response}."""
+    `page_id`. `parent_id` files a NEW page beneath a parent (ignored on update — a
+    page is not re-parented by a content push). Returns {pointer, url, action, ok,
+    response}."""
     transport = transport or _default_transport
     headers = {"Authorization": _basic(auth), "Content-Type": "application/json",
                "Accept": "application/json"}
@@ -344,13 +375,52 @@ def confluence_push(auth, space, title, body, page_id=None, transport=None):
              "version": {"number": ver}, "body": storage})
         return {"pointer": page_id, "url": _conf_url(auth, resp, page_id),
                 "action": "updated", "ok": status == 200, "status": status, "response": resp}
+    create = {"type": "page", "title": title, "space": {"key": space}, "body": storage}
+    if parent_id:
+        create["ancestors"] = [{"id": str(parent_id)}]
     status, resp = transport(
-        "POST", f"{auth['base_url']}/wiki/rest/api/content", headers,
-        {"type": "page", "title": title, "space": {"key": space}, "body": storage})
+        "POST", f"{auth['base_url']}/wiki/rest/api/content", headers, create)
     new_id = resp.get("id")
     return {"pointer": new_id, "url": _conf_url(auth, resp, new_id),
             "action": "created", "ok": status in (200, 201) and bool(new_id),
             "status": status, "response": resp}
+
+
+def confluence_get_page(auth, page_id, transport=None):
+    """Read a page's title + storage body. Returns {pointer, title, body, url, ok,
+    status, response}."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Accept": "application/json"}
+    status, resp = transport(
+        "GET", f"{auth['base_url']}/wiki/rest/api/content/{page_id}?expand=body.storage",
+        headers, None)
+    if status != 200:
+        return {"pointer": page_id, "title": None, "body": None, "url": None,
+                "ok": False, "status": status, "response": resp}
+    body = ((resp.get("body") or {}).get("storage") or {}).get("value")
+    return {"pointer": page_id, "title": resp.get("title"), "body": body,
+            "url": _conf_url(auth, resp, page_id), "ok": True,
+            "status": status, "response": resp}
+
+
+def confluence_get_comments(auth, page_id, transport=None):
+    """List a page's footer comments (the revision-command intake, #154 follow-up).
+    Returns {comments: [{id, body}], ok, status, response}."""
+    transport = transport or _default_transport
+    headers = {"Authorization": _basic(auth), "Accept": "application/json"}
+    status, resp = transport(
+        "GET",
+        f"{auth['base_url']}/wiki/rest/api/content/{page_id}/child/comment"
+        f"?expand=body.storage&limit=100",
+        headers, None)
+    if status != 200:
+        return {"comments": [], "ok": False, "status": status, "response": resp}
+    out = [
+        {"id": c.get("id"),
+         "body": ((c.get("body") or {}).get("storage") or {}).get("value")}
+        for c in (resp.get("results") or [])
+    ]
+    return {"comments": out, "ok": True, "status": status, "response": resp}
 
 
 def _conf_url(auth, resp, page_id):

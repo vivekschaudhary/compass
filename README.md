@@ -86,7 +86,7 @@ Compass maps directly onto an OKR planning cycle. The bet IS the initiative; the
 
 **Ceremonies:**
 
-- **OKR planning** → `/setup-product` (O + KRs at foundation) + `/create-bet-portfolio` (map KRs → bets; dependency graph = sprint sequencing)
+- **OKR planning** → `/create-product-brief` (O + KRs at foundation) + `/create-bet-portfolio` (map KRs → bets; dependency graph = sprint sequencing)
 - **Weekly check-in** → `/status` produces the check-in content automatically
 - **Bet execution** → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build`
 - **Quarter retro** → `/retro` at project altitude consolidates all bet outcomes
@@ -102,7 +102,7 @@ Compass maps directly onto an OKR planning cycle. The bet IS the initiative; the
 ### 1. Bootstrap — once per project
 
 ```
-/setup-product                  → Foundation product bet (PM + Researcher)
+/create-product-brief                  → Product brief, docs-primary (PM + Researcher)
 /setup-foundation-architecture  → Foundation architecture bet + data model (Enterprise Architect)
 /create-bet-portfolio           → MVP wedge: 3-6 stub briefs + dependency graph (PM + Researcher)
 ```
@@ -153,8 +153,8 @@ source .venv/bin/activate
 
 # See the steps, then run your first workflow
 export ANTHROPIC_API_KEY=sk-ant-...
-python3 -m compass.orchestrator.run setup-product --dry-run
-python3 -m compass.orchestrator.run setup-product \
+python3 -m compass.orchestrator.run create-product-brief --dry-run
+python3 -m compass.orchestrator.run create-product-brief \
   --context "We are building <your product description>."
 ```
 

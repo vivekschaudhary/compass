@@ -27,7 +27,7 @@ The orchestrator is what makes Compass shippable — without it, Compass is a do
 
 ## "Start sending" criteria — ALL MET
 
-- [x] `python3 -m compass.orchestrator.run setup-product` runs end-to-end without human host-switching
+- [x] `python3 -m compass.orchestrator.run create-product-brief` runs end-to-end without human host-switching
 - [x] `python3 -m compass.orchestrator.run build` runs end-to-end without human host-switching
 - [x] All Product pack + Build pack agents present in `compass/agents/`
 - [x] Orchestrator handles HITL gates correctly (doesn't skip, doesn't loop)
@@ -57,7 +57,7 @@ Reviewer + security-reviewer declare `preferred_hosts: [codex, gemini]` — cros
 
 | Workflow | Status |
 |---|---|
-| `/setup-product` · `/setup-foundation-architecture` · `/create-brief` · `/create-bet-architecture` · `/create-story` · `/build` · `/fix` · `/triage` · `/ops` | ✅ dispatch-graph |
+| `/create-product-brief` · `/setup-foundation-architecture` · `/create-brief` · `/create-bet-architecture` · `/create-story` · `/build` · `/fix` · `/triage` · `/ops` | ✅ dispatch-graph |
 | Visibility/analysis (`/status`, `/plan`, `/dashboard`, `/metrics`, `/measure`, `/scan`, `/retro`) | prose (run interactively; orchestration post-MVP) |
 
 ---

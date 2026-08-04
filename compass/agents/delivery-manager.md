@@ -3,7 +3,7 @@ name: delivery-manager
 preferred_hosts: [claude, codex, gemini, chatgpt]
 required_tools: [text_input, github_write_artifact]
 optional_tools: [filesystem_read_recursive, shell_exec, mcp_github, mcp_jira, mcp_linear, mcp_slack]
-participates_in_workflows: [setup-product, status, plan, dashboard]
+participates_in_workflows: [create-product-brief, status, plan, dashboard]
 version: 0.3.19
 ---
 

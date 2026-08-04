@@ -10,7 +10,7 @@ status: active
 version: 0.4.0
 
 requires:                                        # authoring — the gate is prior-doc approval + a source
-  - foundation.product == approved               # else → /setup-product
+  - foundation.product == approved               # else → /create-product-brief
   - foundation.arch == approved                  # else → /setup-foundation-architecture
   - source.present == true                        # a link · free text · portfolio stub  (else → provide a source)
   - epic.brief_status != drafted                 # else → /create-story or /create-bet-architecture (already drafted)

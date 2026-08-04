@@ -3,7 +3,7 @@ id: WORKFLOW-RUN-LOG-<workflow>
 type: workflow-run-log
 status: living                     # rolling, append-only; never finalized
 altitude: workflow                 # source data for workflow-altitude retros per [fractal-retro] (canon.md v0.3.17)
-workflow: <workflow-name>          # e.g., build, fix, ops, triage, setup-product, create-brief
+workflow: <workflow-name>          # e.g., build, fix, ops, triage, create-product-brief, create-brief
 parent_artifact: null              # workflow runs span bets by design
 created: YYYY-MM-DD
 last_appended: YYYY-MM-DD

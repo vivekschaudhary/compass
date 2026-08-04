@@ -49,7 +49,7 @@ After the MVP ships, the project transitions to steady-state: new bets come one-
    - PM rationale: why this wedge, why this MVP line.
    - Frontmatter: `type: portfolio`, `status: proposed`, `parent: FOUNDATION-PRODUCT`.
 8. **Mirror to ticketing system** — each stub as an epic (per config).
-9. **DRI log seeded** on `portfolio.md` (PM ≥1 Decision; Researcher ≥1 Decision AND ≥1 Risk — same breadth as setup-product's enforcement).
+9. **DRI log seeded** on `portfolio.md` (PM ≥1 Decision; Researcher ≥1 Decision AND ≥1 Risk — same breadth as create-product-brief's enforcement).
 10. **HITL approval** — human reviews `portfolio.md`, approves or rejects. Portfolio status `proposed` → `approved`. Each stub brief stays `status: proposed, portfolio_stub: true` until its own `/create-brief` promotion + HITL.
 
 ## Verification (mandatory)

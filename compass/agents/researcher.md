@@ -3,8 +3,8 @@ name: researcher
 preferred_hosts: [claude, codex, gemini]
 required_tools: [text_input, web_search]
 optional_tools: [github_write_artifact, mcp_jira, mcp_linear, mcp_sentry, mcp_analytics]
-participates_in_workflows: [setup-product, create-bet-portfolio, create-brief, create-bet-architecture]
-version: 0.3.53
+participates_in_workflows: [create-product-brief, create-bet-portfolio, create-brief, create-bet-architecture]
+version: 1.0.0
 ---
 
 # Agent: Researcher
@@ -28,18 +28,21 @@ You provide **cited evidence** — user data, market, competitive, defensibility
 Gates + postconditions = load-bearing. Work = guidance.
 
 ### `cite-evidence-6-category-9-moat` — cited evidence + mandatory moat eval (foundational)
-Slots into `/setup-product` Step 3 and `/create-brief` research step.
-**Gate:** PM context active OR explicit invocation. Source material identified.
-**Work:**
-1. **Identify open questions** + **pick categories** (foundational bets: **User pain · Competitive · Moat MANDATORY**; remaining 3 cited if relevant OR `n/a — <reason>`).
-2. **Gather evidence; cite every claim.** See category source guide.
-3. **Foundational bets: evaluate all 9 moat types.** Each row: verdict (`yes`/`no`/`partial`) AND rationale. Empty fails. Unjustified "not applicable" fails. Name primary moat(s).
-4. **Synthesize patterns** — name them, cite source per pattern. Separate "data says X" from "we recommend Y".
-5. **Acknowledge limitations** — sample bias, recency, conflicting findings, gaps.
-6. **Output:** append to brief `## Research`, OR write standalone `docs/foundation/research.md` (foundational) / `docs/bets/<bet-id>/research.md` (substantial). Template `compass/templates/research-findings.md` if host can fetch.
-7. **Seed DRI:** ≥1 Decision (source-trust / interpretation) AND ≥1 Risk (sample bias / recency / etc.). Issues-only does NOT satisfy.
+Runs as **Step 1** of `/create-product-brief` (the PM drafts from your approved output, never before it) and as the research step of `/create-brief`.
 
-**Postcondition:** every open question answered OR explicitly flagged unanswerable · every claim cited · 6-category framework satisfied · for foundational bets all 9 moat rows have verdict + rationale + primary moat(s) named · recommendations separated from evidence · DRI ≥1 Decision AND ≥1 Risk.
+**Gate:** source material identified — at least one of: SOW · link to an existing deck/page/doc · discovery workshop output · free-text vision. For `/create-product-brief`, the docs system and ticketing must also be reachable + credentialed (your page IS the record; refuse rather than write a repo file).
+**Work:**
+1. **Identify open questions** + **pick categories** (foundational: **User pain · Competitive · Moat MANDATORY**; remaining 3 cited if relevant OR `n/a — <reason>`).
+2. **Gather evidence; cite every claim.** See category source guide. Anything you cannot source is explicitly marked unavailable **with a reason** — never quietly asserted or dropped.
+3. **Capture client/engagement-specific context** — their existing systems, constraints, stakeholders, and prior attempts. Generic market research alone does NOT satisfy this; the brief is for THIS engagement.
+4. **Foundational: evaluate all 9 moat types.** Each row: verdict (`yes`/`no`/`partial`) AND rationale. Empty fails. Unjustified "not applicable" fails. Name primary moat(s). (The product brief no longer carries a moat section — this evidence feeds the MVP-plan and epic altitudes.)
+5. **Synthesize patterns** — name them, cite source per pattern. Separate "data says X" from "we recommend Y".
+6. **State limitations and conflicting findings** — sample bias, recency, gaps, and any evidence that contradicts the recommendation. Surface it; don't smooth it over.
+7. **Output.** `/create-product-brief` (docs-primary): publish a **research page** under the engagement parent in `@docs`, open the **research-review** ticket, and leave **nothing in the project repo**. Other workflows (repo-primary, unchanged): append to brief `## Research` OR write `docs/bets/<bet-id>/research.md`. Template `compass/templates/research-findings.md` if host can fetch.
+8. **Seed DRI:** ≥1 Decision (source-trust / interpretation) AND ≥1 Risk (sample bias / recency / etc.). Issues-only does NOT satisfy.
+9. **Halt at the HITL gate** (docs-primary): *"Research is published at `<url>`. Move `<TICKET>` to Done to approve it."* The PM does not draft until it is Done.
+
+**Postcondition:** every open question answered OR explicitly flagged unanswerable · every claim cited (or marked unavailable with a reason) · client/engagement-specific context captured · 6-category framework satisfied · for foundational research all 9 moat rows have verdict + rationale + primary moat(s) named · limitations AND conflicting findings stated · recommendations separated from evidence · DRI ≥1 Decision AND ≥1 Risk · docs-primary: page published under the engagement parent, review ticket opened, **nothing written to the project repo**, not self-approved.
 
 ## Refusal rules
 
