@@ -254,7 +254,7 @@ function StaffingControl({ items }: { items: NonNullable<Job["staffing"]> }) {
 // map is replaced by the generated catalog in the next slice.
 type Workflow = { key: string; label: string; hint?: string };
 const ROLE_WORKFLOWS: Record<string, Workflow[]> = {
-  pm: [{ key: "bet", label: "Create epic" }, { key: "brief", label: "Create brief" }, { key: "portfolio", label: "Bet portfolio" }],
+  pm: [{ key: "product-brief", label: "Product brief" }, { key: "bet", label: "Create epic" }, { key: "brief", label: "Create brief" }, { key: "portfolio", label: "Bet portfolio" }],
   "product-owner": [{ key: "story", label: "Create story" }, { key: "refine", label: "Refine" }, { key: "sprint-review", label: "Sprint review" }, { key: "manage-sprint", label: "Manage sprint" }],
   researcher: [{ key: "research", label: "Run research" }],
   architect: [{ key: "tech-design", label: "Tech design" }, { key: "bet-architecture", label: "Epic architecture" }],

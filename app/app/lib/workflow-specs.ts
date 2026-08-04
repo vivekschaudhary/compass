@@ -16,9 +16,22 @@ export type WorkflowSpec = {
   gate: boolean;              // true = a human must approve → Awaiting HITL approval
   gateRole?: string;          // who approves (default pm)
   focus: string;              // the role-specific instruction handed to the agent
+  command?: string;           // the /slash-command this spec implements, when it has one.
+                              // Sprint 0 tickets name their closing workflow as "via /x" in
+                              // their acceptance; this is what lets that card offer a REAL
+                              // action instead of being informational. One definition, per #148.
 };
 
 export const WORKFLOW_SPECS: Record<string, WorkflowSpec> = {
+  // ── Foundation (Sprint 0) ──
+  // The head of the lifecycle, and the workflow that closes Sprint 0 ticket #2 ("Create
+  // product foundation"). The EVIDENCE half is the app's existing research workflow
+  // (`/api/research` + ResearchModal) — run and approve that first; this is deliberately
+  // not a second research implementation. Gated, because an approved product brief is a
+  // commitment a human has to actually sign off on.
+  "product-brief":  { role: "pm",           verb: "Product brief",     artifact: "confluence", gate: true, gateRole: "pm", command: "/create-product-brief",
+                      focus: "Produce the engagement's product brief with these sections, all mandatory: Vision · Target users · Problem · Access & data posture · Scope (in and out) · Objectives and Key Results. Every Key Result needs a metric, baseline, target and timeframe — a KR with no threshold is not done. Access & data posture means auth posture, data sensitivity and regulatory regime: these are PRODUCT decisions architecture derives from, so state them explicitly or record why each is not applicable. Do NOT infer them — where you lack the answer, say so and list it as an open question with 3 concrete options for the human to choose from rather than guessing." },
+
   "design-spec":    { role: "designer",     verb: "Design spec",      artifact: "confluence", gate: true,  gateRole: "pm",       focus: "Produce a design spec: user flows, key screens (described), states, and interaction notes. Functional, not visual pixel-detail." },
   "copy":           { role: "ux-writer",    verb: "UX copy",          artifact: "confluence", gate: true,  gateRole: "pm",       focus: "Produce the UX copy deck: screen-by-screen microcopy, empty/error/success states, and voice notes. Exact strings, ready to paste." },
   "tech-design":    { role: "architect",    verb: "Tech design",      artifact: "confluence", gate: true,  gateRole: "engineer", focus: "Produce a technical design: approach, key components/interfaces, data shape, risks, and a build sequence. No code." },
@@ -39,3 +52,18 @@ export const WORKFLOW_SPECS: Record<string, WorkflowSpec> = {
 export const GENERIC_WORKFLOWS: Record<string, string> = Object.fromEntries(
   Object.entries(WORKFLOW_SPECS).map(([key, spec]) => [key, spec.verb]),
 );
+
+// /slash-command → the spec keys that implement it, in run order. DERIVED, so a Sprint 0
+// card can ask "is my closing workflow runnable yet?" without a second hand-kept list.
+// A command maps to MORE than one key when it gates more than once (product brief:
+// research, then the brief itself).
+export const SPECS_BY_COMMAND: Record<string, string[]> = Object.entries(WORKFLOW_SPECS)
+  .reduce((acc, [key, spec]) => {
+    if (spec.command) (acc[spec.command] ??= []).push(key);
+    return acc;
+  }, {} as Record<string, string[]>);
+
+/** The next spec key to run for a /command, or undefined when the command isn't app-runnable. */
+export function firstSpecForCommand(command?: string | null): string | undefined {
+  return command ? SPECS_BY_COMMAND[command]?.[0] : undefined;
+}
