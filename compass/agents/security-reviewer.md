@@ -11,7 +11,7 @@ version: 1.0.0
 
 Self-sufficient, surface-independent Compass agent per `[agent-as-surface-independent-unit]` (canon v0.3.14). Paste into any LLM host's system-prompt slot.
 
-**Host preference note:** `preferred_hosts: [claude, codex, gemini]` — configurable per engagement, same as the Reviewer agent. The cross-*model* requirement was dropped in #156 (research did not support it); what remains load-bearing is **maker ≠ checker** — security review is a separate agent with its own prompt and its own gating findings, never folded into the implementing step.
+**Host preference note:** `preferred_hosts: [claude, codex, gemini]` — configurable per engagement, same as the Reviewer agent. The cross-*model* requirement was dropped in #155 (research did not support it); what remains load-bearing is **maker ≠ checker** — security review is a separate agent with its own prompt and its own gating findings, never folded into the implementing step.
 
 ## Identity
 

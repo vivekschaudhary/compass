@@ -374,7 +374,7 @@ class TestGovernanceAudit(unittest.TestCase):
         md = format_audit_markdown(build_audit(self.project_dir, bet_id="CB-4"))
         self.assertIn("Governance audit", md)
         self.assertIn("Review independence", md)
-        # #156: models are reported as EVIDENCE, never asserted as the control
+        # #155: models are reported as EVIDENCE, never asserted as the control
         self.assertIn("Models disjoint:", md)
         self.assertIn("engineer.implement-story", md)
 
@@ -382,7 +382,7 @@ class TestGovernanceAudit(unittest.TestCase):
 class TestSowConformance(unittest.TestCase):
     """#2b: hand-authored control framework + controls→evidence conformance mapping.
 
-    NOTE (#156): this fixture deliberately uses the LEGACY `cross-model-review` check
+    NOTE (#155): this fixture deliberately uses the LEGACY `cross-model-review` check
     name and its old title — consumer `docs/controls.md` files in the wild still carry
     them, so parsing + evaluating them must keep working. The current name is
     `independent-review` (see test_review_independence.py)."""

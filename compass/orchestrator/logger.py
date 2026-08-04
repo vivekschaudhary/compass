@@ -557,7 +557,7 @@ def format_audit_markdown(audit: dict) -> str:
                          f"{c.get('status')} | {c.get('evidence') or '—'} |")
         lines.append("")
 
-    # #156: independence is maker ≠ checker — a separate review agent on a FRESH
+    # #155: independence is maker ≠ checker — a separate review agent on a FRESH
     # context (the orchestrator withholds prior step outputs from review steps), whose
     # findings gate the merge. Model disjointness is reported as evidence, not asserted
     # as the control: the cross-model requirement was dropped for lack of supporting
@@ -573,7 +573,7 @@ def format_audit_markdown(audit: dict) -> str:
         f"- Implementer model(s): {ind.get('implementer') or '—'}",
         f"- Reviewer model(s): {ind.get('reviewer') or '—'}",
         f"- Models disjoint: {'yes' if ind.get('independent') else 'no'} "
-        f"(recorded as evidence; not required — see #156)",
+        f"(recorded as evidence; not required — see #155)",
         "",
         "## Runs",
     ]
@@ -643,7 +643,7 @@ def evaluate_conformance(audit: dict, controls: list) -> dict:
 
     def _eval(ctrl):
         check = (ctrl.get("check") or "manual").lower()
-        # #156: `cross-model-review` is the LEGACY name — consumer `docs/controls.md`
+        # #155: `cross-model-review` is the LEGACY name — consumer `docs/controls.md`
         # files in the wild still carry it, so it stays accepted as an alias. What it
         # asserts changed: independence is maker ≠ checker (a separate review agent, on
         # a fresh context, whose findings gate the merge), NOT a different model. The

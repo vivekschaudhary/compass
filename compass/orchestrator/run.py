@@ -269,7 +269,7 @@ def _with_review_context(user_message: str, diff: str) -> str:
 def _remap_claude_cli(preferred_hosts: list) -> list:
     """#120: route Claude steps to the subscription-backed CLI host when opted in
     (--claude-cli / COMPASS_CLAUDE_HOST=cli). Remaps ONLY `claude` → `claude-code`;
-    Every host in the list is remapped uniformly; since #156 the reviewer may run on
+    Every host in the list is remapped uniformly; since #155 the reviewer may run on
     claude too, and routing it to the subscription CLI is desirable, not a violation —
     review independence is fresh context (see `_FRESH_CONTEXT_AGENTS`), not the host."""
     return ["claude-code" if h == "claude" else h for h in preferred_hosts]
@@ -1127,7 +1127,7 @@ def _condense_output(text: str) -> str:
     return head[:800] + ("\n[... truncated ...]" if len(head) > 800 else "")
 
 
-# #156: agents that must run with NO history of the work they are checking. Compass
+# #155: agents that must run with NO history of the work they are checking. Compass
 # used to buy reviewer independence by forcing a different MODEL (`preferred_hosts:
 # [codex, gemini]`); research did not support that, so the model is now configurable
 # and independence is bought STRUCTURALLY instead — a fresh agent, a clean context, and
@@ -3017,7 +3017,7 @@ def _run_workflow(
             user_context = stack_profile_text + "\n" + user_context
             print(f"[stack] injected '{stack}' profile for {step.agent}")
 
-        # #156: a review step runs as a FRESH agent with NO implementation history.
+        # #155: a review step runs as a FRESH agent with NO implementation history.
         # Prior step outputs carry the Engineer's own account of what it built and why;
         # feeding that to the reviewer anchors it to the implementer's narrative and it
         # reviews the story rather than the code. Since the cross-MODEL requirement was

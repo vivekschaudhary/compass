@@ -4,7 +4,7 @@
 
 Walks Compass dispatch-graph workflows and dispatches each step to the named agent's host via API. **Multi-host dispatch:** each step reads the agent's `preferred_hosts:` frontmatter and routes to the best available host (Claude API, OpenAI API, or Gemini API).
 
-This closes the P0 drift from Retro #009: every step dispatches to the host its agent declares, rather than defaulting to Claude. Reviewer steps route to whatever the engagement configures (#156) — Claude by default, or OpenAI (Codex) / Gemini API, preserving cross-model independence.
+This closes the P0 drift from Retro #009: every step dispatches to the host its agent declares, rather than defaulting to Claude. Reviewer steps route to whatever the engagement configures (#155) — Claude by default, or OpenAI (Codex) / Gemini API, preserving cross-model independence.
 
 ## Requirements
 
@@ -101,7 +101,7 @@ With `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` set:
 | 4 | `engineer.respond-to-review` | `[claude, codex, gemini]` | Claude API |
 | 5 | `pm.arbitrate-dispute` | `[chatgpt, claude, ...]` | OpenAI API (chatgpt) |
 
-Engineer and Reviewer dispatch as separate agents; the Reviewer runs on a fresh context with no implementation history (#156). Different models optional, not required.
+Engineer and Reviewer dispatch as separate agents; the Reviewer runs on a fresh context with no implementation history (#155). Different models optional, not required.
 
 ## v0.4-alpha scope and known gaps
 

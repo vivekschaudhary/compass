@@ -112,7 +112,7 @@ agents:
 
 # ─── Defaults ─────────────────────────────────────────────────────────
 # Any role not set below in tool_assignments falls back to the default here.
-# #156: `reviews` was pinned to codex to force a DIFFERENT MODEL than the
+# #155: `reviews` was pinned to codex to force a DIFFERENT MODEL than the
 # implementer. That requirement is dropped — research did not support it.
 # Review independence is now structural (maker ≠ checker: a separate agent
 # dispatched with NO implementation history, whose findings gate the merge),
@@ -133,7 +133,7 @@ defaults:
 #            designer: gemini     ← use Gemini for designer role
 #
 # reviewer / security_reviewer may use ANY host, including the same one as
-# the implementer (#156). What is load-bearing is that they are SEPARATE
+# the implementer (#155). What is load-bearing is that they are SEPARATE
 # AGENTS run on a FRESH context — the orchestrator withholds prior step
 # outputs from review steps so the reviewer never inherits the engineer's
 # account of its own work. A client that prefers Codex, Gemini, or its own

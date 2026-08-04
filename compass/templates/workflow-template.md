@@ -152,7 +152,7 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   Compass's empirically-validated split (Claude implements, Codex reviews);
   user can override per-role to any agent in the registry (openai,
   gemini, deepseek, codestral, custom). Reviewer + Security Reviewer
-  run on any configured host (#156); independence is fresh-context per AGENTS.md "Tool
+  run on any configured host (#155); independence is fresh-context per AGENTS.md "Tool
   division of labor" structural rationale. Generalizes the [agent-handoff]
   v0.3.5 pattern (reviewer-only) to every role. Forward-compatible with
   the orchestrator vision (v0.4+) — the registry shape naturally extends

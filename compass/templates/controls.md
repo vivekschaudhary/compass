@@ -15,7 +15,7 @@ fields. `check:` binds the control to evidence Compass verifies automatically:
 
 - `independent-review` — a separate review agent, dispatched with no implementation
   history, whose findings gate the merge (maker ≠ checker). Model disjointness is
-  reported as evidence but is not required (#156). Legacy alias: `cross-model-review`.
+  reported as evidence but is not required (#155). Legacy alias: `cross-model-review`.
 - `human-approval` — a human approved the gated deliverable
 - `security-review` — a security-review step ran
 - `tests-present` — a test/automation step ran

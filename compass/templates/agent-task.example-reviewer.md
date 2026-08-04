@@ -3,7 +3,7 @@
      finally STRUCTURED as a `pre:` predicate instead of prose buried in the Preconditions section. -->
 ---
 name: reviewer
-preferred_hosts: [claude, codex, gemini] # any host (#156) — independence is fresh-context (reviewer ≠ implementer model)
+preferred_hosts: [claude, codex, gemini] # any host (#155) — independence is fresh-context (reviewer ≠ implementer model)
 required_tools: [filesystem_read, shell_exec, github_write_artifact, mcp_github]
 participates_in_workflows: [build, fix, ops, triage]
 version: 0.4.0

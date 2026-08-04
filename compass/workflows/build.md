@@ -20,7 +20,7 @@ requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md
 What this workflow operationalizes. Full entries in `compass/framework/canon.md`.
 
 - **Compass-originals operationalized:** `[agent-as-surface-independent-unit]` (v0.3.14 — agent files own task content) · `[mechanical-output-verification]` (v0.3.6 — Engineer's runtime-artifact inspection in `implement-story`; Reviewer's framework-registration check in `review-pr` Step 0) · `[freshness-check]` (v0.3.3 → v0.3.11 — Phase 5 reviewer.md freshness gate; review-time freshness on NEW load-bearing claims) · `[agent-handoff]` (v0.3.5 — Engineer → Reviewer via `agent-handoff.yml` template, automated when consuming repo installs it) · `[role-boundary]` (v0.3.4 — Engineer writes code/unit/component tests; Reviewer writes E2E; PM arbitrates disputes; no overlap) · `[refuse-escalate]` (Engineer refuses to improvise architectural decisions) · `[soft-spec-hardening]` (vague AC pushes back to PM)
-- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization — `polished-but-broken` failure mode hardened via mechanical-output-verification) · Principle #16 (refuse + escalate to upstream) · Maker ≠ checker — the Engineer implements; the Reviewer is a separate agent with no implementation history (#156); host is configurable
+- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization — `polished-but-broken` failure mode hardened via mechanical-output-verification) · Principle #16 (refuse + escalate to upstream) · Maker ≠ checker — the Engineer implements; the Reviewer is a separate agent with no implementation history (#155); host is configurable
 
 ## Purpose
 
@@ -55,10 +55,10 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 ## Roles invoked (agents dispatched)
 
 - `compass/agents/engineer.md` — implementation + commit/push (the orchestrator opens the PR on green, #92) + response loop (migrated v0.3.14; tasks: `implement-story`, `respond-to-review` NEW v0.3.23)
-- `compass/agents/reviewer.md` — PR code review (migrated v0.3.16; `preferred_hosts: [claude, codex, gemini]` — any host, #156; task: `review-pr`. E2E authoring split to Automation in v0.3.33)
+- `compass/agents/reviewer.md` — PR code review (migrated v0.3.16; `preferred_hosts: [claude, codex, gemini]` — any host, #155; task: `review-pr`. E2E authoring split to Automation in v0.3.33)
 - `compass/agents/automation.md` — E2E tests + test framework + CI configs (NEW agent v0.3.33, split from Reviewer; task: `write-e2e-tests`)
 - `compass/agents/pm.md` — arbitrate Engineer-vs-Reviewer disputes (ad-hoc; fires only when Engineer adds `## Dispute` to PR; task: `arbitrate-dispute`)
-- `compass/agents/security-reviewer.md` (migrated v0.3.36; `preferred_hosts: [claude, codex, gemini]` — any host, #156) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions; task: `review-pr-security`
+- `compass/agents/security-reviewer.md` (migrated v0.3.36; `preferred_hosts: [claude, codex, gemini]` — any host, #155) — auto-engages on diffs touching auth/PII/payments/secrets/external input/sessions; task: `review-pr-security`
 - `compass/agents/tech-writer.md` (migrated v0.3.36) — post-merge changelog accumulation (Phase 7); task: `accumulate-changelog`
 
 ## Dispatch graph
@@ -230,7 +230,7 @@ After completion (or refusal), report in this exact shape:
 
 ## Discipline always
 
-No shortcuts under pressure. Full Reviewer review + Architect compliance + Security review (if applicable) on every PR including drafts and hotfixes. **Maker ≠ checker is structurally enforced (#156):** the Reviewer is a separate agent dispatched with no implementation history — the orchestrator withholds prior step outputs from review steps. The reviewer's HOST is configurable; what is never allowed is the implementer reviewing its own work or review collapsing into the build step.
+No shortcuts under pressure. Full Reviewer review + Architect compliance + Security review (if applicable) on every PR including drafts and hotfixes. **Maker ≠ checker is structurally enforced (#155):** the Reviewer is a separate agent dispatched with no implementation history — the orchestrator withholds prior step outputs from review steps. The reviewer's HOST is configurable; what is never allowed is the implementer reviewing its own work or review collapsing into the build step.
 
 ## Notes
 
@@ -258,7 +258,7 @@ No shortcuts under pressure. Full Reviewer review + Architect compliance + Secur
 - **Post-merge bug on shipped story** — reopen the story; do NOT create a separate "fix" story for the same defect. Handled at workflow-level pattern section above.
 - **`.github/workflows/ai-review.yml` installed** — Engineer → Reviewer handoff automated on CI-green per `[agent-handoff]` (canon v0.3.5). Either path (automated OR manual `codex` invocation) terminates at the same place (PR comment); automation removes the tool-switch only.
 - **Security-Reviewer auto-engages** in parallel with Reviewer when diff touches sensitive surfaces. Two reviews + two PR comments; both must clear (zero BLOCKERs + zero CRITICALs) before Step 7 mechanical merge constraints pass.
-- **Single-host run (everything on Claude)** — fully supported (#156). The Reviewer is a separate agent dispatched with **no implementation history** (the orchestrator withholds prior step outputs from review steps), so independence holds on one model. What is NOT allowed: folding review into the implementing step, or letting the engineer grade its own work. Do NOT run Reviewer-on-Claude against Claude-written code.
+- **Single-host run (everything on Claude)** — fully supported (#155). The Reviewer is a separate agent dispatched with **no implementation history** (the orchestrator withholds prior step outputs from review steps), so independence holds on one model. What is NOT allowed: folding review into the implementing step, or letting the engineer grade its own work. Do NOT run Reviewer-on-Claude against Claude-written code.
 - **Tech Writer / Security Reviewer migrated v0.3.36** — workflow references `compass/agents/tech-writer.md` (Task `accumulate-changelog`) + `compass/agents/security-reviewer.md` (Task `review-pr-security`). Legacy `compass/roles/` copies were removed in v1.0 (#38).
 
 ### Migration (v0.3.0-alpha → v0.3.23)

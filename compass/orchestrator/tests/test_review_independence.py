@@ -1,4 +1,4 @@
-"""Review-independence tests (#156).
+"""Review-independence tests (#155).
 
 Compass used to buy reviewer independence by forcing a different MODEL
 (`reviewer.preferred_hosts: [codex, gemini]`, claude excluded). Research did not
@@ -74,7 +74,7 @@ class TestReviewerHostIsFree(unittest.TestCase):
             self.assertIn("claude", self._hosts(agent), agent)
 
     def test_claude_cli_remap_now_covers_the_reviewer(self):
-        # Pre-#156 the reviewer could not use the flat-cost CLI because it was pinned
+        # Pre-#155 the reviewer could not use the flat-cost CLI because it was pinned
         # off claude. It can now.
         self.assertEqual(runmod._remap_claude_cli(["claude", "codex", "gemini"]),
                          ["claude-code", "codex", "gemini"])
@@ -95,7 +95,7 @@ class TestControlNoLongerReportsFalseBreach(unittest.TestCase):
         }
 
     def test_same_model_review_is_met(self):
-        # The regression this whole test file exists for: pre-#156 this returned
+        # The regression this whole test file exists for: pre-#155 this returned
         # "unmet — reviewer shares a model with the implementer".
         conf = evaluate_conformance(
             self._audit("claude-opus", "claude-opus"),
