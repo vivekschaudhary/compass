@@ -23,6 +23,7 @@ import { TriageModal } from "./modals/TriageModal";
 import { StoryModal } from "./modals/StoryModal";
 import { SprintReviewModal } from "./modals/SprintReviewModal";
 import { ResearchModal } from "./modals/ResearchModal";
+import { ProductBriefModal } from "./modals/ProductBriefModal";
 import { WorkflowModal } from "./modals/WorkflowModal";
 import { RefineModal } from "./modals/RefineModal";
 
@@ -33,7 +34,7 @@ const OVERSIGHT_ROLES = ["pm", "delivery-manager"];
 
 type Model = ProgramModel & { source: "supabase" | "fixture" };
 // which action modal is open — a plain string, or the workflow runner keyed by its workflow
-type ModalState = null | "bet" | "triage" | "story" | "review" | "research" | "refine" | { workflow: string };
+type ModalState = null | "bet" | "triage" | "story" | "review" | "research" | "refine" | "product-brief" | { workflow: string };
 
 export function AppShell({ model }: { model: Model }) {
   const { program, pillars, attention, roles, engagements, activeEngagementId, deliverables, epics, storyList } = model;
@@ -124,6 +125,7 @@ export function AppShell({ model }: { model: Model }) {
                 onTriage={() => setModal("triage")} decomposing={decomposing} activity={model.activity}
                 onCreateStory={() => setModal("story")} onSprintReview={() => setModal("review")} atlassianBase={model.atlassianBase}
                 onRunResearch={() => setModal("research")} onRunWorkflow={(key) => setModal({ workflow: key })}
+                onRunProductBrief={() => setModal("product-brief")}
                 onRefine={() => setModal("refine")} />
             )}
           </div>
@@ -143,6 +145,7 @@ export function AppShell({ model }: { model: Model }) {
       <StoryModal open={modal === "story"} onClose={close} {...ctx} epics={epics} />
       <SprintReviewModal open={modal === "review"} onClose={close} engagementId={activeEngagementId} programName={program.name} />
       <ResearchModal open={modal === "research"} onClose={close} {...ctx} storyList={storyList} providerLabel={providerLabel} />
+      <ProductBriefModal open={modal === "product-brief"} onClose={close} {...ctx} providerLabel={providerLabel} />
       <RefineModal open={modal === "refine"} onClose={close} {...ctx} epics={epics} />
       {role && (
         <WorkflowModal open={typeof modal === "object" && modal !== null} onClose={close} {...ctx}

@@ -274,7 +274,7 @@ const ROLE_WORKFLOWS: Record<string, Workflow[]> = {
 };
 
 export function JobsQueue({
-  role, jobs, onGetHelp, onAction, busy, onCreateBet, onDecompose, onTriage, decomposing, activity, onCreateStory, onSprintReview, atlassianBase, onRunResearch, onRunWorkflow, onRefine,
+  role, jobs, onGetHelp, onAction, busy, onCreateBet, onDecompose, onTriage, decomposing, activity, onCreateStory, onSprintReview, atlassianBase, onRunResearch, onRunProductBrief, onRunWorkflow, onRefine,
 }: {
   role: Role;
   jobs: Job[];
@@ -290,6 +290,7 @@ export function JobsQueue({
   onSprintReview?: () => void;
   atlassianBase?: string;
   onRunResearch?: () => void;
+  onRunProductBrief?: () => void;
   onRunWorkflow?: (key: string) => void;
   onRefine?: () => void;
 }) {
@@ -300,6 +301,8 @@ export function JobsQueue({
   // Dedicated modals for the bespoke workflows; everything else routes through the generic runner.
   const HANDLERS: Record<string, (() => void) | undefined> = {
     bet: onCreateBet, story: onCreateStory, refine: onRefine, "sprint-review": onSprintReview, research: onRunResearch, triage: onTriage,
+    // engagement-scoped + source-driven, so it does NOT go through the ticket-scoped generic runner
+    "product-brief": onRunProductBrief,
   };
   const handlerFor = (key: string): (() => void) | undefined =>
     HANDLERS[key] ?? (GENERIC_WORKFLOWS[key] && onRunWorkflow ? () => onRunWorkflow(key) : undefined);
