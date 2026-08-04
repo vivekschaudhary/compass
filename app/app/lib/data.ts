@@ -177,15 +177,10 @@ export type StorySummary = { id: string; epicId: string; title: string; role: st
 // (an acceptance-criteria checklist item). The on-platform, checkable form of a doc's action items.
 export type TaskItem = { id: number; storyId: string; title: string; role: string | null; kind: "task" | "ac"; done: boolean; ord: number };
 
-// Workflow keys the generic runner (/api/workflow) can execute → their human label. Client-safe
-// mirror of WORKFLOW_SPECS in app/api/workflow/route.ts (keep the keys in sync). These flip their
-// ROLE_WORKFLOWS entry to "ready" and run through the per-role ticket picker.
-export const GENERIC_WORKFLOWS: Record<string, string> = {
-  "design-spec": "Design spec", "copy": "UX copy", "tech-design": "Tech design", "bet-architecture": "Epic architecture",
-  "launch-plan": "Launch plan", "release-comms": "Release comms", "execute-change": "Change plan",
-  "e2e": "E2E test plan", "review-pr": "PR review", "scan": "Security scan", "docs": "Docs update",
-  "runbook": "Runbook", "status": "Status roll-up",
-};
+// Workflow keys the generic runner (/api/workflow) can execute → their human label. #148: this was
+// a hand-kept copy of WORKFLOW_SPECS that could only drift; it is now DERIVED from the specs in
+// lib/workflow-specs.ts. Re-exported here so existing importers keep working.
+export { GENERIC_WORKFLOWS } from "./workflow-specs";
 // A completed task in the history — logged per role + actor.
 export type Activity = { id: number; role: string; actor: string; kind: string; title: string; related: string; status: string; created_at: string; run_id: string | null };
 // A metric definition, captured per project (epicId null) or per epic (bet outcome). Value empty until instrumented.

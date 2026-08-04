@@ -246,13 +246,17 @@ function StaffingControl({ items }: { items: NonNullable<Job["staffing"]> }) {
 }
 
 // Per-role workflow catalog — every role's list of workflows, from the 17 Compass agents' tasks.
-// `ready` ones are wired (stream + log); the rest are declared (visible, not yet wired) so each
-// role's surface is honest and complete. New workflows flip ready:true as they're built.
-type Workflow = { key: string; label: string; ready?: boolean; hint?: string };
+//
+// #148: the `ready` flag that used to sit on these entries was DEAD — written on six of them and
+// read by nothing. Enablement is, and was, `handlerFor()` below. So the flag said `false` for the
+// 13 workflows the generic runner has been executing all along. A field that contradicts the
+// behaviour it claims to describe is worse than no field. Removed rather than repaired: this whole
+// map is replaced by the generated catalog in the next slice.
+type Workflow = { key: string; label: string; hint?: string };
 const ROLE_WORKFLOWS: Record<string, Workflow[]> = {
-  pm: [{ key: "bet", label: "Create epic", ready: true }, { key: "brief", label: "Create brief" }, { key: "portfolio", label: "Bet portfolio" }],
-  "product-owner": [{ key: "story", label: "Create story", ready: true }, { key: "refine", label: "Refine", ready: true }, { key: "sprint-review", label: "Sprint review", ready: true }, { key: "manage-sprint", label: "Manage sprint" }],
-  researcher: [{ key: "research", label: "Run research", ready: true }],
+  pm: [{ key: "bet", label: "Create epic" }, { key: "brief", label: "Create brief" }, { key: "portfolio", label: "Bet portfolio" }],
+  "product-owner": [{ key: "story", label: "Create story" }, { key: "refine", label: "Refine" }, { key: "sprint-review", label: "Sprint review" }, { key: "manage-sprint", label: "Manage sprint" }],
+  researcher: [{ key: "research", label: "Run research" }],
   architect: [{ key: "tech-design", label: "Tech design" }, { key: "bet-architecture", label: "Epic architecture" }],
   "enterprise-architect": [{ key: "foundation-arch", label: "Foundation architecture" }],
   designer: [{ key: "design-spec", label: "Design spec" }],
@@ -262,7 +266,7 @@ const ROLE_WORKFLOWS: Record<string, Workflow[]> = {
   "security-reviewer": [{ key: "security-review", label: "Security review" }],
   scanner: [{ key: "scan", label: "Scan" }],
   "tech-writer": [{ key: "docs", label: "Update docs" }],
-  support: [{ key: "triage", label: "Triage issue", ready: true }],
+  support: [{ key: "triage", label: "Triage issue" }],
   gtm: [{ key: "launch-plan", label: "Launch plan" }, { key: "release-comms", label: "Release comms" }],
   sre: [{ key: "execute-change", label: "Execute change" }, { key: "runbook", label: "Author runbook" }],
   "delivery-manager": [{ key: "status", label: "Status roll-up" }],

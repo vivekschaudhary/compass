@@ -13,6 +13,10 @@ export async function runOrchestrator(opts: {
   storyKey: string;
   workflow: "build" | "fix";
   runId?: string;              // existing run row to update; a deterministic id is used when omitted
+  actor?: string;              // who launched it, for the activity log
+  label?: string;              // activity title verb; defaults to the workflow's own name
+  clearJobId?: string;         // #148: the job card that launched this — deleted once the run goes
+                               // green and the approve job supersedes it
   emit: (s: string) => void;   // receives the header, live stdout/stderr, and the exit sentinel
 }): Promise<{ code: number | null; log: string; runId: string }> {
   const { storyKey, workflow, emit } = opts;
@@ -62,13 +66,29 @@ export async function runOrchestrator(opts: {
   }
 
   // finalize — persist the run + gate on the PR when green (same handshake as build)
-  await finalize({ runId, storyKey, workflow, code, log, jira, push });
+  await finalize({ runId, storyKey, workflow, code, log, jira, push,
+                   actor: opts.actor, label: opts.label, clearJobId: opts.clearJobId,
+                   repoName: plan.repoName });
   return { code, log, runId };
+}
+
+// #148: where a run stopped, from the orchestrator's exit-code convention (run.py) — 1 in-loop
+// halt, 2 missing dispatch prerequisite, 3 pre-dispatch entry gate, 130 interrupt. /api/build used
+// to hardcode this as "check gate", which is wrong for every failure that isn't one — and after
+// #123, exit 3 is by definition BEFORE the check gate. The field is shown in the run history, so a
+// wrong label misdirects triage.
+function failedStepFor(code: number | null): string | null {
+  if (code === 0 || code === null) return null;
+  if (code === 3) return "entry gate (pre-dispatch)";
+  if (code === 2) return "dispatch prerequisite";
+  if (code === 130) return "interrupted";
+  return "run halted";
 }
 
 async function finalize(o: {
   runId: string; storyKey: string; workflow: "build" | "fix"; code: number | null; log: string;
   jira: JiraCreds | null; push: (s: string) => void;
+  actor?: string; label?: string; clearJobId?: string; repoName?: string;
 }) {
   const sb = supabaseAdmin();
   if (!sb) return;
@@ -82,18 +102,22 @@ async function finalize(o: {
   // upsert so a run triggered without a pre-existing row (the assistant tool) still records
   await sb.from("run").upsert({
     id: o.runId, engagement_id: engId, role: "engineer", story: o.storyKey, workflow: o.workflow,
-    status: failed ? "failed" : "resolved", error: failed ? `exit ${o.code}` : null, log: o.log,
+    status: failed ? "failed" : "resolved", failed_step: failedStepFor(o.code),
+    error: failed ? `exit ${o.code}` : null, log: o.log,
   });
   if (engId) {
+    const verb = o.label ?? (o.workflow === "fix" ? "Fix" : "Build");
     await logActivity(sb, {
-      engagementId: engId, role: "engineer", kind: o.workflow,
-      title: `${o.workflow === "fix" ? "Fix" : "Re-run"} ${o.storyKey}`, related: o.storyKey,
+      engagementId: engId, role: "engineer", actor: o.actor, kind: o.workflow,
+      title: `${verb} ${o.storyKey}${o.repoName ? ` · ${o.repoName}` : ""}`, related: o.storyKey,
       status: failed ? "failed" : "done", runId: o.runId,
     });
     // green → gate on the PR (not auto-Done)
     if (o.code === 0) {
       const step = (s: string) => o.push(s.endsWith("\n") ? s : s + "\n");
       await gateOnPr(sb, o.jira, { ticket: o.storyKey, engagementId: engId, workflow: o.workflow, log: o.log }, step);
+      // the run happened; the approve job supersedes the card that launched it
+      if (o.clearJobId) await sb.from("job").delete().eq("id", o.clearJobId);
     }
   }
 }
