@@ -6,6 +6,7 @@ import { startWork, handoffForApproval } from "@/app/lib/lifecycle";
 import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
 import { generate, AI_MODEL } from "@/app/lib/dispatch";
 import { WORKFLOW_SPECS } from "@/app/lib/workflow-specs";
+import { engagementReadiness, readinessRefusal } from "@/app/lib/readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,14 @@ export async function POST(req: Request) {
       const jira = resolveJira(eng);
       const providerName = eng.docs_provider === "teams" ? "Teams/SharePoint" : "Confluence";
       step(`▸ Product brief · pm · ${eng.name}`);
+
+      // Phase A gate. Delivery work assumes a provisioned container; without it every failure
+      // downstream is silent — the page lands nowhere findable, or the gate never transitions,
+      // and the run still reports success. Refuse up front, naming the remedy.
+      step(`▸ checking the engagement is provisioned…`);
+      const readiness = await engagementReadiness(engagementId);
+      for (const c of readiness.checks) step(`  ${c.ok ? "✓" : "✗"} ${c.key} — ${c.detail}`);
+      if (!readiness.ok) throw new Error(readinessRefusal(readiness));
 
       // ── source material ──────────────────────────────────────────────────
       const pasted = (source ?? "").trim();

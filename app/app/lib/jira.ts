@@ -47,6 +47,22 @@ export async function createIssue(c: JiraCreds, opts: { type: string; summary: s
 // The issue's current status NAME, or null when it can't be read. Used to remember where a ticket
 // was before a speculative transition, so it can be put back if the work never actually started
 // (#123 — the orchestrator's pre-dispatch gates refuse before running anything).
+// Every status name the project's issue types can reach. Used by the Phase A readiness check:
+// `moveTo` degrades QUIETLY when a status isn't on the board — it logs "(skipped)" and the run
+// carries on reporting success, so a missing "Awaiting HITL approval" column means every human
+// gate silently fails to transition while the board looks fine. Better to assert it once at
+// setup than to discover it after a client sees an ungated deliverable marked Done.
+// Returns null when the project can't be read at all (auth/permission/not-found).
+export async function projectStatuses(c: JiraCreds): Promise<string[] | null> {
+  const r = await jreq(c, `/project/${c.project}/statuses`);
+  if (!r.ok) return null;
+  const body = await r.json().catch(() => null);
+  if (!Array.isArray(body)) return null;
+  const names = new Set<string>();
+  for (const t of body) for (const s of t?.statuses ?? []) if (s?.name) names.add(String(s.name));
+  return [...names];
+}
+
 export async function issueStatus(c: JiraCreds, key: string): Promise<string | null> {
   const r = await jreq(c, `/issue/${key}?fields=status`);
   if (!r.ok) return null;

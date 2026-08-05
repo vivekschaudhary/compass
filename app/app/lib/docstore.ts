@@ -83,6 +83,32 @@ async function teamsRead(eng: DocEng, itemId: string): Promise<string | null> {
   } catch { return null; }
 }
 
+// Can we actually reach the configured docs destination? A READ probe, not a write — the
+// readiness check must not litter the client's space with test pages. Returns null when it
+// is reachable, else a human-readable reason. Phase A asserts this; every workflow after it
+// assumes a doc can land, and `writeProviderDoc` returning null is otherwise indistinguishable
+// from "not configured" at the point where the work is already done.
+export async function probeDocs(eng: DocEng): Promise<string | null> {
+  if (eng.docs_provider === "teams") {
+    if (!eng.teams_site) return "no Teams/SharePoint site configured";
+    const creds = resolveGraphCreds(eng);
+    if (!creds) return "no Graph credentials (tenant id / client id / client secret)";
+    try {
+      await resolveSite(creds, eng.teams_site);
+      return null;
+    } catch (e) { return `could not reach the Teams site — ${e instanceof Error ? e.message : "error"}`; }
+  }
+  const a = cfAuth(eng);
+  if (!a) return "no Atlassian credentials (base url / email / token)";
+  if (!eng.confluence_space) return "no Confluence space configured";
+  try {
+    const res = await fetch(`${a.base}/wiki/rest/api/space/${encodeURIComponent(eng.confluence_space)}`, { headers: a.headers });
+    if (res.status === 404) return `space "${eng.confluence_space}" not found`;
+    if (res.status === 401 || res.status === 403) return `no access to space "${eng.confluence_space}" (HTTP ${res.status})`;
+    return res.ok ? null : `space check failed (HTTP ${res.status})`;
+  } catch (e) { return `could not reach Confluence — ${e instanceof Error ? e.message : "network error"}`; }
+}
+
 // ── Public: dispatch by the engagement's docs provider ──
 export async function writeProviderDoc(eng: DocEng, title: string, html: string): Promise<{ id: string; url: string } | null> {
   return eng.docs_provider === "teams" ? teamsWrite(eng, title, html) : cfWrite(eng, title, html);
