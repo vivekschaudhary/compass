@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { slotByName, defaultProvider, missingRequired } from "@/app/lib/adapters";
+import { AdapterConfig } from "@/app/components/ui/AdapterConfig";
 import { useRouter } from "next/navigation";
 
 type IntakeQuestion = {
@@ -47,11 +49,16 @@ export default function NewEngagement() {
   const [engagementId, setEngagementId] = useState("");
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
-  const [provider, setProvider] = useState<"confluence" | "teams">("confluence");
-  const [space, setSpace] = useState("");
-  const [rootPage, setRootPage] = useState("");
-  const [teamsSite, setTeamsSite] = useState("");
-  const [jiraProject, setJiraProject] = useState("");
+  // Adapter slots are registry-driven (lib/adapters.ts): the chosen provider decides which
+  // fields exist, so this screen never hardcodes "if confluence, show space key".
+  const [docsProvider, setDocsProvider] = useState(defaultProvider("docs"));
+  const [ticketsProvider, setTicketsProvider] = useState(defaultProvider("tickets"));
+  const [conn, setConn] = useState<Record<string, string>>({});
+  const setConnValue = (k: string, v: string) => setConn((c) => ({ ...c, [k]: v }));
+  const missing = [
+    ...missingRequired("docs", docsProvider, conn),
+    ...missingRequired("tickets", ticketsProvider, conn),
+  ];
   const [readiness, setReadiness] = useState<{ ok: boolean; checks: { key: string; label: string; ok: boolean; detail: string; remedy?: string }[] } | null>(null);
   const [data, setData] = useState<Extracted | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -70,9 +77,7 @@ export default function NewEngagement() {
         const r = await fetch("/api/intake", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mode: "provision", provision: {
-            name, client, docs_provider: provider,
-            confluence_space: space, confluence_root_page_id: rootPage,
-            teams_site: teamsSite, jira_project: jiraProject } }),
+            name, client, docs_provider: docsProvider, tickets_provider: ticketsProvider, ...conn } }),
         });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || "could not create the engagement");
@@ -167,49 +172,22 @@ export default function NewEngagement() {
             </div>
 
             <div className="mt-4 border-t border-line pt-4">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Document storage</span>
-              <div className="mt-1.5 flex gap-2">
-                {(["confluence", "teams"] as const).map((p) => (
-                  <button key={p} onClick={() => setProvider(p)}
-                    className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-medium ${provider === p ? "border-brand bg-brand-weak text-brand-ink" : "border-line bg-card text-body hover:bg-shell"}`}>
-                    {p === "confluence" ? "Confluence" : "Teams / SharePoint"}
-                  </button>
-                ))}
-              </div>
-              {provider === "confluence" ? (
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Space key</span>
-                    <input value={space} onChange={(e) => setSpace(e.target.value)} placeholder="e.g. NWRETAIL"
-                      className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Root page id <span className="text-faint/70">· optional</span></span>
-                    <input value={rootPage} onChange={(e) => setRootPage(e.target.value)} placeholder="pages nest under this"
-                      className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
-                  </label>
-                </div>
-              ) : (
-                <label className="mt-3 block">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Teams site</span>
-                  <input value={teamsSite} onChange={(e) => setTeamsSite(e.target.value)} placeholder="host:/sites/Name"
-                    className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
-                </label>
-              )}
+              <AdapterConfig slot={slotByName("docs")} provider={docsProvider} onProvider={setDocsProvider}
+                values={conn} onValue={setConnValue} />
             </div>
 
-            <label className="mt-4 block border-t border-line pt-4">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Jira project key</span>
-              <input value={jiraProject} onChange={(e) => setJiraProject(e.target.value)} placeholder="e.g. NWR"
-                className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
-              <span className="mt-1 block text-[11.5px] text-muted">
-                Its board needs an <span className="mono">Awaiting HITL approval</span> status — without it, human
-                approval gates fail silently. We check next.
-              </span>
-            </label>
+            <div className="mt-4 border-t border-line pt-4">
+              <AdapterConfig slot={slotByName("tickets")} provider={ticketsProvider} onProvider={setTicketsProvider}
+                values={conn} onValue={setConnValue} />
+              <p className="mt-2 text-[11.5px] text-muted">
+                The board needs an <span className="mono">Awaiting HITL approval</span> status — without it, human
+                approval gates fail silently. We verify it next.
+              </p>
+            </div>
 
             <div className="mt-5 flex justify-end">
-              <button onClick={provision} disabled={!name.trim() || !client.trim()}
+              <button onClick={provision} disabled={!name.trim() || !client.trim() || missing.length > 0}
+                title={missing.length ? `Still needed: ${missing.map((f) => f.label).join(", ")}` : undefined}
                 className="rounded-lg bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
                 Set up and check
               </button>

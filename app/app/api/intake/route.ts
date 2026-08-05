@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generate } from "@/app/lib/dispatch";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { seedDocTreeSpec } from "@/app/lib/doctree";
+import { adapterColumns } from "@/app/lib/adapters";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
 import { raiseQuestions, initialsFor as nameInitials, type AgentQuestion } from "@/app/lib/questions";
@@ -138,8 +139,8 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     mode: "provision" | "analyze" | "create";
     sow?: string; data?: Extracted; engagementId?: string;
-    provision?: { name: string; client: string; docs_provider?: string; confluence_space?: string;
-                  confluence_root_page_id?: string; teams_site?: string; jira_project?: string };
+    // adapter fields are keyed by engagement column and whitelisted against the registry
+    provision?: { name: string; client: string; docs_provider?: string } & Record<string, string | undefined>;
   };
 
   // ── Phase A · provision ───────────────────────────────────────────────────
@@ -159,15 +160,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "name and client are required" }, { status: 400 });
     }
     const id = `${slug(p.client || p.name)}-${Date.now().toString(36).slice(-4)}`;
+    // Adapter fields arrive as a flat map keyed by engagement column (lib/adapters.ts), so a new
+    // provider is a registry entry rather than an edit here. Whitelisted against the registry:
+    // an unknown key would be a PostgREST error at insert time, and silently dropping one would
+    // mean an engagement that looks configured but isn't.
+    const allowed = new Set(adapterColumns());
+    const adapterValues = Object.fromEntries(
+      Object.entries(p).filter(([k, v]) => allowed.has(k) && typeof v === "string" && v.trim())
+        .map(([k, v]) => [k, (v as string).trim()]),
+    );
     const { error } = await sb.from("engagement").insert({
       id, name: p.name.trim(), client: p.client.trim(),
       sow: "SOW pending",                       // replaced by the extraction in Phase B
       phase: "Setup · Phase A", overall: "good",
       docs_provider: p.docs_provider === "teams" ? "teams" : "confluence",
-      confluence_space: p.confluence_space || null,
-      confluence_root_page_id: p.confluence_root_page_id || null,
-      teams_site: p.teams_site || null,
-      jira_project: p.jira_project || null,
+      ...adapterValues,
       cost_spent: 0, cost_spark: [0], scope_spark: [], time_spark: [],
       time_milestone: "Setup", stories_late: 0, quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
     });
