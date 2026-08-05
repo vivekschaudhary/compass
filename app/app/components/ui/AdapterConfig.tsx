@@ -9,12 +9,15 @@ import { AdapterSlot, optionFor } from "@/app/lib/adapters";
 //
 // Declared-but-unbuilt providers render disabled with their reason, rather than being hidden.
 // Hiding them would make the roadmap invisible; offering them would be a lie.
-export function AdapterConfig({ slot, provider, onProvider, values, onValue }: {
+export function AdapterConfig({ slot, provider, onProvider, values, onValue, present }: {
   slot: AdapterSlot;
   provider: string;
   onProvider: (id: string) => void;
   values: Record<string, string>;
   onValue: (key: string, value: string) => void;
+  /** Which secrets are already stored, by presenceKey (e.g. { has_atlassian_token: true }).
+   *  Never the values themselves — a stored secret is reported, not returned. */
+  present?: Record<string, boolean>;
 }) {
   const opt = optionFor(slot.slot, provider);
 
@@ -49,20 +52,30 @@ export function AdapterConfig({ slot, provider, onProvider, values, onValue }: {
 
       {opt && opt.fields.length > 0 && (
         <div className={`mt-3 grid gap-3 ${opt.fields.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-          {opt.fields.map((f) => (
-            <label key={f.key} className="block">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-faint">
-                {f.label}{!f.required && <span className="text-faint/70"> · optional</span>}
-              </span>
-              <input
-                value={values[f.key] ?? ""}
-                onChange={(e) => onValue(f.key, e.target.value)}
-                placeholder={f.placeholder}
-                className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand"
-              />
-              {f.help && <span className="mt-1 block text-[11.5px] text-muted">{f.help}</span>}
-            </label>
-          ))}
+          {opt.fields.map((f) => {
+            const stored = Boolean(f.presenceKey && present?.[f.presenceKey]);
+            const filledElsewhere = Boolean(f.shared && (values[f.key] ?? "").trim());
+            return (
+              <label key={f.key} className="block">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-faint">
+                  {f.label}{!f.required && <span className="text-faint/70"> · optional</span>}
+                  {f.secret && <span className="ml-1.5 rounded-pill bg-shell px-1.5 py-0.5 text-[10px] normal-case tracking-normal text-muted">secret</span>}
+                </span>
+                <input
+                  type={f.secret ? "password" : "text"}
+                  autoComplete={f.secret ? "new-password" : "off"}
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => onValue(f.key, e.target.value)}
+                  placeholder={stored ? "•••••••• stored — leave blank to keep" : f.placeholder}
+                  className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand"
+                />
+                {f.help && <span className="mt-1 block text-[11.5px] text-muted">{f.help}</span>}
+                {filledElsewhere && !f.help && (
+                  <span className="mt-1 block text-[11.5px] text-muted">Shared with your other Atlassian connector.</span>
+                )}
+              </label>
+            );
+          })}
         </div>
       )}
     </div>

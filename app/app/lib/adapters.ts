@@ -23,6 +23,15 @@ export type AdapterField = {
   placeholder?: string;
   required?: boolean;       // blocks provisioning when empty
   help?: string;
+  /** Render masked, never echo back from the server. Stored, then only its PRESENCE is reported. */
+  secret?: boolean;
+  /** Boolean column reporting that a secret is stored (e.g. has_atlassian_token), so a form can
+   *  show "already set — leave blank to keep" without ever reading the value back. */
+  presenceKey?: string;
+  /** This column is written by more than one slot (Confluence and Jira share one Atlassian
+   *  account). The config UI keeps ONE flat map keyed by column, so filling it in either slot
+   *  fills both — this flag is what lets the UI say so instead of looking like a duplicate. */
+  shared?: boolean;
 };
 
 export type AdapterOption = {
@@ -48,10 +57,15 @@ export type AdapterSlot = {
   options: AdapterOption[];
 };
 
-// Credentials (base url / email / API token) are resolved per-engagement with an env fallback
-// (`resolveJira`, `cfAuth`), so they are NOT adapter fields here — a form that asked for a token
-// per slot would ask twice for the same Atlassian account and invite pasting secrets into two
-// places. Per-engagement credential overrides belong in Settings, not in engagement setup.
+// Credentials ARE adapter fields: a control tower runs many clients, and each engagement may point
+// at its own Atlassian/Notion/Linear instance. They are deliberately NOT `required`, because every
+// resolver falls back to the server env (`resolveJira`, `cfAuth`) — a solo operator on one tenant
+// should not have to paste a token per engagement. What decides whether the adapter actually works
+// is the readiness PROBE, not whether the form was filled in: it reads the real space and the real
+// project, so a wrong token fails loudly at setup instead of mid-workflow.
+//
+// Secrets are write-only. They are stored, and thereafter only their PRESENCE is reported back via
+// `presenceKey` — the value never leaves the server.
 export const ADAPTER_SLOTS: AdapterSlot[] = [
   {
     slot: "docs",
@@ -67,6 +81,11 @@ export const ADAPTER_SLOTS: AdapterSlot[] = [
           { key: "confluence_space", label: "Space key", placeholder: "e.g. NWRETAIL", required: true },
           { key: "confluence_root_page_id", label: "Root page id", placeholder: "pages nest beneath this",
             help: "Optional. Without it, pages land at the space root." },
+          { key: "atlassian_base_url", label: "Atlassian URL", placeholder: "https://acme.atlassian.net", shared: true,
+            help: "Leave blank to use the server default." },
+          { key: "atlassian_email", label: "Atlassian email", placeholder: "you@acme.com", shared: true },
+          { key: "atlassian_api_token", label: "Atlassian API token", secret: true, shared: true,
+            presenceKey: "has_atlassian_token", help: "From id.atlassian.com → Security → API tokens." },
         ],
       },
       {
@@ -76,6 +95,10 @@ export const ADAPTER_SLOTS: AdapterSlot[] = [
         fields: [
           { key: "teams_site", label: "Site", placeholder: "host:/sites/Name", required: true,
             help: "A webUrl, a site id, or host:/sites/Name." },
+          { key: "graph_tenant_id", label: "Azure tenant id", placeholder: "directory (tenant) id" },
+          { key: "graph_client_id", label: "App client id", placeholder: "application (client) id" },
+          { key: "graph_client_secret", label: "Client secret", secret: true, presenceKey: "has_graph_secret",
+            help: "Leave blank to use the server default." },
         ],
       },
       { id: "notion", label: "Notion", status: "declared", fields: [], note: "Not built yet." },
@@ -95,6 +118,11 @@ export const ADAPTER_SLOTS: AdapterSlot[] = [
         fields: [
           { key: "jira_project", label: "Project key", placeholder: "e.g. NWR", required: true },
           { key: "jira_board_id", label: "Board id", placeholder: "optional" },
+          { key: "atlassian_base_url", label: "Atlassian URL", placeholder: "https://acme.atlassian.net", shared: true,
+            help: "Shared with Confluence — filling it in either place sets both." },
+          { key: "atlassian_email", label: "Atlassian email", placeholder: "you@acme.com", shared: true },
+          { key: "atlassian_api_token", label: "Atlassian API token", secret: true, shared: true,
+            presenceKey: "has_atlassian_token" },
         ],
       },
       { id: "linear", label: "Linear", status: "declared", fields: [], note: "Not built yet." },

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { slotByName } from "@/app/lib/adapters";
+import { AdapterConfig } from "@/app/components/ui/AdapterConfig";
 import { useRouter } from "next/navigation";
 import { Connectors, RepoRef, RepoArea, DocsProvider, TeamMember, COMPASS_ROLES } from "@/app/lib/data";
 
@@ -19,18 +21,6 @@ function Input({ label, value, onChange, placeholder, mono, type }: { label: str
 }
 
 // A write-only secret field: never pre-filled. Shows whether one is already stored.
-function Secret({ label, value, onChange, isSet }: { label: string; value: string; onChange: (v: string) => void; isSet: boolean }) {
-  return (
-    <label className="block">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-faint">{label}
-        {isSet && <span className="ml-1.5 rounded-pill bg-good-weak px-1.5 py-0.5 text-[9.5px] font-medium text-good">set</span>}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} type="password" autoComplete="new-password"
-        placeholder={isSet ? "•••••••••••• — leave blank to keep" : "paste secret"}
-        className="mono mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
-    </label>
-  );
-}
-
 type DocRow = { path: string; title: string; kind: string; status: string; url: string | null };
 
 export function SettingsForm({ engagementId, engagementName, initialConnectors, initialRepos, initialDocs, initialMembers }: {
@@ -40,6 +30,20 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
   const [c, setC] = useState<Connectors>(initialConnectors);
   const [atlassianToken, setAtlassianToken] = useState("");
   const [graphSecret, setGraphSecret] = useState("");
+
+  // The registry addresses fields by engagement COLUMN, so bridge the connector object and the
+  // two write-only secrets into one flat map. Secrets live outside `c` because `c` is what the
+  // server sent back — and it never contains a secret value, only whether one is set.
+  const adapterValues: Record<string, string> = {
+    ...(c as unknown as Record<string, string>),
+    atlassian_api_token: atlassianToken,
+    graph_client_secret: graphSecret,
+  };
+  const setAdapterValue = (k: string, v: string) => {
+    if (k === "atlassian_api_token") return setAtlassianToken(v);
+    if (k === "graph_client_secret") return setGraphSecret(v);
+    setC({ ...c, [k]: v });
+  };
   const [repos, setRepos] = useState<RepoRef[]>(initialRepos.length ? initialRepos : []);
   const [team, setTeam] = useState<TeamMember[]>(initialMembers);
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
@@ -100,46 +104,33 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
             <div />
           </div>
 
-          {/* doc-storage provider — Confluence or Teams/SharePoint */}
-          <div className="mt-5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Doc storage</span>
-            <div className="mt-1.5 inline-flex rounded-lg border border-line bg-shell/40 p-0.5">
-              {(["confluence", "teams"] as DocsProvider[]).map((p) => (
-                <button key={p} onClick={() => setC({ ...c, docs_provider: p })}
-                  className={`rounded-md px-3 py-1.5 text-[12.5px] font-medium ${c.docs_provider === p ? "bg-card text-ink shadow-sm ring-1 ring-line" : "text-muted hover:text-ink"}`}>
-                  {p === "confluence" ? "Confluence" : "Teams / SharePoint"}
-                </button>
-              ))}
+          {/* Adapter slots — rendered from the registry (lib/adapters.ts), the same control the
+              new-engagement screen uses. Previously this block hand-rolled every provider's fields,
+              which is exactly the drift the registry exists to end: a provider added in one screen
+              and forgotten in the other. Secrets stay write-only — only their presence is known. */}
+          <div className="mt-5 space-y-5">
+            <AdapterConfig
+              slot={slotByName("docs")}
+              provider={c.docs_provider}
+              onProvider={(id) => setC({ ...c, docs_provider: id as DocsProvider })}
+              values={adapterValues}
+              onValue={setAdapterValue}
+              present={{ has_atlassian_token: c.has_atlassian_token, has_graph_secret: c.has_graph_secret }}
+            />
+            <div className="border-t border-line pt-5">
+              <AdapterConfig
+                slot={slotByName("tickets")}
+                provider="jira"
+                onProvider={() => { /* single implemented tracker — see AdapterSlot.providerKey */ }}
+                values={adapterValues}
+                onValue={setAdapterValue}
+                present={{ has_atlassian_token: c.has_atlassian_token }}
+              />
             </div>
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {c.docs_provider === "confluence" ? (
-              <>
-                <Input label="Confluence space key" value={c.confluence_space} onChange={set("confluence_space")} placeholder="ACME" mono />
-                <Input label="Confluence root page id" value={c.confluence_root_page_id} onChange={set("confluence_root_page_id")} placeholder="(set by Scaffold)" mono />
-                <Input label="Atlassian base URL" value={c.atlassian_base_url} onChange={set("atlassian_base_url")} placeholder="https://acme.atlassian.net" mono />
-                <Input label="Atlassian email" value={c.atlassian_email} onChange={set("atlassian_email")} placeholder="you@acme.com" mono />
-                <div className="sm:col-span-2">
-                  <Secret label="Atlassian API token" value={atlassianToken} onChange={setAtlassianToken} isSet={c.has_atlassian_token} />
-                  <p className="mt-1 text-[11px] text-faint">This client&apos;s Confluence credentials. Leave URL/email/token blank to fall back to the server <span className="mono">.env</span>.</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="sm:col-span-2">
-                  <Input label="SharePoint site" value={c.teams_site} onChange={set("teams_site")} placeholder="contoso.sharepoint.com:/sites/AcmePortal" mono />
-                  <p className="mt-1 text-[11px] text-faint">The Team&apos;s site — <span className="mono">host:/sites/Name</span>, a site webUrl, or a site id. The tree lands in the site&apos;s default document library.</p>
-                </div>
-                <Input label="Graph tenant id (Directory ID)" value={c.graph_tenant_id} onChange={set("graph_tenant_id")} placeholder="00000000-0000-…" mono />
-                <Input label="Graph client id (Application ID)" value={c.graph_client_id} onChange={set("graph_client_id")} placeholder="00000000-0000-…" mono />
-                <div className="sm:col-span-2">
-                  <Secret label="Graph client secret" value={graphSecret} onChange={setGraphSecret} isSet={c.has_graph_secret} />
-                  <p className="mt-1 text-[11px] text-faint">This client&apos;s Azure AD app (perm <span className="mono">Sites.ReadWrite.All</span>, admin-consented). Leave blank to fall back to the server <span className="mono">GRAPH_*</span> env.</p>
-                </div>
-              </>
-            )}
-            <Input label="Jira project key" value={c.jira_project} onChange={set("jira_project")} placeholder="KAN" mono />
-            <Input label="Jira board id" value={c.jira_board_id} onChange={set("jira_board_id")} placeholder="12" mono />
+            <p className="text-[11px] text-faint">
+              Leave credentials blank to fall back to the server <span className="mono">.env</span>.
+              A stored secret is never shown again — blank keeps it.
+            </p>
           </div>
         </section>
 
