@@ -135,7 +135,46 @@ async function createSprint0(sb: NonNullable<ReturnType<typeof supabaseAdmin>>, 
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as { mode: "analyze" | "create"; sow?: string; data?: Extracted };
+  const body = (await req.json()) as {
+    mode: "provision" | "analyze" | "create";
+    sow?: string; data?: Extracted; engagementId?: string;
+    provision?: { name: string; client: string; docs_provider?: string; confluence_space?: string;
+                  confluence_root_page_id?: string; teams_site?: string; jira_project?: string };
+  };
+
+  // ── Phase A · provision ───────────────────────────────────────────────────
+  // Stand up the CONTAINER before any SOW exists. Phase A is configuration, not a workflow —
+  // no basis, no deliverable, no gate (compass/framework/engagement-setup.md). It needs only
+  // enough identity for the row to exist, because connectors are stored ON that row and the
+  // doc tree cannot be scaffolded until it does.
+  //
+  // Why this mode has to exist: the SOW is the ROOT BASIS of everything downstream, so it
+  // belongs IN the doc store at `02-scope/sow` — not pasted into a form where it has no
+  // version and no link. That requires the store to be wired first, which requires the
+  // engagement to exist first. Hence: provision → scaffold → load the SOW → extract.
+  if (body.mode === "provision") {
+    const sb = supabaseAdmin();
+    const p = body.provision;
+    if (!sb || !p?.name?.trim() || !p?.client?.trim()) {
+      return NextResponse.json({ ok: false, error: "name and client are required" }, { status: 400 });
+    }
+    const id = `${slug(p.client || p.name)}-${Date.now().toString(36).slice(-4)}`;
+    const { error } = await sb.from("engagement").insert({
+      id, name: p.name.trim(), client: p.client.trim(),
+      sow: "SOW pending",                       // replaced by the extraction in Phase B
+      phase: "Setup · Phase A", overall: "good",
+      docs_provider: p.docs_provider === "teams" ? "teams" : "confluence",
+      confluence_space: p.confluence_space || null,
+      confluence_root_page_id: p.confluence_root_page_id || null,
+      teams_site: p.teams_site || null,
+      jira_project: p.jira_project || null,
+      cost_spent: 0, cost_spark: [0], scope_spark: [], time_spark: [],
+      time_milestone: "Setup", stories_late: 0, quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
+    });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    await seedDocTreeSpec(id);   // the refinable tree; scaffolding it is the next Phase A step
+    return NextResponse.json({ ok: true, id });
+  }
 
   if (body.mode === "analyze") {
     try {
@@ -151,8 +190,12 @@ export async function POST(req: Request) {
   const d = body.data;
   if (!sb || !d) return NextResponse.json({ ok: false, error: "not configured" }, { status: 400 });
 
+  // Phase B against a provisioned shell: FILL the existing engagement rather than inserting a
+  // second one. Without this the Phase A container (and its connectors, and its scaffolded doc
+  // tree) would be orphaned the moment the SOW was extracted.
+  const existingId = body.engagementId?.trim() || null;
   const suffix = Date.now().toString(36).slice(-4);
-  const id = `${slug(d.client || d.name || "engagement")}-${suffix}`;
+  const id = existingId ?? `${slug(d.client || d.name || "engagement")}-${suffix}`;
   const days = Math.max(7, Math.round((d.months || 3) * 30));
 
   // `sow` is a SHORT reference chip, never the full doc — guard against the agent dumping prose.
@@ -160,14 +203,21 @@ export async function POST(req: Request) {
     ? d.sow.trim()
     : (d.name || d.client || "SOW").split(/\s+/).slice(0, 3).join(" ");
 
-  const { error: e1 } = await sb.from("engagement").insert({
-    id, name: d.name, client: d.client, sow: sowRef, pricing: d.pricing,
+  // What the SOW tells us. On a provisioned shell this UPDATES (connectors + scaffolded tree
+  // survive); with no shell it inserts, preserving the original one-shot flow.
+  const fromSow = {
+    name: d.name, client: d.client, sow: sowRef, pricing: d.pricing,
     budget: d.budget, months: d.months, quality_bar: d.quality_bar,
     phase: "Kickoff · Phase 1", overall: "good",
-    cost_budget: d.budget, cost_spent: 0, cost_spark: [0],
-    scope_spark: [], time_milestone: "Kickoff", time_days_left: days, stories_late: 0, time_spark: [],
-    quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
-  });
+    cost_budget: d.budget, time_milestone: "Kickoff", time_days_left: days,
+  };
+  const { error: e1 } = existingId
+    ? await sb.from("engagement").update(fromSow).eq("id", existingId)
+    : await sb.from("engagement").insert({
+        id, ...fromSow, cost_spent: 0, cost_spark: [0],
+        scope_spark: [], stories_late: 0, time_spark: [],
+        quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
+      });
   if (e1) return NextResponse.json({ ok: false, error: e1.message }, { status: 400 });
 
   const rows = (d.deliverables || []).map((x, i) => ({

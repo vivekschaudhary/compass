@@ -40,12 +40,56 @@ Quality: WCAG 2.1 AA, 99.9% uptime, p95 < 400ms. Any scope beyond the above is a
 export default function NewEngagement() {
   const router = useRouter();
   const [sow, setSow] = useState("");
-  const [phase, setPhase] = useState<"input" | "analyzing" | "preview" | "clarify" | "creating">("input");
+  // Phase A (setup → provisioning) runs BEFORE the SOW. The SOW is the root basis of everything
+  // downstream, so it belongs in the doc store at `02-scope/sow` — which needs the store wired,
+  // which needs the engagement row to exist. See compass/framework/engagement-setup.md.
+  const [phase, setPhase] = useState<"setup" | "provisioning" | "input" | "analyzing" | "preview" | "clarify" | "creating">("setup");
+  const [engagementId, setEngagementId] = useState("");
+  const [name, setName] = useState("");
+  const [client, setClient] = useState("");
+  const [provider, setProvider] = useState<"confluence" | "teams">("confluence");
+  const [space, setSpace] = useState("");
+  const [rootPage, setRootPage] = useState("");
+  const [teamsSite, setTeamsSite] = useState("");
+  const [jiraProject, setJiraProject] = useState("");
+  const [readiness, setReadiness] = useState<{ ok: boolean; checks: { key: string; label: string; ok: boolean; detail: string; remedy?: string }[] } | null>(null);
   const [data, setData] = useState<Extracted | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   const openQuestions = data?.questions ?? [];
+
+  // Phase A: create the container, scaffold the doc tree, then ASSERT it is provisioned.
+  // Asserting rather than assuming is the whole point — an unscaffolded tree fails silently
+  // later, at the moment a workflow has already done its work.
+  async function provision() {
+    setPhase("provisioning"); setError(""); setReadiness(null);
+    try {
+      let id = engagementId;
+      if (!id) {
+        const r = await fetch("/api/intake", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "provision", provision: {
+            name, client, docs_provider: provider,
+            confluence_space: space, confluence_root_page_id: rootPage,
+            teams_site: teamsSite, jira_project: jiraProject } }),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "could not create the engagement");
+        id = j.id as string;
+        setEngagementId(id);
+      }
+      await fetch("/api/scaffold", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engagementId: id }),
+      });
+      const rr = await fetch(`/api/readiness?engagementId=${encodeURIComponent(id)}`);
+      const rj = await rr.json();
+      setReadiness(rj.readiness ?? null);
+      if (rj.readiness?.ok) setPhase("input");
+      else setPhase("provisioning");
+    } catch (e) { setError(e instanceof Error ? e.message : "failed"); setPhase("setup"); }
+  }
 
   async function analyze() {
     setPhase("analyzing"); setError("");
@@ -71,7 +115,9 @@ export default function NewEngagement() {
         else unanswered.push(q);
       }
       finalData = { ...finalData, questions: unanswered };
-      const r = await fetch("/api/intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "create", data: finalData }) });
+      // Carry the provisioned engagement id so Phase B FILLS the Phase A container rather than
+      // creating a second engagement and orphaning the connectors + scaffolded tree.
+      const r = await fetch("/api/intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "create", data: finalData, engagementId: engagementId || undefined }) });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || "create failed");
       document.cookie = `compass_eng=${j.engagementId}; path=/; max-age=31536000`;
@@ -97,6 +143,110 @@ export default function NewEngagement() {
 
       <div className="mx-auto max-w-2xl px-6 py-8">
         {error && <div className="mb-4 rounded-tile border border-bad-weak bg-bad-weak/60 px-4 py-3 text-[12.5px] text-bad">{error}</div>}
+
+        {/* ── Phase A · setup ─────────────────────────────────────────────── */}
+        {phase === "setup" && (
+          <section className="rounded-card border border-line bg-card p-5">
+            <h1 className="text-[15px] font-semibold text-ink">Set up the engagement</h1>
+            <p className="mt-1 text-[12.5px] text-muted">
+              Where this engagement&apos;s documents and tickets live. This comes first because the SOW
+              itself gets filed in the doc store — so there is one traceable copy everything else derives from.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Engagement name</span>
+                <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Store Replenishment"
+                  className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Client</span>
+                <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. Northwind Retail"
+                  className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
+              </label>
+            </div>
+
+            <div className="mt-4 border-t border-line pt-4">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Document storage</span>
+              <div className="mt-1.5 flex gap-2">
+                {(["confluence", "teams"] as const).map((p) => (
+                  <button key={p} onClick={() => setProvider(p)}
+                    className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-medium ${provider === p ? "border-brand bg-brand-weak text-brand-ink" : "border-line bg-card text-body hover:bg-shell"}`}>
+                    {p === "confluence" ? "Confluence" : "Teams / SharePoint"}
+                  </button>
+                ))}
+              </div>
+              {provider === "confluence" ? (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Space key</span>
+                    <input value={space} onChange={(e) => setSpace(e.target.value)} placeholder="e.g. NWRETAIL"
+                      className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Root page id <span className="text-faint/70">· optional</span></span>
+                    <input value={rootPage} onChange={(e) => setRootPage(e.target.value)} placeholder="pages nest under this"
+                      className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
+                  </label>
+                </div>
+              ) : (
+                <label className="mt-3 block">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Teams site</span>
+                  <input value={teamsSite} onChange={(e) => setTeamsSite(e.target.value)} placeholder="host:/sites/Name"
+                    className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
+                </label>
+              )}
+            </div>
+
+            <label className="mt-4 block border-t border-line pt-4">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Jira project key</span>
+              <input value={jiraProject} onChange={(e) => setJiraProject(e.target.value)} placeholder="e.g. NWR"
+                className="mt-1 w-full rounded-lg border border-line bg-shell/40 px-3 py-2 text-[13px] text-body outline-none focus:border-brand" />
+              <span className="mt-1 block text-[11.5px] text-muted">
+                Its board needs an <span className="mono">Awaiting HITL approval</span> status — without it, human
+                approval gates fail silently. We check next.
+              </span>
+            </label>
+
+            <div className="mt-5 flex justify-end">
+              <button onClick={provision} disabled={!name.trim() || !client.trim()}
+                className="rounded-lg bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+                Set up and check
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Phase A · provisioning result ───────────────────────────────── */}
+        {phase === "provisioning" && (
+          <section className="rounded-card border border-line bg-card p-5">
+            <h1 className="text-[15px] font-semibold text-ink">Provisioning</h1>
+            <p className="mt-1 text-[12.5px] text-muted">Creating the engagement, scaffolding the doc tree, then checking it can actually run.</p>
+
+            {!readiness && <p className="mt-4 text-[12.5px] text-muted">Working…</p>}
+
+            {readiness && (
+              <>
+                <ul className="mt-4 space-y-2">
+                  {readiness.checks.map((c) => (
+                    <li key={c.key} className="flex gap-2.5 rounded-tile border border-line px-3 py-2.5">
+                      <span className={c.ok ? "text-good" : "text-bad"}>{c.ok ? "✓" : "✗"}</span>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-ink">{c.label} <span className="mono text-[11px] text-faint">{c.key}</span></div>
+                        <div className="text-[12px] text-muted">{c.detail}</div>
+                        {!c.ok && c.remedy && <div className="mt-0.5 text-[12px] text-warn">→ {c.remedy}</div>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-5 flex justify-between">
+                  <button onClick={() => setPhase("setup")} className="text-[12.5px] font-medium text-muted hover:text-ink">← Change setup</button>
+                  <button onClick={provision} className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-body hover:bg-shell">Re-check</button>
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
         {(phase === "input" || phase === "analyzing") && (
           <section className="rounded-card border border-line bg-card p-5">
