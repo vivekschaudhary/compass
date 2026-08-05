@@ -101,11 +101,21 @@ export async function POST(req: Request) {
 
       // Point the doc-tree row at the page, so /api/research (and anything else reading
       // `01-foundation/product-brief`) resolves it instead of finding an empty scaffold.
+      // UPSERT, not update: the tree may never have been scaffolded for this engagement
+      // (verified — a live engagement had zero doc_page rows), and an update would then
+      // match nothing, leaving the page written but unreachable by every downstream reader.
+      // Row shape + id convention mirror doctree.ts `row()` so a later scaffold reconciles.
       if (doc?.id) {
-        await sb.from("doc_page").update({
-          external_id: doc.id, url: doc.url, status: "created",
-          provider: eng.docs_provider === "teams" ? "teams" : "confluence",
-        }).eq("engagement_id", engagementId).eq("path", BRIEF_PATH);
+        const provider = eng.docs_provider === "teams" ? "teams" : "confluence";
+        await sb.from("doc_page").upsert({
+          id: `${engagementId}-${BRIEF_PATH.replace(/\//g, "-")}`,
+          engagement_id: engagementId,
+          path: BRIEF_PATH, title: "Product brief", kind: "doc", parent_path: "01-foundation",
+          provider, external_id: doc.id, external_url: doc.url,
+          confluence_page_id: provider === "confluence" ? doc.id : null,
+          confluence_url: provider === "confluence" ? doc.url : null,
+          status: "created",
+        }, { onConflict: "id" });
         step(`  ✓ ${BRIEF_PATH} now points at the page`);
       }
 
