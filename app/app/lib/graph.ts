@@ -2,13 +2,16 @@
 // Used to scaffold the fixed doc tree into a Team's SharePoint document library
 // (the store behind a Team's "Files" tab), parallel to the Confluence provider.
 
+import { decryptSecret } from "./crypto";
+
 export type GraphCreds = { tenantId: string; clientId: string; clientSecret: string };
 
 // Per-engagement creds win; fall back to the server .env. Returns null if incomplete.
 export function resolveGraphCreds(eng: { graph_tenant_id?: string; graph_client_id?: string; graph_client_secret?: string }): GraphCreds | null {
   const tenantId = eng.graph_tenant_id || process.env.GRAPH_TENANT_ID || "";
   const clientId = eng.graph_client_id || process.env.GRAPH_CLIENT_ID || "";
-  const clientSecret = eng.graph_client_secret || process.env.GRAPH_CLIENT_SECRET || "";
+  // stored secrets are encrypted at rest; legacy plaintext passes through unchanged
+  const clientSecret = decryptSecret(eng.graph_client_secret) || process.env.GRAPH_CLIENT_SECRET || "";
   return tenantId && clientId && clientSecret ? { tenantId, clientId, clientSecret } : null;
 }
 

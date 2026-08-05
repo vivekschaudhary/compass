@@ -2,6 +2,7 @@ import { supabaseAdmin } from "./supabase";
 import { resolveGraphCreds, resolveSite, defaultDrive, ensureFolder, ensureFile, safeName } from "./graph";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { decryptSecret } from "./crypto";
 
 // A node in the workspace doc tree. `parent` is another node's `path`, or "" for a top-level node.
 export type DocNode = { path: string; title: string; kind: "folder" | "doc" | "template"; parent: string; body?: string };
@@ -71,7 +72,7 @@ async function buildConfluence(eng: Eng, tree: DocNode[]): Promise<Record<string
   const space = eng.confluence_space;
   const base = eng.atlassian_base_url || process.env.ATLASSIAN_BASE_URL;
   const email = eng.atlassian_email || process.env.ATLASSIAN_EMAIL;
-  const token = eng.atlassian_api_token || process.env.ATLASSIAN_API_TOKEN;
+  const token = decryptSecret(eng.atlassian_api_token) || process.env.ATLASSIAN_API_TOKEN;
   const canCreate = Boolean(space && base && email && token);
   const auth = canCreate ? Buffer.from(`${email}:${token}`).toString("base64") : "";
   const headers = { Authorization: `Basic ${auth}`, "Content-Type": "application/json", Accept: "application/json" };

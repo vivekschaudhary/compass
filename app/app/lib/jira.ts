@@ -2,6 +2,7 @@
 // Stories under the Epic (team-managed `parent` link), build/fix → status transitions.
 // Per-engagement creds win; fall back to the server .env. Returns null if incomplete.
 import { supabaseAdmin } from "./supabase";
+import { decryptSecret } from "./crypto";
 
 export type JiraCreds = { baseUrl: string; email: string; token: string; project: string };
 
@@ -10,7 +11,8 @@ export function resolveJira(eng: {
 }): JiraCreds | null {
   const baseUrl = eng.atlassian_base_url || process.env.ATLASSIAN_BASE_URL || "";
   const email = eng.atlassian_email || process.env.ATLASSIAN_EMAIL || "";
-  const token = eng.atlassian_api_token || process.env.ATLASSIAN_API_TOKEN || "";
+  // stored credentials are encrypted at rest; legacy plaintext passes through unchanged
+  const token = decryptSecret(eng.atlassian_api_token) || process.env.ATLASSIAN_API_TOKEN || "";
   const project = eng.jira_project || process.env.JIRA_PROJECT || "";
   return baseUrl && email && token && project ? { baseUrl, email, token, project } : null;
 }

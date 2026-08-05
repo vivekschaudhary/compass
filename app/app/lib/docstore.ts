@@ -2,6 +2,7 @@
 // so the research workflow can read the product brief and draft the research doc back into whichever
 // provider the engagement uses. Per-engagement creds win, env fallback (same as scaffold).
 import { resolveGraphCreds, resolveSite, defaultDrive, ensureFolder, ensureFile, readFile, safeName } from "./graph";
+import { decryptSecret } from "./crypto";
 
 export type DocEng = {
   id: string; name: string; docs_provider?: string;
@@ -21,7 +22,7 @@ export function stripHtml(html: string): string {
 function cfAuth(eng: DocEng) {
   const base = eng.atlassian_base_url || process.env.ATLASSIAN_BASE_URL || "";
   const email = eng.atlassian_email || process.env.ATLASSIAN_EMAIL || "";
-  const token = eng.atlassian_api_token || process.env.ATLASSIAN_API_TOKEN || "";
+  const token = decryptSecret(eng.atlassian_api_token) || process.env.ATLASSIAN_API_TOKEN || "";
   if (!base || !email || !token) return null;
   return { base, headers: { Authorization: "Basic " + Buffer.from(`${email}:${token}`).toString("base64"), "Content-Type": "application/json", Accept: "application/json" } };
 }

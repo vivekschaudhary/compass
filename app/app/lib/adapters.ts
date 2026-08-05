@@ -161,3 +161,10 @@ export function adapterColumns(): string[] {
   }
   return [...new Set(cols)];
 }
+
+/** Columns holding a secret — what a write path must encrypt, and a read path decrypt. */
+export function secretColumns(): string[] {
+  const cols: string[] = [];
+  for (const s of ADAPTER_SLOTS) for (const o of s.options) for (const f of o.fields) if (f.secret) cols.push(f.key);
+  return [...new Set(cols)];
+}

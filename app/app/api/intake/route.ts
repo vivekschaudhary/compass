@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { generate } from "@/app/lib/dispatch";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { seedDocTreeSpec } from "@/app/lib/doctree";
-import { adapterColumns } from "@/app/lib/adapters";
+import { adapterColumns, secretColumns } from "@/app/lib/adapters";
+import { encryptSecret } from "@/app/lib/crypto";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
 import { raiseQuestions, initialsFor as nameInitials, type AgentQuestion } from "@/app/lib/questions";
@@ -165,9 +166,12 @@ export async function POST(req: Request) {
     // an unknown key would be a PostgREST error at insert time, and silently dropping one would
     // mean an engagement that looks configured but isn't.
     const allowed = new Set(adapterColumns());
+    const secretCols = new Set(secretColumns());
     const adapterValues = Object.fromEntries(
       Object.entries(p).filter(([k, v]) => allowed.has(k) && typeof v === "string" && v.trim())
-        .map(([k, v]) => [k, (v as string).trim()]),
+        // credentials are encrypted at rest, here too — this path can carry a token straight
+        // from the setup screen, and it would otherwise be the one place that stores plaintext.
+        .map(([k, v]) => [k, secretCols.has(k) ? encryptSecret((v as string).trim()) : (v as string).trim()]),
     );
     const { error } = await sb.from("engagement").insert({
       id, name: p.name.trim(), client: p.client.trim(),

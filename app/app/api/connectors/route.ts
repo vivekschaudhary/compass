@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/app/lib/supabase";
+import { encryptSecret } from "@/app/lib/crypto";
 import { ConnectorsInput, RepoRef, TeamMember } from "@/app/lib/data";
 
 export const runtime = "nodejs";
@@ -27,8 +28,10 @@ export async function POST(req: Request) {
     updated_at: new Date().toISOString(),
   };
   // secrets are write-only: only overwrite when a new value was actually typed (blank = keep)
-  if (connectors.atlassian_api_token) update.atlassian_api_token = connectors.atlassian_api_token;
-  if (connectors.graph_client_secret) update.graph_client_secret = connectors.graph_client_secret;
+  // encrypted at rest — encryptSecret throws SecretKeyMissing rather than silently
+  // storing plaintext, so a missing key fails loudly at the moment of writing.
+  if (connectors.atlassian_api_token) update.atlassian_api_token = encryptSecret(connectors.atlassian_api_token);
+  if (connectors.graph_client_secret) update.graph_client_secret = encryptSecret(connectors.graph_client_secret);
 
   await sb.from("engagement").update(update).eq("id", engagementId);
 
