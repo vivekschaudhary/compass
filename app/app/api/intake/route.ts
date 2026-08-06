@@ -230,7 +230,10 @@ export async function POST(req: Request) {
   // Always seed the delivery-manager (owns intake + kickoff visibility) AND every Sprint 0 ticket
   // owner (pm, architect, …) — else those roles have no roster entry, no role view, and their
   // Sprint 0 tickets + clarifying questions would be invisible in the switcher.
-  const s0Roles = readSprint0().map((r) => normTeamRole(r.owner)).filter((c): c is string => !!c);
+  // Read the engagement's OWN spec: if this client's kickoff adds a ticket owned by a role the
+  // framework default never names, that role still needs a roster entry or its ticket lands
+  // invisible.
+  const s0Roles = (await readSprint0(id)).map((r) => normTeamRole(r.owner)).filter((c): c is string => !!c);
   const roleCodes = [...new Set(["delivery-manager", ...baseCodes, ...namedByRole.keys(), ...qRoles, ...s0Roles])];
   const members = roleCodes.flatMap((code) => {
     const names = namedByRole.get(code) ?? [];

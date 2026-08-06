@@ -1,32 +1,34 @@
 import { supabaseAdmin } from "./supabase";
 import { resolveGraphCreds, resolveSite, defaultDrive, ensureFolder, ensureFile, safeName } from "./graph";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import { decryptSecret } from "./crypto";
+import { resolveSpecContent, readFrameworkDefault, parseSpecTable } from "./specs";
 
 // A node in the workspace doc tree. `parent` is another node's `path`, or "" for a top-level node.
 export type DocNode = { path: string; title: string; kind: "folder" | "doc" | "template"; parent: string; body?: string };
 
-// The framework's compass/ dir — where the DEFAULT doc-tree spec lives. Same resolution as repo.ts /
-// intake: in the monorepo the app runs from <repo>/app and the framework is <repo>/compass.
-const COMPASS_DIR = process.env.COMPASS_DIR || `${process.env.COMPASS_REPO || resolve(process.cwd(), "..")}/compass`;
+export const DOC_TREE_PATH = "templates/doc-tree.md";
+const DOC_TREE_COLUMNS = ["path", "title", "kind", "parent"] as const;
 
-// Parse the DEFAULT doc tree from compass/templates/doc-tree.md (the "## Nodes" table). Mirrors the
-// sprint-0.md table read in api/intake — the SPEC is the source of truth; edit the table, not code.
-export function readDefaultDocTree(): DocNode[] {
-  let md = "";
-  try { md = readFileSync(`${COMPASS_DIR}/templates/doc-tree.md`, "utf8"); } catch { return []; }
-  const section = md.split(/^##\s+/m).find((s) => /^nodes/i.test(s.trim())) ?? "";
-  const nodes: DocNode[] = [];
-  for (const line of section.split("\n")) {
-    const t = line.trim();
-    if (!t.startsWith("|")) continue;
-    const c = t.split("|").slice(1, -1).map((x) => x.trim());
-    if (c.length < 5 || !/^\d+$/.test(c[0])) continue;          // data rows only (skip header + separator)
-    const kind = c[3] === "folder" || c[3] === "template" ? c[3] : "doc";
-    nodes.push({ path: c[1], title: c[2], kind, parent: c[4] === "—" ? "" : c[4] });
-  }
-  return nodes;
+function toNodes(rows: Record<(typeof DOC_TREE_COLUMNS)[number], string>[]): DocNode[] {
+  return rows.map((r) => ({
+    path: r.path, title: r.title,
+    kind: r.kind === "folder" || r.kind === "template" ? r.kind : "doc",
+    parent: r.parent === "—" ? "" : r.parent,
+  }));
+}
+
+/** The doc tree as THIS engagement sees it — its override, else the org default, else the shipped
+ *  spec. This is the DEFAULT structure; the engagement's refined copy still lives in
+ *  `doc_tree_spec` and is what actually gets scaffolded. */
+export async function readDefaultDocTree(engagementId: string | null = null): Promise<DocNode[]> {
+  const content = await resolveSpecContent(engagementId, DOC_TREE_PATH);
+  return toNodes(parseSpecTable(content, "Nodes", DOC_TREE_COLUMNS).rows);
+}
+
+/** The shipped tree, ignoring every override. */
+export function readShippedDocTree(): DocNode[] {
+  const content = readFrameworkDefault(DOC_TREE_PATH);
+  return content ? toNodes(parseSpecTable(content, "Nodes", DOC_TREE_COLUMNS).rows) : [];
 }
 
 // The sprint-review / demo template (⚡ = auto-filled from Supabase/Jira at generation time).
@@ -147,7 +149,9 @@ export async function seedDocTreeSpec(engagementId: string) {
   if (!sb) return { ok: false, error: "no db" };
   const { count } = await sb.from("doc_tree_spec").select("path", { count: "exact", head: true }).eq("engagement_id", engagementId);
   if (count && count > 0) return { ok: true, seeded: 0 };   // already seeded — don't clobber refinements
-  const rows = readDefaultDocTree().map((n, i) => ({
+  // Seeded from the tree THIS engagement resolves to (its override, else the org default, else the
+  // shipped spec) — so an org that reshaped its standard workspace gets that shape, not Compass's.
+  const rows = (await readDefaultDocTree(engagementId)).map((n, i) => ({
     engagement_id: engagementId, path: n.path, title: n.title, kind: n.kind,
     parent_path: n.parent, body: n.body ?? null, ord: i,
   }));
@@ -164,7 +168,7 @@ export async function getEngagementDocTree(engagementId: string): Promise<DocNod
       return data.map((r) => ({ path: r.path, title: r.title, kind: r.kind, parent: r.parent_path ?? "", body: r.body ?? undefined }));
     }
   }
-  return readDefaultDocTree();
+  return readDefaultDocTree(engagementId);
 }
 
 // Scaffold the engagement's (refined) doc tree into its chosen provider (Confluence or Teams/

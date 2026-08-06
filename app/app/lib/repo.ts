@@ -1,6 +1,7 @@
 import { existsSync } from "fs";
 import { resolve } from "path";
 import { supabaseAdmin } from "./supabase";
+import { buildOverlay, overlayHeader } from "./overlay";
 
 // Monorepo layout: the app lives at <repo>/app and the framework at <repo>. Default the framework
 // root to the app cwd's parent so it isn't pinned to one machine; COMPASS_REPO still overrides.
@@ -26,13 +27,14 @@ export type RunPlan = { args: string[]; cwd: string; scrubCreds: boolean; header
 // every story runs in exactly one repo, chosen by its epic's discipline/area.
 export async function resolveRunPlan(storyKey: string, workflow: "build" | "fix"): Promise<RunPlan> {
   const sb = supabaseAdmin();
-  let repoPath = "", repoName = "";
+  let repoPath = "", repoName = "", engagementId: string | null = null;
 
   if (sb && storyKey) {
     const { data: story } = await sb.from("story").select("epic_id").eq("id", storyKey).maybeSingle();
     if (story?.epic_id) {
       const { data: epic } = await sb.from("epic").select("engagement_id, discipline").eq("id", story.epic_id).maybeSingle();
       if (epic) {
+        engagementId = epic.engagement_id;   // whose spec overrides this run should read
         const { data: repos } = await sb.from("repo").select("*").eq("engagement_id", epic.engagement_id).order("ord");
         const areas = AREA_BY_DISCIPLINE[epic.discipline] ?? [];
         const repo = (repos ?? []).find((r) => areas.includes(r.area)) ?? (repos ?? []).find((r) => r.area === "shared") ?? (repos ?? [])[0];
@@ -52,14 +54,26 @@ export async function resolveRunPlan(storyKey: string, workflow: "build" | "fix"
     // run halts without (#123) — has a compass/ dir with no workflows/ in it. Probing the bare dir
     // dropped --compass-dir for those projects and the run died with "workflow file not found",
     // i.e. following the halt's own remediation broke the launcher.
-    const compassDir = existsSync(`${repoPath}/compass/workflows`) ? "" : COMPASS_DIR;
+    const vendored = existsSync(`${repoPath}/compass/workflows`);
+
+    // Per-engagement / per-org spec overrides reach Python as a DIRECTORY, not a query: build a
+    // copy of whichever compass/ this run would have used, with the overrides written over it, and
+    // point --compass-dir at that. The orchestrator stays a thing that reads files.
+    //
+    // The base matters. A vendoring project's overrides must be layered on ITS projection, not the
+    // framework's, or an engagement would silently run against the wrong set of workflows.
+    // No overrides → no overlay → the exact bytes on disk, and today's behaviour byte-for-byte.
+    const overlay = await buildOverlay(engagementId, vendored ? `${repoPath}/compass` : COMPASS_DIR);
+    const compassDir = overlay ? overlay.dir : (vendored ? "" : COMPASS_DIR);
     const compassArg = compassDir ? ["--compass-dir", compassDir] : [];
     return {
       // --non-interactive: the app spawns this headless (no stdin), so the orchestrator must never
       // prompt for per-step context — otherwise input() deadlocks the run at step 2+ (run.py:854).
       args: ["-m", "compass.orchestrator.run", workflow, "--project-dir", repoPath, ...compassArg, "--story", storyKey, "--non-interactive"],
       cwd: REPO, scrubCreds: false, real: true, repoName,
-      header: `$ compass.orchestrator.run ${workflow} --project-dir ${repoPath}${compassDir ? ` --compass-dir ${compassDir}` : ""} --story ${storyKey} --non-interactive\n$ cwd ${REPO}\n\n`,
+      // The overlay line states WHOSE definitions ran. Without it, "the workflow did something
+      // unexpected" is unanswerable — you cannot tell whose copy of the spec produced it.
+      header: `$ compass.orchestrator.run ${workflow} --project-dir ${repoPath}${compassDir ? ` --compass-dir ${compassDir}` : ""} --story ${storyKey} --non-interactive\n$ cwd ${REPO}\n${overlayHeader(overlay)}\n`,
     };
   }
   return {
