@@ -113,8 +113,22 @@ export async function engagementReadiness(engagementId: string): Promise<Readine
     return { ok: false, checks: [c], blocking: [c] };
   }
 
+  // Each check is isolated: a throw becomes a not-ready check carrying the error, never an
+  // exception out of this function. The individual probes do catch their own network errors today,
+  // so this is belt-and-braces — but the guarantee above is only worth stating if it holds
+  // STRUCTURALLY. Without this, one probe learning to throw turns a gate into a 500 from inside
+  // whatever workflow happened to call it, and an un-answerable check must never read as ready.
+  const guard = async (c: Promise<ReadinessCheck>, key: ReadinessCheck["key"], label: string) => {
+    try { return await c; } catch (e) {
+      return { key, label, ok: false, detail: `check failed — ${e instanceof Error ? e.message : "error"}`,
+               remedy: "Retry; if it persists, check the connector settings and network access." };
+    }
+  };
   const checks = await Promise.all([
-    checkDocs(eng), checkTickets(eng), checkScm(engagementId), checkTree(engagementId),
+    guard(checkDocs(eng), "docs.wired", "Document storage"),
+    guard(checkTickets(eng), "tickets.wired", "Ticketing"),
+    guard(checkScm(engagementId), "scm.wired", "Source control"),
+    guard(checkTree(engagementId), "tree.scaffolded", "Doc tree"),
   ]);
   const blocking = checks.filter((c) => !c.ok && c.key !== "scm.wired");
   return { ok: blocking.length === 0, checks, blocking };
