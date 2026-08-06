@@ -168,7 +168,10 @@ export async function getProgram(engagementId?: string): Promise<ProgramModel & 
     // Informational (no fake action button) — the Sprint 0 workflows (/create-product-brief, …) aren't
     // app-runnable yet; the card's job is to make the kickoff backlog VISIBLE in its owner's queue
     // and name the gate. `meta` carries the workflow that closes it.
-    const s0Epic = epicRows.find((e) => e.id === `${id}-S0`);
+    // Found by MARK, not by id: the epic's id is its Jira key when the tracker is wired, so
+    // reconstructing `<id>-S0` matched only the un-wired fallback — the backlog went invisible in
+    // this queue exactly when Jira worked. `kind` holds either way (018_sprint0_epic_kind.sql).
+    const s0Epic = epicRows.find((e) => e.kind === "sprint-0") ?? epicRows.find((e) => e.id === `${id}-S0`);
     const sprint0Jobs = s0Epic
       ? storyRows
           .filter((s) => s.epic_id === s0Epic.id && (s.status ?? "idle") !== "done")

@@ -60,6 +60,9 @@ export default function NewEngagement() {
     ...missingRequired("tickets", ticketsProvider, conn),
   ];
   const [readiness, setReadiness] = useState<{ ok: boolean; checks: { key: string; label: string; ok: boolean; detail: string; remedy?: string }[] } | null>(null);
+  // What closing Phase A actually produced — reported, not assumed. A local-only fallback (`jira:
+  // false`) is the case worth seeing: setup "worked" but the board is still empty.
+  const [sprint0, setSprint0] = useState<{ created: number; jira: boolean; closed: number } | null>(null);
   const [data, setData] = useState<Extracted | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -70,7 +73,7 @@ export default function NewEngagement() {
   // Asserting rather than assuming is the whole point — an unscaffolded tree fails silently
   // later, at the moment a workflow has already done its work.
   async function provision() {
-    setPhase("provisioning"); setError(""); setReadiness(null);
+    setPhase("provisioning"); setError(""); setReadiness(null); setSprint0(null);
     try {
       let id = engagementId;
       if (!id) {
@@ -91,8 +94,19 @@ export default function NewEngagement() {
       const rr = await fetch(`/api/readiness?engagementId=${encodeURIComponent(id)}`);
       const rj = await rr.json();
       setReadiness(rj.readiness ?? null);
-      if (rj.readiness?.ok) setPhase("input");
-      else setPhase("provisioning");
+      if (rj.readiness?.ok) {
+        // Phase A is over: the container is provisioned AND proven. Only now does the kickoff
+        // backlog get cut, into a tracker we just watched respond. Its first ticket ("Connect
+        // systems of record") is what these checks assert, so it lands already Done.
+        const cr = await fetch("/api/intake", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "complete-phase-a", engagementId: id }),
+        });
+        const cj = await cr.json();
+        if (!cj.ok) throw new Error(cj.error || "could not complete setup");
+        setSprint0({ created: cj.sprint0 ?? 0, jira: Boolean(cj.sprint0InJira), closed: cj.closed ?? 0 });
+        setPhase("input");
+      } else setPhase("provisioning");
     } catch (e) { setError(e instanceof Error ? e.message : "failed"); setPhase("setup"); }
   }
 
@@ -228,6 +242,13 @@ export default function NewEngagement() {
 
         {(phase === "input" || phase === "analyzing") && (
           <section className="rounded-card border border-line bg-card p-5">
+            {sprint0 && sprint0.created > 0 && (
+              <div className={`mb-4 rounded-tile border px-4 py-3 text-[12.5px] ${sprint0.jira ? "border-good-line bg-good-weak/50 text-good" : "border-warn-weak bg-warn-weak/50 text-warn"}`}>
+                {sprint0.jira
+                  ? <>Setup complete — Sprint 0 created on the board: {sprint0.created} tickets{sprint0.closed > 0 && <>, {sprint0.closed} already done</>}.</>
+                  : <>Setup complete, but Jira didn&apos;t accept the tickets — Sprint 0 exists locally only ({sprint0.created}). Fix the connector in Settings, then re-provision.</>}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <h1 className="text-[15px] font-semibold text-ink">Paste the Statement of Work</h1>
               <button onClick={() => setSow(SAMPLE)} className="text-[12.5px] font-medium text-brand hover:text-brand-ink">Use a sample SOW</button>

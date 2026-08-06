@@ -7,6 +7,7 @@ import { DOC_FORMAT, parseDoc } from "@/app/lib/aidoc";
 import { generate, AI_MODEL } from "@/app/lib/dispatch";
 import { WORKFLOW_SPECS } from "@/app/lib/workflow-specs";
 import { engagementReadiness, readinessRefusal } from "@/app/lib/readiness";
+import { findSprint0Epic } from "@/app/lib/sprint0";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,10 +83,13 @@ export async function POST(req: Request) {
       // "via /setup-product" in their acceptance; matching only the new name would
       // silently skip their ticket — no In Progress, no gate, no approval job — and
       // look like it worked. Verified against live data: 2 such tickets exist today.
-      const { data: s0 } = await sb.from("story")
-        .select("id, title, status").eq("epic_id", `${engagementId}-S0`)
+      // Resolve the epic by mark rather than rebuilding `<id>-S0`: its id is the Jira key whenever
+      // the tracker is wired, so the old form found the ticket only when Jira was NOT working.
+      const s0Epic = await findSprint0Epic(sb, engagementId ?? "");
+      const { data: s0 } = s0Epic ? await sb.from("story")
+        .select("id, title, status").eq("epic_id", s0Epic.id)
         .or("acceptance.ilike.%/create-product-brief%,acceptance.ilike.%/setup-product%")
-        .maybeSingle();
+        .maybeSingle() : { data: null };
       if (s0) {
         step(`▸ closing Sprint 0 ticket ${s0.id} — ${s0.title}`);
         await startWork(jira, s0.id, step);

@@ -3,13 +3,11 @@ import { generate } from "@/app/lib/dispatch";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { seedDocTreeSpec } from "@/app/lib/doctree";
 import { adapterColumns, secretColumns } from "@/app/lib/adapters";
-import { resolveJira, createIssue } from "@/app/lib/jira";
 import { encryptSecret } from "@/app/lib/crypto";
 import { seedEngagementMetrics } from "@/app/lib/metrics";
 import { COMPASS_ROLES } from "@/app/lib/data";
 import { raiseQuestions, initialsFor as nameInitials, type AgentQuestion } from "@/app/lib/questions";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { readSprint0, completePhaseA } from "@/app/lib/sprint0";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,8 +43,6 @@ const ROLE_LABEL: Record<string, string> = Object.fromEntries(COMPASS_ROLES.map(
 const ROLE_CODES = COMPASS_ROLES.map((r) => r.code);
 // The standard cross-functional scrum team, seeded when the SOW doesn't state staffing.
 const DEFAULT_TEAM = ["delivery-manager", "pm", "researcher", "designer", "ux-writer", "engineer", "automation", "gtm", "sre"];
-// The framework's compass/ dir — where the specs live (sprint-0.md, workflows). Same resolution as repo.ts.
-const COMPASS_DIR = process.env.COMPASS_DIR || `${process.env.COMPASS_REPO || resolve(process.cwd(), "..")}/compass`;
 
 function normTeamRole(raw: string): string | null {
   const r = (raw || "").toLowerCase().trim().replace(/\s+/g, "-");
@@ -97,91 +93,9 @@ function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 18);
 }
 
-// ── Sprint 0 (spec-driven kickoff backlog) ──────────────────────────────────
-// Read compass/templates/sprint-0.md and materialize its ticket TABLE onto the board:
-// a "Sprint 0" epic + one story per row. The SPEC is the source of truth — add a row there
-// and every new engagement starts with that ticket, no code change. Created at the END OF PHASE A,
-// in Jira, because by then the tracker IS connected (that was ticket #1, now the readiness check).
-type Sprint0Row = { ticket: string; workflow: string; owner: string; gate: string };
-function readSprint0(): Sprint0Row[] {
-  let md = "";
-  try { md = readFileSync(`${COMPASS_DIR}/templates/sprint-0.md`, "utf8"); } catch { return []; }
-  const section = md.split(/^##\s+/m).find((s) => /^tickets/i.test(s.trim())) ?? "";
-  const rows: Sprint0Row[] = [];
-  for (const line of section.split("\n")) {
-    const t = line.trim();
-    if (!t.startsWith("|")) continue;
-    const c = t.split("|").slice(1, -1).map((x) => x.trim());
-    if (c.length < 5 || !/^\d+$/.test(c[0])) continue;   // data rows only (skip header + separator)
-    rows.push({ ticket: c[1], workflow: c[2], owner: c[3], gate: c[4] });
-  }
-  return rows;
-}
-
-// Materialize the kickoff backlog. Runs at the END OF PHASE A, not with the SOW: these tickets
-// come from the sprint-0.md spec and are identical every engagement, so none of them depends on
-// what the SOW says. Once setup is done, the tracker should START BEING USED — a wired Jira with
-// an empty board is setup that has not actually landed.
-//
-// Creates in JIRA when it is reachable, then stores the returned keys as the local ids so the
-// board and the app agree on one identity. Falls back to local-only ids when Jira is unreachable,
-// which keeps a docs-only engagement working rather than blocking setup on a tracker.
-//
-// Idempotent: returns 0 if the Sprint 0 epic already exists, so re-running provisioning (or the
-// legacy one-shot create path) never duplicates the backlog.
-async function createSprint0(
-  sb: NonNullable<ReturnType<typeof supabaseAdmin>>, engagementId: string,
-): Promise<{ created: number; jira: boolean }> {
-  const rows = readSprint0();
-  if (!rows.length) return { created: 0, jira: false };
-
-  const localEpicId = `${engagementId}-S0`;
-  const { data: existing } = await sb.from("epic").select("id").eq("id", localEpicId).maybeSingle();
-  if (existing) return { created: 0, jira: false };
-
-  const { data: eng } = await sb.from("engagement")
-    .select("name, atlassian_base_url, atlassian_email, atlassian_api_token, jira_project")
-    .eq("id", engagementId).maybeSingle();
-  const jira = eng ? resolveJira(eng) : null;
-
-  // Epic in Jira first — its key becomes the local epic id, so there is ONE identity for it.
-  let epicId = localEpicId;
-  let inJira = false;
-  if (jira) {
-    const issue = await createIssue(jira, {
-      type: "Epic", summary: `Sprint 0 · Foundation & Setup — ${eng?.name ?? engagementId}`,
-      description: "Kickoff backlog, created from Compass's sprint-0.md spec.",
-    });
-    if (issue?.key) { epicId = issue.key; inJira = true; }
-  }
-
-  await sb.from("epic").insert({
-    id: epicId, engagement_id: engagementId, title: "Sprint 0 · Foundation & Setup",
-    deliverable_code: null, discipline: "Product", phase: "Kickoff", status: "idle",
-    note: "Foundation setup — created from the sprint-0.md spec at kickoff.", ord: 0,
-  });
-
-  const stories = [];
-  for (const [i, r] of rows.entries()) {
-    const acceptance = `Done: ${r.gate}${r.workflow.startsWith("/") ? ` · via ${r.workflow}` : ""}`;
-    const role = normTeamRole(r.owner) ?? "delivery-manager";
-    let id = `${epicId}-s${i + 1}`;
-    if (jira && inJira) {
-      const issue = await createIssue(jira, {
-        type: "Story", summary: r.ticket, description: acceptance, parentKey: epicId, labels: [role],
-      });
-      if (issue?.key) id = issue.key;
-    }
-    stories.push({ id, epic_id: epicId, title: r.ticket, assignee: "—", status: "idle",
-                   estimate_pts: 0, ac_pass_pct: 0, acceptance, role });
-  }
-  await sb.from("story").insert(stories);
-  return { created: stories.length, jira: inJira };
-}
-
 export async function POST(req: Request) {
   const body = (await req.json()) as {
-    mode: "provision" | "analyze" | "create";
+    mode: "provision" | "complete-phase-a" | "analyze" | "create";
     sow?: string; data?: Extracted; engagementId?: string;
     // adapter fields are keyed by engagement column and whitelisted against the registry
     provision?: { name: string; client: string; docs_provider?: string } & Record<string, string | undefined>;
@@ -227,10 +141,24 @@ export async function POST(req: Request) {
     });
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     await seedDocTreeSpec(id);   // the refinable tree; the client scaffolds it next
-    // Start USING the tracker as soon as it is wired — a connected Jira with an empty board is
-    // setup that has not landed. These tickets are spec-fixed, so none of them needs the SOW.
-    const s0 = await createSprint0(sb, id);
-    return NextResponse.json({ ok: true, id, sprint0: s0.created, sprint0InJira: s0.jira });
+    // Sprint 0 is NOT created here. Provisioning stores credentials; it does not prove they work,
+    // and a backlog cut against unverified Jira falls silently back to local ids that idempotency
+    // then makes permanent. It happens at `complete-phase-a`, after the readiness probe.
+    return NextResponse.json({ ok: true, id });
+  }
+
+  // ── Phase A · complete ────────────────────────────────────────────────────
+  // The end of Phase A, asserted rather than assumed. Readiness passes → the kickoff backlog is
+  // materialized in the tracker that was just proven reachable. A wired Jira with an empty board
+  // is setup that has not actually landed, so this is where the tracker starts being used.
+  if (body.mode === "complete-phase-a") {
+    const id = body.engagementId?.trim();
+    if (!id) return NextResponse.json({ ok: false, error: "engagementId required" }, { status: 400 });
+    const r = await completePhaseA(id);
+    // 409, not 400: the request is well-formed, the engagement just isn't ready yet. The client
+    // shows the blocking checks and lets the human fix them, so this is a state conflict.
+    if (!r.ok) return NextResponse.json({ ok: false, error: r.error, readiness: r.readiness }, { status: 409 });
+    return NextResponse.json({ ok: true, sprint0: r.sprint0, sprint0InJira: r.jira, closed: r.closed });
   }
 
   if (body.mode === "analyze") {
@@ -317,8 +245,13 @@ export async function POST(req: Request) {
   await seedDocTreeSpec(id);
   // capture the SOW-level product + engineering metric definitions
   await seedEngagementMetrics(sb, id);
-  // spec-driven kickoff: materialize the Sprint 0 foundation backlog from sprint-0.md
-  const sprint0 = (await createSprint0(sb, id)).created;   // no-op when Phase A already created it
+  // Legacy one-shot path (a `create` with no prior `provision`): still try to close Phase A, so an
+  // engagement made this way gets its kickoff backlog. Goes through completePhaseA rather than
+  // calling createSprint0 directly — bypassing the readiness assertion here would reintroduce
+  // exactly the unverified-tracker problem it exists to prevent. Not ready → 0, and the DM sees the
+  // blocking checks on the readiness panel. No-op when Phase A already completed.
+  const phaseA = await completePhaseA(id);
+  const sprint0 = phaseA.ok ? phaseA.sprint0 : 0;
 
   // file the DM agent's still-open clarifying questions into its jobs-to-do — resolving each logical
   // `field` to a concrete allowlisted target now that ids exist. Answered ones were already applied
