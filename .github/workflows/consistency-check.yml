@@ -32,3 +32,34 @@ jobs:
 
       - name: Orchestrator test suite
         run: python -m unittest discover -s compass/orchestrator/tests
+
+  # The control-tower app is the monorepo's other half and had no automated tests at all until
+  # now — every check on it was a human clicking through a live engagement. Its own job, because
+  # it needs Node rather than Python and must fail independently of the framework's checks.
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # No credentials are configured for this job on purpose: the suite must never reach the real
+      # Supabase / Atlassian / Anthropic accounts. Anything needing one is mocked, and live checks
+      # stay a deliberate manual step.
+      - name: Test
+        run: npm test
