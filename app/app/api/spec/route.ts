@@ -69,7 +69,12 @@ export async function GET(req: Request) {
   const engagementId = url.searchParams.get("engagementId");
 
   if (!path) {
-    return NextResponse.json({ ok: true, files: await listEditablePaths(engagementId) });
+    // `advisoryAuth` rides along with the LIST, not just a single file: the warning is about the
+    // whole surface, and hiding it until someone opens a file would mean the screen looks like a
+    // permissioned admin panel right up until the moment it matters.
+    return NextResponse.json({
+      ok: true, files: await listEditablePaths(engagementId), advisoryAuth: isAdvisoryOnly(),
+    });
   }
   if (!isEditablePath(path)) {
     return NextResponse.json({ ok: false, error: "Not an editable framework path" }, { status: 400 });

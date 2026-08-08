@@ -3,11 +3,12 @@ import { getProgram } from "../lib/program";
 import { supabaseAdmin } from "../lib/supabase";
 import { SettingsForm } from "../components/SettingsForm";
 import { DocTreePanel } from "../components/DocTreePanel";
+import { SpecEditor } from "../components/SpecEditor";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
-  const { e } = await searchParams;
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ e?: string; role?: string }> }) {
+  const { e, role } = await searchParams;
   const model = await getProgram(e);
   // Canonicalize the URL so it always names the engagement being configured (readable + shareable).
   if (!e && model.activeEngagementId) redirect(`/settings?e=${encodeURIComponent(model.activeEngagementId)}`);
@@ -31,6 +32,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       />
       <div className="mx-auto max-w-3xl px-6">
         <DocTreePanel engagementId={model.activeEngagementId} />
+      </div>
+      {/* The ENGAGEMENT scope of the same editor: where this client's process differs from the
+          organisation default. It belongs here, next to this engagement's other configuration —
+          the org-wide half lives at /admin. */}
+      <div className="mx-auto max-w-5xl px-6 pb-8">
+        <SpecEditor scope="engagement" engagementId={model.activeEngagementId} role={role ?? ""} />
       </div>
     </div>
   );

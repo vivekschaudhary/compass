@@ -91,7 +91,13 @@ export function Sidebar({
           </a>
         </div>
         <div className="mt-1 text-[13px] font-semibold text-ink">{program.name}</div>
-        <div className="mono mt-0.5 text-[11.5px] text-muted">{program.sow} · {program.pricing.toLowerCase()}</div>
+        {/* An engagement that has finished Phase A but not yet had its SOW extracted has no
+            pricing — a first-class state since provisioning was split from intake, and one you sit
+            in for as long as the connectors take. `.toLowerCase()` on that null 500s the whole
+            dashboard, so the field is simply omitted until it exists. */}
+        <div className="mono mt-0.5 text-[11.5px] text-muted">
+          {program.sow}{program.pricing ? ` · ${program.pricing.toLowerCase()}` : ""}
+        </div>
       </div>
 
       <div className="mt-auto border-t border-line p-3">
