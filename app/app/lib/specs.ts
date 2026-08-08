@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
 import { resolve, normalize } from "path";
 import { createHash } from "crypto";
 import { supabaseAdmin } from "./supabase";
@@ -111,6 +111,44 @@ export async function effectiveOverrides(engagementId: string | null): Promise<R
     for (const r of eng ?? []) if (isEditablePath(r.path)) out[r.path] = r.content;   // engagement wins
   }
   return out;
+}
+
+export type SpecFileEntry = { path: string; tier: Tier; updatedAt?: string; updatedBy?: string };
+
+/**
+ * Every editable framework file, with the tier each currently resolves to.
+ *
+ * Walks the whitelisted directories on disk rather than listing override rows, because the
+ * FRAMEWORK is the full catalogue — an engagement that has overridden nothing still has 100+
+ * files it may edit, and a list built from `spec_file` would show an empty screen on a fresh
+ * install and grow as you used it, which is backwards.
+ */
+export async function listEditablePaths(engagementId: string | null): Promise<SpecFileEntry[]> {
+  const files: string[] = [];
+  for (const dir of EDITABLE_DIRS) {
+    const abs = `${COMPASS_DIR}/${dir}`;
+    if (!existsSync(abs)) continue;
+    for (const name of readdirSync(abs)) {
+      if (name.endsWith(".md") || name.endsWith(".yaml")) files.push(`${dir}${name}`);
+    }
+  }
+  for (const f of EDITABLE_FILES) if (existsSync(`${COMPASS_DIR}/${f}`)) files.push(f);
+
+  const overrides = new Map<string, { tier: Tier; updatedAt?: string; updatedBy?: string }>();
+  const sb = supabaseAdmin();
+  if (sb) {
+    const { data: org } = await sb.from("spec_file").select("path, updated_at, updated_by").eq("org_id", DEFAULT_ORG);
+    for (const r of org ?? []) overrides.set(r.path, { tier: "org", updatedAt: r.updated_at, updatedBy: r.updated_by });
+    if (engagementId) {
+      const { data: eng } = await sb.from("spec_file").select("path, updated_at, updated_by").eq("engagement_id", engagementId);
+      for (const r of eng ?? []) overrides.set(r.path, { tier: "engagement", updatedAt: r.updated_at, updatedBy: r.updated_by });
+    }
+    // A row may point at a path no longer on disk (the framework removed a workflow after someone
+    // overrode it). Surface it rather than hiding it — it is still live for that engagement.
+    for (const p of overrides.keys()) if (!files.includes(p) && isEditablePath(p)) files.push(p);
+  }
+
+  return files.sort().map((path) => ({ path, tier: "framework" as Tier, ...overrides.get(path) }));
 }
 
 /**
