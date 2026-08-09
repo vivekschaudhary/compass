@@ -176,7 +176,7 @@ test.describe("permissions and tiers", () => {
   });
 
   test("an engagement override isolates from other engagements", async ({ page }) => {
-    await page.goto(`/settings?e=${ENGAGEMENT}&role=delivery-manager`);
+    await page.goto(`/settings?e=${ENGAGEMENT}&role=delivery-manager&tab=process`);
     const ed = editor(page, "engagement");
     await ed.getByTestId("spec-file-templates/sprint-0.md").click();
 
@@ -190,5 +190,30 @@ test.describe("permissions and tiers", () => {
     // The point of the tiering: nobody else moved.
     expect(await tierOf(page, "northwind-retail-qki1")).toBe("framework");
     expect(await tierOf(page)).toBe("framework");
+  });
+});
+
+test.describe("settings navigation", () => {
+  test("sections are separate, and the URL says which one you are on", async ({ page }) => {
+    // Settings used to stack connectors, team, repos, documents, the doc tree and the whole spec
+    // editor on one scroll. Each is now its own pane, deep-linkable.
+    await page.goto(`/settings?e=${ENGAGEMENT}&role=delivery-manager`);
+    await expect(page.getByRole("heading", { name: "Connectors", level: 1 })).toBeVisible();
+    await expect(page.getByTestId("spec-editor-engagement")).toBeHidden();
+
+    await page.getByRole("button", { name: /Process/ }).click();
+    await expect(page).toHaveURL(/tab=process/);
+    await expect(page.getByTestId("spec-editor-engagement")).toBeVisible();
+
+    await page.getByRole("button", { name: /Team/ }).click();
+    await expect(page).toHaveURL(/tab=team/);
+    await expect(page.getByTestId("spec-editor-engagement")).toBeHidden();
+  });
+
+  test("a deep link opens its section directly, keeping the role", async ({ page }) => {
+    await page.goto("/settings?role=delivery-manager&tab=process");
+    await expect(page).toHaveURL(/tab=process/);          // survives the canonicalizing redirect
+    await expect(page).toHaveURL(/role=delivery-manager/);
+    await expect(page.getByTestId("spec-editor-engagement")).toBeVisible();
   });
 });
