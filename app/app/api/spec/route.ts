@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/app/lib/supabase";
 import { logActivity } from "@/app/lib/activity";
 import {
   isEditablePath, resolveSpec, readFrameworkDefault, hashContent, listEditablePaths, DEFAULT_ORG,
+  driftOf,
 } from "@/app/lib/specs";
 import { validateSpec, specKind } from "@/app/lib/spec-validate";
 import { structuralChanges, isDangerous, summarizeChanges } from "@/app/lib/spec-structure";
@@ -86,9 +87,16 @@ export async function GET(req: Request) {
   // and the thing a revert falls back to.
   const below = engagementId ? await resolveSpec(null, path) : (shipped === null ? null : { path, content: shipped, tier: "framework" as const });
 
+  // Has the tier below moved since this override was taken? Computed against `below`, which is
+  // exactly what a revert would fall back to — so the question asked and the action offered agree.
+  const drift = resolved && resolved.tier !== "framework"
+    ? driftOf(resolved, below?.content ?? "")
+    : { drifted: false, comparable: false, baseContent: null, currentBaseline: below?.content ?? "" };
+
   return NextResponse.json({
     ok: true,
     path,
+    drift,
     content: resolved?.content ?? "",
     tier: resolved?.tier ?? null,
     updatedAt: resolved?.updatedAt ?? null,
@@ -104,7 +112,7 @@ export async function GET(req: Request) {
 // ── POST: validate · save · revert ───────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
-    action?: "validate" | "save" | "revert";
+    action?: "validate" | "save" | "revert" | "acknowledge" | "promote";
     scope?: string; engagementId?: string | null; path?: string; content?: string;
     role?: string | null; actor?: string | null;
     confirmStructuralChange?: boolean;
@@ -144,9 +152,74 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, reverted: true });
   }
 
+  // ── acknowledge: "I read the new default and I am keeping mine" ──
+  // Re-anchors the baseline WITHOUT touching content, so the warning clears and the override keeps
+  // running as-is. Audited, because it is a decision rather than a dismissal — someone chose to
+  // stay behind, and that should be answerable later.
+  if (body.action === "acknowledge") {
+    const below = engagementId ? await resolveSpec(null, path) : null;
+    const baseline = below?.content ?? readFrameworkDefault(path) ?? "";
+    const { error } = await sb.from("spec_file")
+      .update({ base_hash: baseline ? hashContent(baseline) : null, base_content: baseline || null })
+      .eq(filter.column, filter.value).eq("path", path);
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    await audit(sb, scope, engagementId, actor.userId ?? body.role,
+                `Kept the local version of ${path} after the default changed`);
+    return NextResponse.json({ ok: true, acknowledged: true });
+  }
+
+  // ── promote: this engagement's edit becomes the organisation default ──
+  // Requires edit-org-defaults, NOT the engagement capability: a delivery manager may adapt their
+  // own client, but changing how every other engagement runs is a different decision with a
+  // different blast radius.
+  if (body.action === "promote") {
+    if (scope !== "engagement" || !engagementId) {
+      return NextResponse.json({ ok: false, error: "Only an engagement override can be promoted." }, { status: 400 });
+    }
+    if (!can(actor, "edit-org-defaults")) {
+      return NextResponse.json({ ok: false, error: permissionRefusal("edit-org-defaults") }, { status: 403 });
+    }
+    const mine = await resolveSpec(engagementId, path);
+    if (!mine || mine.tier !== "engagement") {
+      return NextResponse.json({ ok: false, error: "Nothing to promote — this file is not overridden here." }, { status: 400 });
+    }
+
+    // The same structural gate a direct org edit would face. Promoting a spec that drops a step
+    // from the firm's default is exactly as dangerous as typing it there, so it asks the same
+    // question — measured against the ORG tier, which is what would change.
+    const orgNow = await resolveSpec(null, path);
+    const changes = structuralChanges(
+      orgNow ? await validateSpec(path, orgNow.content) : null, await validateSpec(path, mine.content),
+    );
+    const dangerous = changes.filter(isDangerous);
+    if (dangerous.length && !body.confirmStructuralChange) {
+      return NextResponse.json({ ok: false, needsConfirmation: true, changes, error: summarizeChanges(changes) }, { status: 409 });
+    }
+
+    const framework = readFrameworkDefault(path) ?? "";
+    await sb.from("spec_file_version").insert({
+      org_id: DEFAULT_ORG, engagement_id: null, path, content: mine.content,
+      saved_by: actor.userId ?? body.role ?? null,
+    });
+    const { error } = await sb.from("spec_file").upsert({
+      org_id: DEFAULT_ORG, engagement_id: null, path, content: mine.content,
+      base_hash: framework ? hashContent(framework) : null, base_content: framework || null,
+      updated_at: new Date().toISOString(), updated_by: actor.userId ?? body.role ?? null,
+    }, { onConflict: "org_id,engagement_id,path" });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+
+    // Drop the engagement row so it INHERITS what it just became, rather than keeping an identical
+    // copy that would then drift away from the default it created.
+    await sb.from("spec_file").delete().eq("engagement_id", engagementId).eq("path", path);
+
+    await audit(sb, "org", null, actor.userId ?? body.role, `Promoted ${path} from ${engagementId} to the organisation default`);
+    await audit(sb, "engagement", engagementId, actor.userId ?? body.role, `Promoted ${path} to the organisation default; now inherited`);
+    return NextResponse.json({ ok: true, promoted: true, changes });
+  }
+
   // ── save ──
   if (body.action !== "save") {
-    return NextResponse.json({ ok: false, error: "action must be validate | save | revert" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "action must be validate | save | revert | acknowledge | promote" }, { status: 400 });
   }
   const content = body.content ?? "";
   if (!content.trim()) {
@@ -189,6 +262,9 @@ export async function POST(req: Request) {
     engagement_id: engagementId,
     path, content,
     base_hash: baseline ? hashContent(baseline) : null,
+    // The baseline TEXT, not just its fingerprint — without it we could say a default had changed
+    // but never show what changed in it, which is the only question worth asking.
+    base_content: baseline || null,
     updated_at: new Date().toISOString(),
     updated_by: actor.userId ?? body.role ?? null,
   }, { onConflict: "org_id,engagement_id,path" });

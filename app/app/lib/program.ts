@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "./supabase";
 import { FIXTURE, ProgramModel, Health, Pillar, Attention, Lane, Epic, Phase, COMPASS_ROLES } from "./data";
 import { PLATFORM_ROLES } from "./authz";
+import { listEditablePaths } from "./specs";
 
 const DISCIPLINES = ["Product", "Engineering", "QA", "Design"];
 const LEAD: Record<string, string> = { Product: "Jen", Engineering: "Maria", QA: "Priya", Design: "Alex" };
@@ -114,6 +115,19 @@ export async function getProgram(engagementId?: string): Promise<ProgramModel & 
     }
     for (const c of pendingCRs) {
       attention.push({ id: c.id, pillar: "scope", tone: "bad", title: c.title, detail: c.detail, actions: ["Raise change request", "Map to a deliverable"] });
+    }
+    // Process overrides that have fallen behind the tier below. ONE card, never one per file:
+    // this is a delivery surface, and a configuration changelog here would drown the things that
+    // actually threaten the engagement.
+    const driftedSpecs = (await listEditablePaths(id)).filter((f) => f.drifted).length;
+    if (driftedSpecs > 0) {
+      attention.push({
+        id: "spec-drift", pillar: "scope", tone: "warn",
+        title: `${driftedSpecs} process file${driftedSpecs === 1 ? "" : "s"} behind the default`,
+        detail: `This engagement overrides ${driftedSpecs} file${driftedSpecs === 1 ? "" : "s"} whose default has since changed. `
+              + `Your version still runs — review what changed and keep or take it.`,
+        actions: ["Review in Settings"],
+      });
     }
     if (lateStories > 0) {
       attention.push({ id: "late", pillar: "time", tone: "warn", title: `Engineering — ${lateStories} ${lateStories === 1 ? "story" : "stories"} slipping`, detail: "Stories behind their phase target.", actions: ["See plan"] });

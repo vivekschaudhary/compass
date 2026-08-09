@@ -17,7 +17,7 @@ import { diffLines, diffStat, collapseUnchanged, type DiffLine } from "@/app/lib
 // confirmed.
 
 type Tier = "engagement" | "org" | "framework";
-type FileEntry = { path: string; tier: Tier; updatedAt?: string; updatedBy?: string };
+type FileEntry = { path: string; tier: Tier; updatedAt?: string; updatedBy?: string; drifted?: boolean };
 type Change = { kind: string; severity: "danger" | "info"; detail: string };
 
 type Validation =
@@ -26,10 +26,12 @@ type Validation =
   | { kind: "agent"; ok: boolean; preferred_hosts: string[]; executor_tools: string[]; model_tier: string | null; warnings: string[] }
   | { kind: "table"; ok: boolean; rows: Record<string, string>[]; warnings: string[] };
 
+type Drift = { drifted: boolean; comparable: boolean; baseContent: string | null; currentBaseline: string };
+
 type Loaded = {
   path: string; content: string; tier: Tier | null; updatedAt: string | null; updatedBy: string | null;
   below: { content: string; tier: Tier } | null; shipped: string | null;
-  kind: string | null; validation: Validation | null; advisoryAuth: boolean;
+  kind: string | null; validation: Validation | null; advisoryAuth: boolean; drift: Drift;
 };
 
 const TIER_LABEL: Record<Tier, string> = {
@@ -72,6 +74,9 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
   const [busy, setBusy] = useState<"" | "load" | "validate" | "save" | "revert">("");
   const [msg, setMsg] = useState<{ tone: "ok" | "bad" | "warn"; text: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Promotion has its own confirmation: it changes the firm's default, not this engagement's copy,
+  // so it must not share a flag with the save gate and accidentally apply the wrong action.
+  const [promoting, setPromoting] = useState(false);
   const [filter, setFilter] = useState("");
   // Start with everything collapsed. Templates opens by default because it holds the two files
   // anyone actually came here to change — the kickoff backlog and the doc tree.
@@ -91,7 +96,7 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
   }, [engParam]);
 
   const open = useCallback(async (p: string) => {
-    setBusy("load"); setMsg(null); setChanges([]); setConfirming(false);
+    setBusy("load"); setMsg(null); setChanges([]); setConfirming(false); setPromoting(false);
     // Keep the open file's category expanded — otherwise clearing the filter collapses the group
     // and the file you are editing vanishes from the list you are editing it from.
     setOpenGroups((prev) => new Set(prev).add(p.includes("/") ? p.split("/")[0] : "root"));
@@ -141,6 +146,35 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
     await open(path);
     setMsg({ tone: "ok", text: "Saved. This is what runs now." });
     setChanges(j.changes ?? []);
+  }
+
+  /** "Keep mine" — re-anchor to the new baseline without touching content. */
+  async function acknowledge() {
+    setBusy("save"); setMsg(null);
+    const r = await fetch("/api/spec", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "acknowledge", scope, engagementId, path, role }),
+    });
+    const j = await r.json();
+    setBusy("");
+    if (!j.ok) { setMsg({ tone: "bad", text: j.error ?? "Could not update." }); return; }
+    await open(path);
+    setMsg({ tone: "ok", text: "Kept your version. It no longer shows as behind." });
+  }
+
+  async function promote(confirm = false) {
+    setBusy("save"); setMsg(null);
+    const r = await fetch("/api/spec", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "promote", scope, engagementId, path, role, confirmStructuralChange: confirm }),
+    });
+    const j = await r.json();
+    setBusy("");
+    if (j.needsConfirmation) { setChanges(j.changes ?? []); setPromoting(true); return; }
+    setPromoting(false);
+    if (!j.ok) { setMsg({ tone: "bad", text: j.error ?? "Could not promote." }); return; }
+    await open(path);
+    setMsg({ tone: "ok", text: "This is now your organisation default. The engagement inherits it." });
   }
 
   async function revert() {
@@ -249,6 +283,10 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
                       <button key={f.path} onClick={() => open(f.path)} data-testid={`spec-file-${f.path}`}
                         className={`flex w-full items-center gap-1.5 py-1.5 pl-7 pr-3 text-left text-[12.5px] hover:bg-shell ${f.path === path ? "bg-shell font-medium text-ink" : "text-body"}`}>
                         <span className="min-w-0 flex-1 truncate">{name}</span>
+                        {f.drifted && (
+                          <span title="The default changed after this was edited"
+                            className="size-1.5 shrink-0 rounded-full bg-warn" />
+                        )}
                         {overridden && (
                           <span title={TIER_LABEL[f.tier]}
                             className={`size-1.5 shrink-0 rounded-full ${f.tier === "engagement" ? "bg-brand" : "bg-good"}`} />
@@ -286,6 +324,16 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
                 {stat.changed && <span className="text-[11.5px] text-muted">+{stat.added} −{stat.removed} vs default</span>}
               </div>
 
+              {loaded.drift.drifted && (
+                <DriftBanner
+                  drift={loaded.drift}
+                  belowLabel={loaded.below?.tier === "org" ? "organisation default" : "Compass default"}
+                  busy={busy === "save" || busy === "revert"}
+                  onKeep={acknowledge}
+                  onTake={revert}
+                />
+              )}
+
               <textarea
                 value={draft}
                 onChange={(e) => { setDraft(e.target.value); setMsg(null); setConfirming(false); }}
@@ -316,13 +364,47 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
                     Discard
                   </button>
                 </div>
+                <div className="flex items-center gap-3">
+                {scope === "engagement" && loaded.tier === "engagement" && (
+                  // Only meaningful on an engagement's OWN override. The server checks the
+                  // capability too — this just avoids offering an action that will be refused.
+                  <button onClick={() => promote()} disabled={busy === "save" || dirty}
+                    title={dirty ? "Save your changes first" : "Make this the default for every engagement"}
+                    data-testid="spec-promote"
+                    className="text-[12.5px] font-medium text-brand hover:underline disabled:opacity-40">
+                    Promote to organisation default
+                  </button>
+                )}
                 {loaded.tier !== "framework" && (
                   <button onClick={revert} disabled={busy === "revert"}
                     className="text-[12.5px] font-medium text-muted hover:text-bad">
                     {busy === "revert" ? "Reverting…" : `Revert to ${loaded.below?.tier === "org" ? "the organisation default" : "the Compass default"}`}
                   </button>
                 )}
+                </div>
               </div>
+
+              {promoting && (
+                <div className="mt-3 rounded-tile border border-bad-weak bg-bad-weak/40 px-4 py-3" data-testid="spec-promote-confirm">
+                  <p className="text-[12.5px] font-medium text-bad">
+                    Making this the organisation default removes something the current default has.
+                  </p>
+                  <ul className="mt-1.5 space-y-0.5">
+                    {dangerous.map((c, i) => <li key={i} className="text-[12px] text-bad">· {c.detail}</li>)}
+                  </ul>
+                  <p className="mt-2 text-[12px] text-muted">This affects every engagement that has not overridden this file.</p>
+                  <div className="mt-2.5 flex gap-2">
+                    <button onClick={() => promote(true)} disabled={busy === "save"} data-testid="spec-promote-anyway"
+                      className="rounded-lg bg-bad px-3 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                      Promote anyway
+                    </button>
+                    <button onClick={() => setPromoting(false)}
+                      className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-medium text-body hover:bg-shell">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {msg && (
                 <p className={`mt-3 rounded-tile border px-3 py-2 text-[12.5px] ${
@@ -361,6 +443,71 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
             </>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "The default moved under you."
+ *
+ * The useful view is OLD default → NEW default, not your version vs the new one: for a 400-line
+ * workflow the latter is a wall of differences, most of them your own edits, and the question you
+ * actually have is whether the framework's change touched the part you changed.
+ *
+ * When the override predates `base_content` (021) we cannot produce that comparison, so the banner
+ * says so rather than showing a diff that would silently mean something else.
+ */
+function DriftBanner({ drift, belowLabel, busy, onKeep, onTake }: {
+  drift: Drift; belowLabel: string; busy: boolean; onKeep: () => void; onTake: () => void;
+}) {
+  const diff = drift.comparable && drift.baseContent !== null
+    ? diffLines(drift.baseContent, drift.currentBaseline) : null;
+  const stat = diffStat(diff);
+
+  return (
+    <div className="mt-3 rounded-tile border border-warn-weak bg-warn-weak/40 px-4 py-3" data-testid="spec-drift">
+      <p className="text-[12.5px] font-medium text-warn">
+        The {belowLabel} changed after you edited this file.
+      </p>
+      <p className="mt-0.5 text-[12px] text-muted">
+        Your version is still what runs. It has not picked up{" "}
+        {stat.changed ? `the ${stat.added} added and ${stat.removed} removed line(s) below` : "that change"}.
+      </p>
+
+      {diff ? (
+        <details className="mt-2 rounded-tile border border-line bg-card/60">
+          <summary className="cursor-pointer px-3 py-1.5 text-[12px] font-medium text-body">
+            What changed in the {belowLabel}
+          </summary>
+          <pre className="mono max-h-56 overflow-auto border-t border-line px-2 py-2 text-[11.5px] leading-relaxed">
+            {collapseUnchanged(diff, 3).map((r, i) =>
+              r.type === "gap"
+                ? <div key={i} className="px-1.5 py-0.5 text-faint">⋯ {r.count} unchanged line{r.count === 1 ? "" : "s"}</div>
+                : <div key={i} className={
+                    r.type === "add" ? "bg-good-weak/50 px-1.5 text-good"
+                    : r.type === "remove" ? "bg-bad-weak/40 px-1.5 text-bad" : "px-1.5 text-muted"}>
+                    <span className="select-none opacity-60">{r.type === "add" ? "+" : r.type === "remove" ? "−" : " "} </span>
+                    {r.text || " "}
+                  </div>
+            )}
+          </pre>
+        </details>
+      ) : (
+        <p className="mt-2 text-[12px] text-faint">
+          The previous version of the {belowLabel} wasn&apos;t recorded, so there is nothing to compare against.
+        </p>
+      )}
+
+      <div className="mt-2.5 flex gap-2">
+        <button onClick={onKeep} disabled={busy} data-testid="spec-drift-keep"
+          className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-medium text-body hover:bg-shell disabled:opacity-50">
+          Keep mine
+        </button>
+        <button onClick={onTake} disabled={busy} data-testid="spec-drift-take"
+          className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-medium text-body hover:bg-shell disabled:opacity-50">
+          Take the new {belowLabel}
+        </button>
       </div>
     </div>
   );
