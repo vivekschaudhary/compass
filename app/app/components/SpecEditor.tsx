@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { diffLines, diffStat, collapseUnchanged, type DiffLine } from "@/app/lib/diff";
 
 // Editing the framework's markdown without repo access.
@@ -37,9 +38,16 @@ const TIER_LABEL: Record<Tier, string> = {
   framework: "Compass default",
 };
 
-export function SpecEditor({ scope, engagementId, role }: {
-  scope: "org" | "engagement"; engagementId?: string; role: string;
+export function SpecEditor({ scope, engagementId, role: roleProp }: {
+  scope: "org" | "engagement"; engagementId?: string; role?: string;
 }) {
+  // Read the role from the URL rather than trusting a prop threaded through the server.
+  // `?role=` is where the header's picker writes, and it is the ONLY place that is reliably
+  // current: the sidebar's Settings link and the settings page's own canonicalizing redirect both
+  // used to drop it, so a prop-only version silently arrived empty and every save was refused for
+  // want of a capability the user actually had.
+  const search = useSearchParams();
+  const role = search.get("role") ?? roleProp ?? "";
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [advisory, setAdvisory] = useState(false);
   const [path, setPath] = useState("");
@@ -68,9 +76,13 @@ export function SpecEditor({ scope, engagementId, role }: {
     setPath(p); setLoaded(j); setDraft(j.content); setValidation(j.validation);
   }, [engParam]);
 
-  // On blur, never per keystroke: each call spawns a Python process, and a process per character
-  // is the wrong cost for a text box.
-  async function validate() {
+  // EXPLICIT, never automatic. This used to run on blur, which meant clicking Save re-rendered the
+  // panel above the button and the click was lost between mousedown and mouseup. It is also a
+  // Python process per call, which is the wrong cost to pay for leaving a text box.
+  //
+  // Saving validates server-side regardless, so nothing depends on this having been run — it is a
+  // "show me what this parses as before I commit" affordance.
+  async function check() {
     if (!loaded || draft === loaded.content) return;
     setBusy("validate");
     const r = await fetch("/api/spec", {
@@ -206,12 +218,48 @@ export function SpecEditor({ scope, engagementId, role }: {
               <textarea
                 value={draft}
                 onChange={(e) => { setDraft(e.target.value); setMsg(null); setConfirming(false); }}
-                onBlur={validate}
                 spellCheck={false}
                 className="mono mt-3 h-[380px] w-full resize-y rounded-tile border border-line bg-shell/40 px-3 py-2.5 text-[12px] leading-relaxed text-body outline-none focus:border-brand"
               />
 
-              <ValidatorPanel validation={validation} busy={busy === "validate"} />
+              {/* ACTIONS SIT DIRECTLY UNDER THE TEXTAREA, above everything that can change height.
+                  They used to be at the bottom, under the validator panel — which re-rendered on
+                  blur, so clicking Save moved the button out from under the pointer between
+                  mousedown and mouseup and the click was simply lost. Nothing below this row can
+                  push it now, which is the actual fix: `onMouseDown` would also have worked for a
+                  mouse and silently broken Enter/Space, since keyboard activation fires click. */}
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex gap-2">
+                  <button onClick={() => save()} disabled={!dirty || busy === "save" || confirming}
+                    className="rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+                    {busy === "save" ? "Saving…" : dirty ? "Save" : "Saved"}
+                  </button>
+                  <button onClick={check} disabled={!dirty || busy === "validate"}
+                    className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-body hover:bg-shell disabled:opacity-40">
+                    {busy === "validate" ? "Checking…" : "Check"}
+                  </button>
+                  <button onClick={() => { setDraft(loaded.content); setChanges([]); setConfirming(false); setMsg(null); }}
+                    disabled={!dirty}
+                    className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-body hover:bg-shell disabled:opacity-40">
+                    Discard
+                  </button>
+                </div>
+                {loaded.tier !== "framework" && (
+                  <button onClick={revert} disabled={busy === "revert"}
+                    className="text-[12.5px] font-medium text-muted hover:text-bad">
+                    {busy === "revert" ? "Reverting…" : `Revert to ${loaded.below?.tier === "org" ? "the organisation default" : "the Compass default"}`}
+                  </button>
+                )}
+              </div>
+
+              {msg && (
+                <p className={`mt-3 rounded-tile border px-3 py-2 text-[12.5px] ${
+                  msg.tone === "ok" ? "border-good-line bg-good-weak/50 text-good"
+                  : msg.tone === "warn" ? "border-warn-weak bg-warn-weak/50 text-warn"
+                  : "border-bad-weak bg-bad-weak/50 text-bad"}`}>{msg.text}</p>
+              )}
+
+              <ValidatorPanel validation={validation} busy={busy === "validate"} stale={dirty} />
 
               {changes.length > 0 && <ChangeList changes={changes} />}
 
@@ -237,33 +285,6 @@ export function SpecEditor({ scope, engagementId, role }: {
                 </div>
               )}
 
-              {msg && (
-                <p className={`mt-3 rounded-tile border px-3 py-2 text-[12.5px] ${
-                  msg.tone === "ok" ? "border-good-line bg-good-weak/50 text-good"
-                  : msg.tone === "warn" ? "border-warn-weak bg-warn-weak/50 text-warn"
-                  : "border-bad-weak bg-bad-weak/50 text-bad"}`}>{msg.text}</p>
-              )}
-
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex gap-2">
-                  <button onClick={() => save()} disabled={!dirty || busy === "save" || confirming}
-                    className="rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
-                    {busy === "save" ? "Saving…" : dirty ? "Save" : "Saved"}
-                  </button>
-                  <button onClick={() => { setDraft(loaded.content); setChanges([]); setConfirming(false); setMsg(null); }}
-                    disabled={!dirty}
-                    className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-body hover:bg-shell disabled:opacity-40">
-                    Discard
-                  </button>
-                </div>
-                {loaded.tier !== "framework" && (
-                  <button onClick={revert} disabled={busy === "revert"}
-                    className="text-[12.5px] font-medium text-muted hover:text-bad">
-                    {busy === "revert" ? "Reverting…" : `Revert to ${loaded.below?.tier === "org" ? "the organisation default" : "the Compass default"}`}
-                  </button>
-                )}
-              </div>
-
               {diff && stat.changed && <DiffPanel lines={diff} baseTier={loaded.below?.tier ?? "framework"} />}
             </>
           )}
@@ -273,8 +294,12 @@ export function SpecEditor({ scope, engagementId, role }: {
   );
 }
 
-/** What the PARSER extracted — the thing that makes a silent break visible. */
-function ValidatorPanel({ validation, busy }: { validation: Validation | null; busy: boolean }) {
+/** What the PARSER extracted — the thing that makes a silent break visible.
+ *
+ *  `stale` matters: with checking now explicit, the panel can describe the SAVED version while the
+ *  box holds unsaved edits. Showing that without saying so would be worse than showing nothing —
+ *  it would look like confirmation of a change nobody has parsed yet. */
+function ValidatorPanel({ validation, busy, stale }: { validation: Validation | null; busy: boolean; stale?: boolean }) {
   if (busy) return <p className="mt-3 text-[12px] text-muted">Checking…</p>;
   if (!validation) {
     return <p className="mt-3 text-[12px] text-faint">
@@ -283,9 +308,12 @@ function ValidatorPanel({ validation, busy }: { validation: Validation | null; b
   }
 
   return (
-    <div className="mt-3 rounded-tile border border-line bg-shell/30 px-3.5 py-3">
+    <div className={`mt-3 rounded-tile border border-line bg-shell/30 px-3.5 py-3 ${stale ? "opacity-60" : ""}`}>
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">Compass reads this as</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">
+          {stale ? "Compass reads the SAVED version as" : "Compass reads this as"}
+        </span>
+        {stale && <span className="rounded-pill bg-warn-weak px-2 py-0.5 text-[11px] font-medium text-warn">unsaved edits — press Check</span>}
         {!validation.ok && <span className="rounded-pill bg-bad-weak px-2 py-0.5 text-[11px] font-medium text-bad">unusable</span>}
       </div>
 

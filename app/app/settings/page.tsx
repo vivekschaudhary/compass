@@ -11,7 +11,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { e, role } = await searchParams;
   const model = await getProgram(e);
   // Canonicalize the URL so it always names the engagement being configured (readable + shareable).
-  if (!e && model.activeEngagementId) redirect(`/settings?e=${encodeURIComponent(model.activeEngagementId)}`);
+  // PRESERVE the other params while doing it: `role` is the acting identity, and dropping it here
+  // sent every visitor in as nobody — the editor then refused saves for want of a capability the
+  // user actually had.
+  if (!e && model.activeEngagementId) {
+    const qs = new URLSearchParams({ e: model.activeEngagementId, ...(role ? { role } : {}) });
+    redirect(`/settings?${qs}`);
+  }
   const sb = supabaseAdmin();
   const res = sb ? await sb.from("doc_page").select("*").eq("engagement_id", model.activeEngagementId).order("ord") : { data: [] };
   const docs = (res.data ?? []).map((d) => ({ path: d.path, title: d.title, kind: d.kind, status: d.status, url: d.external_url ?? d.confluence_url }));
