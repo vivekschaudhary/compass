@@ -38,6 +38,20 @@ const TIER_LABEL: Record<Tier, string> = {
   framework: "Compass default",
 };
 
+// Plain English for each category. The directory names are the framework's vocabulary, not the
+// reader's — a delivery manager opening this has no reason to know what "stacks" holds.
+const GROUP_META: Record<string, { label: string; blurb: string }> = {
+  templates: { label: "Templates", blurb: "Kickoff backlog, doc structure, artifact starting points" },
+  workflows: { label: "Workflows", blurb: "The step-by-step sequences Compass runs" },
+  agents: { label: "Agents", blurb: "What each role does, and which model runs it" },
+  stacks: { label: "Tech stacks", blurb: "Build and test commands per technology" },
+  framework: { label: "Framework", blurb: "The principles agents are held to" },
+  root: { label: "Configuration", blurb: "Delivery policy, approvals, connectors" },
+};
+
+/** Ordered by how often someone actually edits them — everyday first, reference last. */
+const GROUP_ORDER = ["templates", "workflows", "agents", "root", "stacks", "framework"];
+
 export function SpecEditor({ scope, engagementId, role: roleProp }: {
   scope: "org" | "engagement"; engagementId?: string; role?: string;
 }) {
@@ -58,6 +72,15 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
   const [busy, setBusy] = useState<"" | "load" | "validate" | "save" | "revert">("");
   const [msg, setMsg] = useState<{ tone: "ok" | "bad" | "warn"; text: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [filter, setFilter] = useState("");
+  // Start with everything collapsed. Templates opens by default because it holds the two files
+  // anyone actually came here to change — the kickoff backlog and the doc tree.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(["templates"]));
+  const toggleGroup = (dir: string) => setOpenGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(dir)) next.delete(dir); else next.add(dir);
+    return next;
+  });
 
   const engParam = scope === "engagement" && engagementId ? `&engagementId=${encodeURIComponent(engagementId)}` : "";
 
@@ -69,6 +92,9 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
 
   const open = useCallback(async (p: string) => {
     setBusy("load"); setMsg(null); setChanges([]); setConfirming(false);
+    // Keep the open file's category expanded — otherwise clearing the filter collapses the group
+    // and the file you are editing vanishes from the list you are editing it from.
+    setOpenGroups((prev) => new Set(prev).add(p.includes("/") ? p.split("/")[0] : "root"));
     const r = await fetch(`/api/spec?path=${encodeURIComponent(p)}${engParam}`);
     const j = (await r.json()) as Loaded & { ok: boolean };
     setBusy("");
@@ -110,9 +136,11 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
       setMsg({ tone: "bad", text: j.error ?? "Save failed." });
       return;
     }
+    // Reload FIRST, then report. `open` clears the message on its way in, so setting it before
+    // this wiped the only confirmation the user gets — the save worked and looked like it hadn't.
+    await open(path);
     setMsg({ tone: "ok", text: "Saved. This is what runs now." });
     setChanges(j.changes ?? []);
-    await open(path);
   }
 
   async function revert() {
@@ -124,8 +152,8 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
     const j = await r.json();
     setBusy("");
     if (!j.ok) { setMsg({ tone: "bad", text: j.error ?? "Revert failed." }); return; }
+    await open(path);                                   // same ordering as save, same reason
     setMsg({ tone: "ok", text: "Reverted — this file follows the default again." });
-    await open(path);
   }
 
   const dirty = Boolean(loaded && draft !== loaded.content);
@@ -140,16 +168,20 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
   const stat = diffStat(diff);
 
   const grouped = useMemo(() => {
+    const q = filter.trim().toLowerCase();
     const g = new Map<string, FileEntry[]>();
     for (const f of files) {
+      if (q && !f.path.toLowerCase().includes(q)) continue;
       const dir = f.path.includes("/") ? f.path.split("/")[0] : "root";
       g.set(dir, [...(g.get(dir) ?? []), f]);
     }
-    return [...g.entries()].sort();
-  }, [files]);
+    // Ordered by how often a delivery manager actually touches them, not alphabetically — the
+    // kickoff backlog and doc structure are the everyday edits; canon is a once-a-year read.
+    return [...g.entries()].sort((a, b) => (GROUP_ORDER.indexOf(a[0]) + 1 || 99) - (GROUP_ORDER.indexOf(b[0]) + 1 || 99));
+  }, [files, filter]);
 
   return (
-    <div className="rounded-card border border-line bg-card">
+    <div className="rounded-card border border-line bg-card" data-testid={`spec-editor-${scope}`}>
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div>
           <h2 className="text-[15px] font-semibold text-ink">
@@ -170,28 +202,67 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
         )}
       </header>
 
-      <div className="grid grid-cols-[220px_1fr] gap-0">
-        {/* ── file browser ─────────────────────────────────────────── */}
-        <nav className="max-h-[560px] overflow-y-auto border-r border-line py-2">
-          {grouped.map(([dir, entries]) => (
-            <div key={dir} className="mb-2">
-              <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-faint">{dir}</div>
-              {entries.map((f) => {
-                const name = f.path.split("/").pop();
-                const overridden = f.tier !== "framework";
-                return (
-                  <button key={f.path} onClick={() => open(f.path)}
-                    className={`flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[12.5px] hover:bg-shell ${f.path === path ? "bg-shell font-medium text-ink" : "text-body"}`}>
-                    <span className="min-w-0 flex-1 truncate">{name}</span>
-                    {overridden && (
-                      <span title={TIER_LABEL[f.tier]}
-                        className={`size-1.5 shrink-0 rounded-full ${f.tier === "engagement" ? "bg-brand" : "bg-good"}`} />
+      <div className="grid grid-cols-[248px_1fr] gap-0">
+        {/* ── file browser ─────────────────────────────────────────────
+            Eighty files listed flat is a wall, and most of them are ones you will never touch.
+            Categories collapse, carry a plain-English blurb (nobody arrives knowing what "stacks"
+            means), and show how many files inside are already changed — so "where have we diverged
+            from the default?" is answerable at a glance rather than by opening things. */}
+        <nav className="max-h-[560px] overflow-y-auto border-r border-line">
+          <div className="sticky top-0 z-10 border-b border-line bg-card p-2">
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find a file…" data-testid="spec-filter"
+              className="w-full rounded-lg border border-line bg-shell/40 px-2.5 py-1.5 text-[12.5px] text-body outline-none focus:border-brand" />
+          </div>
+
+          <div className="py-1">
+            {grouped.map(([dir, entries]) => {
+              const meta = GROUP_META[dir] ?? { label: dir, blurb: "" };
+              const changed = entries.filter((f) => f.tier !== "framework").length;
+              // Filtering implies intent to see matches, so it overrides collapse — otherwise you
+              // type a name and the thing you searched for stays hidden behind a closed group.
+              const expanded = filter.trim() ? true : openGroups.has(dir);
+              return (
+                <div key={dir} className="mb-0.5">
+                  <button onClick={() => toggleGroup(dir)}
+                    aria-expanded={expanded} data-testid={`spec-group-${dir}`}
+                    className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left hover:bg-shell">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round"
+                      className={`shrink-0 text-faint transition-transform ${expanded ? "rotate-90" : ""}`}>
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12.5px] font-semibold text-ink">{meta.label}</span>
+                      {meta.blurb && <span className="block text-[10.5px] leading-tight text-faint">{meta.blurb}</span>}
+                    </span>
+                    {changed > 0 && (
+                      <span title={`${changed} changed from the default`}
+                        className="shrink-0 rounded-pill bg-brand-weak px-1.5 py-0.5 text-[10px] font-semibold text-brand-ink">{changed}</span>
                     )}
+                    <span className="shrink-0 text-[10.5px] text-faint">{entries.length}</span>
                   </button>
-                );
-              })}
-            </div>
-          ))}
+
+                  {expanded && entries.map((f) => {
+                    const name = f.path.split("/").pop();
+                    const overridden = f.tier !== "framework";
+                    return (
+                      <button key={f.path} onClick={() => open(f.path)} data-testid={`spec-file-${f.path}`}
+                        className={`flex w-full items-center gap-1.5 py-1.5 pl-7 pr-3 text-left text-[12.5px] hover:bg-shell ${f.path === path ? "bg-shell font-medium text-ink" : "text-body"}`}>
+                        <span className="min-w-0 flex-1 truncate">{name}</span>
+                        {overridden && (
+                          <span title={TIER_LABEL[f.tier]}
+                            className={`size-1.5 shrink-0 rounded-full ${f.tier === "engagement" ? "bg-brand" : "bg-good"}`} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {grouped.length === 0 && (
+              <p className="px-3 py-4 text-[12px] text-faint">Nothing matches “{filter}”.</p>
+            )}
+          </div>
         </nav>
 
         {/* ── editor ───────────────────────────────────────────────── */}
@@ -219,6 +290,7 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
                 value={draft}
                 onChange={(e) => { setDraft(e.target.value); setMsg(null); setConfirming(false); }}
                 spellCheck={false}
+                data-testid="spec-content"
                 className="mono mt-3 h-[380px] w-full resize-y rounded-tile border border-line bg-shell/40 px-3 py-2.5 text-[12px] leading-relaxed text-body outline-none focus:border-brand"
               />
 
@@ -230,11 +302,11 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
                   mouse and silently broken Enter/Space, since keyboard activation fires click. */}
               <div className="mt-3 flex items-center justify-between">
                 <div className="flex gap-2">
-                  <button onClick={() => save()} disabled={!dirty || busy === "save" || confirming}
+                  <button onClick={() => save()} disabled={!dirty || busy === "save" || confirming} data-testid="spec-save"
                     className="rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
                     {busy === "save" ? "Saving…" : dirty ? "Save" : "Saved"}
                   </button>
-                  <button onClick={check} disabled={!dirty || busy === "validate"}
+                  <button onClick={check} disabled={!dirty || busy === "validate"} data-testid="spec-check"
                     className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-body hover:bg-shell disabled:opacity-40">
                     {busy === "validate" ? "Checking…" : "Check"}
                   </button>
@@ -264,7 +336,7 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
               {changes.length > 0 && <ChangeList changes={changes} />}
 
               {confirming && (
-                <div className="mt-3 rounded-tile border border-bad-weak bg-bad-weak/40 px-4 py-3">
+                <div className="mt-3 rounded-tile border border-bad-weak bg-bad-weak/40 px-4 py-3" data-testid="spec-confirm">
                   <p className="text-[12.5px] font-medium text-bad">This removes something the current version has.</p>
                   <ul className="mt-1.5 space-y-0.5">
                     {dangerous.map((c, i) => <li key={i} className="text-[12px] text-bad">· {c.detail}</li>)}
@@ -273,11 +345,11 @@ export function SpecEditor({ scope, engagementId, role: roleProp }: {
                     That may be exactly what you want. It will be recorded against your name.
                   </p>
                   <div className="mt-2.5 flex gap-2">
-                    <button onClick={() => save(true)} disabled={busy === "save"}
+                    <button onClick={() => save(true)} disabled={busy === "save"} data-testid="spec-save-anyway"
                       className="rounded-lg bg-bad px-3 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
                       {busy === "save" ? "Saving…" : "Save anyway"}
                     </button>
-                    <button onClick={() => setConfirming(false)}
+                    <button onClick={() => setConfirming(false)} data-testid="spec-keep-editing"
                       className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-medium text-body hover:bg-shell">
                       Keep editing
                     </button>
@@ -308,7 +380,7 @@ function ValidatorPanel({ validation, busy, stale }: { validation: Validation | 
   }
 
   return (
-    <div className={`mt-3 rounded-tile border border-line bg-shell/30 px-3.5 py-3 ${stale ? "opacity-60" : ""}`}>
+    <div className={`mt-3 rounded-tile border border-line bg-shell/30 px-3.5 py-3 ${stale ? "opacity-60" : ""}`} data-testid="spec-validation">
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">
           {stale ? "Compass reads the SAVED version as" : "Compass reads this as"}
