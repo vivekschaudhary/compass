@@ -63,6 +63,14 @@ export async function defaultDrive(c: GraphCreds, siteId: string): Promise<strin
 
 // SharePoint/OneDrive item names can't contain \ / : * ? " < > | — sanitize.
 const BAD = /[\\/:*?"<>|]+/g;
+/** Permanently delete a drive item. 404 counts as success — the goal is "not there". */
+export async function deleteItem(c: GraphCreds, driveId: string, itemId: string): Promise<boolean> {
+  const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}`, {
+    method: "DELETE", headers: { Authorization: `Bearer ${await token(c)}` },
+  });
+  return res.ok || res.status === 404;
+}
+
 export function safeName(s: string) { return s.replace(BAD, "-").replace(/\s+/g, " ").trim(); }
 
 // find-or-create a folder under parent (parent = "root" or an item id) → idempotent.

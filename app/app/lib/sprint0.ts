@@ -1,19 +1,16 @@
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import { supabaseAdmin } from "./supabase";
 import { resolveJira, createIssue, transitionIssue } from "./jira";
 import { COMPASS_ROLES } from "./data";
 import { STATUS } from "./lifecycle";
 import { engagementReadiness, readinessRefusal, type Readiness } from "./readiness";
+import { resolveSpecContent, readFrameworkDefault, parseSpecTable } from "./specs";
 
 // Sprint 0 — the engagement kickoff backlog, materialized from the framework spec at the END of
 // Phase A. Lifted out of api/intake so the seeder, the admin editor and tests can all reach it.
 //
-// The spec (compass/templates/sprint-0.md) is the source of truth: add a row there and every new
-// engagement starts with that ticket, no code change.
-
-// The framework's compass/ dir — where the specs live. Same resolution as repo.ts / doctree.ts.
-const COMPASS_DIR = process.env.COMPASS_DIR || `${process.env.COMPASS_REPO || resolve(process.cwd(), "..")}/compass`;
+// The spec is the source of truth: add a row and every new engagement starts with that ticket, no
+// code change. Which COPY of the spec is read now depends on the engagement — its own override,
+// the org default, or the shipped file (lib/specs.ts).
 
 const ROLE_CODES = COMPASS_ROLES.map((r) => r.code);
 function normTeamRole(raw: string): string | null {
@@ -22,22 +19,23 @@ function normTeamRole(raw: string): string | null {
   return COMPASS_ROLES.find((x) => x.label.toLowerCase() === (raw || "").toLowerCase().trim())?.code ?? null;
 }
 
+export const SPRINT_0_PATH = "templates/sprint-0.md";
+export const SPRINT_0_COLUMNS = ["ticket", "workflow", "owner", "gate"] as const;
+
 export type Sprint0Row = { ticket: string; workflow: string; owner: string; gate: string };
 
-/** Parse the ticket TABLE out of compass/templates/sprint-0.md. Mirrors doctree's doc-tree read. */
-export function readSprint0(): Sprint0Row[] {
-  let md = "";
-  try { md = readFileSync(`${COMPASS_DIR}/templates/sprint-0.md`, "utf8"); } catch { return []; }
-  const section = md.split(/^##\s+/m).find((s) => /^tickets/i.test(s.trim())) ?? "";
-  const rows: Sprint0Row[] = [];
-  for (const line of section.split("\n")) {
-    const t = line.trim();
-    if (!t.startsWith("|")) continue;
-    const c = t.split("|").slice(1, -1).map((x) => x.trim());
-    if (c.length < 5 || !/^\d+$/.test(c[0])) continue;   // data rows only (skip header + separator)
-    rows.push({ ticket: c[1], workflow: c[2], owner: c[3], gate: c[4] });
-  }
-  return rows;
+/** The ticket table as THIS engagement sees it — its override, else the org default, else the
+ *  shipped spec. Pass null to read what a brand-new engagement would get. */
+export async function readSprint0(engagementId: string | null): Promise<Sprint0Row[]> {
+  const content = await resolveSpecContent(engagementId, SPRINT_0_PATH);
+  return parseSpecTable(content, "Tickets", SPRINT_0_COLUMNS).rows;
+}
+
+/** The shipped table, ignoring every override. For callers with no engagement context and for
+ *  diffing an override against what Compass actually ships. */
+export function readSprint0Default(): Sprint0Row[] {
+  const content = readFrameworkDefault(SPRINT_0_PATH);
+  return content ? parseSpecTable(content, "Tickets", SPRINT_0_COLUMNS).rows : [];
 }
 
 /**
@@ -75,7 +73,9 @@ export async function findSprint0Epic(
 export async function createSprint0(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>, engagementId: string,
 ): Promise<{ created: number; jira: boolean; closed: number }> {
-  const rows = readSprint0();
+  // The engagement's OWN copy of the spec — so a client whose kickoff differs gets its tickets,
+  // not the framework's.
+  const rows = await readSprint0(engagementId);
   if (!rows.length) return { created: 0, jira: false, closed: 0 };
   if (await findSprint0Epic(sb, engagementId)) return { created: 0, jira: false, closed: 0 };
 

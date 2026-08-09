@@ -23,8 +23,10 @@ function Input({ label, value, onChange, placeholder, mono, type }: { label: str
 // A write-only secret field: never pre-filled. Shows whether one is already stored.
 type DocRow = { path: string; title: string; kind: string; status: string; url: string | null };
 
-export function SettingsForm({ engagementId, engagementName, initialConnectors, initialRepos, initialDocs, initialMembers }: {
-  engagementId: string; engagementName: string; initialConnectors: Connectors; initialRepos: RepoRef[]; initialDocs: DocRow[]; initialMembers: TeamMember[];
+export type SettingsSection = "connectors" | "team" | "repos" | "docs";
+
+export function SettingsForm({ engagementId, section, initialConnectors, initialRepos, initialDocs, initialMembers }: {
+  engagementId: string; section: SettingsSection; initialConnectors: Connectors; initialRepos: RepoRef[]; initialDocs: DocRow[]; initialMembers: TeamMember[];
 }) {
   const router = useRouter();
   const [c, setC] = useState<Connectors>(initialConnectors);
@@ -81,22 +83,10 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
   }
 
   return (
-    <div className="min-h-screen bg-shell">
-      <header className="flex items-center justify-between border-b border-line bg-card px-6 py-4">
-        <div>
-          <div className="text-[14.5px] font-semibold text-ink">Settings — {engagementName}</div>
-          <div className="text-[11px] text-faint">Connectors: code · design · docs · tracker</div>
-        </div>
-        <div className="flex items-center gap-3">
-          {state === "saved" && <span className="text-[12.5px] font-medium text-good">✓ Saved</span>}
-          <button onClick={save} disabled={state === "saving"} className="rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">{state === "saving" ? "Saving…" : "Save"}</button>
-          <a href="/" className="text-[13px] font-medium text-muted hover:text-ink">← Dashboard</a>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-3xl px-6 py-8 space-y-4">
+    <div className="space-y-4">
+      <div>
         {/* connectors */}
-        <section className="rounded-card border border-line bg-card p-5">
+        {section === "connectors" && <section className="rounded-card border border-line bg-card p-5">
           <h2 className="text-[15px] font-semibold text-ink">Connectors</h2>
           <p className="mt-0.5 text-[12.5px] text-muted">Design source, docs store, and tracker for this engagement.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -132,10 +122,9 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
               A stored secret is never shown again — blank keeps it.
             </p>
           </div>
-        </section>
+        </section>}
 
-        {/* team */}
-        <section className="rounded-card border border-line bg-card p-5">
+        {section === "team" && <section className="rounded-card border border-line bg-card p-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[15px] font-semibold text-ink">Team</h2>
@@ -170,10 +159,9 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
               </div>
             ))}
           </div>
-        </section>
+        </section>}
 
-        {/* repos */}
-        <section className="rounded-card border border-line bg-card p-5">
+        {section === "repos" && <section className="rounded-card border border-line bg-card p-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[15px] font-semibold text-ink">Code repositories</h2>
@@ -204,10 +192,9 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
               </div>
             ))}
           </div>
-        </section>
+        </section>}
 
-        {/* docs */}
-        <section className="rounded-card border border-line bg-card p-5">
+        {section === "docs" && <section className="rounded-card border border-line bg-card p-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[15px] font-semibold text-ink">Documentation — {c.docs_provider === "teams" ? "Teams / SharePoint" : "Confluence"}</h2>
@@ -236,8 +223,20 @@ export function SettingsForm({ engagementId, engagementName, initialConnectors, 
               )}
             </div>
           )}
-        </section>
+        </section>}
       </div>
+
+      {/* Connectors, team and repos post together to /api/connectors, so one save covers the
+          three of them wherever you happen to be standing. The docs list is read-only. */}
+      {section !== "docs" && (
+        <div className="flex items-center justify-end gap-3">
+          {state === "saved" && <span className="text-[12.5px] font-medium text-good">✓ Saved</span>}
+          <button onClick={save} disabled={state === "saving"}
+            className="rounded-lg bg-brand px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-40">
+            {state === "saving" ? "Saving…" : "Save"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

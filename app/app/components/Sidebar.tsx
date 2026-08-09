@@ -83,7 +83,10 @@ export function Sidebar({
       <div className="mx-3 mt-5 rounded-xl border border-line bg-shell/60 p-3">
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-wide text-faint">Engagement</div>
-          <a href="/settings" title="Engagement settings" aria-label="Engagement settings"
+          {/* Carry the acting role across. Without it, arriving at Settings from here means
+              arriving as nobody, and the spec editor refuses every save. */}
+          <a href={role?.roleCode ? `/settings?role=${encodeURIComponent(role.roleCode)}` : "/settings"}
+            title="Engagement settings" aria-label="Engagement settings"
             className="grid size-6 place-items-center rounded-md text-faint hover:bg-card hover:text-ink">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
@@ -91,7 +94,13 @@ export function Sidebar({
           </a>
         </div>
         <div className="mt-1 text-[13px] font-semibold text-ink">{program.name}</div>
-        <div className="mono mt-0.5 text-[11.5px] text-muted">{program.sow} · {program.pricing.toLowerCase()}</div>
+        {/* An engagement that has finished Phase A but not yet had its SOW extracted has no
+            pricing — a first-class state since provisioning was split from intake, and one you sit
+            in for as long as the connectors take. `.toLowerCase()` on that null 500s the whole
+            dashboard, so the field is simply omitted until it exists. */}
+        <div className="mono mt-0.5 text-[11.5px] text-muted">
+          {program.sow}{program.pricing ? ` · ${program.pricing.toLowerCase()}` : ""}
+        </div>
       </div>
 
       <div className="mt-auto border-t border-line p-3">

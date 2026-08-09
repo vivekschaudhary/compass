@@ -1,7 +1,7 @@
 // Provider-agnostic doc read/write — reuses the two-provider layer (Confluence REST · Teams Graph)
 // so the research workflow can read the product brief and draft the research doc back into whichever
 // provider the engagement uses. Per-engagement creds win, env fallback (same as scaffold).
-import { resolveGraphCreds, resolveSite, defaultDrive, ensureFolder, ensureFile, readFile, safeName } from "./graph";
+import { resolveGraphCreds, resolveSite, defaultDrive, ensureFolder, ensureFile, readFile, safeName, deleteItem } from "./graph";
 import { decryptSecret } from "./crypto";
 
 export type DocEng = {
@@ -110,7 +110,47 @@ export async function probeDocs(eng: DocEng): Promise<string | null> {
   } catch (e) { return `could not reach Confluence — ${e instanceof Error ? e.message : "network error"}`; }
 }
 
+/**
+ * Permanently remove a page. Returns true when it is gone (or was already).
+ *
+ * Confluence needs TWO calls. A bare DELETE returns 204 but only moves the page to TRASH — it
+ * still resolves, still holds the content, and still occupies its title in the space, so a
+ * "deleted" page silently blocks recreating one with the same name. `?purge=true` is what
+ * actually removes it, and only works once the page is trashed. Verified by hand: 20 pages that
+ * had returned 204 were all still readable with status "trashed".
+ */
+async function cfDelete(eng: DocEng, pageId: string): Promise<boolean> {
+  const a = cfAuth(eng);
+  if (!a) return false;
+  try {
+    await fetch(`${a.base}/wiki/api/v2/pages/${pageId}`, { method: "DELETE", headers: a.headers });
+    await fetch(`${a.base}/wiki/api/v2/pages/${pageId}?purge=true`, { method: "DELETE", headers: a.headers });
+    const check = await fetch(`${a.base}/wiki/api/v2/pages/${pageId}`, { headers: a.headers });
+    return check.status === 404;                 // gone means GONE, not "we sent a request"
+  } catch { return false; }
+}
+
+async function teamsDelete(eng: DocEng, itemId: string): Promise<boolean> {
+  const creds = resolveGraphCreds(eng);
+  if (!creds || !eng.teams_site) return false;
+  try {
+    const siteId = await resolveSite(creds, eng.teams_site);
+    const driveId = await defaultDrive(creds, siteId);
+    return await deleteItem(creds, driveId, itemId);
+  } catch { return false; }
+}
+
 // ── Public: dispatch by the engagement's docs provider ──
+
+/** Delete a doc from whichever provider this engagement uses. Used by test teardown, where the
+ *  database cascade alone would leave real pages orphaned in a real space. */
+export async function deleteProviderDoc(
+  eng: DocEng, doc: { provider?: string | null; external_id?: string | null },
+): Promise<boolean> {
+  if (!doc.external_id) return true;                       // nothing was ever created
+  return eng.docs_provider === "teams" ? teamsDelete(eng, doc.external_id) : cfDelete(eng, doc.external_id);
+}
+
 export async function writeProviderDoc(eng: DocEng, title: string, html: string): Promise<{ id: string; url: string } | null> {
   return eng.docs_provider === "teams" ? teamsWrite(eng, title, html) : cfWrite(eng, title, html);
 }

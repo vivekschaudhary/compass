@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "./supabase";
 import { FIXTURE, ProgramModel, Health, Pillar, Attention, Lane, Epic, Phase, COMPASS_ROLES } from "./data";
+import { PLATFORM_ROLES } from "./authz";
 
 const DISCIPLINES = ["Product", "Engineering", "QA", "Design"];
 const LEAD: Record<string, string> = { Product: "Jen", Engineering: "Maria", QA: "Priya", Design: "Alex" };
@@ -138,6 +139,22 @@ export async function getProgram(engagementId?: string): Promise<ProgramModel & 
       .slice()
       .sort((a, b) => rank(a.role) - rank(b.role) || (a.name ?? "").localeCompare(b.name ?? ""))
       .map((m) => ({ id: m.id, name: m.name, title: m.title, initials: m.initials, roleCode: m.role }));
+
+    // Platform roles are appended to the switcher, not stored on the roster: they are about
+    // OPERATING Compass, not delivering the engagement. Keeping them out of `member` is what stops
+    // an org-admin appearing as a staffed person with a work queue and an agent — and it is why
+    // they are absent from COMPASS_ROLES, which drives dispatch.
+    //
+    // In demo mode this picker is the whole identity story, so without them the org/engagement
+    // tiering cannot be shown at all. Once real sign-in lands these come from the user's grants
+    // and this block goes away.
+    for (const p of PLATFORM_ROLES) {
+      roles.push({
+        id: `platform-${p.code}`, name: p.label, title: p.title,
+        initials: p.label.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
+        roleCode: p.code,
+      });
+    }
 
     // Real engagement (Supabase) → real data only. No FIXTURE fallback here, or the Acme demo's
     // jobs/failed-run leak into every fresh engagement (the "D3/D4/KAN-112" phantom cards).
