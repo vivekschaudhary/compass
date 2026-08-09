@@ -4,13 +4,17 @@ import { useEffect, useState } from "react";
 
 // Hidden test-teardown page (not linked in nav) — list every engagement and delete the junk ones.
 // Deleting cascades all engagement-scoped data (see /api/engagement). Guarded by a typed confirm.
-type Eng = { id: string; name: string; client: string | null; updated_at: string };
+type Eng = { id: string; name: string; client: string | null; updated_at: string; docCount: number; issueCount: number };
 
 export default function Cleanup() {
   const [engagements, setEngagements] = useState<Eng[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string>("");
   const [msg, setMsg] = useState("");
+  // Default ON: this page exists for test teardown, and the failure it prevents (real pages left
+  // in a real space with nothing pointing at them) is the silent one. Turning it OFF is the
+  // deliberate act, for when the artifacts are the deliverable and should outlive the record.
+  const [external, setExternal] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -21,16 +25,28 @@ export default function Cleanup() {
   useEffect(() => { load(); }, []);
 
   async function del(e: Eng) {
-    if (!window.confirm(`Delete engagement "${e.name}" (${e.id}) and ALL its data? This can't be undone.`)) return;
+    const alsoExternal = external && (e.docCount > 0 || e.issueCount > 0)
+      ? `\n\nThis ALSO permanently deletes ${e.docCount} document page(s) and ${e.issueCount} tracker issue(s) from the connected systems.`
+      : "";
+    if (!window.confirm(`Delete engagement "${e.name}" (${e.id}) and ALL its data?${alsoExternal}\n\nThis can't be undone.`)) return;
     setBusy(e.id); setMsg("");
     try {
-      const j = await fetch(`/api/engagement?id=${encodeURIComponent(e.id)}`, { method: "DELETE" }).then((r) => r.json());
+      const j = await fetch(`/api/engagement?id=${encodeURIComponent(e.id)}${external ? "&external=1" : ""}`, { method: "DELETE" }).then((r) => r.json());
       if (!j.ok) throw new Error(j.error || "delete failed");
       // if we just deleted the active engagement, drop the cookie so the app doesn't point at a ghost
       if (typeof document !== "undefined" && document.cookie.includes(`compass_eng=${e.id}`)) {
         document.cookie = "compass_eng=; path=/; max-age=0";
       }
-      setMsg(`Deleted ${e.id}.`);
+      // Report what actually happened, including failures. A teardown that silently half-worked
+      // is how orphans accumulate in the first place.
+      const bits = [`Deleted ${e.id}`];
+      if (j.external) {
+        bits.push(`${j.docsDeleted} page(s)`, `${j.issuesDeleted} issue(s) removed`);
+        if (j.docsFailed || j.issuesFailed) {
+          bits.push(`⚠ ${j.docsFailed} page(s) and ${j.issuesFailed} issue(s) could NOT be deleted — check the connector, they are still there`);
+        }
+      }
+      setMsg(bits.join(" · ") + ".");
       await load();
     } catch (err) { setMsg(err instanceof Error ? err.message : "delete failed"); }
     setBusy("");
@@ -52,7 +68,13 @@ export default function Cleanup() {
         <section className="rounded-card border border-line bg-card">
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h1 className="text-[15px] font-semibold text-ink">All engagements</h1>
-            <button onClick={load} className="text-[12.5px] font-medium text-muted hover:text-ink">Refresh</button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[12.5px] text-body">
+                <input type="checkbox" checked={external} onChange={(e) => setExternal(e.target.checked)} className="accent-brand" />
+                Also delete pages &amp; issues
+              </label>
+              <button onClick={load} className="text-[12.5px] font-medium text-muted hover:text-ink">Refresh</button>
+            </div>
           </div>
 
           {loading ? (
@@ -66,6 +88,12 @@ export default function Cleanup() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13.5px] font-medium text-ink">{e.name}</div>
                     <div className="mono truncate text-[11.5px] text-faint">{e.id}{e.client ? ` · ${e.client}` : ""}</div>
+                    {(e.docCount > 0 || e.issueCount > 0) && (
+                      <div className="text-[11.5px] text-muted">
+                        {e.docCount} page{e.docCount === 1 ? "" : "s"} · {e.issueCount} issue{e.issueCount === 1 ? "" : "s"}
+                        {!external && <span className="text-warn"> · will be left behind</span>}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => del(e)}
