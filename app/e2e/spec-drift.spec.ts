@@ -108,7 +108,11 @@ test.describe("promote", () => {
     const ed = editor(page, "engagement");
     await ed.getByTestId(`spec-file-${SPRINT0}`).click();
     await ed.getByTestId("spec-promote").click();
-    await expect(ed.getByText("organisation default")).toBeVisible();
+    // Wait on the SUCCESS MESSAGE, not on the words "organisation default" — those also appear in
+    // the promote button's own label and the revert link, so a looser matcher passes instantly and
+    // reads the API before the request has finished.
+    await expect(ed.getByText("This is now your organisation default")).toBeVisible();
+    await expect(ed.getByTestId("spec-promote")).toBeHidden();      // nothing left to promote
 
     // It becomes the org default, and the engagement INHERITS it rather than keeping a twin that
     // would then drift away from the default it created.
