@@ -68,7 +68,7 @@ export async function DELETE(req: Request) {
 
     for (const d of docs) {
       const ok = await deleteProviderDoc(eng, { provider: d.provider, external_id: d.external_id ?? d.confluence_page_id });
-      ok ? report.docsDeleted++ : report.docsFailed++;
+      if (ok) report.docsDeleted++; else report.docsFailed++;
     }
 
     // Stories before epics: deleting a parent with live children either fails or orphans them.
@@ -77,7 +77,7 @@ export async function DELETE(req: Request) {
     if (jira) {
       for (const key of issueKeys) {
         const ok = await deleteIssue(jira, key);
-        ok ? report.issuesDeleted++ : report.issuesFailed++;
+        if (ok) report.issuesDeleted++; else report.issuesFailed++;
       }
     }
   }

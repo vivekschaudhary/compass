@@ -28,7 +28,32 @@ const EDITABLE_DIRS = ["workflows/", "agents/", "templates/", "stacks/", "framew
 const EDITABLE_FILES = ["config.yaml"];
 
 export type Tier = "engagement" | "org" | "framework";
-export type ResolvedSpec = { path: string; content: string; tier: Tier; updatedAt?: string; updatedBy?: string };
+export type ResolvedSpec = {
+  path: string; content: string; tier: Tier; updatedAt?: string; updatedBy?: string;
+  // What the tier BELOW said when this override was taken. Carried on the resolve so a caller can
+  // compute drift without a second query.
+  baseHash?: string | null; baseContent?: string | null;
+};
+
+/**
+ * Has the tier below moved since this override was forked?
+ *
+ * `baseContent` null means the override predates 021 and its baseline was never recorded — so we
+ * can still say THAT it changed (the hash is enough) but not HOW. Reported as `comparable: false`
+ * rather than silently omitting the diff, because "we can't show you" and "nothing changed" must
+ * not look the same.
+ */
+export type Drift = { drifted: boolean; comparable: boolean; baseContent: string | null; currentBaseline: string };
+
+export function driftOf(
+  row: { baseHash?: string | null; baseContent?: string | null } | null, currentBaseline: string,
+): Drift {
+  const none: Drift = { drifted: false, comparable: false, baseContent: null, currentBaseline };
+  // No override, or one saved before base_hash was recorded: nothing to be behind.
+  if (!row || !row.baseHash) return none;
+  const drifted = row.baseHash !== hashContent(currentBaseline);
+  return { drifted, comparable: drifted && typeof row.baseContent === "string", baseContent: row.baseContent ?? null, currentBaseline };
+}
 
 /**
  * Whether `path` may be read or written through this module.
@@ -77,14 +102,17 @@ export async function resolveSpec(engagementId: string | null, path: string): Pr
   const sb = supabaseAdmin();
 
   if (sb) {
+    const cols = "content, updated_at, updated_by, base_hash, base_content";
     if (engagementId) {
-      const { data } = await sb.from("spec_file").select("content, updated_at, updated_by")
+      const { data } = await sb.from("spec_file").select(cols)
         .eq("engagement_id", engagementId).eq("path", p).maybeSingle();
-      if (data) return { path: p, content: data.content, tier: "engagement", updatedAt: data.updated_at, updatedBy: data.updated_by };
+      if (data) return { path: p, content: data.content, tier: "engagement", updatedAt: data.updated_at,
+                         updatedBy: data.updated_by, baseHash: data.base_hash, baseContent: data.base_content };
     }
-    const { data: org } = await sb.from("spec_file").select("content, updated_at, updated_by")
+    const { data: org } = await sb.from("spec_file").select(cols)
       .eq("org_id", DEFAULT_ORG).eq("path", p).maybeSingle();
-    if (org) return { path: p, content: org.content, tier: "org", updatedAt: org.updated_at, updatedBy: org.updated_by };
+    if (org) return { path: p, content: org.content, tier: "org", updatedAt: org.updated_at,
+                      updatedBy: org.updated_by, baseHash: org.base_hash, baseContent: org.base_content };
   }
 
   const content = readFrameworkDefault(p);
@@ -113,7 +141,7 @@ export async function effectiveOverrides(engagementId: string | null): Promise<R
   return out;
 }
 
-export type SpecFileEntry = { path: string; tier: Tier; updatedAt?: string; updatedBy?: string };
+export type SpecFileEntry = { path: string; tier: Tier; updatedAt?: string; updatedBy?: string; drifted?: boolean };
 
 /**
  * Every editable framework file, with the tier each currently resolves to.
@@ -134,14 +162,29 @@ export async function listEditablePaths(engagementId: string | null): Promise<Sp
   }
   for (const f of EDITABLE_FILES) if (existsSync(`${COMPASS_DIR}/${f}`)) files.push(f);
 
-  const overrides = new Map<string, { tier: Tier; updatedAt?: string; updatedBy?: string }>();
+  const overrides = new Map<string, { tier: Tier; updatedAt?: string; updatedBy?: string; drifted?: boolean }>();
   const sb = supabaseAdmin();
   if (sb) {
-    const { data: org } = await sb.from("spec_file").select("path, updated_at, updated_by").eq("org_id", DEFAULT_ORG);
-    for (const r of org ?? []) overrides.set(r.path, { tier: "org", updatedAt: r.updated_at, updatedBy: r.updated_by });
+    const cols = "path, updated_at, updated_by, base_hash, base_content";
+    // The org rows carry `content` too: it is the BASELINE an engagement override is measured
+    // against, so fetching it here avoids a query per overridden file below.
+    const { data: org } = await sb.from("spec_file").select(`${cols}, content`).eq("org_id", DEFAULT_ORG);
+    const orgRows = new Map((org ?? []).map((r) => [r.path, r]));
+    for (const r of org ?? []) {
+      // An ORG override's baseline is the shipped file.
+      const drift = driftOf({ baseHash: r.base_hash, baseContent: r.base_content }, readFrameworkDefault(r.path) ?? "");
+      overrides.set(r.path, { tier: "org", updatedAt: r.updated_at, updatedBy: r.updated_by, drifted: drift.drifted });
+    }
     if (engagementId) {
-      const { data: eng } = await sb.from("spec_file").select("path, updated_at, updated_by").eq("engagement_id", engagementId);
-      for (const r of eng ?? []) overrides.set(r.path, { tier: "engagement", updatedAt: r.updated_at, updatedBy: r.updated_by });
+      const { data: eng } = await sb.from("spec_file").select(cols).eq("engagement_id", engagementId);
+      for (const r of eng ?? []) {
+        // An ENGAGEMENT override's baseline is the ORG default when one exists, else the shipped
+        // file — the same tier the resolver would fall through to. Reusing the rows already
+        // fetched keeps this one round trip rather than one query per overridden file.
+        const baseline = orgRows.get(r.path)?.content ?? readFrameworkDefault(r.path) ?? "";
+        const drift = driftOf({ baseHash: r.base_hash, baseContent: r.base_content }, baseline);
+        overrides.set(r.path, { tier: "engagement", updatedAt: r.updated_at, updatedBy: r.updated_by, drifted: drift.drifted });
+      }
     }
     // A row may point at a path no longer on disk (the framework removed a workflow after someone
     // overrode it). Surface it rather than hiding it — it is still live for that engagement.
