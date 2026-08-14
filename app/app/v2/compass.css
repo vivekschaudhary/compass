@@ -1,0 +1,218 @@
+/* Compass's additions to Organic — the ONE place any class of ours is defined.
+ *
+ * v2 has exactly TWO stylesheets and gains no more. `organic.css` is the design system, vendored
+ * verbatim and never edited, so it can be re-exported from the design project and dropped back in
+ * without a merge. This file is everything else — every class the product uses, including the
+ * design library's own. No page, component or feature gets a stylesheet of its own; that is how a
+ * rule ends up defined twice with two slightly different values.
+ *
+ * The cost is honest: the design library's chrome ships on every v2 page rather than only on
+ * /v2/design. It is under 2 KB, and one location is worth more than that.
+ *
+ * Rules:
+ *
+ *   1. Tokens only. No raw hex, no raw px where a --space-* or --radius-* exists. If a value
+ *      cannot be expressed in Organic's tokens, that is a signal the system needs extending, not
+ *      that this file needs a literal.
+ *   2. Every class lives here. Components name classes; they do not carry inline styles. A style
+ *      written at a call site is invisible to every other call site and drifts immediately.
+ *   3. Names are prefixed or specific enough not to collide with Organic. `.dot` is already taken
+ *      by its radio control, which is why the status mark below is `.status-dot`.
+ */
+
+/* ── ground ──────────────────────────────────────────────────────────────────
+ * Re-asserted on a wrapper because v1's globals.css is still imported by the root layout and sets
+ * body background/colour/font from the Tailwind theme. Nested-layout CSS loads after root CSS so
+ * Organic already wins — but relying on emission order for the page's ground is the kind of thing
+ * that breaks silently on a bundler upgrade. v1 and v2 share no token names, so nothing else
+ * collides. */
+
+.v2 {
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.v2 .page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) calc(var(--space-8) * 1.7);
+}
+
+/* ── motion ──────────────────────────────────────────────────────────────── */
+
+@keyframes compass-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes compass-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.rise { animation: compass-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.blink { animation: compass-blink 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .blink { animation: none !important; }
+}
+
+/* ── scrollbars, so a scrolling pane does not import the OS grey into a warm page ── */
+
+.v2 ::-webkit-scrollbar { width: 9px; height: 9px; }
+.v2 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: 999px; }
+.v2 { scrollbar-color: var(--color-neutral-300) transparent; }
+
+/* ── people ──────────────────────────────────────────────────────────────── */
+
+.avatar {
+  display: grid; place-items: center; flex: none;
+  width: 24px; height: 24px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700;
+  background: var(--color-neutral-200); color: var(--color-neutral-700);
+}
+.avatar-active { background: var(--color-accent); color: var(--color-bg); }
+.avatar-lg { width: 28px; height: 28px; font-size: 10.5px; }
+
+/* ── glyph — the round mark that opens a job card ─────────────────────────── */
+
+.glyph {
+  display: grid; place-items: center; flex: none;
+  width: 38px; height: 38px; border-radius: 999px; font-size: 15px;
+  background: var(--color-accent-100); color: var(--color-accent-800);
+}
+.glyph-sm { width: 28px; height: 28px; font-size: 12px; }
+.glyph-solid { background: var(--color-accent); color: var(--color-bg); }
+
+/* ── provenance — what the agent reads ───────────────────────────────────────
+ * Dashed on purpose. These are inputs, not states, and must not be mistakable for a tag: the
+ * whole provenance idea rests on the reader seeing at a glance which marks are sources. */
+
+.read-chip {
+  font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  border: 1px dashed var(--color-neutral-400); color: var(--color-neutral-700);
+}
+.reads { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.reads-label { font-size: 11px; color: var(--color-neutral-600); }
+
+/* ── status ──────────────────────────────────────────────────────────────────
+ * `.status-dot`, not `.dot` — Organic's radio control already owns that name. */
+
+.status-dot {
+  display: inline-block; flex: none;
+  width: 7px; height: 7px; border-radius: 999px;
+  background: var(--color-accent);
+}
+.status-dot-muted { background: var(--color-neutral-400); }
+
+.status-line { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 12.5px; }
+
+/* ── labels and hints ────────────────────────────────────────────────────── */
+
+.section-label { color: var(--color-neutral-600); margin: 0; }
+.field-hint { font-size: 11px; margin: 4px 0 0; }
+
+/* ── a compact button, for card actions ──────────────────────────────────── */
+
+.btn-compact { padding: 8px 15px; }
+
+/* ── the job card ────────────────────────────────────────────────────────────
+ * The product's central object. Every role's queue is a column of these. */
+
+.job-card {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-4) calc(var(--space-4) * 1.02);
+  border-radius: 22px;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider);
+}
+.job-card-main { min-width: 0; flex: 1; }
+.job-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.job-card-title {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 16.5px; line-height: 1.25;
+}
+.job-card-sub {
+  margin: 5px 0 0; font-size: 13.5px; line-height: 1.5;
+  color: var(--color-neutral-700);
+}
+.job-card-reads { margin-top: 9px; }
+.job-card-side { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex: none; }
+.job-card-agent { font-size: 10.5px; color: var(--color-neutral-600); }
+
+/* ── one piece of layout that is not a component's own ───────────────────────
+ * The Dialog's in-flow variant, used by the design library. Page composition is Tailwind — a
+ * three-column grid on one page is not a component and does not deserve a class name. */
+
+.dialog-inline { display: grid; place-items: center; padding: var(--space-4); }
+
+/* ── a context row — a document the agent is reading, in the job's left pane ── */
+
+.context-row {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 9px 11px; border-radius: var(--radius-md);
+  background: var(--color-bg); border: 1px solid var(--color-divider);
+}
+.context-row-body { min-width: 0; }
+.context-row-name { margin: 0; font-size: 12.5px; font-weight: 600; }
+.context-row-detail { margin: 1px 0 0; font-size: 11.5px; color: var(--color-neutral-600); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The design library at /v2/design — swatches, ramps, spec rows.
+
+   Not product surface, but it lives here anyway: one location beats a
+   correctly-scoped second file. Where a value varies per element (which ramp
+   step, which space token) the page passes a custom property rather than an
+   inline style — that is data, not a second definition of the look.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.dl-section { display: flex; flex-direction: column; gap: var(--space-4); padding-top: calc(var(--space-8) * 1.6); }
+.dl-head { display: flex; flex-direction: column; gap: var(--space-1); }
+.dl-note { margin: 0; font-size: 13.5px; max-width: 60ch; }
+.dl-intro { margin: 0; font-size: 14.5px; max-width: 62ch; }
+
+.dl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.dl-row-label {
+  width: 96px; flex: none; font-size: 11.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+/* colour */
+.dl-role { display: flex; align-items: center; gap: var(--space-2); }
+.dl-swatch {
+  width: 34px; height: 34px; flex: none; border-radius: 999px;
+  background: var(--dl-c);
+  /* neutral-400, not the divider: ground and surface are cream on a cream page and a hairline
+     divider leaves the two most-checked tokens all but invisible. */
+  border: 1px solid var(--color-neutral-400);
+}
+.dl-role-name { font-size: 12.5px; }
+.dl-role-token { font-size: 11px; }
+
+.dl-ramp-group { display: flex; flex-direction: column; gap: var(--space-1); }
+.dl-ramp { display: flex; overflow: hidden; border-radius: 999px; }
+.dl-ramp-step {
+  display: grid; place-items: center;
+  width: 62px; height: 42px; font-size: 10px;
+  background: var(--dl-c); color: var(--color-neutral-800);
+}
+.dl-ramp-step-inverse { color: var(--color-bg); }
+
+/* space, radius, elevation */
+.dl-space { width: var(--dl-w); height: 26px; border-radius: 3px; background: var(--color-accent-300); }
+.dl-space-stack { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.dl-space-label { font-size: 10px; }
+
+.dl-box {
+  display: grid; place-items: center;
+  width: 74px; height: 52px; font-size: 11px;
+  background: var(--color-neutral-200); border-radius: var(--dl-r, var(--radius-md));
+}
+.dl-box-elev { background: var(--color-neutral-100); border-radius: var(--radius-md); }
+
+.dl-type-stack { display: flex; flex-direction: column; gap: var(--space-1); }
+.dl-type-stack h1, .dl-type-stack h2, .dl-type-stack h3,
+.dl-type-stack h4, .dl-type-stack h5 { margin: 0; }
+.dl-body { max-width: 62ch; margin-top: var(--space-2); }
+.dl-body-muted { max-width: 62ch; margin: 0; }
+
+.dl-dialog-stage { background: var(--color-neutral-200); border-radius: var(--radius-lg); }
+.dl-scroll { overflow-x: auto; }
+.dl-doc-sub { font-size: 12px; }
