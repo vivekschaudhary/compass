@@ -1,0 +1,271 @@
+// The agent loop — one turn of real work.
+//
+// Two tools, and the model must use one: `ask` when something it needs genuinely isn't in what it
+// was given, `draft` when it can produce the deliverable. Tools rather than free text because the
+// outcome has to become rows — a question that blocks the task, or sections with the citations that
+// make a claim traceable. Parsing prose into those shapes would be guessing at the exact moment
+// precision matters.
+//
+// Everything it writes is recorded: the turn, the questions, the draft, and the citations that
+// point at the VERSION each claim came from.
+
+import "server-only";
+import Anthropic from "@anthropic-ai/sdk";
+import { supabaseAdmin } from "../supabase";
+import type { Actor } from "../data/actor";
+import { buildContext, systemPrompt, inputPrompt, type AgentContext } from "./context";
+
+const MODEL = "claude-opus-5";
+
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: "ask",
+    description:
+      "Ask the human what you cannot responsibly infer from the documents you were given. " +
+      "Use this for facts that were never recorded — dates nobody agreed, people nobody named, " +
+      "standards nobody wrote down. Ask everything you need at once. Do not use this for anything " +
+      "the documents already answer.",
+    input_schema: {
+      type: "object",
+      properties: {
+        preamble: { type: "string", description: "One or two sentences on what you found and why you are blocked." },
+        questions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              prompt: { type: "string", description: "The question, as you would ask a colleague." },
+              type: { type: "string", enum: ["text", "choice", "number"] },
+              options: { type: "array", items: { type: "string" }, description: "For type=choice." },
+              why: { type: "string", description: "What this changes about the deliverable." },
+            },
+            required: ["prompt", "type", "why"],
+          },
+        },
+      },
+      required: ["preamble", "questions"],
+    },
+  },
+  {
+    name: "draft",
+    description:
+      "Produce the deliverable. Every section names the document paths it was derived from. " +
+      "A claim you cannot trace to a document you were given does not belong here.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "What you produced and what it is based on. Note any input that was missing and what it cost." },
+        sections: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              heading: { type: "string" },
+              body: { type: "string", description: "Markdown." },
+              cites: {
+                type: "array", items: { type: "string" },
+                description: "Document paths this section was derived from. Empty only if the section is genuinely your own judgment, and say so in the body.",
+              },
+            },
+            required: ["heading", "body", "cites"],
+          },
+        },
+      },
+      required: ["summary", "sections"],
+    },
+  },
+];
+
+export type AgentOutcome =
+  | { kind: "asked"; preamble: string; questions: { prompt: string; type: string; why: string }[] }
+  | { kind: "drafted"; summary: string; sections: number; path: string | null }
+  | { kind: "refused"; reason: string }
+  | { kind: "error"; message: string };
+
+async function nextOrd(taskId: string): Promise<number> {
+  const sb = supabaseAdmin();
+  if (!sb) return 0;
+  const { data } = await sb.from("turn").select("ord").eq("task_id", taskId)
+    .order("ord", { ascending: false }).limit(1);
+  return (data?.[0]?.ord ?? -1) + 1;
+}
+
+async function recordTurn(taskId: string, body: string, ctx: AgentContext): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("turn").insert({
+    task_id: taskId, ord: await nextOrd(taskId),
+    author_kind: "agent", author_role_code: ctx.roleCode, body,
+  }).select("id").maybeSingle();
+  return data?.id ?? null;
+}
+
+/**
+ * Run the agent for one turn.
+ *
+ * Streaming because a real task at high effort can run for minutes and a non-streaming request
+ * would hit the HTTP timeout. We take the final message rather than handling events — the caller
+ * wants the outcome, and progress is visible in the record either way.
+ */
+export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutcome> {
+  const sb = supabaseAdmin();
+  if (!sb) return { kind: "error", message: "Supabase is not configured." };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { kind: "error", message: "ANTHROPIC_API_KEY is not set — nothing can run." };
+  }
+
+  const ctx = await buildContext(actor, taskId);
+  if (!ctx) return { kind: "error", message: "That task is not in your engagement." };
+
+  // Mark who is executing BEFORE the call, so a run that dies mid-flight is visibly attributed
+  // rather than looking like a task nobody ever picked up.
+  await sb.from("work_task").update({ executor: "app" }).eq("id", taskId);
+
+  const client = new Anthropic();
+  let message: Anthropic.Message;
+  try {
+    const stream = client.messages.stream({
+      model: MODEL,
+      max_tokens: 32000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+      system: systemPrompt(ctx),
+      tools: TOOLS,
+      messages: [{ role: "user", content: inputPrompt(ctx) }],
+    });
+    message = await stream.finalMessage();
+  } catch (e) {
+    await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    return { kind: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+
+  // A refusal is a real outcome, not an exception. Record it and leave the task where it is.
+  if (message.stop_reason === "refusal") {
+    const reason = message.stop_details && "explanation" in message.stop_details
+      ? String(message.stop_details.explanation ?? "no explanation given")
+      : "no explanation given";
+    await recordTurn(taskId, `The model declined this request. ${reason}`, ctx);
+    await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    return { kind: "refused", reason };
+  }
+
+  const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+  const call = message.content.find((b) => b.type === "tool_use");
+
+  if (!call) {
+    // It answered in prose without choosing a tool. Record what it said rather than discarding it,
+    // and leave the task running — the human can read it and decide.
+    await recordTurn(taskId, text || "(no output)", ctx);
+    await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    return { kind: "error", message: "The agent replied without using a tool. Its message is in the conversation." };
+  }
+
+  if (call.name === "ask") {
+    const input = call.input as { preamble: string; questions: { prompt: string; type: string; options?: string[]; why: string }[] };
+    const body = [text, input.preamble].filter(Boolean).join("\n\n");
+    const turnId = await recordTurn(taskId, body, ctx);
+
+    if (input.questions.length) {
+      await sb.from("question").insert(input.questions.map((q) => ({
+        task_id: taskId, turn_id: turnId,
+        prompt: q.why ? `${q.prompt}\n\n(${q.why})` : q.prompt,
+        type: ["text", "choice", "number"].includes(q.type) ? q.type : "text",
+        options: q.options ?? null,
+      })));
+    }
+
+    // Waiting on a person is a state, not a pause. The queue should show it as such.
+    await sb.from("work_task").update({ state: "awaiting", executor: null }).eq("id", taskId);
+    return { kind: "asked", preamble: input.preamble, questions: input.questions };
+  }
+
+  if (call.name === "draft") {
+    const input = call.input as { summary: string; sections: { heading: string; body: string; cites: string[] }[] };
+    await recordTurn(taskId, [text, input.summary].filter(Boolean).join("\n\n"), ctx);
+
+    if (!ctx.produces) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      return { kind: "error", message: "The agent drafted, but this step declares no document to produce." };
+    }
+
+    const { data: org } = await sb.from("engagement").select("org_id").eq("id", actor.engagementId).maybeSingle();
+
+    const { data: versionId, error } = await sb.rpc("file_document", {
+      p_org_id: org?.org_id ?? actor.orgId,
+      p_engagement_id: actor.engagementId,
+      p_path: ctx.produces,
+      p_title: ctx.taskTitle,
+      p_sections: input.sections.map((s) => ({ heading: s.heading, body: s.body })),
+      p_version: "1.0",
+      p_actor: actor.holder ?? actor.roleCode,
+      p_actor_role: actor.roleCode,
+      p_owner_role: ctx.roleCode,
+      p_task_id: taskId,
+    });
+    if (error) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      return { kind: "error", message: `filing the draft: ${error.message}` };
+    }
+
+    await recordCitations(versionId as string, input.sections, ctx);
+
+    // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
+    // would make the agent both maker and checker.
+    await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
+    return { kind: "drafted", summary: input.summary, sections: input.sections.length, path: ctx.produces };
+  }
+
+  await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+  return { kind: "error", message: `Unknown tool: ${call.name}` };
+}
+
+/**
+ * Record what each section was derived from.
+ *
+ * A citation points at the pinned VERSION, never the path — that is why `source_version_id` is NOT
+ * NULL. A cite naming a document that was not among this task's inputs is dropped rather than
+ * stored: the agent cannot have derived anything from a document it was never given, and recording
+ * the claim would make the provenance trail lie.
+ */
+async function recordCitations(
+  versionId: string,
+  sections: { heading: string; cites: string[] }[],
+  ctx: AgentContext,
+): Promise<void> {
+  const sb = supabaseAdmin();
+  if (!sb || !versionId) return;
+
+  const { data: rows } = await sb.from("document_section")
+    .select("id, ord").eq("document_version_id", versionId).order("ord");
+  if (!rows?.length) return;
+
+  // Resolve each pinned input to the document AND the version id the agent actually read. Both are
+  // stored: the document so "what cites this file" is one query, the version so the citation keeps
+  // resolving to the text it was written from after the source is edited.
+  const sources = new Map<string, { docId: string; versionId: string }>();
+  for (const input of ctx.inputs) {
+    if (!input.version) continue;
+    const { data: doc } = await sb.from("document")
+      .select("id").eq("engagement_id", ctx.engagementId).eq("path", input.path).maybeSingle();
+    if (!doc) continue;
+    const { data: v } = await sb.from("document_version")
+      .select("id").eq("document_id", doc.id).eq("version", input.version).maybeSingle();
+    if (v) sources.set(input.path, { docId: doc.id, versionId: v.id });
+  }
+
+  const citations = sections.flatMap((s, i) => {
+    const section = rows[i];
+    if (!section) return [];
+    return s.cites
+      .map((path) => ({ path, src: sources.get(path) }))
+      .filter((c): c is { path: string; src: { docId: string; versionId: string } } => Boolean(c.src))
+      .map((c) => ({
+        document_section_id: section.id,
+        source_document_id: c.src.docId,
+        source_version_id: c.src.versionId,
+        locator: c.path,
+      }));
+  });
+
+  if (citations.length) await sb.from("citation").insert(citations);
+}

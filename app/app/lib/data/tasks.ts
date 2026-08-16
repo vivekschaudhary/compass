@@ -11,6 +11,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
+import { pinInputs } from "../agent/context";
 
 /** A card, as the Jobs screen renders it. */
 export type TaskCard = {
@@ -122,6 +123,12 @@ export async function startTask(actor: Actor, taskId: string): Promise<{ ok: tru
     p_actor_role: actor.roleCode,
   });
   if (error) return { ok: false, error: error.message };
+
+  // Pin what this task reads, at the versions live right now. After this the task's inputs are
+  // fixed: editing a source document creates a new version and does not silently change what this
+  // task was working from. Deliberately after the start succeeded — a refused start reads nothing.
+  await pinInputs(taskId, actor.engagementId);
+
   return { ok: true };
 }
 
