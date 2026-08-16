@@ -1,3 +1,3 @@
 workflow,ord,kind,role,task,produces,reads,conditional
-plan-kickoff,1,agent,delivery-manager,propose-kickoff-backlog,01-foundation/kickoff-backlog.md,"02-scope-sow/sow-source.md,02-scope-sow/deliverables.md,01-foundation/ways-of-working.md",
-staff-engagement,1,agent,delivery-manager,propose-staffing,01-foundation/team.md,"02-scope-sow/sow-source.md,01-foundation/kickoff-backlog.md",
+plan-kickoff,1,agent,delivery-manager,propose-kickoff-backlog,01-foundation/kickoff-backlog,"02-scope/sow,02-scope/deliverables,01-foundation/ways-of-working",
+staff-engagement,1,agent,delivery-manager,propose-staffing,01-foundation/team,"02-scope/sow,01-foundation/kickoff-backlog",

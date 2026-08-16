@@ -46,6 +46,8 @@ export type Existing = {
   roles: string[];
   agents: string[];               // compass/agents/*.md that actually exist on disk
   phases: string[];
+  /** Document paths that exist on the engagement, so `reads` can be checked against reality. */
+  documents: string[];
   workflows: { code: string; steps: StepRow[]; criteria: CriterionRow[] }[];
 };
 
@@ -209,6 +211,24 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     dupes(ords).forEach((o) =>
       add("workflow-steps.csv", null, `Workflow '${w.code}' has two steps numbered ${o}.`, "Step numbers order the graph and must be unique."));
   });
+
+  // A step can only read a document that exists, or one an earlier workflow produces. Anything
+  // else is a job whose agent is pointed at nothing — and it fails at RUN time, in front of
+  // whoever clicked it, rather than at import.
+  //
+  // This check exists because the first seed read `02-scope-sow/sow-source.md` while the real
+  // tree had `02-scope/sow`. Nothing caught it: the criteria that would have are not evaluated
+  // yet, and a plausible-looking path is invisible by eye.
+  const produced = new Set(steps.map((s) => s.produces).filter(Boolean));
+  if (existing.documents.length > 0) {
+    const known = new Set([...existing.documents, ...produced]);
+    steps.forEach((s, i) => {
+      s.reads.filter((r) => !known.has(r)).forEach((r) =>
+        add("workflow-steps.csv", i + 2,
+          `Step ${s.workflow}/${s.ord} reads '${r}', which is not a document on this engagement and is not produced by any workflow here.`,
+          "Correct the path, or add the workflow that produces it. An agent pointed at a document that will never exist fails when someone clicks the card."));
+    });
+  }
 
   /* criteria */
   criteria.forEach((c, i) => {

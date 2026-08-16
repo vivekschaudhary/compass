@@ -23,7 +23,7 @@ const seedBundle = (): Bundle => ({
 const realAgents = () =>
   existsSync(AGENTS) ? readdirSync(AGENTS).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
 
-const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], workflows: [] };
+const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
 
 /* ── the seed itself must be valid, or the first load fails ──────────────── */
 
@@ -105,6 +105,47 @@ describe("refuses rather than invents", () => {
   });
 });
 
+/* ── a job pointed at a document that will never exist ───────────────────── */
+
+describe("reads must resolve", () => {
+  const base: Bundle = {
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles: "code,label,tier,scope,workstream\ndm,DM,oversight,everyone,Delivery\n",
+    workflows: "code,label,workstream\nplan,Plan,Delivery\n",
+    criteria: "workflow,ord,kind,text\nplan,1,done,done\n",
+  };
+  const withDocs: Existing = { ...empty, documents: ["02-scope/sow", "01-foundation/ways-of-working"] };
+
+  it("accepts a read that names a real document", () => {
+    const r = planImport({ ...base, steps: 'workflow,ord,kind,role,task,produces,reads\nplan,1,agent,dm,shape,,"02-scope/sow"\n' }, withDocs);
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a plausible-looking path that does not exist — the bug this check exists for", () => {
+    const r = planImport({ ...base, steps: 'workflow,ord,kind,role,task,produces,reads\nplan,1,agent,dm,shape,,"02-scope-sow/sow-source.md"\n' }, withDocs);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.problems[0].message).toContain("02-scope-sow/sow-source.md");
+    expect(r.problems[0].fix).toContain("fails when someone clicks the card");
+  });
+
+  it("accepts a read of a document an earlier workflow produces", () => {
+    const r = planImport({ ...base,
+      workflows: "code,label,workstream\nplan,Plan,Delivery\nstaff,Staff,Delivery\n",
+      steps: 'workflow,ord,kind,role,task,produces,reads\n' +
+             'plan,1,agent,dm,shape,01-foundation/kickoff-backlog,"02-scope/sow"\n' +
+             'staff,1,agent,dm,staff,,"01-foundation/kickoff-backlog"\n',
+      criteria: "workflow,ord,kind,text\nplan,1,done,done\nstaff,1,done,done\n",
+    }, withDocs);
+    expect(r.ok).toBe(true);
+  });
+
+  it("skips the check when nothing is known about documents, rather than failing everything", () => {
+    const r = planImport({ ...base, steps: 'workflow,ord,kind,role,task,produces,reads\nplan,1,agent,dm,shape,,"anything/at/all"\n' }, empty);
+    expect(r.ok).toBe(true);
+  });
+});
+
 /* ── the constraints that stop a false green ─────────────────────────────── */
 
 describe("guards against checks that never evaluate", () => {
@@ -181,7 +222,7 @@ describe("import is versioning", () => {
   };
 
   const already: Existing = {
-    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [],
+    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
       steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "" }],

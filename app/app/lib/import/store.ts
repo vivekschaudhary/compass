@@ -163,7 +163,7 @@ export async function readExisting(
     : [];
 
   const { data: org } = await sb.from("org").select("id").eq("code", orgCode).maybeSingle();
-  if (!org) return { workstreams: [], roles: [], agents, phases: [], workflows: [] };
+  if (!org) return { workstreams: [], roles: [], agents, phases: [], documents: [], workflows: [] };
 
   const list = async (table: string) => {
     const q = sb.from(table).select("code").eq("org_id", org.id);
@@ -205,10 +205,23 @@ export async function readExisting(
     });
   }
 
+  // Document paths, so `reads` can be checked against reality.
+  //
+  // For an engagement-scoped import that is this engagement's tree. For an ORG-LEVEL import there
+  // is no single tree to check against, so the union across engagements is used instead: a path
+  // that exists on no engagement anywhere is almost certainly a typo, and a path that exists
+  // somewhere is at least plausible. Weaker than a per-engagement check, and honest about it.
+  const docQuery = sb.from("document").select("path");
+  const { data: docs } = engagementId === null
+    ? await docQuery
+    : await docQuery.eq("engagement_id", engagementId);
+
   return {
     workstreams: await list("workstream"),
     roles: await list("role"),
-    agents, phases: await list("phase"), workflows,
+    agents, phases: await list("phase"),
+    documents: [...new Set((docs ?? []).map((d: { path: string }) => d.path))],
+    workflows,
   };
 }
 

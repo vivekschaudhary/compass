@@ -30,7 +30,7 @@ const bundle: Bundle = {
   criteria: "workflow,ord,kind,text\nbuild,1,done,tests pass\n",
 };
 
-const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], workflows: [] };
+const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
 const scope = { orgCode: "acme", engagementId: null };
 
 const planOf = (b: Bundle, e: Existing) => {
@@ -68,7 +68,7 @@ describe("applyPlan", () => {
 
 describe("re-running", () => {
   const already: Existing = {
-    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [],
+    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
       steps: [
