@@ -11,11 +11,10 @@
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { supabaseAdmin } from "@/app/lib/supabase";
 import { COMPASS_DIR } from "@/app/lib/specs";
 import { planImport, type Bundle } from "@/app/lib/import/plan";
 import { applyPlan, describeReport } from "@/app/lib/import/apply";
-import { supabaseConfigStore, readExisting } from "@/app/lib/import/store";
+import { configStore, readExistingFor } from "@/app/lib/import/store";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +37,9 @@ function seedBundle(): Bundle {
 }
 
 async function run(bundle: Bundle, orgCode: string, engagementId: string | null, dry: boolean) {
-  const sb = supabaseAdmin();
-  if (!sb) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 503 });
+  const existing = await readExistingFor(orgCode, engagementId);
+  if (!existing) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 503 });
 
-  const existing = await readExisting(sb, orgCode, engagementId);
   const planned = planImport(bundle, existing);
 
   // Refusals are the useful output, not an error page: each one names the file, the row and the
@@ -57,7 +55,10 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
     });
   }
 
-  const report = await applyPlan(planned.plan, { orgCode, engagementId }, supabaseConfigStore(sb));
+  const store = configStore();
+  if (!store) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 503 });
+
+  const report = await applyPlan(planned.plan, { orgCode, engagementId }, store);
   return NextResponse.json({ ok: true, summary: describeReport(report), report });
 }
 

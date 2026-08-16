@@ -216,3 +216,68 @@
 .dl-dialog-stage { background: var(--color-neutral-200); border-radius: var(--radius-lg); }
 .dl-scroll { overflow-x: auto; }
 .dl-doc-sub { font-size: 12px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The engagement shell — top bar, destinations, "Working as"
+   ══════════════════════════════════════════════════════════════════════ */
+
+.topbar {
+  background: var(--color-neutral-100);
+  border-bottom: 1px solid var(--color-divider);
+  padding: 11px 22px;
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.topbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.topbar-row-secondary { justify-content: flex-end; }
+
+.brand {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 19px; letter-spacing: -0.02em;
+}
+.engagement-tag { font-size: 11px; flex: none; white-space: nowrap; }
+.topbar .btn-icon { width: 28px; height: 28px; flex: none; }
+
+.topnav { display: flex; align-items: center; gap: var(--space-4); }
+.topnav a { color: inherit; text-decoration: none; font-size: 14px; }
+.topnav a:hover { color: var(--color-accent); }
+.topnav a[aria-current="page"] { color: var(--color-accent); }
+
+.working-as-label { font-size: 12.5px; color: var(--color-neutral-600); }
+.no-roster { font-size: 12.5px; }
+
+.role-switcher { display: flex; flex-wrap: wrap; gap: 8px; }
+.role-chip {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 4px 12px 4px 5px; border-radius: 999px; font-size: 13px;
+  background: transparent; border: 1px solid var(--color-divider); color: inherit;
+}
+.role-chip:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.role-chip-on { border-color: var(--color-accent); }
+
+/* ── Jobs to do ──────────────────────────────────────────────────────────── */
+
+.jobs-blurb {
+  font-size: 14.5px; color: var(--color-neutral-700);
+  max-width: 60ch; margin: 0 0 6px;
+}
+.jobs-note {
+  font-size: 13px; color: var(--color-neutral-600); margin: 0 0 var(--space-6);
+}
+.jobs-list { display: flex; flex-direction: column; gap: 12px; }
+.jobs-footer { margin: var(--space-6) 0 0; font-size: 12.5px; line-height: 1.6; }
+
+.jobs-empty {
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--color-neutral-400); border-radius: 22px;
+  text-align: center;
+}
+.jobs-empty-title { font-family: var(--font-heading); font-size: 15px; margin: 0 0 4px; }
+
+/* A state, where a button would be if there were anything to start. */
+.task-state { font-size: 12px; white-space: nowrap; }
+
+.start-control { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.start-error {
+  font-size: 11px; max-width: 26ch; text-align: right;
+  color: var(--color-accent-700);
+}

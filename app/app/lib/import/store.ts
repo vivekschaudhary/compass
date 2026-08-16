@@ -9,6 +9,7 @@
 import { readdirSync, existsSync } from "fs";
 import { join } from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "../supabase";
 import { COMPASS_DIR } from "../specs";
 import type { ConfigStore } from "./apply";
 import type { Existing, StepRow, CriterionRow, WorkstreamRow, RoleRow, WorkflowRow } from "./plan";
@@ -17,6 +18,13 @@ import type { Existing, StepRow, CriterionRow, WorkstreamRow, RoleRow, WorkflowR
 // `unique nulls not distinct`, so an org-default row (engagement_id IS NULL) needs `.is()`
 // instead. A generic helper reads better but trips TS2589 — Supabase's builder types are deep
 // enough that inferring through a wrapper exceeds the instantiation limit. Inline it is.
+
+/** The store, creating its own client. Routes ask for this rather than making one themselves —
+ *  data access belongs in a data layer, and the lint rule on app/api/v2 enforces it. */
+export function configStore(): ConfigStore | null {
+  const sb = supabaseAdmin();
+  return sb ? supabaseConfigStore(sb) : null;
+}
 
 export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
   const fail = (what: string, error: { message: string } | null) => {
@@ -140,6 +148,12 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
  * `agents` comes from disk, not the database: a role's agent file is what actually gets loaded as
  * a system prompt, so the only honest check is whether the file is there.
  */
+/** Current state for the plan, creating its own client. Null when Supabase is unconfigured. */
+export async function readExistingFor(orgCode: string, engagementId: string | null): Promise<Existing | null> {
+  const sb = supabaseAdmin();
+  return sb ? readExisting(sb, orgCode, engagementId) : null;
+}
+
 export async function readExisting(
   sb: SupabaseClient, orgCode: string, engagementId: string | null,
 ): Promise<Existing> {
