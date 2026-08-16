@@ -11,8 +11,10 @@
 import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { tasksFor } from "@/app/lib/data/tasks";
+import { storedStatusFor } from "@/app/lib/data/gates";
 import { JobCard } from "../../../_ui/primitives";
 import { StartButton } from "./StartButton";
+import { Gate } from "./Gate";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,9 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
   if (!actor) notFound();
 
   const tasks = await tasksFor(actor);
+  // Read-only: rendering shows what was last measured, it does not re-measure. A refresh that
+  // silently re-checked would make stale evidence look fresh.
+  const gates = await storedStatusFor(tasks.map((t) => t.id));
   const firstName = (actor.holder ?? actor.roleLabel).split(" ")[0];
   const nothingRun = tasks.every((t) => t.startedAt === null);
 
@@ -86,8 +91,14 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
               meta={t.origin === "adhoc" ? "ad-hoc" : undefined}
               subtitle={t.subtitle || subtitleFor(t.state, t.reads.length)}
               reads={t.reads}
-              action={<StartButton taskId={t.id} engagement={engagement} role={actor.roleCode} state={t.state} />}
+              action={<StartButton taskId={t.id} engagement={engagement} role={actor.roleCode} state={t.state} executor={t.executor} />}
               agent={t.agentLabel ?? undefined}
+              footer={
+                <>
+                  <Gate statuses={gates.get(t.id) ?? []} kind="ready" />
+                  <Gate statuses={gates.get(t.id) ?? []} kind="done" />
+                </>
+              }
             />
           ))}
         </div>

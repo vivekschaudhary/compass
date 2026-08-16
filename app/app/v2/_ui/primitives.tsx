@@ -168,9 +168,11 @@ export const SectionLabel = ({ children, className }: { children: ReactNode; cla
 
 /* ── the job card — the product's central object ─────────────────────────── */
 
-export function JobCard({ glyph, title, related, meta, subtitle, reads, action, agent }: {
+export function JobCard({ glyph, title, related, meta, subtitle, reads, action, agent, footer }: {
   glyph: ReactNode; title: string; related?: string; meta?: string; subtitle: string;
   reads: string[]; action?: ReactNode; agent?: string;
+  /** Below the provenance line — where a card's gate lives. */
+  footer?: ReactNode;
 }) {
   return (
     <div className="job-card rise">
@@ -183,6 +185,7 @@ export function JobCard({ glyph, title, related, meta, subtitle, reads, action, 
         </div>
         <p className="job-card-sub">{subtitle}</p>
         <div className="job-card-reads"><ReadsLine docs={reads} /></div>
+        {footer}
       </div>
       {(action || agent) && (
         <div className="job-card-side">

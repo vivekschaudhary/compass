@@ -313,3 +313,34 @@
 }
 .flow-edge code { background: transparent; font-size: 12px; color: inherit; padding: 0; }
 .flow-via { color: var(--color-accent-2-700); }
+
+/* ── the gate on a card ──────────────────────────────────────────────────────
+ * Three states with three marks. `not checked` must not look like a near-miss of `not met` —
+ * they are different facts, and the whole point of showing them is that a reader can tell. */
+
+.gate { margin-top: 12px; }
+.gate + .gate { margin-top: 8px; }
+
+.gate-head { display: flex; align-items: baseline; gap: var(--space-2); }
+.gate-title {
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-neutral-700); font-weight: 600;
+}
+.gate-count { font-size: 11px; color: var(--color-neutral-600); }
+
+.gate-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.gate-item {
+  display: grid; grid-template-columns: 14px 1fr auto; gap: 8px;
+  align-items: baseline; font-size: 11.5px; line-height: 1.45;
+}
+.gate-glyph { text-align: center; font-size: 10px; }
+.gate-text { min-width: 0; }
+.gate-detail { display: block; font-size: 10.5px; color: var(--color-neutral-600); }
+.gate-when { font-size: 10px; color: var(--color-neutral-500); white-space: nowrap; }
+
+.gate-ok      .gate-glyph { color: var(--color-accent-2-700); }
+.gate-no      .gate-glyph { color: var(--color-accent-700); }
+.gate-unknown .gate-glyph { color: var(--color-neutral-400); }
+.gate-unknown .gate-text  { color: var(--color-neutral-600); }
+
+.recheck { font-size: 11px; padding: 0 var(--space-1); }

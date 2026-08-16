@@ -28,6 +28,8 @@ export type TaskCard = {
   origin: "defined" | "adhoc";
   rationale: string | null;
   workflowCode: string | null;
+  /** Which engine picked it up. NULL means nothing has — started is not the same as running. */
+  executor: string | null;
   startedAt: string | null;
   startedBy: string | null;
 };
@@ -35,13 +37,13 @@ export type TaskCard = {
 type Row = {
   id: string; title: string; subtitle: string; state: string; kind: string;
   role_code: string; ticket_key: string | null; origin: "defined" | "adhoc";
-  rationale: string | null; started_at: string | null; started_by: string | null;
+  rationale: string | null; executor: string | null; started_at: string | null; started_by: string | null;
   workflow_step: { reads: string[] | null } | null;
   workflow_run: { workflow: { code: string } | null } | null;
 };
 
 const SELECT =
-  "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,started_at,started_by," +
+  "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
   "workflow_step(reads),workflow_run(workflow(code))";
 
 /**
@@ -80,6 +82,7 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
     origin: r.origin,
     rationale: r.rationale,
     workflowCode: r.workflow_run?.workflow?.code ?? null,
+    executor: r.executor,
     startedAt: r.started_at,
     startedBy: r.started_by,
   }));
