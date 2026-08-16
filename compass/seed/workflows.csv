@@ -1,2 +1,3 @@
 code,label,workstream,phase,owner_role,trigger,enabled
-staff-engagement,Staff the engagement,Delivery,Pre-Sprint 0,delivery-manager,project-created,true
+plan-kickoff,Shape the kickoff backlog,Delivery,Pre-Sprint 0,delivery-manager,project-created,true
+staff-engagement,Staff the engagement,Delivery,Pre-Sprint 0,delivery-manager,kickoff-published,true

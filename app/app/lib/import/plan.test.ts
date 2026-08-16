@@ -28,27 +28,37 @@ const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], wo
 /* ── the seed itself must be valid, or the first load fails ──────────────── */
 
 describe("the shipped seed", () => {
-  it("plans cleanly against an empty database", () => {
+  const planned = () => {
     const result = planImport(seedBundle(), { ...empty, agents: realAgents() });
     if (!result.ok) {
       throw new Error("seed does not validate:\n" + result.problems.map((p) => `  ${p.file}:${p.row} ${p.message}`).join("\n"));
     }
-    expect(result.plan.workflows).toHaveLength(1);
-    expect(result.plan.workflows[0].row.code).toBe("staff-engagement");
-    expect(result.plan.workflows[0].action).toBe("create");
+    return result.plan;
+  };
+
+  it("plans cleanly against an empty database, and everything in it is new", () => {
+    const plan = planned();
+    expect(plan.workflows.length).toBeGreaterThan(0);
+    expect(plan.workflows.every((w) => w.action === "create")).toBe(true);
   });
 
   it("names an agent file that actually exists", () => {
     const agents = realAgents();
     expect(agents.length).toBeGreaterThan(0);           // guard: the check is only meaningful if we found the dir
-    const result = planImport(seedBundle(), { ...empty, agents });
-    expect(result.ok).toBe(true);                        // a missing agent file is a refusal, not a warning
+    expect(planImport(seedBundle(), { ...empty, agents }).ok).toBe(true);
   });
 
-  it("triggers on project-created, so the DM's queue fills when the wizard finishes", () => {
-    const result = planImport(seedBundle(), { ...empty, agents: realAgents() });
-    if (!result.ok) throw new Error("seed invalid");
-    expect(result.plan.workflows[0].row.trigger).toBe("project-created");
+  // The invariant, not the count — the seed will grow, and a hardcoded length would just have to
+  // be edited each time without ever catching anything.
+  it("has exactly one workflow triggered by project-created", () => {
+    const onCreate = planned().workflows.filter((w) => w.row.trigger === "project-created");
+    expect(onCreate.map((w) => w.row.code)).toEqual(["plan-kickoff"]);
+  });
+
+  it("opens everything else off the kickoff backlog, not off project creation", () => {
+    const rest = planned().workflows.filter((w) => w.row.code !== "plan-kickoff");
+    expect(rest.length).toBeGreaterThan(0);
+    expect(rest.every((w) => w.row.trigger !== "project-created")).toBe(true);
   });
 });
 
