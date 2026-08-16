@@ -223,7 +223,9 @@ create table if not exists criterion (
   step_ord             int,
   kind                 text not null,
   ord                  int  not null default 0,
-  text                 text not null default '',
+  -- Named `statement`, not `text`. `text` is a type name, and `length(text)` inside a check
+  -- constraint reads ambiguously enough that it is not worth finding out on a live database.
+  statement            text not null default '',
   subject_kind         text,
   subject_ref          text,
   operator             text,
@@ -238,7 +240,7 @@ create table if not exists criterion (
     (subject_kind is not null and subject_ref is not null and operator is not null and value is not null)
   ),
   -- Judgment criteria must at least say what is being judged.
-  constraint criterion_judgment_has_text check (subject_kind is not null or length(text) > 0)
+  constraint criterion_judgment_has_text check (subject_kind is not null or length(statement) > 0)
 );
 
 create index if not exists criterion_by_version on criterion (workflow_version_id, kind, step_ord);
