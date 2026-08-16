@@ -1,0 +1,65 @@
+workflow,step,kind,agent,practice,task,conditional,detail
+advance,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+build,1,agent,engineer,Engineering,implement-story,,engineer.implement-story (Engineer agent owns) — covers Phase 2 + Phase 4
+build,2,agent,automation,QA,write-e2e-tests,,automation.write-e2e-tests (Automation agent owns) — covers Phase 3
+build,3,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns) — covers Phase 5 review side
+build,4,agent,engineer,Engineering,respond-to-review,,engineer.respond-to-review (Engineer agent owns) — covers Phase 5 response side
+build,5,agent,pm,Product,arbitrate-dispute,,pm.arbitrate-dispute (PM agent owns) — fires ad-hoc when Engineer disputes
+build,6,hitl,human,,approve,,HITL gate — human approves merge (human)
+build,7,machine,,,mechanical check,,Mechanical merge constraints (CI + branch protection)
+build,8,other,,,Post-merge,,Post-merge — tech-writer engagement + story status finalization
+create-bet-architecture,1,agent,architect,Engineering,draft-bet-architecture,,architect.draft-bet-architecture (Architect agent owns)
+create-bet-architecture,2,hitl,human,,approve,,HITL gate (human)
+create-bet-architecture,3,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+create-bet-portfolio,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
+create-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,,researcher.cite-evidence-6-category-9-moat (Researcher agent owns)
+create-brief,2,agent,pm,Product,draft-brief,,pm.draft-brief (PM agent owns)
+create-brief,3,hitl,human,,approve,,HITL gate (human)
+create-brief,4,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+create-product-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,,researcher.cite-evidence-6-category-9-moat (Researcher agent owns)
+create-product-brief,2,hitl,human,,approve,,HITL gate (human) — research review
+create-product-brief,3,agent,pm,Product,draft-product-brief,,pm.draft-product-brief (PM agent owns)
+create-product-brief,4,hitl,human,,approve,,HITL gate (human) — brief approval
+create-product-brief,5,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+create-story,1,agent,pm,Product,decompose-bet-to-story,,pm.decompose-bet-to-story (PM agent owns)
+create-story,2,agent,designer,Design,draft-design-spec,,designer.draft-design-spec (Designer agent owns) — per UI slice (into the design story)
+create-story,3,agent,ux-writer,Design,write-copy,,ux-writer.write-copy (UX Writer agent owns) — per UI slice (into the copy story)
+create-story,4,hitl,human,,approve,,HITL gate (human — only when hitl_level: every_phase)
+create-story,5,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+dashboard,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
+fix,1,agent,engineer,Engineering,triage-and-fix,,engineer.triage-and-fix (Engineer agent owns)
+fix,2,agent,automation,QA,write-e2e-tests,,automation.write-e2e-tests (Automation agent owns)
+fix,3,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns)
+fix,4,agent,engineer,Engineering,respond-to-review,,engineer.respond-to-review (Engineer agent owns)
+fix,5,hitl,human,,approve,,HITL gate — approve merge (human)
+fix,6,agent,tech-writer,Product,accumulate-changelog,,tech-writer.accumulate-changelog (Tech Writer agent owns)
+improvements,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
+measure,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+metrics,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+ops,1,agent,enterprise-architect,Engineering,lead-ops-change,,enterprise-architect.lead-ops-change (Enterprise Architect agent owns)
+ops,2,hitl,human,,approve,,HITL gate — plan approved (human)
+ops,3,agent,engineer,Engineering,apply-ops-change,,engineer.apply-ops-change (Engineer agent owns)
+ops,4,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns)
+ops,5,agent,engineer,Engineering,respond-to-review,,engineer.respond-to-review (Engineer agent owns)
+ops,6,hitl,human,,approve,,HITL gate — approve merge (human)
+ops,7,agent,tech-writer,Product,accumulate-changelog,,tech-writer.accumulate-changelog (Tech Writer agent owns)
+plan,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
+retro,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
+scan,1,refresh,scanner,Security,refresh,,"No dispatch graph — one agent, recurring"
+setup-foundation-architecture,1,agent,enterprise-architect,Engineering,research-architecture,,enterprise-architect.research-architecture (Enterprise Architect agent owns)
+setup-foundation-architecture,2,hitl,human,,approve,,HITL gate — research approved (human)
+setup-foundation-architecture,3,agent,enterprise-architect,Engineering,derive-architecture,,enterprise-architect.derive-architecture (Enterprise Architect agent owns)
+setup-foundation-architecture,4,hitl,human,,approve,,HITL gate — architecture approved (human)
+setup-foundation-architecture,5,agent,enterprise-architect,Engineering,scaffold-foundation,,enterprise-architect.scaffold-foundation (Enterprise Architect agent owns)
+setup-foundation-architecture,6,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+status,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
+tech-design,1,agent,architect,Engineering,design-story-tech,,architect.design-story-tech (Architect agent owns)
+triage,1,agent,support,Support,classify-intake,,support.classify-intake (Support agent owns)
+triage,2,hitl,human,,approve,,HITL — ITIL intake routing gate (human)
+triage,3,agent,support,Support,triage-incident,incident branch,support.triage-incident (Support agent owns) — [incident branch]
+triage,4,hitl,human,,approve,incident branch,HITL — stop-the-bleed + fix-forward routing gate (human) — [incident branch]
+triage,5,agent,engineer,Engineering,triage-and-fix,needs-fix branch,engineer.triage-and-fix (Engineer agent owns) — [needs-fix branch]
+triage,6,agent,reviewer,QA,review-pr,needs-fix branch,reviewer.review-pr (Reviewer agent owns) — [needs-fix branch]
+triage,7,agent,support,Support,write-postmortem,reconverge: both incident branches,support.write-postmortem (Support agent owns) — [reconverge: both incident branches]
+triage,8,hitl,human,,approve,,HITL — postmortem approved (human)
+triage,9,agent,tech-writer,Product,accumulate-changelog,,tech-writer.accumulate-changelog (Tech Writer agent owns)

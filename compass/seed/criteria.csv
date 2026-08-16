@@ -1,0 +1,6 @@
+workflow,ord,kind,text,subject_kind,subject_ref,operator,value
+staff-engagement,,ready,The engagement exists and its systems of record answered,connector,docs,is,wired
+staff-engagement,,ready,,connector,tickets,is,wired
+staff-engagement,1,done,Every role Sprint 0 assigns work to has a named holder,roster,sprint-0-roles,unfilled,0
+staff-engagement,1,done,Roles left deliberately unstaffed are recorded with a reason,roster,deferred,has-reason,all
+staff-engagement,,done,The Delivery Manager approved the roster,ticket,{{story}},status,Done

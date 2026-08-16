@@ -1,0 +1,2 @@
+code,label,title,tier,scope,workstream,agent,hosts,capabilities
+delivery-manager,Delivery Manager,Runs the engagement,oversight,everyone,Delivery,delivery-manager,"claude,codex,gemini","edit-engagement-specs,approve-gates"
