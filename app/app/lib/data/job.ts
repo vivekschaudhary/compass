@@ -25,6 +25,8 @@ export async function conversation(taskId: string): Promise<Turn[]> {
 
 export type OpenQuestion = { id: string; prompt: string; type: string; options: string[] | null };
 
+export type PastQuestion = { id: string; prompt: string; answer: string | null; state: string; reason: string | null };
+
 /** Questions still blocking the task. There is no decline — an unanswered question stays. */
 export async function openQuestions(taskId: string): Promise<OpenQuestion[]> {
   const sb = supabaseAdmin();
@@ -126,4 +128,29 @@ export async function recordAnswers(
   const remaining = Math.max(0, (open ?? []).length - given.length);
   if (remaining === 0) await sb.from("work_task").update({ state: "running" }).eq("id", taskId);
   return { ok: true, remaining };
+}
+
+/**
+ * Questions that are no longer waiting on anyone — answered, or superseded when the agent drafted
+ * without them. Shown as history so the record reads honestly: a question that was worked around
+ * is a different fact from one that was resolved, and both are worth being able to see.
+ */
+export async function settledQuestions(taskId: string): Promise<PastQuestion[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+  const { data } = await sb.from("question")
+    .select("id, prompt, answer, state, superseded_reason")
+    .eq("task_id", taskId).neq("state", "open").order("created_at");
+  return (data ?? []).map((q) => ({
+    id: q.id, prompt: q.prompt, answer: q.answer, state: q.state, reason: q.superseded_reason,
+  }));
+}
+
+/** Where the task is, for deciding what the job view should offer. */
+export async function taskState(actor: Actor, taskId: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("work_task")
+    .select("state").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  return data?.state ?? null;
 }

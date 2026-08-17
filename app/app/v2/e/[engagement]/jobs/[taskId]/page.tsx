@@ -9,11 +9,13 @@ import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { buildContext } from "@/app/lib/agent/context";
 import { conversation, openQuestions, draftOf } from "@/app/lib/data/job";
-import { storedStatusFor } from "@/app/lib/data/gates";
+import { storedStatusFor, describeCriterion } from "@/app/lib/data/gates";
+import { taskState } from "@/app/lib/data/job";
 import { Tag, SectionLabel } from "../../../../_ui/primitives";
 import { Gate } from "../Gate";
 import { AnswerForm } from "./AnswerForm";
 import { RunButton } from "./RunButton";
+import { ApprovePanel } from "./ApprovePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +34,16 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
   const ctx = await buildContext(actor, taskId);
   if (!ctx) notFound();
 
-  const [turns, questions, draft, gates] = await Promise.all([
+  const [turns, questions, draft, gates, state] = await Promise.all([
     conversation(taskId), openQuestions(taskId), draftOf(actor, ctx.produces), storedStatusFor([taskId]),
+    taskState(actor, taskId),
   ]);
+
+  // The approval panel appears when there is something to approve — a draft, and a task waiting at
+  // the gate. Showing it earlier would invite a signature on work that does not exist yet.
+  const doneCriteria = (gates.get(taskId) ?? [])
+    .filter((g) => g.kind === "done")
+    .map((g) => ({ id: g.id, statement: describeCriterion(g), satisfied: g.satisfied }));
 
   const backHref = `/v2/e/${engagement}/jobs${role ? `?role=${role}` : ""}`;
 
@@ -95,10 +104,20 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
             />
           )}
 
-          <RunButton
-            engagement={engagement} role={roleCode} taskId={taskId}
-            hasOpenQuestions={questions.length > 0}
-          />
+          {state === "hitl" && draft && doneCriteria.length > 0 && (
+            <ApprovePanel
+              engagement={engagement} role={roleCode} taskId={taskId} criteria={doneCriteria}
+            />
+          )}
+
+          {state === "closed" ? (
+            <p className="closed-note">Closed. Approved and published.</p>
+          ) : (
+            <RunButton
+              engagement={engagement} role={roleCode} taskId={taskId}
+              hasOpenQuestions={questions.length > 0}
+            />
+          )}
         </section>
 
         {/* ── what it produced ──────────────────────────────────────────── */}

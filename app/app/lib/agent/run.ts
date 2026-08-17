@@ -251,6 +251,15 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
 
     await recordCitations(versionId as string, input.sections, ctx);
 
+    // Drafting is a decision to proceed without the outstanding answers. Those questions stop
+    // blocking — but they were never answered, so they are superseded, not resolved. Leaving them
+    // open is what made the queue look like the agent was asking the same things forever.
+    await sb.from("question").update({
+      state: "superseded",
+      superseded_at: new Date().toISOString(),
+      superseded_reason: "The agent drafted without these answers and named what was unresolved in the document.",
+    }).eq("task_id", taskId).eq("state", "open");
+
     // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
     // would make the agent both maker and checker.
     await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);

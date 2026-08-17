@@ -68,26 +68,24 @@ export type Permission = { path: string; title: string; owns: string | null; edi
 /**
  * Who may do what, DERIVED from the workflows rather than stored.
  *
- * A role that produces a document edits it; a role whose step reads it reads it. Explicit rows in
- * `document_permission` override that. Deriving means the table cannot drift from the process it
- * describes — change a workflow's `reads` and the permissions follow.
+ * A role that produces a document edits it; a role whose step reads it reads it. Nothing overrides
+ * it, and there is no table to: `document_permission` was dropped in 030 because an empty override
+ * table is an invitation to create a second answer to who may edit a document.
+ *
+ * Deriving means this cannot drift from the process it describes — change a workflow's `reads` and
+ * the permissions follow. When a real exception appears that the workflows cannot express, the
+ * override comes back as a migration carrying the case that justified it.
  */
 export async function permissions(actor: Actor): Promise<Permission[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
 
-  const [{ data: docs }, { data: steps }, { data: explicit }] = await Promise.all([
+  const [{ data: docs }, { data: steps }] = await Promise.all([
     sb.from("document").select("id, path, title, owner_role_code")
       .eq("engagement_id", actor.engagementId).neq("kind", "folder").order("path"),
     sb.from("workflow_step").select("role_code, produces, reads, workflow_version!inner(status)")
       .eq("workflow_version.status", "published"),
-    sb.from("document_permission").select("document_id, role_code, level"),
   ]);
-
-  const overrides = new Map<string, { role: string; level: string }[]>();
-  for (const p of explicit ?? []) {
-    overrides.set(p.document_id, [...(overrides.get(p.document_id) ?? []), { role: p.role_code, level: p.level }]);
-  }
 
   return (docs ?? []).map((d) => {
     const edits = new Set<string>();
@@ -98,12 +96,7 @@ export async function permissions(actor: Actor): Promise<Permission[]> {
       if ((s.reads ?? []).includes(d.path)) reads.add(s.role_code);
     }
 
-    let owns = d.owner_role_code ?? null;
-    for (const o of overrides.get(d.id) ?? []) {
-      if (o.level === "owns") owns = o.role;
-      if (o.level === "edits") edits.add(o.role);
-      if (o.level === "reads") reads.add(o.role);
-    }
+    const owns = d.owner_role_code ?? null;
 
     // Owning implies editing; editing implies reading. Listing a role twice says nothing.
     if (owns) edits.add(owns);

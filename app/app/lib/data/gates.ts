@@ -271,3 +271,53 @@ export function describeCriterion(c: CriterionRow): string {
   if (c.subjectKind) return `${c.subjectKind} ${c.subjectRef} ${c.operator} ${c.value}`;
   return "unnamed criterion";
 }
+
+/* ── approving: a person as the evaluator ────────────────────────────────── */
+
+/**
+ * Record a person confirming Done criteria, then close the task.
+ *
+ * Judgment criteria — "scope not covered by any row is named rather than left implicit" — cannot be
+ * computed. The person who knows the engagement reads the draft and says so, and that attestation
+ * is stored as a measurement with `source: "human"` and their name, exactly like a machine check.
+ * The record does not distinguish "a script verified this" from "Matt said so" by making one of
+ * them less real; it distinguishes them by saying which.
+ *
+ * Per-criterion rather than one button, because a single Approve that silently satisfies five
+ * criteria is a signature on work nobody read. Criteria left unconfirmed stay unmeasured, and the
+ * database refuses the close — the person does not have to remember what they skipped.
+ */
+export async function approve(
+  actor: Actor, taskId: string, confirmed: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const { data: task } = await sb.from("work_task")
+    .select("id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  if (!task) return { ok: false, error: "That task is not in your engagement." };
+
+  const who = actor.holder ?? actor.roleCode;
+  const criteria = await criteriaForTask(taskId);
+  const done = criteria.filter((c) => c.kind === "done");
+
+  for (const c of done) {
+    if (!confirmed.includes(c.id)) {
+      // Not confirmed is not "failed" — it is unmeasured, and the gate treats it as such. Writing
+      // satisfied:false here would say the person checked and rejected it, which they did not.
+      await sb.from("measurement").delete().eq("task_id", taskId).eq("criterion_id", c.id);
+      continue;
+    }
+    await sb.from("measurement").upsert({
+      task_id: taskId, criterion_id: c.id, satisfied: true,
+      measured_at: new Date().toISOString(),
+      source: "human", detail: `Confirmed by ${who}.`,
+    }, { onConflict: "task_id,criterion_id" });
+  }
+
+  const { error } = await sb.rpc("close_task", {
+    p_task_id: taskId, p_actor: who, p_actor_role: actor.roleCode,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
