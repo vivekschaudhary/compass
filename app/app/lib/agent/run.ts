@@ -41,11 +41,17 @@ const TOOLS: Anthropic.Tool[] = [
               why: { type: "string", description: "What this changes about the deliverable." },
             },
             required: ["prompt", "type", "why"],
+            additionalProperties: false,
           },
         },
       },
       required: ["preamble", "questions"],
+      additionalProperties: false,
     },
+    // Strict: the input is validated against this schema before it reaches us. Without it the
+    // shape is a strong convention rather than a guarantee, and a `sections` that arrived as
+    // something other than an array threw away a finished two-minute run at the filing step.
+    strict: true,
   },
   {
     name: "draft",
@@ -69,13 +75,40 @@ const TOOLS: Anthropic.Tool[] = [
               },
             },
             required: ["heading", "body", "cites"],
+            additionalProperties: false,
           },
         },
       },
       required: ["summary", "sections"],
+      additionalProperties: false,
     },
+    strict: true,
   },
 ];
+
+/**
+ * Normalise what came back before anything else touches it.
+ *
+ * `strict: true` makes the shape a guarantee rather than a convention, but this stays as the
+ * backstop: a run costs minutes of model time, and the cheapest defence against losing one at the
+ * last step is to not assume. A string that parses to an array is accepted; anything else returns
+ * empty and the caller reports it rather than throwing.
+ */
+function asSections(raw: unknown): { heading: string; body: string; cites: string[] }[] {
+  const value = typeof raw === "string" ? safeParse(raw) : raw;
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === "object")
+    .map((s) => ({
+      heading: String(s.heading ?? ""),
+      body: String(s.body ?? ""),
+      cites: Array.isArray(s.cites) ? s.cites.map(String) : [],
+    }));
+}
+
+function safeParse(s: string): unknown {
+  try { return JSON.parse(s); } catch { return null; }
+}
 
 export type AgentOutcome =
   | { kind: "asked"; preamble: string; questions: { prompt: string; type: string; why: string }[] }
@@ -222,8 +255,20 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
   }
 
   if (call.name === "draft") {
-    const input = call.input as { summary: string; sections: { heading: string; body: string; cites: string[] }[] };
-    await recordTurn(taskId, [text, input.summary].filter(Boolean).join("\n\n"), ctx);
+    const input = call.input as { summary?: string; sections?: unknown };
+    const sections = asSections(input.sections);
+
+    // The draft goes into the conversation BEFORE it is filed. Filing can fail — a unique
+    // constraint, a dropped connection — and when it did, minutes of model work vanished because
+    // the only copy was a local variable. The turn is the durable record; the document is a
+    // projection of it.
+    const drafted = sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n");
+    await recordTurn(taskId, [text, input.summary, drafted].filter(Boolean).join("\n\n"), ctx);
+
+    if (!sections.length) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      return { kind: "error", message: "The agent drafted, but returned no readable sections. Its output is in the conversation." };
+    }
 
     if (!ctx.produces) {
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
@@ -237,7 +282,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       p_engagement_id: actor.engagementId,
       p_path: ctx.produces,
       p_title: ctx.taskTitle,
-      p_sections: input.sections.map((s) => ({ heading: s.heading, body: s.body })),
+      p_sections: sections.map((s) => ({ heading: s.heading, body: s.body })),
       // null = the routine derives the next version. Picking a number here is what made a
       // redraft collide on (document_id, version) and lose a two-minute run at the last step.
       p_version: null,
@@ -251,7 +296,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       return { kind: "error", message: `filing the draft: ${error.message}` };
     }
 
-    await recordCitations(versionId as string, input.sections, ctx);
+    await recordCitations(versionId as string, sections, ctx);
 
     // Drafting is a decision to proceed without the outstanding answers. Those questions stop
     // blocking — but they were never answered, so they are superseded, not resolved. Leaving them
@@ -265,7 +310,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
     // would make the agent both maker and checker.
     await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
-    return { kind: "drafted", summary: input.summary, sections: input.sections.length, path: ctx.produces };
+    return { kind: "drafted", summary: input.summary ?? "", sections: sections.length, path: ctx.produces };
   }
 
   await sb.from("work_task").update({ executor: null }).eq("id", taskId);
