@@ -316,3 +316,54 @@ export async function approve(
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+/**
+ * Send the draft back: record what a reviewer read and refused, and why.
+ *
+ * The counterpart to `approve`. An unticked criterion is unmeasured — nobody looked. A REJECTED
+ * one is someone reading the work and saying what is wrong with it, stored as `satisfied: false`
+ * with their name and their reason, and read back to the agent on its next run.
+ *
+ * Without this the gate could only stall. A reviewer who found a real problem had no way to say so
+ * except by leaving a box unticked, which is indistinguishable from not having got to it.
+ */
+export async function reject(
+  actor: Actor, taskId: string, rejections: { criterionId: string; reason: string }[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const { data: task } = await sb.from("work_task")
+    .select("id, state").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  if (!task) return { ok: false, error: "That task is not in your engagement." };
+
+  const given = rejections.filter((r) => r.reason.trim().length > 0);
+  if (!given.length) {
+    // A rejection with no reason is not a rejection, it is a refusal to explain. The agent cannot
+    // act on it and the next reviewer cannot tell what was wrong.
+    return { ok: false, error: "A rejection needs a reason — the agent has to act on it." };
+  }
+
+  const who = actor.holder ?? actor.roleCode;
+  for (const r of given) {
+    await sb.from("measurement").upsert({
+      task_id: taskId, criterion_id: r.criterionId, satisfied: false,
+      measured_at: new Date().toISOString(),
+      source: "human", detail: `Rejected by ${who}: ${r.reason.trim()}`,
+    }, { onConflict: "task_id,criterion_id" });
+  }
+
+  // Back to running: there is work to do, and it is the agent's. Leaving it at `hitl` would say
+  // it is still waiting on a human when the human has just answered.
+  await sb.from("work_task").update({ state: "running" }).eq("id", taskId);
+
+  const { data: last } = await sb.from("turn").select("ord").eq("task_id", taskId)
+    .order("ord", { ascending: false }).limit(1);
+  await sb.from("turn").insert({
+    task_id: taskId, ord: (last?.[0]?.ord ?? -1) + 1,
+    author_kind: "human", author_role_code: actor.roleCode, author_user_id: who,
+    body: `Sent back for revision:\n\n${given.map((r) => `- ${r.reason.trim()}`).join("\n")}`,
+  });
+
+  return { ok: true };
+}

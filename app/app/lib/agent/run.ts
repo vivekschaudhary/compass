@@ -13,7 +13,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "../data/actor";
-import { buildContext, systemPrompt, inputPrompt, type AgentContext } from "./context";
+import { buildContext, systemPrompt, inputPrompt, revisionPrompt, type AgentContext } from "./context";
 import { conversation, openQuestions } from "../data/job";
 
 const MODEL = "claude-opus-5";
@@ -196,6 +196,8 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
   // rather than looking like a task nobody ever picked up.
   await sb.from("work_task").update({ executor: "app" }).eq("id", taskId);
 
+  const revision = revisionPrompt(ctx);
+
   const client = new Anthropic();
   let message: Anthropic.Message;
   try {
@@ -206,7 +208,13 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       output_config: { effort: "high" },
       system: systemPrompt(ctx),
       tools: TOOLS,
-      messages: [{ role: "user", content: inputPrompt(ctx) }, ...await priorMessages(taskId)],
+      messages: [
+        { role: "user", content: inputPrompt(ctx) },
+        ...await priorMessages(taskId),
+        // The previous draft and any rejections go LAST, so they are the most recent thing the
+        // model sees rather than something buried above a long conversation.
+        ...(revision ? [{ role: "user" as const, content: revision }] : []),
+      ],
     });
     message = await stream.finalMessage();
   } catch (e) {

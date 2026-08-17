@@ -351,10 +351,23 @@
   padding: var(--space-4); border-radius: 18px; background: var(--color-accent-2-100); }
 .approve-head { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 600;
   color: var(--color-accent-2-900); }
-.approve-row { display: grid; grid-template-columns: 16px 1fr; gap: 9px; align-items: start;
-  font-size: 12.5px; line-height: 1.45; cursor: pointer; padding: 3px 0; color: var(--color-neutral-700); }
-.approve-row-on { color: var(--color-neutral-900); }
-.approve-box { margin-top: 2px; accent-color: var(--color-accent-2-700); }
+.approve-sending-back { background: var(--color-accent-100); }
+
+.verdict { padding: 4px 0; }
+.verdict-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+.verdict-marks { display: flex; gap: 4px; }
+.vmark {
+  width: 22px; height: 22px; border-radius: 999px; cursor: pointer; font-size: 11px;
+  border: 1px solid var(--color-divider); background: var(--color-neutral-50);
+  color: var(--color-neutral-500); line-height: 1;
+}
+.vmark:hover { border-color: var(--color-neutral-500); }
+.vmark-ok.vmark-on { background: var(--color-accent-2-700); border-color: transparent; color: var(--color-neutral-50); }
+.vmark-no.vmark-on { background: var(--color-accent-700); border-color: transparent; color: var(--color-neutral-50); }
+.verdict-text { font-size: 12.5px; line-height: 1.5; color: var(--color-neutral-700); }
+.verdict-ok .verdict-text { color: var(--color-neutral-900); }
+.verdict-no .verdict-text { color: var(--color-accent-900); }
+.verdict-reason { margin: 6px 0 0 74px; font-size: 12px; width: calc(100% - 74px); }
 .approve-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: 4px; }
 .approve-note { font-size: 11px; }
 .closed-note { margin-top: var(--space-4); font-size: 12.5px; color: var(--color-accent-2-900); }

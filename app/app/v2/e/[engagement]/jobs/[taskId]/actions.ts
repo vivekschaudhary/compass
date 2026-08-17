@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
 import { recordAnswers } from "@/app/lib/data/job";
-import { approve } from "@/app/lib/data/gates";
+import { approve, reject } from "@/app/lib/data/gates";
 
 /** Answer the agent's questions. The write itself lives in lib/data, which owns the scope check. */
 export async function answerAction(
@@ -28,6 +28,21 @@ export async function approveAction(
   if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await approve(actor, taskId, confirmed);
+  revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
+  revalidatePath(`/v2/e/${engagement}/jobs`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Send the draft back with reasons. The agent reads them on its next run. */
+export async function rejectAction(
+  engagement: string, role: string, taskId: string,
+  rejections: { criterionId: string; reason: string }[],
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await reject(actor, taskId, rejections);
   revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
   revalidatePath(`/v2/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };

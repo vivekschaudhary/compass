@@ -39,6 +39,9 @@ export type AgentContext = {
   doneCriteria: string[];
   /** What workflows this engagement can actually run. Without it the agent guesses. */
   inventory: WorkflowSummary[];
+  /** What it produced last time, and what a reviewer said about it. Null on the first run. */
+  priorDraft: { version: string; sections: { heading: string; body: string }[] } | null;
+  rejections: { criterion: string; reason: string; by: string }[];
 };
 
 export type WorkflowSummary = {
@@ -166,6 +169,58 @@ async function loadInventory(orgId: string): Promise<WorkflowSummary[]> {
   }));
 }
 
+/**
+ * What this task produced last time.
+ *
+ * Without it a second run drafts from scratch: "rework section 6" is impossible, and the new
+ * version supersedes the old one without being derived from it — a version chain implying an
+ * editing lineage that never happened. With it, revision is revision.
+ */
+async function loadPriorDraft(engagementId: string, path: string | null) {
+  const sb = supabaseAdmin();
+  if (!sb || !path) return null;
+
+  const { data: doc } = await sb.from("document")
+    .select("current_version_id").eq("engagement_id", engagementId).eq("path", path).maybeSingle();
+  if (!doc?.current_version_id) return null;
+
+  const { data: v } = await sb.from("document_version")
+    .select("version").eq("id", doc.current_version_id).maybeSingle();
+  const { data: secs } = await sb.from("document_section")
+    .select("heading, body").eq("document_version_id", doc.current_version_id).order("ord");
+
+  return v && secs?.length
+    ? { version: v.version, sections: secs.map((x) => ({ heading: x.heading, body: x.body })) }
+    : null;
+}
+
+/**
+ * Criteria a human checked and rejected, with the reason they gave.
+ *
+ * Distinct from a criterion nobody has looked at — that one is simply unmeasured. A rejection is
+ * someone reading the work and saying what is wrong with it, which is the most valuable input the
+ * agent can get and previously had no way to reach it.
+ */
+async function loadRejections(taskId: string) {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+  const { data } = await sb.from("measurement")
+    .select("detail, source, criterion(statement, subject_kind, subject_ref)")
+    .eq("task_id", taskId).eq("satisfied", false).eq("source", "human");
+
+  type Row = { detail: string | null; criterion: { statement: string; subject_kind: string | null; subject_ref: string | null } | { statement: string }[] | null };
+  return ((data ?? []) as unknown as Row[]).map((m) => {
+    const c = Array.isArray(m.criterion) ? m.criterion[0] : m.criterion;
+    const detail = m.detail ?? "";
+    const by = detail.match(/^Rejected by ([^:]+):/)?.[1] ?? "a reviewer";
+    return {
+      criterion: c?.statement || "unnamed criterion",
+      reason: detail.replace(/^Rejected by [^:]+:\s*/, "") || "no reason recorded",
+      by,
+    };
+  });
+}
+
 /** Everything the agent needs, assembled from the record rather than from the caller. */
 export async function buildContext(actor: Actor, taskId: string): Promise<AgentContext | null> {
   const sb = supabaseAdmin();
@@ -218,6 +273,8 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     inputs: await loadInputs(taskId, actor.engagementId),
     doneCriteria,
     inventory: await loadInventory(actor.orgId),
+    priorDraft: await loadPriorDraft(actor.engagementId, produces),
+    rejections: await loadRejections(taskId),
   };
 }
 
@@ -291,6 +348,37 @@ deliverable from a third of the intended inputs, without noting it, is the failu
 system exists to prevent.`.trim());
 
   return parts.join("\n\n---\n\n");
+}
+
+/**
+ * What to say about the previous attempt.
+ *
+ * Appended as its own turn rather than folded into the system prompt: this is feedback on work,
+ * and it belongs in the conversation where the work was discussed.
+ */
+export function revisionPrompt(ctx: AgentContext): string | null {
+  if (!ctx.priorDraft) return null;
+
+  const parts = [
+    `You already produced \`${ctx.produces}\` at v${ctx.priorDraft.version}. Here it is:`,
+    ctx.priorDraft.sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n"),
+  ];
+
+  if (ctx.rejections.length) {
+    parts.push(
+      `A reviewer read it and rejected ${ctx.rejections.length} of the completion criteria:\n\n` +
+      ctx.rejections.map((r) => `- **${r.criterion}** — ${r.by} says: ${r.reason}`).join("\n") +
+      `\n\nRevise the document to address these. Keep everything that was not objected to: a rewrite ` +
+      `that silently drops sections nobody complained about is not a revision, and a reviewer who has ` +
+      `already read this should not have to re-read all of it. If you disagree with a rejection, say so ` +
+      `and explain — do not quietly comply with something you think is wrong.`);
+  } else {
+    parts.push(
+      `Revise it rather than starting over. Keep what still holds, change what should change, and say ` +
+      `what you changed and why. If nothing needs changing, say that instead of redrafting.`);
+  }
+
+  return parts.join("\n\n");
 }
 
 /** The user turn: the pinned material, with absences stated rather than omitted. */
