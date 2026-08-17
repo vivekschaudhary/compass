@@ -353,7 +353,8 @@
 .job-back:hover { color: var(--color-accent-700); }
 .job-sub { margin: 0; font-size: 13px; }
 
-.job-panes { display: grid; grid-template-columns: 260px minmax(0, 1fr) 320px; gap: var(--space-4); align-items: start; }
+.job-panes { display: grid; grid-template-columns: 240px minmax(0, 1fr) minmax(0, 1.05fr); gap: var(--space-4); align-items: start; }
+@media (max-width: 1500px) { .job-panes { grid-template-columns: 240px minmax(0, 1fr); } .pane-doc { grid-column: 1 / -1; } }
 @media (max-width: 1100px) { .job-panes { grid-template-columns: 1fr; } }
 
 .pane {
@@ -380,7 +381,7 @@
 .turn { display: flex; flex-direction: column; gap: 4px; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-divider); }
 .turn-who { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-neutral-600); display: flex; gap: 8px; }
 .turn-when { color: var(--color-neutral-500); text-transform: none; letter-spacing: 0; }
-.turn-body { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.turn-body { font-size: 13px; line-height: 1.6; }
 .turn-human .turn-body { color: var(--color-accent-2-900); }
 
 .asks { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-4); border-radius: 18px; background: var(--color-surface); }
@@ -403,7 +404,7 @@
 .draft-section { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-divider); }
 .draft-section:last-child { border-bottom: 0; }
 .draft-section h4 { font-size: 12.5px; margin: 0; }
-.draft-body { font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; }
+.draft-body { font-size: 11.5px; line-height: 1.55; }
 .draft-cites { font-size: 10px; color: var(--color-neutral-600); }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
@@ -427,3 +428,33 @@
 .approve-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: 4px; }
 .approve-note { font-size: 11px; }
 .closed-note { margin-top: var(--space-4); font-size: 12.5px; color: var(--color-accent-2-900); }
+
+/* ── rendered markdown ───────────────────────────────────────────────────── */
+
+.md { font-size: 12.5px; line-height: 1.6; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 0.7em; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 12.5px; margin: 1em 0 0.35em; font-weight: 700; }
+.md ul, .md ol { margin: 0 0 0.7em; padding-left: 1.2em; }
+.md li { margin-bottom: 0.25em; }
+.md code { font-size: 11.5px; background: var(--color-neutral-200); padding: 1px 5px; border-radius: 5px; }
+.md pre { overflow-x: auto; background: var(--color-neutral-200); padding: 10px 12px; border-radius: 12px; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { margin: 0 0 0.7em; padding-left: 10px; border-left: 2px solid var(--color-divider); color: var(--color-neutral-700); }
+.md hr { border: 0; border-top: 1px solid var(--color-divider); margin: 1em 0; }
+.md a { color: var(--color-accent-700); }
+
+/* Tables were the whole reason this pane was unreadable. They scroll inside themselves so a wide
+ * one never pushes the page sideways. */
+.md table { border-collapse: collapse; width: 100%; font-size: 11.5px; margin: 0 0 0.7em; }
+.md thead th {
+  text-align: left; font-weight: 600; padding: 5px 8px;
+  border-bottom: 1px solid var(--color-neutral-400); white-space: nowrap;
+}
+.md tbody td { padding: 5px 8px; border-bottom: 1px solid var(--color-divider); vertical-align: top; }
+.md tbody tr:last-child td { border-bottom: 0; }
+
+.turn-body.md, .draft-body.md { white-space: normal; }
+.md-scroll { overflow-x: auto; margin: 0 0 0.7em; }
+.md-scroll table { margin: 0; }

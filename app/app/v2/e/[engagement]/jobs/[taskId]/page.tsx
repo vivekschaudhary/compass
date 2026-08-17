@@ -12,6 +12,7 @@ import { conversation, openQuestions, draftOf } from "@/app/lib/data/job";
 import { storedStatusFor, describeCriterion } from "@/app/lib/data/gates";
 import { taskState } from "@/app/lib/data/job";
 import { Tag, SectionLabel } from "../../../../_ui/primitives";
+import { Markdown } from "../../../../_ui/Markdown";
 import { Gate } from "../Gate";
 import { AnswerForm } from "./AnswerForm";
 import { RunButton } from "./RunButton";
@@ -94,7 +95,7 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
                 {t.authorKind === "agent" ? `${t.authorRoleCode ?? "agent"} agent` : t.authorUserId ?? "you"}
                 <span className="turn-when">{new Date(t.createdAt).toLocaleTimeString()}</span>
               </div>
-              <div className="turn-body">{t.body}</div>
+              <Markdown className="turn-body">{t.body}</Markdown>
             </article>
           ))}
 
@@ -116,6 +117,7 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
             <RunButton
               engagement={engagement} role={roleCode} taskId={taskId}
               hasOpenQuestions={questions.length > 0}
+              secondary={state === "hitl"}
             />
           )}
         </section>
@@ -138,7 +140,7 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
               {draft.sections.map((s) => (
                 <div key={s.id} className="draft-section">
                   <h4>{s.heading}</h4>
-                  <div className="draft-body">{s.body}</div>
+                  <Markdown className="draft-body">{s.body}</Markdown>
                   {/* Provenance under the claim it supports, not in a footnote nobody opens. */}
                   {s.cites.length > 0 && (
                     <div className="draft-cites">
