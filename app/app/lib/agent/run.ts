@@ -14,6 +14,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "../data/actor";
 import { buildContext, systemPrompt, inputPrompt, type AgentContext } from "./context";
+import { conversation, openQuestions } from "../data/job";
 
 const MODEL = "claude-opus-5";
 
@@ -82,6 +83,47 @@ export type AgentOutcome =
   | { kind: "refused"; reason: string }
   | { kind: "error"; message: string };
 
+/**
+ * Replay the conversation so far.
+ *
+ * Without this the agent rebuilds context from the pinned documents on every run and asks the same
+ * questions again — the answers are recorded, and it never sees them. The transcript is
+ * reconstructed rather than replayed verbatim: agent turns come back as assistant messages, human
+ * turns as user messages. Tool calls are deliberately NOT replayed, because a `tool_use` block
+ * requires its matching `tool_result` and there is no result to give — the human's answer IS the
+ * result, and it is already in the next turn.
+ *
+ * Any questions still open are appended as a final user message, so "you asked twelve things and
+ * got eight answers" is something the model is told rather than something it has to infer.
+ */
+async function priorMessages(taskId: string): Promise<Anthropic.MessageParam[]> {
+  const turns = await conversation(taskId);
+  const messages: Anthropic.MessageParam[] = turns.map((t) => ({
+    role: t.authorKind === "agent" ? ("assistant" as const) : ("user" as const),
+    content: t.body,
+  }));
+
+  const still = await openQuestions(taskId);
+  if (still.length) {
+    messages.push({
+      role: "user",
+      content:
+        `These questions of yours are still unanswered:\n` +
+        still.map((q) => `- ${q.prompt.split("\n")[0]}`).join("\n") +
+        `\n\nWork with what you have. If you can produce the deliverable and name what is still ` +
+        `unresolved inside it, do that rather than asking again. Only ask again for something that ` +
+        `genuinely blocks you.`,
+    });
+  }
+
+  // The model must end on a user turn to reply to. When the last thing recorded was the agent's own
+  // message and nothing is outstanding, say so plainly.
+  if (messages.length && messages[messages.length - 1].role === "assistant") {
+    messages.push({ role: "user", content: "Continue from here." });
+  }
+  return messages;
+}
+
 async function nextOrd(taskId: string): Promise<number> {
   const sb = supabaseAdmin();
   if (!sb) return 0;
@@ -131,7 +173,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       output_config: { effort: "high" },
       system: systemPrompt(ctx),
       tools: TOOLS,
-      messages: [{ role: "user", content: inputPrompt(ctx) }],
+      messages: [{ role: "user", content: inputPrompt(ctx) }, ...await priorMessages(taskId)],
     });
     message = await stream.finalMessage();
   } catch (e) {
