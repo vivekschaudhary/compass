@@ -15,6 +15,7 @@ import { supabaseAdmin } from "../supabase";
 import type { Actor } from "../data/actor";
 import { buildContext, systemPrompt, inputPrompt, revisionPrompt, type AgentContext } from "./context";
 import { conversation, openQuestions } from "../data/job";
+import { publishToDocs } from "../data/publish";
 
 const MODEL = "claude-opus-5";
 
@@ -112,7 +113,7 @@ function safeParse(s: string): unknown {
 
 export type AgentOutcome =
   | { kind: "asked"; preamble: string; questions: { prompt: string; type: string; why: string }[] }
-  | { kind: "drafted"; summary: string; sections: number; path: string | null }
+  | { kind: "drafted"; summary: string; sections: number; path: string | null; publishedUrl?: string | null }
   | { kind: "refused"; reason: string }
   | { kind: "error"; message: string };
 
@@ -276,8 +277,14 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     await recordTurn(taskId, [text, input.summary].filter(Boolean).join("\n\n"), ctx);
 
     if (!sections.length) {
+      // Same rule as a filing failure, and I broke it here first: never discard model output
+      // because the step after it failed. The raw tool input goes into the conversation verbatim,
+      // so a run that took minutes is recoverable by hand rather than gone.
+      await recordTurn(taskId,
+        "**The draft could not be read as sections, so it is preserved raw below.**\n\n" +
+        "```json\n" + JSON.stringify(input.sections ?? call.input, null, 2).slice(0, 40000) + "\n```", ctx);
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
-      return { kind: "error", message: "The agent drafted, but returned no readable sections. Its output is in the conversation." };
+      return { kind: "error", message: "The agent drafted, but the sections could not be read. The raw output is in the conversation." };
     }
 
     if (!ctx.produces) {
@@ -313,6 +320,16 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
 
     await recordCitations(versionId as string, sections, ctx);
 
+    // Publish to the engagement's doc store. Filing already succeeded, so a provider failure does
+    // not lose the draft — it is recorded on the version and the task carries on. Per
+    // `[docs-primary]` (#154), the page is the record for everyone who does not open Compass.
+    const published = await publishToDocs(actor.engagementId, versionId as string);
+    if (!published.ok) {
+      await recordTurn(taskId,
+        `Filed in Compass, but publishing to the engagement's doc store failed: ${published.error}\n\n` +
+        `The document is complete and versioned here; it is not yet visible in the doc store.`, ctx);
+    }
+
     // Drafting is a decision to proceed without the outstanding answers. Those questions stop
     // blocking — but they were never answered, so they are superseded, not resolved. Leaving them
     // open is what made the queue look like the agent was asking the same things forever.
@@ -325,7 +342,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
     // would make the agent both maker and checker.
     await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
-    return { kind: "drafted", summary: input.summary ?? "", sections: sections.length, path: ctx.produces };
+    return { kind: "drafted", summary: input.summary ?? "", sections: sections.length, path: ctx.produces, publishedUrl: published.ok ? published.url : null };
   }
 
   await sb.from("work_task").update({ executor: null }).eq("id", taskId);
