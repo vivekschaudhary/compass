@@ -490,3 +490,24 @@
 .done-list li { font-size: 11.5px; line-height: 1.4; padding-left: 11px; position: relative; }
 .done-list li::before { content: "·"; position: absolute; left: 2px; color: var(--color-neutral-500); }
 .pane-empty { font-size: 12.5px; margin: 0; }
+
+/* ── starting an engagement ──────────────────────────────────────────────── */
+
+.onboard { display: flex; flex-direction: column; gap: var(--space-4); max-width: 900px; }
+.onboard-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); }
+.onboard-publish { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.onboard-publish input { accent-color: var(--color-accent-2-700); }
+.onboard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.onboard-note { font-size: 11.5px; }
+
+.onboard-done {
+  display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start;
+  max-width: 640px; padding: var(--space-5);
+  background: var(--color-accent-2-100); border-radius: 22px;
+}
+.onboard-done h3 { margin: 0; font-size: 15px; }
+.onboard-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.onboard-facts li { font-size: 12.5px; padding-left: 14px; position: relative; }
+.onboard-facts li::before { content: "·"; position: absolute; left: 3px; color: var(--color-neutral-600); }
+.onboard-problems { font-size: 12px; color: var(--color-accent-900); }
+.onboard-problems ul { margin: 4px 0 0; padding-left: 18px; }
