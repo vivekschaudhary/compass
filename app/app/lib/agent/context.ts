@@ -37,6 +37,13 @@ export type AgentContext = {
   produces: string | null;
   inputs: PinnedInput[];
   doneCriteria: string[];
+  /** What workflows this engagement can actually run. Without it the agent guesses. */
+  inventory: WorkflowSummary[];
+};
+
+export type WorkflowSummary = {
+  code: string; label: string; workstream: string | null;
+  ownerRole: string | null; stepCount: number;
 };
 
 /**
@@ -119,6 +126,46 @@ async function loadInputs(taskId: string, engagementId: string): Promise<PinnedI
   return out;
 }
 
+/**
+ * The workflows this engagement can run.
+ *
+ * The agent was writing backlog rows naming workflows it had inferred from whatever its own role
+ * file happened to mention in prose — five, all planning ones — and then correctly reporting that
+ * those five did not cover build or deploy. Its reasoning was sound and its premise was invented,
+ * and it flagged that as its first open question. Nothing in its context listed what actually
+ * exists, so this does.
+ *
+ * A workflow with zero steps is included and says so: the framework has commands whose dispatch
+ * graph was never written, and "this exists but its steps are unspecified" is a fact worth having
+ * rather than an absence to infer from.
+ */
+async function loadInventory(orgId: string): Promise<WorkflowSummary[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { data: wfs } = await sb.from("workflow")
+    .select("id, code, label, workstream_code, owner_role_code, enabled")
+    .eq("org_id", orgId).eq("enabled", true).order("workstream_code").order("code");
+  if (!wfs?.length) return [];
+
+  const { data: versions } = await sb.from("workflow_version")
+    .select("id, workflow_id").in("workflow_id", wfs.map((w) => w.id)).eq("status", "published");
+  const { data: steps } = versions?.length
+    ? await sb.from("workflow_step").select("workflow_version_id").in("workflow_version_id", versions.map((v) => v.id))
+    : { data: [] };
+
+  const stepsByVersion = new Map<string, number>();
+  for (const st of steps ?? []) stepsByVersion.set(st.workflow_version_id, (stepsByVersion.get(st.workflow_version_id) ?? 0) + 1);
+  const versionOfWorkflow = new Map((versions ?? []).map((v) => [v.workflow_id, v.id]));
+
+  return wfs.map((w) => ({
+    code: w.code, label: w.label,
+    workstream: w.workstream_code ?? null,
+    ownerRole: w.owner_role_code ?? null,
+    stepCount: stepsByVersion.get(versionOfWorkflow.get(w.id) ?? "") ?? 0,
+  }));
+}
+
 /** Everything the agent needs, assembled from the record rather than from the caller. */
 export async function buildContext(actor: Actor, taskId: string): Promise<AgentContext | null> {
   const sb = supabaseAdmin();
@@ -170,6 +217,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     produces,
     inputs: await loadInputs(taskId, actor.engagementId),
     doneCriteria,
+    inventory: await loadInventory(actor.orgId),
   };
 }
 
@@ -186,6 +234,29 @@ export function systemPrompt(ctx: AgentContext): string {
   parts.push(ctx.agentFile
     ? ctx.agentFile
     : `You are the ${ctx.roleCode} on a delivery engagement. No agent definition file was found for this role, so you are working without its usual discipline — say so in your first message rather than improvising one.`);
+
+  if (ctx.inventory.length) {
+    const unspecified = ctx.inventory.filter((w) => w.stepCount === 0);
+    parts.push(`
+# The workflows this engagement can run
+
+This is the complete list. Do not name a workflow that is not on it, and do not assume a workflow
+exists because the work obviously needs doing — if a piece of scope has no workflow here, that is
+a real gap and naming it is more useful than inventing a row to cover it.
+
+${ctx.inventory.map((w) =>
+  `- \`${w.code}\` — ${w.label}${w.workstream ? ` · ${w.workstream}` : ""}${w.ownerRole ? ` · owned by ${w.ownerRole}` : ""}` +
+  (w.stepCount === 0 ? " · STEPS UNSPECIFIED" : ` · ${w.stepCount} steps`)).join("\n")}
+${unspecified.length ? `
+${unspecified.length} of these have no steps specified — the command exists but its dispatch graph was never
+written. You may place work against them; you cannot say what they do step by step.` : ""}`.trim());
+  } else {
+    parts.push(`
+# The workflows this engagement can run
+
+No workflow inventory was found. Say so rather than working from what you assume Compass provides —
+any workflow name you produce would be a guess.`.trim());
+  }
 
   parts.push(`
 # This task

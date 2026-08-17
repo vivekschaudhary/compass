@@ -238,7 +238,9 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       p_path: ctx.produces,
       p_title: ctx.taskTitle,
       p_sections: input.sections.map((s) => ({ heading: s.heading, body: s.body })),
-      p_version: "1.0",
+      // null = the routine derives the next version. Picking a number here is what made a
+      // redraft collide on (document_id, version) and lose a two-minute run at the last step.
+      p_version: null,
       p_actor: actor.holder ?? actor.roleCode,
       p_actor_role: actor.roleCode,
       p_owner_role: ctx.roleCode,

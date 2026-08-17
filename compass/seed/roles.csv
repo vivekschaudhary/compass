@@ -11,3 +11,8 @@ gtm,GTM,Launch and comms,practitioner,mine,GTM,gtm,"claude",""
 sre,SRE,Change and runbooks,practitioner,mine,SRE,sre,"claude",""
 org-admin,Org Admin,Compass administrator,platform,everyone,,,"",edit-org-defaults
 engagement-admin,Engagement Admin,Engagement configuration,platform,everyone,,,"",edit-engagement-specs
+reviewer,Reviewer,Reviewer,practitioner,everyone,Engineering,reviewer,,
+tech-writer,Tech Writer,Technical Writer,practitioner,mine,Product,tech-writer,,
+enterprise-architect,Enterprise Architect,Enterprise Architect,oversight,everyone,Engineering,enterprise-architect,,
+support,Support,Support Engineer,practitioner,mine,Support,support,,
+scanner,Scanner,Security Scanner,platform,everyone,Security,scanner,,
