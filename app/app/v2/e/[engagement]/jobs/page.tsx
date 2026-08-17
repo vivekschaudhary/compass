@@ -91,7 +91,9 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
               meta={t.origin === "adhoc" ? "ad-hoc" : undefined}
               subtitle={t.subtitle || subtitleFor(t.state, t.reads.length)}
               reads={t.reads}
-              action={<StartButton taskId={t.id} engagement={engagement} role={actor.roleCode} state={t.state} executor={t.executor} />}
+              action={<StartButton taskId={t.id} engagement={engagement} role={actor.roleCode} state={t.state} executor={t.executor}
+                href={`/v2/e/${engagement}/jobs/${t.id}?role=${actor.roleCode}`}
+                openQuestions={t.openQuestions} />}
               agent={t.agentLabel ?? undefined}
               footer={
                 <>

@@ -31,6 +31,8 @@ export type TaskCard = {
   workflowCode: string | null;
   /** Which engine picked it up. NULL means nothing has — started is not the same as running. */
   executor: string | null;
+  /** How many of the agent's questions are still blocking this task. */
+  openQuestions: number;
   startedAt: string | null;
   startedBy: string | null;
 };
@@ -70,6 +72,14 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
 
   const agentByRole = await agentLabels(actor);
 
+  // One query for the whole list rather than one per card.
+  const ids = ((data ?? []) as unknown as Row[]).map((r) => r.id);
+  const { data: qs } = ids.length
+    ? await sb.from("question").select("task_id").in("task_id", ids).eq("state", "open")
+    : { data: [] };
+  const openByTask = new Map<string, number>();
+  for (const q of qs ?? []) openByTask.set(q.task_id, (openByTask.get(q.task_id) ?? 0) + 1);
+
   return ((data ?? []) as unknown as Row[]).map((r) => ({
     id: r.id,
     title: r.title,
@@ -84,6 +94,7 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
     rationale: r.rationale,
     workflowCode: r.workflow_run?.workflow?.code ?? null,
     executor: r.executor,
+    openQuestions: openByTask.get(r.id) ?? 0,
     startedAt: r.started_at,
     startedBy: r.started_by,
   }));

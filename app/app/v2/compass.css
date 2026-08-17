@@ -407,5 +407,9 @@
 .draft-cites { font-size: 10px; color: var(--color-neutral-600); }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-.job-card-link { color: inherit; text-decoration: none; }
-.job-card-link:hover { color: var(--color-accent-700); text-decoration: underline; text-underline-offset: 3px; }
+/* A link has to look like one. Styling it as plain text meant a card could say "waiting on you"
+ * and give the reader nothing they could tell was clickable. */
+.job-card-link { color: inherit; text-decoration: underline; text-decoration-color: var(--color-neutral-400); text-underline-offset: 3px; }
+.job-card-link:hover { color: var(--color-accent-700); text-decoration-color: currentColor; }
+
+.task-state-row { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }

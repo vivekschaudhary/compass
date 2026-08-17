@@ -8,16 +8,33 @@ import { Button } from "../../../_ui/primitives";
 import { startTaskAction, recheckAction } from "./actions";
 
 export function StartButton({
-  taskId, engagement, role, state, executor,
+  taskId, engagement, role, state, executor, href, openQuestions = 0,
 }: {
   taskId: string; engagement: string; role: string; state: string;
   /** Which engine has the task. NULL means nothing has picked it up. */
   executor?: string | null;
+  /** Where the job lives. A card that says "waiting on you" must give you somewhere to go. */
+  href?: string;
+  openQuestions?: number;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   if (state !== "idle") {
+    // A state alone is a dead end. When there is something for a person to do, the card carries
+    // the way to do it — the label told you the task was waiting and then offered nothing to press.
+    if (href && (state === "awaiting" || state === "hitl" || state === "running")) {
+      return (
+        <div className="task-state-row">
+          <a href={href} className="btn btn-primary">
+            {openQuestions > 0
+              ? `Answer ${openQuestions} question${openQuestions === 1 ? "" : "s"}`
+              : state === "hitl" ? "Review the draft" : "Open the job"}
+          </a>
+          <span className="task-state text-muted">{labelFor(state, executor)}</span>
+        </div>
+      );
+    }
     return <span className="task-state text-muted">{labelFor(state, executor)}</span>;
   }
 
