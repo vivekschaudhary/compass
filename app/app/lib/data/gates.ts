@@ -11,6 +11,8 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
+import { probeDocs, type DocEng } from "../docstore";
+import { resolveJira, projectStatuses } from "../jira";
 import type { Actor } from "./actor";
 export { describeCriterion } from "@/app/v2/_ui/criterion";
 
@@ -61,30 +63,62 @@ async function evaluateDocument(actor: Actor, c: CriterionRow): Promise<Verdict>
     : { state: "unsatisfied", source: "compass", detail: `${c.subjectRef} is ${v?.status ?? "unknown"}, not ${c.value}.` };
 }
 
+/**
+ * Is the connector actually reachable?
+ *
+ * This used to read the engagement's own settings back and call a non-empty field "wired". That is
+ * a check of what somebody typed, not of what works — and it passed for weeks on an engagement
+ * whose documents were being published nowhere, because nothing had ever tried.
+ *
+ * Now it calls the API. `probeDocs` asks the provider for the space; `projectStatuses` asks Jira
+ * for the project. Both fail with a reason, and the reason is what lands on the card — "space
+ * Test not found" sends someone somewhere useful in a way that "not configured" never did.
+ *
+ * The cost is that a gate check now makes a network call and can be slow or flaky. That is the
+ * correct trade: a fast check that cannot fail is not a check.
+ */
 async function evaluateConnector(actor: Actor, c: CriterionRow): Promise<Verdict> {
   const sb = supabaseAdmin();
   if (!sb) return { state: "unmeasurable", why: "no database" };
 
   const { data: e } = await sb.from("engagement")
-    .select("docs_provider, confluence_space, confluence_root_page_id, teams_site, jira_project, jira_board_id")
+    .select("id, name, docs_provider, confluence_space, confluence_root_page_id, atlassian_base_url, atlassian_email, atlassian_api_token, teams_site, teams_root_item_id, graph_tenant_id, graph_client_id, graph_client_secret, jira_project, jira_board_id")
     .eq("id", actor.engagementId).maybeSingle();
   if (!e) return { state: "unmeasurable", why: "engagement not found" };
 
-  // "Wired" means configured here. It does NOT mean the API answered — that is a stronger claim
-  // and it needs a live call. When intake's readiness check moves over, this becomes that.
   if (c.subjectRef === "docs") {
-    const wired = e.docs_provider === "teams"
-      ? Boolean(e.teams_site)
-      : Boolean(e.confluence_space && e.confluence_root_page_id);
-    return wired
-      ? { state: "satisfied", source: "compass", detail: `Documentation is configured (${e.docs_provider}).` }
-      : { state: "unsatisfied", source: "compass", detail: `${e.docs_provider ?? "Documentation"} is chosen but not configured — no space or root page.` };
+    let problem: string | null;
+    try {
+      problem = await probeDocs(e as DocEng);
+    } catch (err) {
+      // A network failure is not the same as a misconfigured space, and saying "not configured"
+      // when the truth is "the office wifi dropped" sends someone to change settings that are fine.
+      return { state: "unmeasurable", why: `could not reach ${e.docs_provider ?? "the doc store"}: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    return problem === null
+      ? { state: "satisfied", source: e.docs_provider ?? "docs", detail: `${e.docs_provider === "teams" ? "Teams site" : `Confluence space ${e.confluence_space}`} answered.` }
+      : { state: "unsatisfied", source: e.docs_provider ?? "docs", detail: problem };
   }
+
   if (c.subjectRef === "tickets") {
-    return e.jira_project
-      ? { state: "satisfied", source: "compass", detail: `Tracker is configured (${e.jira_project}).` }
-      : { state: "unsatisfied", source: "compass", detail: "No tracker project is configured for this engagement." };
+    if (!e.jira_project) {
+      return { state: "unsatisfied", source: "compass", detail: "No tracker project is configured for this engagement." };
+    }
+    const creds = resolveJira(e as Parameters<typeof resolveJira>[0]);
+    if (!creds) {
+      return { state: "unsatisfied", source: "compass", detail: "No Jira credentials (base url / email / token)." };
+    }
+    let statuses: string[] | null;
+    try {
+      statuses = await projectStatuses(creds);
+    } catch (err) {
+      return { state: "unmeasurable", why: `could not reach Jira: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    return statuses
+      ? { state: "satisfied", source: "jira", detail: `Project ${e.jira_project} answered with ${statuses.length} statuses.` }
+      : { state: "unsatisfied", source: "jira", detail: `Jira did not return project ${e.jira_project} — check the key and the credentials' access to it.` };
   }
+
   return { state: "unmeasurable", why: `no evaluator for connector '${c.subjectRef}'` };
 }
 
@@ -366,4 +400,20 @@ export async function reject(
   });
 
   return { ok: true };
+}
+
+/**
+ * Check the engagement's connectors right now, without a task.
+ *
+ * The same evaluators the gate uses, callable on their own — for a setup screen, and for answering
+ * "can Compass actually reach Confluence" without having to find a task whose gate happens to ask.
+ */
+export async function checkConnectors(actor: Actor): Promise<{ connector: string; verdict: Verdict }[]> {
+  const shape = (ref: string): CriterionRow => ({
+    id: "", kind: "ready", stepOrd: null, statement: "",
+    subjectKind: "connector", subjectRef: ref, operator: "is", value: "wired",
+  });
+  return Promise.all(
+    ["docs", "tickets"].map(async (connector) => ({ connector, verdict: await evaluate(actor, shape(connector)) })),
+  );
 }
