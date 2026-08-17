@@ -5,7 +5,7 @@
 // nothing alike — and conflating them is how a board starts lying.
 
 import type { StoredStatus } from "@/app/lib/data/gates";
-import { describeCriterion } from "@/app/lib/data/gates";
+import { describeCriterion } from "@/app/v2/_ui/criterion";
 
 function mark(s: StoredStatus) {
   if (s.satisfied === true) return { glyph: "✓", cls: "gate-ok", label: "met" };

@@ -12,6 +12,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
+export { describeCriterion } from "@/app/v2/_ui/criterion";
 
 export type CriterionRow = {
   id: string;
@@ -265,12 +266,6 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
   return out;
 }
 
-/** How a criterion reads on a card when it has no statement of its own. */
-export function describeCriterion(c: CriterionRow): string {
-  if (c.statement) return c.statement;
-  if (c.subjectKind) return `${c.subjectKind} ${c.subjectRef} ${c.operator} ${c.value}`;
-  return "unnamed criterion";
-}
 
 /* ── approving: a person as the evaluator ────────────────────────────────── */
 

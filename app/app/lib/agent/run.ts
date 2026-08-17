@@ -258,12 +258,14 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     const input = call.input as { summary?: string; sections?: unknown };
     const sections = asSections(input.sections);
 
-    // The draft goes into the conversation BEFORE it is filed. Filing can fail — a unique
-    // constraint, a dropped connection — and when it did, minutes of model work vanished because
-    // the only copy was a local variable. The turn is the durable record; the document is a
-    // projection of it.
-    const drafted = sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n");
-    await recordTurn(taskId, [text, input.summary, drafted].filter(Boolean).join("\n\n"), ctx);
+    // The conversation gets the SUMMARY, not the document. Writing the whole draft into the turn
+    // made it render twice — once in the chat and again in the document pane — and turned a
+    // readable exchange into nine pages of duplicated text. The chat is where you talk about the
+    // work; the document pane is where the work is.
+    //
+    // Durability is still handled, just not by duplication: if filing fails, the draft is written
+    // as a recovery turn below, which is the only case where the conversation is the last copy.
+    await recordTurn(taskId, [text, input.summary].filter(Boolean).join("\n\n"), ctx);
 
     if (!sections.length) {
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
@@ -292,6 +294,11 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       p_task_id: taskId,
     });
     if (error) {
+      // Filing failed, so the conversation IS the last copy. Write it out in full — this is the
+      // one case where the duplication is worth it, because the alternative is losing the run.
+      await recordTurn(taskId,
+        `**Filing failed — the draft is preserved here.** ${error.message}\n\n` +
+        sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n"), ctx);
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
       return { kind: "error", message: `filing the draft: ${error.message}` };
     }
