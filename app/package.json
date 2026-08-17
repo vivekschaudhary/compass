@@ -12,7 +12,11 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "lockfile:rebuild": "rm -rf node_modules package-lock.json && npm install --no-audit --no-fund"
+    "lockfile:rebuild": "rm -rf node_modules package-lock.json && npm install --no-audit --no-fund",
+    "db:status": "supabase migration list --linked",
+    "db:push": "supabase db push --linked",
+    "db:new": "supabase migration new",
+    "db:adopt": "node scripts/adopt-migrations.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
