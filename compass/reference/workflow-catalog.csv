@@ -20,7 +20,9 @@ create-product-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,
 create-product-brief,2,hitl,human,,approve,,HITL gate (human) — research review
 create-product-brief,3,agent,pm,Product,draft-product-brief,,pm.draft-product-brief (PM agent owns)
 create-product-brief,4,hitl,human,,approve,,HITL gate (human) — brief approval
-create-product-brief,5,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+create-product-brief,5,agent,designer,Design,spec-design-foundation,,designer.spec-design-foundation (Designer agent owns)
+create-product-brief,6,hitl,human,,approve,,HITL gate (human) — design foundation approval
+create-product-brief,7,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
 create-story,1,agent,pm,Product,decompose-bet-to-story,,pm.decompose-bet-to-story (PM agent owns)
 create-story,2,agent,designer,Design,draft-design-spec,,designer.draft-design-spec (Designer agent owns) — per UI slice (into the design story)
 create-story,3,agent,ux-writer,Design,write-copy,,ux-writer.write-copy (UX Writer agent owns) — per UI slice (into the copy story)
@@ -51,7 +53,9 @@ setup-foundation-architecture,2,hitl,human,,approve,,HITL gate — research appr
 setup-foundation-architecture,3,agent,enterprise-architect,Engineering,derive-architecture,,enterprise-architect.derive-architecture (Enterprise Architect agent owns)
 setup-foundation-architecture,4,hitl,human,,approve,,HITL gate — architecture approved (human)
 setup-foundation-architecture,5,agent,enterprise-architect,Engineering,scaffold-foundation,,enterprise-architect.scaffold-foundation (Enterprise Architect agent owns)
-setup-foundation-architecture,6,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+setup-foundation-architecture,6,agent,designer,Design,build-design-library,,designer.build-design-library (Designer agent owns)
+setup-foundation-architecture,7,hitl,human,,approve,,HITL gate — design library approved (human)
+setup-foundation-architecture,8,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
 status,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
 tech-design,1,agent,architect,Engineering,design-story-tech,,architect.design-story-tech (Architect agent owns)
 triage,1,agent,support,Support,classify-intake,,support.classify-intake (Support agent owns)
