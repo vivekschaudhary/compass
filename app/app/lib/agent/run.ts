@@ -204,7 +204,11 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
   try {
     const stream = client.messages.stream({
       model: MODEL,
-      max_tokens: 32000,
+      // 64k, not 32k. A run came back with a complete 1,760-character summary and an EMPTY
+      // sections array: adaptive thinking at high effort plus a long summary left no budget for
+      // the document itself. max_tokens caps thinking AND output together, so a document-producing
+      // task needs room for both.
+      max_tokens: 64000,
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system: systemPrompt(ctx),
@@ -232,6 +236,10 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     await sb.from("work_task").update({ executor: null }).eq("id", taskId);
     return { kind: "refused", reason };
   }
+
+  // Running out of room is not the same as having nothing to say, and it is the difference
+  // between "the agent failed" and "give it more budget". Checked before anything reads content.
+  const truncated = message.stop_reason === "max_tokens";
 
   const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
   const call = message.content.find((b) => b.type === "tool_use");
@@ -277,14 +285,22 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     await recordTurn(taskId, [text, input.summary].filter(Boolean).join("\n\n"), ctx);
 
     if (!sections.length) {
-      // Same rule as a filing failure, and I broke it here first: never discard model output
-      // because the step after it failed. The raw tool input goes into the conversation verbatim,
-      // so a run that took minutes is recoverable by hand rather than gone.
+      // An EMPTY array is not unreadable output — it parsed perfectly and contained nothing. Saying
+      // "could not be read" sends someone to debug a parser when the actual cause is usually that
+      // the model ran out of room after writing its summary. Name which one it was.
+      const why = truncated
+        ? "It hit the token limit after writing its summary, so the document itself never came. Run it again — the budget is larger now."
+        : Array.isArray(input.sections)
+          ? "It returned an empty list of sections, having written a summary. Running again usually resolves it."
+          : "Its sections came back in a shape that could not be read; the raw output is below.";
+
       await recordTurn(taskId,
-        "**The draft could not be read as sections, so it is preserved raw below.**\n\n" +
-        "```json\n" + JSON.stringify(input.sections ?? call.input, null, 2).slice(0, 40000) + "\n```", ctx);
+        `**No document was produced.** ${why}` +
+        (Array.isArray(input.sections) && !input.sections.length
+          ? ""
+          : "\n\n```json\n" + JSON.stringify(input.sections ?? call.input, null, 2).slice(0, 40000) + "\n```"), ctx);
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
-      return { kind: "error", message: "The agent drafted, but the sections could not be read. The raw output is in the conversation." };
+      return { kind: "error", message: `The agent wrote a summary but produced no document. ${why}` };
     }
 
     if (!ctx.produces) {
