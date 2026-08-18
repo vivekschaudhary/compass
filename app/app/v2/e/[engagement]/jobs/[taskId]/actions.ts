@@ -4,7 +4,7 @@
 
 import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
-import { recordAnswers } from "@/app/lib/data/job";
+import { recordAnswers, addNote } from "@/app/lib/data/job";
 import { approve, reject } from "@/app/lib/data/gates";
 
 /** Answer the agent's questions. The write itself lives in lib/data, which owns the scope check. */
@@ -45,6 +45,19 @@ export async function rejectAction(
   const result = await reject(actor, taskId, rejections);
   revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
   revalidatePath(`/v2/e/${engagement}/jobs`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Add a message to the conversation. Never changes the task's state. */
+export async function noteAction(
+  engagement: string, role: string, taskId: string, body: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await addNote(actor, taskId, body);
+  revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }

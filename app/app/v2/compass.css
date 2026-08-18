@@ -893,3 +893,10 @@ textarea.verdict-reason {
 }
 .approve-checked-mark { color: var(--color-text); text-align: center; }
 .approve-checked-by { display: block; font-size: 11px; color: var(--color-neutral-600); }
+
+/* ── adding to the conversation ──────────────────────────────────────────── */
+
+.note { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-4); }
+.note-input { font-size: 13.5px; line-height: 1.55; padding: 10px 12px; }
+.note-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.note-hint { font-size: 11.5px; }

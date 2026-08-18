@@ -11,6 +11,7 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
+import { emit } from "./events";
 import { writeProviderDoc, type DocEng } from "../docstore";
 
 export type PublishResult =
@@ -88,6 +89,15 @@ export async function publishToDocs(
 
   if (!result) {
     await sb.from("document_version").update({ publish_error: failure }).eq("id", versionId);
+
+    // A publish that failed is the case people most need to see. The success path already emits
+    // from a database trigger; the failure path emitted nothing at all, so a document that never
+    // reached Confluence looked identical in the log to one that was never written.
+    await emit({
+      engagementId, subjectType: "document", subjectId: versionId,
+      verb: "document.publish_failed", actorKind: "system",
+      payload: { error: failure },
+    });
     return { ok: false, error: failure ?? "unknown" };
   }
 

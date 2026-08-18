@@ -11,6 +11,7 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
+import { emit } from "./events";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolveJira, projectStatuses } from "../jira";
 import type { Actor } from "./actor";
@@ -306,13 +307,30 @@ export async function measureTask(actor: Actor, taskId: string): Promise<Criteri
   const criteria = await criteriaForTask(taskId);
   const out: CriterionStatus[] = [];
 
+  // What the log already believes. This runs on every page render, so emitting a line per criterion
+  // per look would bury the record in polling noise — an audit log records CHANGES, not checks that
+  // came back the same. Only a verdict that moved is news.
+  const { data: before } = await sb.from("measurement")
+    .select("criterion_id, satisfied").eq("task_id", taskId);
+  const previously = new Map((before ?? []).map((m) => [m.criterion_id as string, m.satisfied as boolean]));
+
   for (const c of criteria) {
     const verdict = await evaluate(actor, c, taskId);
     out.push({ ...c, verdict });
+    const was = previously.get(c.id);
 
     if (verdict.state === "unmeasurable") {
       // Clear any stale measurement rather than leaving yesterday's answer standing.
       await sb.from("measurement").delete().eq("task_id", taskId).eq("criterion_id", c.id);
+      // Losing the ability to check something IS news — "we could no longer verify this" must
+      // never read the same as "we never tried".
+      if (was !== undefined) {
+        await emit({
+          engagementId: actor.engagementId, subjectType: "criterion", subjectId: c.id,
+          verb: "criterion.unmeasurable", actorKind: "system", actorRoleCode: actor.roleCode,
+          payload: { taskId, statement: c.statement, kind: c.kind, why: verdict.why, previously: was },
+        });
+      }
       continue;
     }
     await sb.from("measurement").upsert({
@@ -321,6 +339,20 @@ export async function measureTask(actor: Actor, taskId: string): Promise<Criteri
       measured_at: new Date().toISOString(),
       source: verdict.source, detail: verdict.detail,
     }, { onConflict: "task_id,criterion_id" });
+
+    const now = verdict.state === "satisfied";
+    if (was !== now) {
+      await emit({
+        engagementId: actor.engagementId, subjectType: "criterion", subjectId: c.id,
+        verb: now ? "criterion.met" : "criterion.unmet",
+        actorKind: "system", actorRoleCode: actor.roleCode,
+        payload: {
+          taskId, statement: c.statement, kind: c.kind,
+          source: verdict.source, detail: verdict.detail,
+          previously: was ?? null,
+        },
+      });
+    }
   }
 
   return out;
@@ -460,6 +492,15 @@ export async function approve(
       measured_at: new Date().toISOString(),
       source: "human", detail: `Confirmed by ${who}.`,
     }, { onConflict: "task_id,criterion_id" });
+
+    // A person putting their name to something a machine could not check is the single most
+    // consequential act in the system. It was previously invisible in the log.
+    await emit({
+      engagementId: actor.engagementId, subjectType: "criterion", subjectId: c.id,
+      verb: "criterion.attested", actorKind: "human",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      payload: { taskId, statement: c.statement, satisfied: true },
+    });
   }
 
   const { error } = await sb.rpc("close_task", {
@@ -503,6 +544,13 @@ export async function reject(
       measured_at: new Date().toISOString(),
       source: "human", detail: `Rejected by ${who}: ${r.reason.trim()}`,
     }, { onConflict: "task_id,criterion_id" });
+
+    await emit({
+      engagementId: actor.engagementId, subjectType: "criterion", subjectId: r.criterionId,
+      verb: "criterion.rejected", actorKind: "human",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      payload: { taskId, reason: r.reason.trim() },
+    });
   }
 
   // Back to running: there is work to do, and it is the agent's. Leaving it at `hitl` would say

@@ -16,6 +16,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { readShippedDocTree } from "../doctree";
 import { publishToDocs } from "./publish";
+import { emit } from "./events";
 
 export type NewEngagement = {
   name: string;
@@ -194,6 +195,18 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     if (r.ok) published += 1;
     else problems.push(`publish the SOW: ${r.error}`);
   }
+
+  await emit({
+    engagementId: id, subjectType: "engagement", subjectId: id,
+    verb: "engagement.created", actorKind: "human",
+    actorRoleCode: "engagement-admin", actorUserId: dmName,
+    payload: {
+      name: input.name, client: input.client, deliveryManager: dmName,
+      docsProvider: input.docsProvider ?? "confluence", jiraProject: input.jiraProject ?? null,
+      sowSections: sections.length, documents: docRows.length,
+      openedWorkflow, problems,
+    },
+  });
 
   return {
     engagementId: id,

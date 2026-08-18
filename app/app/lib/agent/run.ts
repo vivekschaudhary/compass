@@ -16,6 +16,7 @@ import type { Actor } from "../data/actor";
 import { buildContext, systemPrompt, inputPrompt, revisionPrompt, type AgentContext } from "./context";
 import { conversation, openQuestions } from "../data/job";
 import { publishToDocs } from "../data/publish";
+import { emit } from "../data/events";
 
 const MODEL = "claude-opus-5";
 
@@ -183,6 +184,29 @@ async function recordTurn(taskId: string, body: string, ctx: AgentContext): Prom
  * would hit the HTTP timeout. We take the final message rather than handling events — the caller
  * wants the outcome, and progress is visible in the record either way.
  */
+/**
+ * Close the run in the log, whatever way it ended.
+ *
+ * Cost and stop reason belong on the record: "why did this task take four minutes and produce
+ * nothing" is a question the log should answer without anyone re-running it.
+ */
+async function finished(
+  engagementId: string, taskId: string, roleCode: string,
+  outcome: string, message: Anthropic.Message | null, extra: Record<string, unknown> = {},
+): Promise<void> {
+  await emit({
+    engagementId, subjectType: "task", subjectId: taskId,
+    verb: "agent.run.finished", actorKind: "agent", actorRoleCode: roleCode,
+    payload: {
+      outcome,
+      stopReason: message?.stop_reason ?? null,
+      inputTokens: message?.usage?.input_tokens ?? null,
+      outputTokens: message?.usage?.output_tokens ?? null,
+      ...extra,
+    },
+  });
+}
+
 export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutcome> {
   const sb = supabaseAdmin();
   if (!sb) return { kind: "error", message: "Supabase is not configured." };
@@ -196,6 +220,18 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
   // Mark who is executing BEFORE the call, so a run that dies mid-flight is visibly attributed
   // rather than looking like a task nobody ever picked up.
   await sb.from("work_task").update({ executor: "app" }).eq("id", taskId);
+
+  await emit({
+    engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,
+    verb: "agent.run.started", actorKind: "agent", actorRoleCode: ctx.roleCode,
+    payload: {
+      model: MODEL, agentFile: ctx.agentFile, produces: ctx.produces,
+      // What it was allowed to read, pinned. A run is only reproducible if this is on the record.
+      inputs: ctx.inputs.map((i) => ({ path: i.path, version: i.version })),
+      priorDraft: ctx.priorDraft?.version ?? null,
+      rejections: ctx.rejections.length,
+    },
+  });
 
   const revision = revisionPrompt(ctx);
 
@@ -224,6 +260,8 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     message = await stream.finalMessage();
   } catch (e) {
     await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "error", null,
+      { error: e instanceof Error ? e.message : String(e) });
     return { kind: "error", message: e instanceof Error ? e.message : String(e) };
   }
 
@@ -249,6 +287,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     // and leave the task running — the human can read it and decide.
     await recordTurn(taskId, text || "(no output)", ctx);
     await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "no-tool", message);
     return { kind: "error", message: "The agent replied without using a tool. Its message is in the conversation." };
   }
 
@@ -258,16 +297,26 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     const turnId = await recordTurn(taskId, body, ctx);
 
     if (input.questions.length) {
-      await sb.from("question").insert(input.questions.map((q) => ({
+      const { data: asked } = await sb.from("question").insert(input.questions.map((q) => ({
         task_id: taskId, turn_id: turnId,
         prompt: q.why ? `${q.prompt}\n\n(${q.why})` : q.prompt,
         type: ["text", "choice", "number"].includes(q.type) ? q.type : "text",
         options: q.options ?? null,
-      })));
+      }))).select("id, prompt");
+
+      for (const q of asked ?? []) {
+        await emit({
+          engagementId: ctx.engagementId, subjectType: "question", subjectId: q.id,
+          verb: "question.asked", actorKind: "agent", actorRoleCode: ctx.roleCode,
+          payload: { taskId, prompt: q.prompt },
+        });
+      }
     }
 
     // Waiting on a person is a state, not a pause. The queue should show it as such.
     await sb.from("work_task").update({ state: "awaiting", executor: null }).eq("id", taskId);
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "asked", message,
+      { questions: input.questions.length });
     return { kind: "asked", preamble: input.preamble, questions: input.questions };
   }
 
@@ -324,6 +373,13 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       p_owner_role: ctx.roleCode,
       p_task_id: taskId,
     });
+    if (!error && versionId) {
+      await emit({
+        engagementId: ctx.engagementId, subjectType: "document", subjectId: versionId as string,
+        verb: "document.filed", actorKind: "agent", actorRoleCode: ctx.roleCode,
+        payload: { taskId, path: ctx.produces, sections: sections.length },
+      });
+    }
     if (error) {
       // Filing failed, so the conversation IS the last copy. Write it out in full — this is the
       // one case where the duplication is worth it, because the alternative is losing the run.
@@ -331,6 +387,8 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
         `**Filing failed — the draft is preserved here.** ${error.message}\n\n` +
         sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n"), ctx);
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await finished(ctx.engagementId, taskId, ctx.roleCode, "error", message,
+        { error: `filing the draft: ${error.message}` });
       return { kind: "error", message: `filing the draft: ${error.message}` };
     }
 
@@ -349,15 +407,27 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     // Drafting is a decision to proceed without the outstanding answers. Those questions stop
     // blocking — but they were never answered, so they are superseded, not resolved. Leaving them
     // open is what made the queue look like the agent was asking the same things forever.
-    await sb.from("question").update({
+    const { data: dropped } = await sb.from("question").update({
       state: "superseded",
       superseded_at: new Date().toISOString(),
       superseded_reason: "The agent drafted without these answers and named what was unresolved in the document.",
-    }).eq("task_id", taskId).eq("state", "open");
+    }).eq("task_id", taskId).eq("state", "open").select("id, prompt");
+
+    // Superseded is not answered. A question worked around leaves a line saying so, or the record
+    // reads as though it was resolved.
+    for (const q of dropped ?? []) {
+      await emit({
+        engagementId: ctx.engagementId, subjectType: "question", subjectId: q.id,
+        verb: "question.superseded", actorKind: "agent", actorRoleCode: ctx.roleCode,
+        payload: { taskId, prompt: q.prompt, reason: "drafted without an answer" },
+      });
+    }
 
     // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
     // would make the agent both maker and checker.
     await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "drafted", message,
+      { path: ctx.produces, sections: sections.length, published: published.ok });
     return { kind: "drafted", summary: input.summary ?? "", sections: sections.length, path: ctx.produces, publishedUrl: published.ok ? published.url : null };
   }
 

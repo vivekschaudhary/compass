@@ -2,6 +2,7 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
+import { emit } from "./events";
 import type { Actor } from "./actor";
 
 export type Turn = {
@@ -107,13 +108,20 @@ export async function recordAnswers(
   if (!given.length) return { ok: false, error: "Nothing to record." };
 
   const who = actor.holder ?? actor.roleCode;
+  const promptOf = new Map((open ?? []).map((q) => [q.id, q.prompt as string]));
   for (const [id, answer] of given) {
     await sb.from("question").update({
       answer, answered_by: who, answered_at: new Date().toISOString(), state: "answered",
     }).eq("id", id).eq("task_id", taskId);
+
+    await emit({
+      engagementId: actor.engagementId, subjectType: "question", subjectId: id,
+      verb: "question.answered", actorKind: "human",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      payload: { taskId, prompt: promptOf.get(id) ?? null, answer },
+    });
   }
 
-  const promptOf = new Map((open ?? []).map((q) => [q.id, q.prompt as string]));
   const body = given
     .map(([id, a]) => `**${(promptOf.get(id) ?? "question").split("\n")[0]}**\n${a}`)
     .join("\n\n");
@@ -153,4 +161,47 @@ export async function taskState(actor: Actor, taskId: string): Promise<string | 
   const { data } = await sb.from("work_task")
     .select("state").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
   return data?.state ?? null;
+}
+
+/**
+ * Say something on a task, whatever state it is in.
+ *
+ * A closed task's conversation was readable and nothing more — the record went quiet the moment
+ * the work finished, which is precisely when people start asking about it. A note here does NOT
+ * reopen the task and does not touch its state: closing is a statement about the work, not about
+ * whether anyone may still discuss it.
+ *
+ * On a task that is still open the note lands in the conversation the agent replays on its next
+ * run, so it is also how you tell it something without answering a question it asked.
+ */
+export async function addNote(
+  actor: Actor, taskId: string, body: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const text = body.trim();
+  if (!text) return { ok: false, error: "Nothing to add." };
+
+  const { data: task } = await sb.from("work_task")
+    .select("id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  if (!task) return { ok: false, error: "That task is not in your engagement." };
+
+  const { data: last } = await sb.from("turn").select("ord").eq("task_id", taskId)
+    .order("ord", { ascending: false }).limit(1);
+
+  const { error } = await sb.from("turn").insert({
+    task_id: taskId, ord: (last?.[0]?.ord ?? -1) + 1,
+    author_kind: "human", author_role_code: actor.roleCode,
+    author_user_id: actor.holder ?? actor.roleCode, body: text,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await emit({
+    engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,
+    verb: "note.added", actorKind: "human",
+    actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? actor.roleCode,
+    payload: { body: text },
+  });
+  return { ok: true };
 }

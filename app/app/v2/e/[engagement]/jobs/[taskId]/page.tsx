@@ -21,6 +21,7 @@ import { ContextStrip } from "./ContextStrip";
 import { DraftPanel } from "./DraftPanel";
 import { AnswerForm } from "./AnswerForm";
 import { RunButton } from "./RunButton";
+import { NoteBox } from "./NoteBox";
 import { ApprovePanel } from "./ApprovePanel";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,9 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
           {state === "hitl" && draft && doneCriteria.length > 0 && (
             <ApprovePanel engagement={engagement} role={roleCode} taskId={taskId} criteria={doneCriteria} />
           )}
+
+          {/* Always. The record stays open to comment even when the work is finished. */}
+          <NoteBox engagement={engagement} role={roleCode} taskId={taskId} closed={state === "closed"} />
 
           {state === "closed" ? (
             <p className="closed-note">Closed. Approved and published.</p>
