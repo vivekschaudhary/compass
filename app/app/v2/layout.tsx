@@ -30,5 +30,18 @@ import "./organic.css";
 import "./compass.css";
 
 export default function V2Layout({ children }: { children: React.ReactNode }) {
-  return <div className="v2">{children}</div>;
+  return (
+    <div className="v2">
+      {/* The rail's collapsed state, applied before first paint. Read in an inline script rather
+          than in an effect because an effect runs after the browser has already drawn: the rail
+          would render open and snap shut on every navigation, which reads as a glitch rather than
+          as a remembered preference. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `try{if(localStorage.getItem("compass-rail")==="collapsed")document.documentElement.classList.add("rail-collapsed")}catch(e){}`,
+        }}
+      />
+      {children}
+    </div>
+  );
 }

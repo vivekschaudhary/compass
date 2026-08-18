@@ -247,12 +247,6 @@
    The engagement shell — top bar, destinations, "Working as"
    ══════════════════════════════════════════════════════════════════════ */
 
-.topbar {
-  background: var(--color-neutral-100);
-  border-bottom: 1px solid var(--color-divider);
-  padding: 11px var(--gutter);
-  display: flex; flex-direction: column; gap: var(--space-2);
-}
 .topbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
 .topbar-row-secondary { justify-content: flex-end; }
 
@@ -600,4 +594,106 @@ textarea.verdict-reason {
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ── the rail ────────────────────────────────────────────────────────────────
+ * Navigation on the left, collapsible to a strip of icons. Replaces a top bar that spent its full
+ * width on three links and eleven role chips — everything shouted at once, and the one thing that
+ * mattered (who you are working as) was the hardest to find. */
+
+.shell { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); min-height: 100vh; }
+.v2 { --rail-w: 232px; }
+.v2:has(.rail-narrow) { --rail-w: 62px; }
+
+.rail {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding: var(--space-4) 10px;
+  background: var(--color-neutral-100);
+  border-right: 1px solid var(--color-divider);
+  position: sticky; top: 0; height: 100vh;
+}
+
+.rail-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 0; min-height: 34px; }
+.rail-narrow .rail-brand { flex-direction: column; gap: 8px; }
+.rail-mark {
+  display: grid; place-items: center; width: 28px; height: 28px; flex: none;
+  border-radius: 9px; background: var(--color-text); color: var(--color-neutral-50); font-size: 13px;
+}
+.rail-brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.rail-engagement {
+  font-size: 10.5px; color: var(--color-neutral-600);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.rail-nav { display: flex; flex-direction: column; gap: 2px; }
+.rail-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 8px 10px; border-radius: 10px;
+  color: var(--color-neutral-700); text-decoration: none; font-size: 13px;
+  position: relative; white-space: nowrap;
+}
+.rail-item:hover { background: var(--color-surface); color: var(--color-text); }
+.rail-item-on { background: var(--color-surface); color: var(--color-text); font-weight: 600; }
+.rail-item-on svg { color: var(--color-accent-700); }
+.rail-narrow .rail-item { justify-content: center; padding: 9px 0; }
+
+/* The label when there is no room for the label. */
+.rail-tip {
+  position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+  padding: 5px 10px; border-radius: 8px; font-size: 12px; white-space: nowrap;
+  background: var(--color-text); color: var(--color-neutral-50);
+  opacity: 0; pointer-events: none; transition: opacity 90ms ease; z-index: 30;
+}
+.rail-item:hover .rail-tip, .rail-item:focus-visible .rail-tip { opacity: 1; }
+
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+
+.rail-role { position: relative; }
+.rail-role-button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 8px; border: 0; border-radius: 10px; cursor: pointer;
+  background: none; text-align: left; color: inherit;
+}
+.rail-role-button:hover { background: var(--color-surface); }
+.rail-narrow .rail-role-button { justify-content: center; }
+.rail-role-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.rail-role-label { font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-neutral-600); }
+.rail-role-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rail-caret { margin-left: auto; font-size: 9px; color: var(--color-neutral-500); }
+
+.rail-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 232px; max-height: 60vh;
+  overflow-y: auto; z-index: 40; padding: 6px;
+  background: var(--color-neutral-50); border: 1px solid var(--color-divider);
+  border-radius: 14px; box-shadow: 0 10px 30px rgb(32 30 29 / 0.13);
+}
+.rail-menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px 8px; border: 0; border-radius: 9px; cursor: pointer;
+  background: none; text-align: left; color: inherit;
+}
+.rail-menu-item:hover { background: var(--color-surface); }
+.rail-menu-item-on { background: var(--color-accent-2-100); }
+.rail-menu-text { display: flex; flex-direction: column; line-height: 1.25; font-size: 12.5px; }
+.rail-menu-role { font-size: 10.5px; color: var(--color-neutral-600); }
+
+.rail-toggle {
+  margin-left: auto; width: 24px; height: 24px; flex: none; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--color-divider); background: var(--color-neutral-50);
+  color: var(--color-neutral-600); font-size: 12px; line-height: 1;
+}
+.rail-toggle:hover { color: var(--color-text); }
+.rail-narrow .rail-toggle { margin: 0; }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { position: static; height: auto; flex-direction: row; align-items: center; flex-wrap: wrap;
+          border-right: 0; border-bottom: 1px solid var(--color-divider); }
+  .rail-nav { flex-direction: row; }
+  .rail-foot { margin: 0 0 0 auto; flex-direction: row; align-items: center; }
+}
+.rail-menu-rule {
+  font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--color-neutral-600); padding: 8px 8px 4px;
+  border-top: 1px solid var(--color-divider); margin-top: 4px;
 }

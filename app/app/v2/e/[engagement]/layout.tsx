@@ -1,21 +1,21 @@
-// The engagement shell — top bar, the three destinations, and "Working as".
+// The engagement shell — a collapsible rail, and the work beside it.
 //
-// Top bar rather than a sidebar because that is what Organic ships, and because the three-pane
-// job view and the permissions table both want the full width. The engagement is in the path so
-// every screen is shareable; the role is a query parameter because it is a lens over the
-// engagement rather than a place, and it is the seam real identity replaces.
+// A rail rather than a top bar. The top bar spent its full width on three links and eleven role
+// chips, which said everything at once and made the thing that mattered — who you are working as —
+// the hardest to find. The rail holds navigation, collapses to a strip of icons when the work needs
+// the room, and puts the role in a menu.
+//
+// The engagement is in the path so every screen is shareable; the role is a query parameter,
+// because it is a lens over the engagement rather than a place, and it is the seam real identity
+// replaces.
 
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { engagementSummary } from "@/app/lib/data/engagements";
 import { rolesOnEngagement } from "@/app/lib/data/actor";
-import { RoleSwitcher } from "./_RoleSwitcher";
-import { TopNav } from "./_TopNav";
+import { Sidebar } from "./Sidebar";
 
 export const dynamic = "force-dynamic";
 
-// `LayoutProps<'/route'>` is a global helper Next generates from the route tree — no import, and
-// it is what makes the param name a compile error if the folder is ever renamed.
 export default async function EngagementLayout(props: LayoutProps<"/v2/e/[engagement]">) {
   const { engagement } = await props.params;
   const summary = await engagementSummary(engagement);
@@ -24,35 +24,18 @@ export default async function EngagementLayout(props: LayoutProps<"/v2/e/[engage
   const roles = await rolesOnEngagement(engagement);
   const staffed = roles.filter((r) => r.holder);
 
+  // The layout cannot read the query string — that is the page's job — so it hands the rail every
+  // role and lets the client mark the active one from the URL it can see.
   return (
-    <>
-      <header className="topbar">
-        <div className="topbar-row">
-          <span className="brand">Compass</span>
-          <span className="tag tag-neutral engagement-tag">
-            {summary.name}{summary.sprint ? ` · ${summary.sprint}` : ""}
-          </span>
-          <Link
-            href={`/v2/e/${engagement}/setup`}
-            className="btn btn-secondary btn-icon"
-            title="Engagement setup" aria-label="Engagement setup"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-          </Link>
-
-          <TopNav engagement={engagement} />
-        </div>
-
-        <div className="topbar-row topbar-row-secondary">
-          <span className="working-as-label">Working as</span>
-          <RoleSwitcher engagement={engagement} roles={staffed} />
-        </div>
-      </header>
-
+    <div className="shell">
+      <Sidebar
+        engagement={engagement}
+        engagementName={summary.name}
+        sprint={summary.sprint}
+        roles={roles}
+        fallbackRole={staffed[0]?.code ?? roles[0]?.code ?? null}
+      />
       <main>{props.children}</main>
-    </>
+    </div>
   );
 }
