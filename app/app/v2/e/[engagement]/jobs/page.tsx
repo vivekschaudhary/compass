@@ -47,11 +47,17 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
   if (!actor) notFound();
 
   const tasks = await tasksFor(actor);
+  // A delivery manager's scope is `everyone`, so this query returns the whole engagement — which is
+  // right for oversight and wrong under the heading "here's your work". John opened his queue and
+  // found the enterprise architect's, the architect's and the engineer's jobs sitting in it with
+  // nothing saying whose they were. Same rows, told apart.
+  const mine = tasks.filter((t) => t.roleCode === actor.roleCode);
+  const others = tasks.filter((t) => t.roleCode !== actor.roleCode);
   // Read-only: rendering shows what was last measured, it does not re-measure. A refresh that
   // silently re-checked would make stale evidence look fresh.
   const gates = await storedStatusFor(tasks.map((t) => t.id));
   const firstName = (actor.holder ?? actor.roleLabel).split(" ")[0];
-  const nothingRun = tasks.every((t) => t.startedAt === null);
+  const nothingRun = mine.every((t) => t.startedAt === null);
 
   return (
     <div className="page">
@@ -62,13 +68,13 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
 
       {/* Only claim it if it is true. The state is checkable — a task with no started_at has
           never run — so this sentence is evidence rather than decoration. */}
-      {nothingRun && tasks.length > 0 && (
+      {nothingRun && mine.length > 0 && (
         <p className="jobs-note">
           Nothing has run yet. Each job starts a conversation with an agent when — and only when — you click it.
         </p>
       )}
 
-      {tasks.length === 0 ? (
+      {mine.length === 0 && others.length === 0 ? (
         <div className="jobs-empty">
           <p className="jobs-empty-title">Nothing in your queue</p>
           <p className="text-muted">
@@ -82,7 +88,7 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
         </div>
       ) : (
         <div className="jobs-list">
-          {tasks.map((t) => (
+          {mine.map((t) => (
             <JobCard
               key={t.id}
               glyph={GLYPH[t.kind] ?? "✎"}
@@ -104,6 +110,41 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
             />
           ))}
         </div>
+      )}
+
+      {others.length > 0 && (
+        <section className="jobs-others">
+          <h3 className="jobs-others-head">Across the engagement</h3>
+          <p className="text-muted jobs-others-blurb">
+            Not yours to do — {actor.roleLabel} sees the whole engagement. Each says who owns it.
+          </p>
+          <div className="jobs-list">
+            {others.map((t) => (
+              <JobCard
+                key={t.id}
+                glyph={GLYPH[t.kind] ?? "✎"}
+                title={t.title}
+                related={t.ticketKey ?? t.workflowCode ?? undefined}
+                // The owning role, on the card. Without it the queue claimed four jobs were John's.
+                meta={roles.find((r) => r.code === t.roleCode)?.label ?? t.roleCode}
+                subtitle={t.subtitle || subtitleFor(t.state, t.reads.length)}
+                reads={t.reads}
+                action={
+                  <a className="btn btn-secondary" href={`/v2/e/${engagement}/jobs/${t.id}?role=${t.roleCode}`}>
+                    Open as {roles.find((r) => r.code === t.roleCode)?.holder ?? t.roleCode}
+                  </a>
+                }
+                agent={t.agentLabel ?? undefined}
+                footer={
+                  <>
+                    <Gate statuses={gates.get(t.id) ?? []} kind="ready" />
+                    <Gate statuses={gates.get(t.id) ?? []} kind="done" />
+                  </>
+                }
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       <p className="jobs-footer text-muted">
