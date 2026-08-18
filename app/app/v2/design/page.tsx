@@ -74,7 +74,7 @@ export default function DesignLibrary() {
 
       {/* ── foundations ─────────────────────────────────────────────────── */}
 
-      <Section title="Colour" note="A light warm ground with two accents. Each role carries a 100–900 ramp on one shared lightness scale, so the same step of any ramp has the same visual weight.">
+      <Section title="Colour" note="Monochrome: white ground, greys, near-black. Each role still carries a 100–900 ramp on one shared lightness scale, so the same step of any ramp has the same visual weight — the ramps are what make a greyscale interface legible rather than flat. Accent is ink, so the primary action is simply the darkest thing on the page; accent-2 sits lighter and marks what is settled, so 'done' recedes and 'needs you' comes forward.">
         <div className="dl-row">
           {[["bg", "Ground"], ["surface", "Surface"], ["text", "Text"], ["accent", "Accent"], ["accent-2", "Accent 2"]].map(([token, label]) => (
             <div key={token} className="dl-role">

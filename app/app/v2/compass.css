@@ -68,6 +68,80 @@
 /* Inside main the gutter is already applied; a nested .page adds width, not padding. */
 .v2 main .page { padding: 0; }
 
+/* ── the palette ─────────────────────────────────────────────────────────────
+ * Organic ships a cream ground with terracotta and sage accents. This overrides its colour tokens
+ * — and ONLY its colour tokens — with a monochrome ramp: white ground, greys, near-black.
+ *
+ * Done here rather than in organic.css so the seam survives: that file stays byte-identical to the
+ * design project's export and can still be dropped back in. Deleting this block restores Organic's
+ * own palette exactly.
+ *
+ * Type, spacing, radii and shadows are untouched. Caprasimo headings on white is a deliberate
+ * pairing, not an oversight — the editorial weight is what stops a greyscale interface reading as
+ * unfinished.
+ *
+ * ONE THING TO WATCH. In Organic's palette the two accents carried meaning: terracotta for
+ * attention and failure, sage for satisfied. A gate's whole value is telling those apart at a
+ * glance. Monochrome removes hue as the carrier, so state now rests on the glyph (✓ ✗ ○) and on
+ * fill weight. That is a legitimate and more rigorous encoding — colour-blind readers get the same
+ * information everyone else does — but it IS less loud. If the gates read flat, the fix is one
+ * semantic hue for state only, not a return to a coloured chrome. */
+
+.v2 {
+  --color-bg: #ffffff;
+  --color-surface: #f4f4f5;
+  --color-text: #18181b;
+  --color-divider: color-mix(in srgb, #18181b 12%, transparent);
+
+  --color-neutral-50:  #ffffff;
+  --color-neutral-100: #fafafa;
+  --color-neutral-200: #f4f4f5;
+  --color-neutral-300: #e4e4e7;
+  --color-neutral-400: #d4d4d8;
+  --color-neutral-500: #a1a1aa;
+  --color-neutral-600: #71717a;
+  --color-neutral-700: #52525b;
+  --color-neutral-800: #3f3f46;
+  --color-neutral-900: #27272a;
+
+  /* Accent = ink. The primary action is the darkest thing on the page, which is what makes it
+     read as primary without a hue to lean on. */
+  --color-accent: #18181b;
+  --color-accent-100: #f4f4f5;
+  --color-accent-200: #e4e4e7;
+  --color-accent-300: #d4d4d8;
+  --color-accent-400: #a1a1aa;
+  --color-accent-500: #71717a;
+  --color-accent-600: #3f3f46;
+  --color-accent-700: #18181b;
+  --color-accent-800: #131316;
+  --color-accent-900: #0a0a0b;
+
+  /* Accent-2 was sage, and marks things that are settled — a met criterion, a published version.
+     Kept a step lighter than accent so "done" recedes and "needs you" comes forward, which is the
+     only hierarchy that matters on these screens. */
+  --color-accent-2: #52525b;
+  --color-accent-2-100: #fafafa;
+  --color-accent-2-200: #f4f4f5;
+  --color-accent-2-300: #e4e4e7;
+  --color-accent-2-400: #d4d4d8;
+  --color-accent-2-500: #a1a1aa;
+  --color-accent-2-600: #71717a;
+  --color-accent-2-700: #52525b;
+  --color-accent-2-800: #3f3f46;
+  --color-accent-2-900: #27272a;
+
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #18181b 8%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #18181b 9%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #18181b 12%, transparent);
+}
+
+/* State needs a second signal now that hue is gone. The glyph carries it; weight reinforces it. */
+.gate-ok      .gate-glyph { color: var(--color-text); }
+.gate-no      .gate-glyph { color: var(--color-text); font-weight: 700; }
+.gate-unknown .gate-glyph { color: var(--color-neutral-400); }
+.gate-no      .gate-text  { color: var(--color-text); }
+
 /* ── motion ──────────────────────────────────────────────────────────────── */
 
 @keyframes compass-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
