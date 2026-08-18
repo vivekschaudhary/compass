@@ -131,6 +131,13 @@
   --color-accent-2-800: #3f3f46;
   --color-accent-2-900: #27272a;
 
+  /* Radius: minimal. Organic is an over-rounded system — 8/16/28 with pills on every control —
+     and squaring it off is the point of this pass. Not zero: a hairline keeps an edge reading as
+     drawn rather than as a missing style, and with colour gone it is the only decoration left. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+
   --shadow-sm: 0 1px 2px color-mix(in srgb, #18181b 8%, transparent);
   --shadow-md: 0 3px 10px color-mix(in srgb, #18181b 9%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #18181b 12%, transparent);
@@ -157,14 +164,14 @@
 /* ── scrollbars, so a scrolling pane does not import the OS grey into a warm page ── */
 
 .v2 ::-webkit-scrollbar { width: 9px; height: 9px; }
-.v2 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: 999px; }
+.v2 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: var(--radius-sm); }
 .v2 { scrollbar-color: var(--color-neutral-300) transparent; }
 
 /* ── people ──────────────────────────────────────────────────────────────── */
 
 .avatar {
   display: grid; place-items: center; flex: none;
-  width: 24px; height: 24px; border-radius: 999px;
+  width: 24px; height: 24px; border-radius: var(--radius-sm);
   font-size: 9.5px; font-weight: 700;
   background: var(--color-neutral-200); color: var(--color-neutral-700);
 }
@@ -175,7 +182,7 @@
 
 .glyph {
   display: grid; place-items: center; flex: none;
-  width: 38px; height: 38px; border-radius: 999px; font-size: 15px;
+  width: 38px; height: 38px; border-radius: var(--radius-sm); font-size: 15px;
   background: var(--color-accent-100); color: var(--color-accent-800);
 }
 .glyph-sm { width: 28px; height: 28px; font-size: 12px; }
@@ -186,7 +193,7 @@
  * whole provenance idea rests on the reader seeing at a glance which marks are sources. */
 
 .read-chip {
-  font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; padding: 2px 9px; border-radius: var(--radius-sm);
   border: 1px dashed var(--color-neutral-400); color: var(--color-neutral-700);
 }
 .reads { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -197,7 +204,7 @@
 
 .status-dot {
   display: inline-block; flex: none;
-  width: 7px; height: 7px; border-radius: 999px;
+  width: 7px; height: 7px; border-radius: var(--radius-sm);
   background: var(--color-accent);
 }
 .status-dot-muted { background: var(--color-neutral-400); }
@@ -219,7 +226,7 @@
 .job-card {
   display: flex; align-items: flex-start; gap: var(--space-3);
   padding: var(--space-4) calc(var(--space-4) * 1.02);
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   background: var(--color-neutral-100);
   border: 1px solid var(--color-divider);
 }
@@ -277,7 +284,7 @@
 /* colour */
 .dl-role { display: flex; align-items: center; gap: var(--space-2); }
 .dl-swatch {
-  width: 34px; height: 34px; flex: none; border-radius: 999px;
+  width: 34px; height: 34px; flex: none; border-radius: var(--radius-sm);
   background: var(--dl-c);
   /* neutral-400, not the divider: ground and surface are cream on a cream page and a hairline
      divider leaves the two most-checked tokens all but invisible. */
@@ -287,7 +294,7 @@
 .dl-role-token { font-size: 11px; }
 
 .dl-ramp-group { display: flex; flex-direction: column; gap: var(--space-1); }
-.dl-ramp { display: flex; overflow: hidden; border-radius: 999px; }
+.dl-ramp { display: flex; overflow: hidden; border-radius: var(--radius-sm); }
 .dl-ramp-step {
   display: grid; place-items: center;
   width: 62px; height: 42px; font-size: 10px;
@@ -296,7 +303,7 @@
 .dl-ramp-step-inverse { color: var(--color-bg); }
 
 /* space, radius, elevation */
-.dl-space { width: var(--dl-w); height: 26px; border-radius: 3px; background: var(--color-accent-300); }
+.dl-space { width: var(--dl-w); height: 26px; border-radius: var(--radius-sm); background: var(--color-accent-300); }
 .dl-space-stack { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
 .dl-space-label { font-size: 10px; }
 
@@ -342,7 +349,7 @@
 .role-switcher { display: flex; flex-wrap: wrap; gap: 8px; }
 .role-chip {
   display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-  padding: 4px 12px 4px 5px; border-radius: 999px; font-size: 13px;
+  padding: 4px 12px 4px 5px; border-radius: var(--radius-sm); font-size: 13px;
   background: transparent; border: 1px solid var(--color-divider); color: inherit;
 }
 .role-chip:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
@@ -362,7 +369,7 @@
 
 .jobs-empty {
   padding: var(--space-8) var(--space-4);
-  border: 1px dashed var(--color-neutral-400); border-radius: 22px;
+  border: 1px dashed var(--color-neutral-400); border-radius: var(--radius-lg);
   text-align: center;
 }
 .jobs-empty-title { font-family: var(--font-heading); font-size: 15px; margin: 0 0 4px; }
@@ -386,7 +393,7 @@
   padding: var(--space-3) var(--space-4);
   background: var(--color-neutral-100);
   border: 1px solid var(--color-divider);
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
 }
 .doc-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
@@ -402,7 +409,7 @@
 .flow-edge {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   font-size: 12.5px;
-  padding: 8px 14px; border-radius: 999px;
+  padding: 8px 14px; border-radius: var(--radius-sm);
   background: var(--color-accent-2-100); color: var(--color-accent-2-900);
 }
 .flow-edge code { background: transparent; font-size: 12px; color: inherit; padding: 0; }
@@ -442,7 +449,7 @@
 /* ── approving ───────────────────────────────────────────────────────────── */
 
 .approve { display: flex; flex-direction: column; gap: 8px; margin-top: var(--space-4);
-  padding: var(--space-4); border-radius: 18px; background: var(--color-accent-2-100); }
+  padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-accent-2-100); }
 .approve-head { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 600;
   color: var(--color-accent-2-900); }
 .approve-sending-back { background: var(--color-accent-100); }
@@ -451,7 +458,7 @@
 .verdict-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
 .verdict-marks { display: flex; gap: 4px; }
 .vmark {
-  width: 22px; height: 22px; border-radius: 999px; cursor: pointer; font-size: 11px;
+  width: 22px; height: 22px; border-radius: var(--radius-sm); cursor: pointer; font-size: 11px;
   border: 1px solid var(--color-divider); background: var(--color-neutral-50);
   color: var(--color-neutral-500); line-height: 1;
 }
@@ -475,8 +482,8 @@
 .md h1, .md h2, .md h3, .md h4 { font-size: 12.5px; margin: 1em 0 0.35em; font-weight: 700; }
 .md ul, .md ol { margin: 0 0 0.7em; padding-left: 1.2em; }
 .md li { margin-bottom: 0.25em; }
-.md code { font-size: 11.5px; background: var(--color-neutral-200); padding: 1px 5px; border-radius: 5px; }
-.md pre { overflow-x: auto; background: var(--color-neutral-200); padding: 10px 12px; border-radius: 12px; }
+.md code { font-size: 11.5px; background: var(--color-neutral-200); padding: 1px 5px; border-radius: var(--radius-md); }
+.md pre { overflow-x: auto; background: var(--color-neutral-200); padding: 10px 12px; border-radius: var(--radius-lg); }
 .md pre code { background: none; padding: 0; }
 .md blockquote { margin: 0 0 0.7em; padding-left: 10px; border-left: 2px solid var(--color-divider); color: var(--color-neutral-700); }
 .md hr { border: 0; border-top: 1px solid var(--color-divider); margin: 1em 0; }
@@ -511,7 +518,7 @@
 @media (max-width: 1200px) { .job-body { grid-template-columns: minmax(0, 1fr); } }
 
 /* context strip */
-.ctx { border: 1px solid var(--color-divider); border-radius: 16px; background: var(--color-neutral-100); }
+.ctx { border: 1px solid var(--color-divider); border-radius: var(--radius-lg); background: var(--color-neutral-100); }
 .ctx-summary {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
   width: 100%; padding: 10px var(--space-4); background: none; border: 0; cursor: pointer;
@@ -537,7 +544,7 @@
 }
 .chat-earlier:hover { color: var(--color-accent-700); }
 
-.msg { padding: var(--space-4); border-radius: 18px; background: var(--color-neutral-100); max-width: 68ch; }
+.msg { padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-neutral-100); max-width: 68ch; }
 .msg-human { background: var(--color-accent-2-100); align-self: flex-end; }
 .msg-who {
   display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px;
@@ -554,7 +561,7 @@
 .draft-col {
   display: flex; flex-direction: column; gap: var(--space-2);
   padding: var(--space-4); border: 1px solid var(--color-divider);
-  border-radius: 20px; background: var(--color-neutral-100); position: sticky; top: var(--space-4);
+  border-radius: var(--radius-lg); background: var(--color-neutral-100); position: sticky; top: var(--space-4);
 }
 .draft-head { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .draft-head h6 { margin: 0; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; word-break: break-all; }
@@ -597,7 +604,7 @@
 .onboard-done {
   display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start;
   max-width: 640px; padding: var(--space-5);
-  background: var(--color-accent-2-100); border-radius: 22px;
+  background: var(--color-accent-2-100); border-radius: var(--radius-lg);
 }
 .onboard-done h3 { margin: 0; font-size: 15px; }
 .onboard-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -631,7 +638,7 @@ textarea.verdict-reason {
 .asks {
   display: flex; flex-direction: column; gap: var(--space-3);
   margin-top: var(--space-4); padding: var(--space-4);
-  border-radius: 18px; background: var(--color-surface);
+  border-radius: var(--radius-lg); background: var(--color-surface);
 }
 .asks-head {
   font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
@@ -647,7 +654,7 @@ textarea.verdict-reason {
 
 /* A choice, as a chip. Organic's `.seg` owns the segmented control; this is the standalone form. */
 .seg-opt {
-  font-size: 11.5px; padding: 5px 12px; border-radius: 999px;
+  font-size: 11.5px; padding: 5px 12px; border-radius: var(--radius-sm);
   border: 1px solid var(--color-divider); cursor: pointer;
 }
 .seg-opt-on { background: var(--color-accent-700); color: var(--color-neutral-50); border-color: transparent; }
@@ -691,7 +698,7 @@ textarea.verdict-reason {
 .rail-narrow .rail-brand { flex-direction: column; gap: 8px; }
 .rail-mark {
   display: grid; place-items: center; width: 28px; height: 28px; flex: none;
-  border-radius: 9px; background: var(--color-text); color: var(--color-neutral-50); font-size: 13px;
+  border-radius: var(--radius-md); background: var(--color-text); color: var(--color-neutral-50); font-size: 13px;
 }
 .rail-brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .rail-engagement {
@@ -702,7 +709,7 @@ textarea.verdict-reason {
 .rail-nav { display: flex; flex-direction: column; gap: 2px; }
 .rail-item {
   display: flex; align-items: center; gap: 11px;
-  padding: 8px 10px; border-radius: 10px;
+  padding: 8px 10px; border-radius: var(--radius-md);
   color: var(--color-neutral-700); text-decoration: none; font-size: 13px;
   position: relative; white-space: nowrap;
 }
@@ -714,7 +721,7 @@ textarea.verdict-reason {
 /* The label when there is no room for the label. */
 .rail-tip {
   position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
-  padding: 5px 10px; border-radius: 8px; font-size: 12px; white-space: nowrap;
+  padding: 5px 10px; border-radius: var(--radius-md); font-size: 12px; white-space: nowrap;
   background: var(--color-text); color: var(--color-neutral-50);
   opacity: 0; pointer-events: none; transition: opacity 90ms ease; z-index: 30;
 }
@@ -725,7 +732,7 @@ textarea.verdict-reason {
 .rail-role { position: relative; }
 .rail-role-button {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 7px 8px; border: 0; border-radius: 10px; cursor: pointer;
+  padding: 7px 8px; border: 0; border-radius: var(--radius-md); cursor: pointer;
   background: none; text-align: left; color: inherit;
 }
 .rail-role-button:hover { background: var(--color-surface); }
@@ -739,11 +746,11 @@ textarea.verdict-reason {
   position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 232px; max-height: 60vh;
   overflow-y: auto; z-index: 40; padding: 6px;
   background: var(--color-neutral-50); border: 1px solid var(--color-divider);
-  border-radius: 14px; box-shadow: 0 10px 30px rgb(32 30 29 / 0.13);
+  border-radius: var(--radius-lg); box-shadow: 0 10px 30px rgb(32 30 29 / 0.13);
 }
 .rail-menu-item {
   display: flex; align-items: center; gap: 9px; width: 100%;
-  padding: 7px 8px; border: 0; border-radius: 9px; cursor: pointer;
+  padding: 7px 8px; border: 0; border-radius: var(--radius-md); cursor: pointer;
   background: none; text-align: left; color: inherit;
 }
 .rail-menu-item:hover { background: var(--color-surface); }
@@ -752,7 +759,7 @@ textarea.verdict-reason {
 .rail-menu-role { font-size: 10.5px; color: var(--color-neutral-600); }
 
 .rail-toggle {
-  margin-left: auto; width: 24px; height: 24px; flex: none; border-radius: 7px; cursor: pointer;
+  margin-left: auto; width: 24px; height: 24px; flex: none; border-radius: var(--radius-md); cursor: pointer;
   border: 1px solid var(--color-divider); background: var(--color-neutral-50);
   color: var(--color-neutral-600); font-size: 12px; line-height: 1;
 }
@@ -770,4 +777,28 @@ textarea.verdict-reason {
   font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--color-neutral-600); padding: 8px 8px 4px;
   border-top: 1px solid var(--color-divider); margin-top: 4px;
+}
+
+/* ── squared off ─────────────────────────────────────────────────────────────
+ * organic.css:254 pills every button, tag, segment and input, and .card/.dialog take
+ * calc(--radius-lg * 1.15). Those are literals, not tokens, so overriding the tokens alone leaves
+ * them round — they are answered here by name.
+ *
+ * Still in compass.css, so organic.css remains byte-identical to the design project's export. */
+
+.v2 .btn,
+.v2 .tag,
+.v2 .seg,
+.v2 .seg-opt,
+.v2 .input,
+.v2 .card,
+.v2 .dialog {
+  border-radius: var(--radius-sm);
+}
+
+/* A dot is a dot and a radio is a radio — these are shapes, not decoration. */
+.v2 .status-dot,
+.v2 .radio .dot,
+.v2 .avatar {
+  border-radius: 50%;
 }
