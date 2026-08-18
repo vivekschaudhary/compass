@@ -511,3 +511,19 @@
 .onboard-facts li::before { content: "·"; position: absolute; left: 3px; color: var(--color-neutral-600); }
 .onboard-problems { font-size: 12px; color: var(--color-accent-900); }
 .onboard-problems ul { margin: 4px 0 0; padding-left: 18px; }
+
+/* ── textareas are not pills ──────────────────────────────────────────────────
+ * organic.css:254 gives `.input` a 999px radius. On a single-line field that is the system's look
+ * and it is right. On a fourteen-row textarea it renders an ellipse that clips the first and last
+ * characters of most lines — which is exactly what a pasted SOW looked like.
+ *
+ * Fixed here rather than in organic.css, which stays vendored verbatim. --radius-md is Organic's
+ * own token for input-shaped surfaces, so this stays inside the system rather than opting out of
+ * it. Organic itself anticipated textareas (line 150 sets their min-height); the blanket radius
+ * rule just landed on top. */
+
+textarea.input,
+textarea.ask-input,
+textarea.verdict-reason {
+  border-radius: var(--radius-md);
+}
