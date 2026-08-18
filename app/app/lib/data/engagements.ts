@@ -39,3 +39,47 @@ export async function listEngagements() {
   const { data } = await sb.from("engagement").select("id, name").order("name");
   return data ?? [];
 }
+
+export type EngagementRow = {
+  id: string; name: string; client: string | null; phase: string | null;
+  docsProvider: string | null; jiraProject: string | null;
+  openTasks: number; documents: number;
+};
+
+/**
+ * Every engagement in the org, with enough state to tell them apart.
+ *
+ * Counts rather than status words: "3 open" is a fact anyone can check, where "on track" is a
+ * claim nobody signed. Two queries for the whole list rather than two per row.
+ */
+export async function engagementsOverview(): Promise<EngagementRow[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { data: rows } = await sb.from("engagement")
+    .select("id, name, client, phase, docs_provider, jira_project").order("name");
+  if (!rows?.length) return [];
+
+  const ids = rows.map((r) => r.id);
+  const { data: tasks } = await sb.from("work_task")
+    .select("engagement_id, state").in("engagement_id", ids);
+  const { data: docs } = await sb.from("document")
+    .select("engagement_id, current_version_id").in("engagement_id", ids);
+
+  const open = new Map<string, number>();
+  for (const t of tasks ?? []) {
+    if (["closed", "abandoned"].includes(t.state)) continue;
+    open.set(t.engagement_id, (open.get(t.engagement_id) ?? 0) + 1);
+  }
+  const filed = new Map<string, number>();
+  for (const d of docs ?? []) {
+    if (!d.current_version_id) continue;
+    filed.set(d.engagement_id, (filed.get(d.engagement_id) ?? 0) + 1);
+  }
+
+  return rows.map((r) => ({
+    id: r.id, name: r.name, client: r.client, phase: r.phase,
+    docsProvider: r.docs_provider, jiraProject: r.jira_project,
+    openTasks: open.get(r.id) ?? 0, documents: filed.get(r.id) ?? 0,
+  }));
+}

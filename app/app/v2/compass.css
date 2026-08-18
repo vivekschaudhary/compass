@@ -694,7 +694,7 @@ textarea.verdict-reason {
   position: sticky; top: 0; height: 100vh;
 }
 
-.rail-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 0; min-height: 34px; }
+.rail-brand { display: flex; align-items: center; gap: 6px; padding: 2px 2px 0; min-height: 34px; }
 .rail-narrow .rail-brand { flex-direction: column; gap: 8px; }
 .rail-mark {
   display: grid; place-items: center; width: 28px; height: 28px; flex: none;
@@ -802,3 +802,43 @@ textarea.verdict-reason {
 .v2 .avatar {
   border-radius: 50%;
 }
+
+/* ── the project switcher ────────────────────────────────────────────────────
+ * Top of the rail, like the thing it is: the answer to "which engagement am I in", with the two
+ * moves you make when the answer is wrong — start a new one, or go look at all of them. */
+
+.rail-project { position: relative; flex: 1; min-width: 0; }
+.rail-project-button {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 6px 7px; border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  background: none; text-align: left; color: inherit;
+}
+.rail-project-button:hover { background: var(--color-surface); }
+.rail-narrow .rail-project-button { justify-content: center; padding: 6px 0; }
+.rail-project-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.rail-project-name {
+  font-size: 13px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rail-switch { margin-left: auto; font-size: 8px; letter-spacing: -2px; color: var(--color-neutral-500); }
+
+/* The project menu drops DOWN from the top; the role menu rises from the bottom. Each opens away
+ * from its own edge so it never covers the control you just pressed. */
+.rail-menu-down { top: calc(100% + 6px); bottom: auto; }
+
+/* ── the organisation ────────────────────────────────────────────────────── */
+
+.rail-org {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 7px 2px; border-top: 1px solid var(--color-divider); margin-top: 2px;
+}
+.rail-narrow .rail-org { justify-content: center; }
+.rail-org-mark { background: var(--color-text); color: var(--color-neutral-50); }
+.rail-org-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.rail-org-name { font-size: 12.5px; font-weight: 600; }
+.rail-org-label { font-size: 10.5px; color: var(--color-neutral-600); }
+
+/* ── the projects listing ────────────────────────────────────────────────── */
+
+.projects-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.projects-head h2 { margin: 0; }

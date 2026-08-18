@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
  */
 
 export type NavRole = { code: string; label: string; holder: string | null; initials: string; tier: string };
+export type NavEngagement = { id: string; name: string };
 
 /**
  * The rail's collapsed state lives on <html>, set by an inline script before first paint so the
@@ -56,11 +57,13 @@ const Icon = ({ children }: { children: ReactNode }) => (
        strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
 );
 
-export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRole }: {
+export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRole, engagements, org }: {
   engagement: string; engagementName: string; sprint: string | null;
   roles: NavRole[];
   /** Used when the URL names no role — the same default the pages resolve to. */
   fallbackRole: string | null;
+  engagements: NavEngagement[];
+  org: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -69,6 +72,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
   const activeRole = roles.find((r) => r.code === activeCode) ?? null;
   const collapsed = useSyncExternalStore(railStore.subscribe, railStore.get, railStore.getServer);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
 
 
   function pickRole(code: string) {
@@ -81,13 +85,45 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
   return (
     <aside className={collapsed ? "rail rail-narrow" : "rail"}>
       <div className="rail-brand">
-        <span className="rail-mark" aria-hidden>◈</span>
-        {!collapsed && (
-          <span className="rail-brand-text">
-            <span className="brand">Compass</span>
-            <span className="rail-engagement">{engagementName}{sprint ? ` · ${sprint}` : ""}</span>
-          </span>
-        )}
+        <div className="rail-project">
+          <button
+            className="rail-project-button" onClick={() => setProjectsOpen(!projectsOpen)}
+            title={collapsed ? engagementName : undefined}
+            aria-expanded={projectsOpen} aria-haspopup="menu"
+          >
+            <span className="rail-mark" aria-hidden>◈</span>
+            {!collapsed && (
+              <span className="rail-project-text">
+                <span className="rail-project-name">{engagementName}</span>
+                {sprint && <span className="rail-engagement">{sprint}</span>}
+              </span>
+            )}
+            {!collapsed && <span className="rail-switch" aria-hidden>⌃⌄</span>}
+          </button>
+
+          {projectsOpen && (
+            <div className="rail-menu rail-menu-down" role="menu">
+              {engagements.map((e) => (
+                <Link
+                  key={e.id} role="menuitem" href={`/v2/e/${e.id}/jobs`}
+                  className={e.id === engagement ? "rail-menu-item rail-menu-item-on" : "rail-menu-item"}
+                  onClick={() => setProjectsOpen(false)}
+                >
+                  <span className="rail-menu-text"><span>{e.name}</span></span>
+                </Link>
+              ))}
+              {/* Creating and browsing sit with the list, because both are what you came here for
+                  when the list did not have what you wanted. */}
+              <div className="rail-menu-rule">Organisation</div>
+              <Link href="/v2/new" className="rail-menu-item" role="menuitem" onClick={() => setProjectsOpen(false)}>
+                <span className="rail-menu-text"><span>+ New</span></span>
+              </Link>
+              <Link href="/v2/projects" className="rail-menu-item" role="menuitem" onClick={() => setProjectsOpen(false)}>
+                <span className="rail-menu-text"><span>Manage projects</span></span>
+              </Link>
+            </div>
+          )}
+        </div>
         {/* Beside the brand rather than in the bottom corner — where every dev overlay and support
             widget in existence parks itself, and where this one was genuinely unclickable. */}
         <button
@@ -170,6 +206,17 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
           )}
         </div>
 
+        {/* The organisation, last. It is the least-changing thing on the screen and the one you
+            look at least — which is exactly why it belongs at the bottom rather than the top. */}
+        <div className="rail-org" title={collapsed ? org : undefined}>
+          <span className="avatar rail-org-mark">{org.slice(0, 1).toUpperCase()}</span>
+          {!collapsed && (
+            <span className="rail-org-text">
+              <span className="rail-org-name">{org}</span>
+              <span className="rail-org-label">Organisation</span>
+            </span>
+          )}
+        </div>
       </div>
     </aside>
   );

@@ -12,6 +12,7 @@
 import { notFound } from "next/navigation";
 import { engagementSummary } from "@/app/lib/data/engagements";
 import { rolesOnEngagement } from "@/app/lib/data/actor";
+import { listEngagements } from "@/app/lib/data/engagements";
 import { Sidebar } from "./Sidebar";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,10 @@ export default async function EngagementLayout(props: LayoutProps<"/v2/e/[engage
   const summary = await engagementSummary(engagement);
   if (!summary) notFound();
 
-  const roles = await rolesOnEngagement(engagement);
+  const [roles, engagements] = await Promise.all([
+    rolesOnEngagement(engagement),
+    listEngagements(),
+  ]);
   const staffed = roles.filter((r) => r.holder);
 
   // The layout cannot read the query string — that is the page's job — so it hands the rail every
@@ -34,6 +38,8 @@ export default async function EngagementLayout(props: LayoutProps<"/v2/e/[engage
         sprint={summary.sprint}
         roles={roles}
         fallbackRole={staffed[0]?.code ?? roles[0]?.code ?? null}
+        engagements={engagements}
+        org="Compass"
       />
       <main>{props.children}</main>
     </div>
