@@ -438,7 +438,17 @@ export async function approve(
   const criteria = await criteriaForTask(taskId);
   const done = criteria.filter((c) => c.kind === "done");
 
+  // What a CHECK established stays the check's. Overwriting it with "Confirmed by <name>" put a
+  // person's signature on seventeen rows a script verified — the record then says they personally
+  // checked something they never looked at, which is worse than no record.
+  const { data: existing } = await sb.from("measurement")
+    .select("criterion_id, source, satisfied").eq("task_id", taskId);
+  const machineMet = new Set((existing ?? [])
+    .filter((m) => m.satisfied && m.source !== "human")
+    .map((m) => m.criterion_id as string));
+
   for (const c of done) {
+    if (machineMet.has(c.id)) continue;
     if (!confirmed.includes(c.id)) {
       // Not confirmed is not "failed" — it is unmeasured, and the gate treats it as such. Writing
       // satisfied:false here would say the person checked and rejected it, which they did not.

@@ -55,7 +55,7 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
 
   const statuses = gates.get(taskId) ?? [];
   const doneCriteria = statuses.filter((g) => g.kind === "done")
-    .map((g) => ({ id: g.id, statement: describeCriterion(g), satisfied: g.satisfied }));
+    .map((g) => ({ id: g.id, statement: describeCriterion(g), satisfied: g.satisfied, source: g.source, detail: g.detail }));
 
   return (
     <div className="job">

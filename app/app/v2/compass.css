@@ -883,3 +883,13 @@ textarea.verdict-reason {
 .hist-facts { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: 12px; color: var(--color-neutral-700); }
 .hist-produced { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: 12px; }
 .hist-link { font-size: 11.5px; color: var(--color-accent-700); }
+
+/* Criteria a check already settled: shown so the reader sees the whole gate, with no checkbox,
+ * because nobody is signing for them. */
+.approve-checked { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
+.approve-checked-row {
+  display: grid; grid-template-columns: 16px 1fr; gap: 9px; align-items: start;
+  font-size: 12.5px; line-height: 1.5; color: var(--color-neutral-700);
+}
+.approve-checked-mark { color: var(--color-text); text-align: center; }
+.approve-checked-by { display: block; font-size: 11px; color: var(--color-neutral-600); }
