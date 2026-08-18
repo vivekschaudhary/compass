@@ -1,0 +1,10 @@
+code,label,ord,enabled
+Delivery,Delivery,10,true
+Product,Product,20,true
+Design,Design,30,true
+Engineering,Engineering,40,true
+QA,QA,50,true
+GTM,GTM,60,true
+SRE,SRE,70,true
+Support,Support,7,true
+Security,Security,8,true

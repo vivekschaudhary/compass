@@ -307,6 +307,24 @@ git config core.hooksPath compass/scripts/githooks
 
 ---
 
+## `workflow-catalog.py` — every workflow's steps, as one table
+
+Flattens all twenty dispatch graphs into `compass/reference/workflow-catalog.csv` — one row per step. Two uses: reviewing the catalogue as a whole, which is hard to do across twenty markdown files, and **authoring** — the columns are the shape a step actually has, so a spreadsheet round-trip is a plausible way for a practice to draft or amend a workflow.
+
+The `kind` column is the load-bearing one. `agent` is work someone holds; `hitl` is a human gate; `machine` is a mechanical check (CI, branch protection) that **nobody holds** and therefore belongs on a gate as a criterion rather than in a queue; `refresh` is a workflow with no dispatch graph at all — one agent, recurring. A workflow reporting `refresh` that is genuinely multi-role has its steps written in some other format, which is a finding about the file.
+
+Derived, so **regenerate rather than edit**. `--check` fails when the CSV no longer matches the workflow files, the same discipline as `consistency-check.py`.
+
+```bash
+python3 compass/scripts/workflow-catalog.py            # write the CSV
+python3 compass/scripts/workflow-catalog.py --check    # fail if stale (CI / pre-commit)
+python3 compass/scripts/workflow-catalog.py --stdout   # print instead of writing
+```
+
+Current state: 64 steps across 20 workflows — 38 agent, 14 HITL, 10 refresh, 1 machine, 1 unclassified. `advance`, `measure` and `metrics` name no agent anywhere and are flagged for review.
+
+---
+
 ## Future scripts + templates
 
 Reference implementations may join this directory as Compass evolves. Candidates:

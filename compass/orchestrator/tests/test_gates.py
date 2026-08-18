@@ -119,7 +119,7 @@ class TestArtifactTargetParsing(unittest.TestCase):
         cpb = load_workflow(WORKFLOWS / "create-product-brief.md")
         self.assertEqual(
             [s.artifact_target for s in cpb if s.is_hitl],
-            ["research@docs", "product-brief@docs"],
+            ["research@docs", "product-brief@docs", "design-foundation@docs"],
         )
         cb = load_workflow(WORKFLOWS / "create-brief.md")
         self.assertEqual(

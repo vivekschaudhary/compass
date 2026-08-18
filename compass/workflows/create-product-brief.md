@@ -87,11 +87,29 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]`. Methodology lives in the
 **Artifact target:** `product-brief@docs`
 **What it covers:** the human reviews the brief and moves the **product-brief-approval ticket to Done**. That ticket is what downstream workflows read (`product-brief@tickets`); nothing downstream runs until it is Done. **Any later change to an approved brief reverts this ticket to pending** — an approved commitment always reflects something a human actually signed off on.
 
-### Step 5. `delivery-manager.update-status` (Delivery Manager agent owns)
+### Step 5. `designer.spec-design-foundation` (Designer agent owns)
+
+**Dispatches:** Designer agent
+**Task definition:** `compass/agents/designer.md` → Task `spec-design-foundation`
+**Input:** approved brief (surfaces, audience, posture come from it)
+**What it covers:** name every surface the product needs → state audience and context of use as constraints → set a **numeric** accessibility bar → declare the states every component must answer → record brand constraints or justified `n/a` → leave `## Visual direction (human)` as `<TBD>` → open the **design-foundation-approval** ticket → seed DRI ≥1 Decision → halt.
+**Output:** design-foundation page in `@docs` + design-foundation-approval ticket
+
+**Why here.** The brief settles who the product is for and what it must do; the design foundation is the first thing that depends on that and the last thing that can be decided cheaply. Specced later, every `create-story` run invents its own components and states, and the product accumulates a different answer per story.
+
+**Why the agent does not choose the direction.** Palette, typeface and tone remain human work per #171. This step states what a direction must *satisfy* so the human choosing it knows the constraints and the choice can be checked against something.
+
+### Step 6. **HITL gate** (human) — design foundation approval
+
+**Dispatches:** HUMAN (not an agent)
+**Artifact target:** `design-foundation@docs`
+**What it covers:** the human reviews the foundation **and fills `## Visual direction (human)`** — palette, typeface, tone — then moves the **design-foundation-approval ticket to Done**. `designer.build-design-library` refuses to run while the direction is `<TBD>`: a library built against a direction nobody chose is a direction chosen silently by the agent.
+
+### Step 7. `delivery-manager.update-status` (Delivery Manager agent owns)
 
 **Dispatches:** Delivery Manager agent
 **Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`
-**What it covers:** record that the product brief exists and is approved, with its page link, approval ticket, and date.
+**What it covers:** record that the product brief and the design foundation exist and are approved, with their page links, approval tickets, and dates.
 
 ## Workflow-level verification (final GATE)
 
@@ -107,6 +125,11 @@ Mirrors per-task postconditions + cross-agent invariants.
 - [ ] (Step 3 — pm) Brief contains **all six mandatory sections**: Vision · target users · problem · Access & data posture · scope in/out · Objectives + Key Results
 - [ ] (Step 3 — pm) **Access & data posture** — auth posture, data sensitivity, regulatory regime each carry a value OR explicit `n/a — <reason>`. Empty fails. Unjustified `n/a` fails. **Per Principle #15.**
 - [ ] (Step 3 — pm) **Every Key Result is measurable** — metric + baseline + target + timeframe. A KR without a threshold fails (`[soft-spec-hardening]`)
+- [ ] (Step 5 — designer) Every **surface** the product needs is named — a foundation covering one surface does not cover the others
+- [ ] (Step 5 — designer) The accessibility bar is a **number** (contrast ratio · target size · keyboard coverage), not an adjective
+- [ ] (Step 5 — designer) The **required-states contract** is declared — this is what the library is later checked against
+- [ ] (Step 5 — designer) `## Visual direction (human)` is present and `<TBD>` — **not** filled by the agent (#171)
+- [ ] (Step 6 — HITL) The human filled the visual direction before the ticket moved to Done — an approved foundation with a `<TBD>` direction blocks `build-design-library`
 - [ ] (Step 3 — pm) **No inferred answers** — every material unknown was elicited with options and captured verbatim, not guessed
 - [ ] (Step 3 — pm) PM DRI: ≥1 Decision entry
 - [ ] (Step 3 — pm) Brief page published under the **same** engagement parent as the research page; approval ticket opened and linked to the page

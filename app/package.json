@@ -12,14 +12,20 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "lockfile:rebuild": "rm -rf node_modules package-lock.json && npm install --no-audit --no-fund"
+    "lockfile:rebuild": "rm -rf node_modules package-lock.json && npm install --no-audit --no-fund",
+    "db:status": "supabase migration list --linked",
+    "db:push": "supabase db push --linked",
+    "db:new": "supabase migration new",
+    "db:adopt": "node scripts/adopt-migrations.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@supabase/supabase-js": "^2.110.2",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

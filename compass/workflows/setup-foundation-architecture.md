@@ -74,8 +74,26 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 **Task definition:** `compass/agents/enterprise-architect.md` → Task `scaffold-foundation`
 **What it covers:** file plan presented → explicit user confirmation → scaffold boundary folders + CI/CD + base configs from locked picks → populate `compass/config.yaml` **including top-level `stack:` + `checks:` (#122 — `checks:` mirrors the scaffolded CI command-for-command; without them every later `/build` and `/fix` HALTS, #123)** → **deploy canaries, one per target** (`ci_cd.canary_artifacts[]`; any failing target = architecture blocker → ADR + loop, partial coverage fails) → written-files + canary summary.
 **Host note:** requires a filesystem-capable host. On text-only API dispatch the task degrades per its Host-capability rule: file plan + full contents as text, canaries marked "pending human verification" — never claimed green.
+### Step 6. `designer.build-design-library` (Designer agent owns)
 
-### Step 6. `delivery-manager.update-status` (Delivery Manager agent owns)
+**Dispatches:** Designer agent
+**Task definition:** `compass/agents/designer.md` → Task `build-design-library`
+**Input:** approved `design-foundation@docs` **with its visual direction filled by a human** · approved architecture (the stack)
+**What it covers:** vendor the human's direction verbatim as tokens → implement every component the states contract requires, in the architecture's framework → build a living reference page rendering every component in every state → state where styles may and may not be written → list every required component NOT built, with reasons → seed DRI ≥1 Decision → halt.
+**Output:** design-library page in `@docs` + the library itself in the scaffolded repo + design-library-approval ticket
+
+**Why after architecture, not in `/create-product-brief`.** A component library is code. It is written in the framework the architecture picked, so building it earlier means either rewriting it or quietly constraining a decision that was not the designer's to make. The *foundation* is product-level and belongs with the brief; the *library* is implementation-level and belongs here.
+
+**Refuses if the visual direction is `<TBD>`.** Not a warning — a halt. A library built against a direction nobody chose is a direction chosen by the agent, invisibly, and every screen afterwards inherits it.
+
+
+### Step 7. **HITL gate — design library approved** (human)
+
+**Dispatches:** HUMAN (not an agent)
+**Artifact target:** `design-library@docs`
+**What it covers:** the human reviews the **living reference page** — every component in every state — rather than the code, and moves the **design-library-approval ticket to Done**. The list of required components that were NOT built is part of what is being approved: approving a library with gaps is a decision, and it should be a stated one.
+
+### Step 8. `delivery-manager.update-status` (Delivery Manager agent owns)
 
 **Dispatches:** Delivery Manager agent
 **Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`

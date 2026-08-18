@@ -118,9 +118,11 @@ class TestRealWorkflows(unittest.TestCase):
 
     def test_create_product_brief(self):
         steps = load_workflow(WORKFLOWS / "create-product-brief.md")
-        self.assertEqual(len(steps), 5)
+        # 7 since design got a foundation: the brief is followed by
+        # designer.spec-design-foundation and its own HITL gate.
+        self.assertEqual(len(steps), 7)
         # two gates: research review, then brief approval
-        self.assertEqual([s.is_hitl for s in steps], [False, True, False, True, False])
+        self.assertEqual([s.is_hitl for s in steps], [False, True, False, True, False, True, False])
 
     def test_create_product_brief_researches_before_drafting(self):
         """#154 regression guard. Its predecessor `/create-product-brief` dispatched the PM at
@@ -131,12 +133,16 @@ class TestRealWorkflows(unittest.TestCase):
         agents = [(s.agent, s.task) for s in steps if not s.is_hitl]
         self.assertEqual(agents[0][0], "researcher")
         self.assertEqual(agents[1], ("pm", "draft-product-brief"))
-        self.assertEqual(agents[2], ("delivery-manager", "update-status"))
+        self.assertEqual(agents[2], ("designer", "spec-design-foundation"))
+        self.assertEqual(agents[3], ("delivery-manager", "update-status"))
 
     def test_create_product_brief_gates_name_their_artifacts(self):
         steps = load_workflow(WORKFLOWS / "create-product-brief.md")
         targets = [s.artifact_target for s in steps if s.is_hitl]
-        self.assertEqual(targets, ["research@docs", "product-brief@docs"])
+        self.assertEqual(
+            targets,
+            ["research@docs", "product-brief@docs", "design-foundation@docs"],
+        )
 
     def test_build(self):
         steps = load_workflow(WORKFLOWS / "build.md")
@@ -156,10 +162,13 @@ class TestRealWorkflows(unittest.TestCase):
 
     def test_setup_foundation_architecture(self):
         steps = load_workflow(WORKFLOWS / "setup-foundation-architecture.md")
-        self.assertEqual(len(steps), 6)
-        # two HITL gates, at steps 2 and 4, each with an artifact target
+        # 8 since the design library builds here — after the architecture picks the
+        # stack it is written in — with its own approval gate.
+        self.assertEqual(len(steps), 8)
+        # three HITL gates now — research, architecture, and the design library that
+        # is built here because it is written in the stack the architecture picked
         gates = [s for s in steps if s.is_hitl]
-        self.assertEqual([s.number for s in gates], [2, 4])
+        self.assertEqual([s.number for s in gates], [2, 4, 7])
         self.assertEqual(
             gates[0].artifact_target, "docs/foundation/architecture-phase-a-research.md"
         )

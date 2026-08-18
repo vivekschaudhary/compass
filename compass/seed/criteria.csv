@@ -1,0 +1,13 @@
+workflow,ord,kind,text,subject_kind,subject_ref,operator,value
+plan-kickoff,,ready,The engagement exists and its systems of record answered,connector,docs,is,wired
+plan-kickoff,,ready,,connector,tickets,is,wired
+plan-kickoff,,ready,The SOW is filed — the backlog is derived from it and cannot be invented,document,02-scope/sow,status,published
+plan-kickoff,1,done,Every row names a workflow that exists,backlog,workflow,unresolved,0
+plan-kickoff,1,done,Every row names an owning role that exists,backlog,owner,unresolved,0
+plan-kickoff,1,done,Every row is in Pre-Sprint 0 or Sprint 0,backlog,stage,outside,0
+plan-kickoff,1,done,Scope not covered by any row is named rather than left implicit,backlog,uncovered-deliverables,has-note,all
+plan-kickoff,,done,The Delivery Manager approved the backlog,ticket,{{story}},status,Done
+staff-engagement,,ready,The kickoff backlog is approved,document,01-foundation/kickoff-backlog,status,published
+staff-engagement,1,done,Every role Sprint 0 assigns work to has a named holder,roster,sprint-0-roles,unfilled,0
+staff-engagement,1,done,Roles left deliberately unstaffed are recorded with a reason,roster,deferred,has-reason,all
+staff-engagement,,done,The Delivery Manager approved the roster,ticket,{{story}},status,Done

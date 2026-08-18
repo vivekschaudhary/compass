@@ -1,3 +1,9 @@
+/* Tailwind v4 only processes `@theme` in the entry that imports the framework, so this line and
+ * the theme block below cannot be separated — moving it to a sibling file orphans every token
+ * here and silently drops every utility derived from them. The build still compiles.
+ *
+ * AT CUTOVER: when v1 is deleted, this import MOVES to the v2 entry. It must not be deleted along
+ * with the rest of this file. v2 uses Tailwind for page composition only. */
 @import "tailwindcss";
 
 /* ─ Compass design tokens — home-app language (clean light SaaS) ───────────── */
