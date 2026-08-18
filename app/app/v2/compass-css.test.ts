@@ -68,3 +68,41 @@ describe("compass.css", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * Every token compass.css reads is defined somewhere.
+ *
+ * `--space-5` does not exist in Organic — the scale is 1, 2, 3, 4, 6, 8 — and five rules used it.
+ * An undefined custom property makes the whole declaration invalid, so `padding: var(--space-5)`
+ * silently became no padding at all. No build error, no console warning, nothing in the DOM to
+ * inspect except a number that was never applied.
+ *
+ * Exactly the failure mode as a class name with no rule, one layer down: CSS fails quietly, and
+ * quiet failure is the thing this file exists to make loud.
+ */
+describe("compass.css tokens", () => {
+  it("only reads custom properties that are defined", () => {
+    // Anywhere, not just at line start: `.v2 { --rail-w: 232px; }` is a one-liner, and requiring
+    // a definition to begin its line reported it as undefined — the guard's own false positive.
+    const defined = new Set(
+      [...CSS.matchAll(/(--[\w-]+)\s*:/g), ...ORGANIC.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]),
+    );
+
+    // Some tokens are per-element and set from React — the design library's swatches pass a colour
+    // in as `--dl-c`. Those are defined, just not in a stylesheet.
+    for (const file of tsxFiles(V2)) {
+      for (const m of readFileSync(file, "utf-8").matchAll(/["'`](--[\w-]+)["'`]/g)) defined.add(m[1]);
+    }
+
+    const used = new Set<string>();
+    for (const m of CSS.matchAll(/var\(\s*(--[\w-]+)/g)) used.add(m[1]);
+
+    // A var() with a fallback — var(--dl-r, var(--radius-md)) — is deliberate, not a mistake.
+    const withFallback = new Set(
+      [...CSS.matchAll(/var\(\s*(--[\w-]+)\s*,/g)].map((m) => m[1]),
+    );
+
+    const missing = [...used].filter((v) => !defined.has(v) && !withFallback.has(v)).sort();
+    expect(missing, "these tokens are read but never defined, so the declarations silently do nothing").toEqual([]);
+  });
+});
