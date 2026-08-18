@@ -48,6 +48,7 @@ const railStore = {
 const NAV = [
   { href: "jobs", label: "Jobs to do", icon: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8.5 12l2.2 2.2 4.8-4.8" /></> },
   { href: "plan", label: "Plan & sprint", icon: <><path d="M3 6h18M3 12h18M3 18h18" /><circle cx="8" cy="6" r="1.6" fill="currentColor" stroke="none" /><circle cx="16" cy="12" r="1.6" fill="currentColor" stroke="none" /><circle cx="11" cy="18" r="1.6" fill="currentColor" stroke="none" /></> },
+  { href: "history", label: "History", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
   { href: "content", label: "Shared content", icon: <><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10l2 2.5h6.5A1.5 1.5 0 0 1 20 8v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5Z" /></> },
   { href: "setup", label: "Setup", icon: <><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3 15a1.7 1.7 0 0 0-1.51-1H1a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 2.6 8" /></> },
 ] as const;
