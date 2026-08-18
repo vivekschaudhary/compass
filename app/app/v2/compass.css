@@ -28,6 +28,11 @@
  * collides. */
 
 .v2 {
+  /* The page gutter. Named because the top bar and the content below it must agree, and they did
+     not: the bar hard-coded 22px while the content used --space-6, so the brand and the heading
+     under it sat four pixels apart. A value used by two rules belongs in one place. */
+  --gutter: 22px;
+
   min-height: 100vh;
   background: var(--color-bg);
   color: var(--color-text);
@@ -36,11 +41,32 @@
   line-height: 1.55;
 }
 
+/* ── the gutter belongs to the layout ─────────────────────────────────────────
+ * It used to live on `.page`, which meant every page had to remember to apply that class to get
+ * a left and right margin. The job view could not — it is three panes wide and `.page` caps at
+ * 880px — so it rendered flush against the viewport while the top bar beside it was inset. A
+ * layout whose spacing depends on each page opting in is not doing its job.
+ *
+ * Now `main` carries it, so nothing under an engagement can be flush by accident, and `.page` is
+ * only what its name suggests: a reading width. */
+
+.v2 main {
+  padding: var(--space-8) var(--gutter) calc(var(--space-8) * 1.7);
+}
+
+/* Pages outside an engagement (/v2/new, /v2/design) have no <main> above them — the same gutter,
+ * still stated once. */
+.v2 > .page {
+  padding: var(--space-8) var(--gutter) calc(var(--space-8) * 1.7);
+}
+
 .v2 .page {
   max-width: 880px;
   margin: 0 auto;
-  padding: var(--space-8) var(--space-6) calc(var(--space-8) * 1.7);
 }
+
+/* Inside main the gutter is already applied; a nested .page adds width, not padding. */
+.v2 main .page { padding: 0; }
 
 /* ── motion ──────────────────────────────────────────────────────────────── */
 
@@ -224,7 +250,7 @@
 .topbar {
   background: var(--color-neutral-100);
   border-bottom: 1px solid var(--color-divider);
-  padding: 11px 22px;
+  padding: 11px var(--gutter);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
 .topbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
@@ -526,4 +552,52 @@ textarea.input,
 textarea.ask-input,
 textarea.verdict-reason {
   border-radius: var(--radius-md);
+}
+
+/* ── the agent's questions ───────────────────────────────────────────────────
+ * Lost when the job view was rebuilt: a regex that swept the old three-pane block out took these
+ * with it, and nothing said so — the classes stayed on the elements and simply matched no rule.
+ * See the guard in compass-css.test.ts, added so the next one is caught by a test rather than by
+ * someone reading a screenshot. */
+
+.asks {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  margin-top: var(--space-4); padding: var(--space-4);
+  border-radius: 18px; background: var(--color-surface);
+}
+.asks-head {
+  font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
+  font-weight: 600; color: var(--color-accent-700);
+}
+.ask { display: flex; flex-direction: column; gap: 5px; }
+.ask-prompt { font-size: 12.5px; font-weight: 600; line-height: 1.45; }
+.ask-why { font-size: 11px; color: var(--color-neutral-600); line-height: 1.45; }
+.ask-input { font-size: 12.5px; }
+.ask-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.asks-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.asks-note { font-size: 11px; }
+
+/* A choice, as a chip. Organic's `.seg` owns the segmented control; this is the standalone form. */
+.seg-opt {
+  font-size: 11.5px; padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--color-divider); cursor: pointer;
+}
+.seg-opt-on { background: var(--color-accent-700); color: var(--color-neutral-50); border-color: transparent; }
+
+/* ── running the agent ───────────────────────────────────────────────────── */
+
+.run-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-4); }
+.run-note, .run-outcome { font-size: 11.5px; }
+.run-outcome { color: var(--color-accent-2-900); }
+
+/* A card's state, with the way in beneath it. */
+.task-state-row { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+.job-card-link { color: inherit; text-decoration: underline; text-decoration-color: var(--color-neutral-400); text-underline-offset: 3px; }
+.job-card-link:hover { color: var(--color-accent-700); text-decoration-color: currentColor; }
+
+/* Visually hidden, still read aloud and still focusable. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
