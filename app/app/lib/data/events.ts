@@ -15,6 +15,30 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 
+/**
+ * The org an engagement belongs to.
+ *
+ * NOT a column on `engagement` — that was the assumption behind four events written with a null
+ * org, which the trigger-written ones beside them carried correctly. Tasks carry it, and every
+ * engagement that has done anything has tasks; the single-org fallback covers the gap before the
+ * first one exists.
+ */
+export async function orgIdFor(engagementId: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const { data: task } = await sb.from("work_task")
+    .select("org_id").eq("engagement_id", engagementId).limit(1).maybeSingle();
+  if (task?.org_id) return task.org_id as string;
+
+  const { data: doc } = await sb.from("document")
+    .select("org_id").eq("engagement_id", engagementId).limit(1).maybeSingle();
+  if (doc?.org_id) return doc.org_id as string;
+
+  const { data: org } = await sb.from("org").select("id").eq("code", "default").maybeSingle();
+  return (org?.id as string) ?? null;
+}
+
 export type Emit = {
   engagementId: string;
   /** What the event is about — `criterion`, `question`, `task`, `document`, `agent_run`. */
@@ -33,10 +57,8 @@ export async function emit(e: Emit): Promise<void> {
   const sb = supabaseAdmin();
   if (!sb) return;
 
-  const { data: eng } = await sb.from("engagement").select("org_id").eq("id", e.engagementId).maybeSingle();
-
   const { error } = await sb.from("event").insert({
-    org_id: (eng as { org_id?: string } | null)?.org_id ?? null,
+    org_id: await orgIdFor(e.engagementId),
     engagement_id: e.engagementId,
     subject_type: e.subjectType,
     subject_id: e.subjectId,
