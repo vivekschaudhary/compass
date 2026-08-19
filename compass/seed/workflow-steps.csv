@@ -57,10 +57,9 @@ triage,7,agent,support,write-postmortem,,,,,
 triage,8,hitl,support,approve,,,,,
 triage,9,agent,tech-writer,accumulate-changelog,,,,,
 basecamp,1,machine,,connect-systems-of-record,,,,,Connect systems of record
-basecamp,2,agent,delivery-manager,propose-kickoff-backlog,01-foundation/kickoff-backlog,"02-scope/sow,02-scope/deliverables,01-foundation/ways-of-working",,,Shape the kickoff backlog
-basecamp,3,agent,delivery-manager,propose-staffing,01-foundation/team,"02-scope/sow,01-foundation/kickoff-backlog",,,Staff the engagement
-groundwork,1,workflow,researcher,define-product-foundation,docs/foundation/product.md,"02-scope/sow,01-foundation/kickoff-backlog",,create-product-brief,Define the product foundation
-groundwork,2,workflow,enterprise-architect,establish-foundation-architecture,docs/foundation/architecture.md,"docs/foundation/product.md",,setup-foundation-architecture,Establish the foundation architecture
-groundwork,3,workflow,pm,agree-the-epics,docs/epics/portfolio.md,"docs/foundation/product.md",,create-epics,Agree the epics
+basecamp,2,agent,delivery-manager,propose-staffing,01-foundation/team,"02-scope/sow",,,Staff the engagement
+groundwork,1,workflow,researcher,define-product-foundation,docs/foundation/product.md,"02-scope/sow",,create-product-brief,Define the product foundation
+groundwork,2,workflow,pm,draft-the-epics,docs/epics/portfolio.md,"docs/foundation/product.md,02-scope/sow",,create-epics,Draft the high-level epics
+groundwork,3,workflow,enterprise-architect,establish-foundation-architecture,docs/foundation/architecture.md,"docs/foundation/product.md,docs/epics/portfolio.md",,setup-foundation-architecture,Establish the foundation architecture
 groundwork,4,workflow,delivery-manager,plan-first-milestone,docs/plan.md,"docs/epics/portfolio.md",,plan,Plan the first milestone
 groundwork,5,workflow,delivery-manager,start-rolling-status,docs/status.md,"docs/plan.md",,status,Start the rolling status

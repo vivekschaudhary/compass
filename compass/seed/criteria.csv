@@ -4,25 +4,21 @@ basecamp,,ready,,connector,tickets,is,wired
 basecamp,,ready,The SOW is filed — everything downstream is derived from it and cannot be invented,document,02-scope/sow,status,published
 basecamp,1,done,The doc store answers,connector,docs,is,wired
 basecamp,1,done,The tracker answers,connector,tickets,is,wired
-basecamp,2,done,Every row names a workflow that exists,backlog,workflow,unresolved,0
-basecamp,2,done,Every row names an owning role that exists,backlog,owner,unresolved,0
-basecamp,2,done,Every row is in Basecamp or Groundwork,backlog,stage,outside,0
-basecamp,2,done,Scope not covered by any row is named rather than left implicit,backlog,uncovered-deliverables,has-note,all
-basecamp,2,done,The Delivery Manager approved the backlog,ticket,{{story}},status,Done
-basecamp,3,done,Every role Groundwork assigns work to has a named holder,roster,sprint-0-roles,unfilled,0
-basecamp,3,done,Roles left deliberately unstaffed are recorded with a reason,roster,deferred,has-reason,all
-basecamp,3,done,The Delivery Manager approved the roster,ticket,{{story}},status,Done
-groundwork,,ready,The kickoff backlog is approved,document,01-foundation/kickoff-backlog,status,published
+basecamp,2,done,Every role Groundwork assigns work to has a named holder,roster,sprint-0-roles,unfilled,0
+basecamp,2,done,Roles left deliberately unstaffed are recorded with a reason,roster,deferred,has-reason,all
+basecamp,2,done,The Delivery Manager approved the roster,ticket,{{story}},status,Done
 groundwork,,ready,The roster is approved,document,01-foundation/team,status,published
 groundwork,1,done,The product foundation is published,document,docs/foundation/product.md,status,published
 groundwork,1,done,Every feature the SOW commits to is defined at scope level or named out of scope,,,,
 groundwork,1,done,The Product Manager approved it,,,,
-groundwork,2,done,The foundation architecture is published,document,docs/foundation/architecture.md,status,published
-groundwork,2,done,Every scope-level feature has a named home in the architecture,,,,
-groundwork,2,done,The Enterprise Architect approved it,,,,
-groundwork,3,done,The epic list is published,document,docs/epics/portfolio.md,status,published
-groundwork,3,done,Every epic traces to a commitment in the SOW,,,,
-groundwork,3,done,The Product Manager approved it,,,,
+groundwork,2,done,The epic list is published,document,docs/epics/portfolio.md,status,published
+groundwork,2,done,Every epic traces to something the brief or the SOW commits to,,,,
+groundwork,2,done,Every epic has a description and a milestone,,,,
+groundwork,2,done,What the brief leaves unclear is recorded as an open question rather than a guessed epic,,,,
+groundwork,2,done,The Product Manager approved the epics,,,,
+groundwork,3,done,The foundation architecture is published,document,docs/foundation/architecture.md,status,published
+groundwork,3,done,Every scope-level feature has a named home in the architecture,,,,
+groundwork,3,done,The Enterprise Architect approved it,,,,
 groundwork,4,done,The plan is published,document,docs/plan.md,status,published
 groundwork,4,done,Every row carries an estimate or an explicit tbd with a reason,,,,
 groundwork,4,done,The Delivery Manager approved the plan,,,,

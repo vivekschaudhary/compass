@@ -28,14 +28,17 @@ requires:
 
 # ── PRODUCES ──────────────────────────────────────────────────────────────
 produces:
-  - 01-foundation/kickoff-backlog@docs: approved
   - 01-foundation/team@docs: approved
 ---
 
 ## Purpose
 
-Turn a provisioned project entry into an engagement that can be worked: what the SOW commits us
-to, expressed as a backlog, and a named person against every role that backlog assigns work to.
+Turn a provisioned project entry into an engagement that can be worked: proven systems of record,
+and a named person against every role that groundwork assigns work to.
+
+There is deliberately no backlog row. The engagement's epics are written in groundwork, FROM the
+product brief — an SOW commits to outcomes and money, and epics derived from it alone are invented
+scope, which is how a fixed-price engagement bleeds.
 
 Ends when groundwork can start. It does not plan groundwork — `groundwork.md` does that, and the
 DM initiates that too.
@@ -55,8 +58,7 @@ has.
 | # | task | dispatch | owner | reads | produces | depends-on |
 |---|------|----------|-------|-------|----------|------------|
 | 1 | Connect systems of record | — | delivery-manager | — | — | — |
-| 2 | Shape the kickoff backlog | `agent: delivery-manager.propose-kickoff-backlog` | delivery-manager | `02-scope/sow` · `02-scope/deliverables` · `01-foundation/ways-of-working` | `01-foundation/kickoff-backlog` | 1 |
-| 3 | Staff the engagement | `agent: delivery-manager.propose-staffing` | delivery-manager | `02-scope/sow` · `01-foundation/kickoff-backlog` | `01-foundation/team` | 2 |
+| 2 | Staff the engagement | `agent: delivery-manager.propose-staffing` | delivery-manager | `02-scope/sow` | `01-foundation/team` | 1 |
 
 ## Gates
 
@@ -75,17 +77,9 @@ Satisfied by the admin's project entry and the probes above, so this task closes
 a row rather than an assumption because an engagement whose tracker silently stopped answering
 should reopen it.
 
-### 2. Shape the kickoff backlog
+### 2. Staff the engagement
 
-    check:    every row names a workflow that exists
-    check:    every row names an owning role that exists
-    check:    every row is in Pre-Sprint 0 or Sprint 0
-    judgment: scope not covered by any row is named rather than left implicit
-    judgment: the Delivery Manager approved the backlog
-
-### 3. Staff the engagement
-
-    check:    every role Sprint 0 assigns work to has a named holder
+    check:    every role Groundwork assigns work to has a named holder
     judgment: roles left deliberately unstaffed are recorded with a reason
     judgment: the Delivery Manager approved the roster
 

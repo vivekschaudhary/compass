@@ -29,13 +29,13 @@ Cited via short-form in workflows: e.g., `[working-backwards]` → links to that
 ### blue-ocean
 **Blue Ocean Strategy** — W. Chan Kim & Renée Mauborgne, *Blue Ocean Strategy* (2005). Create uncontested market space rather than competing in red oceans of head-to-head competition; framework includes the "four actions" (raise / reduce / eliminate / create).
 
-## Bet-based commitment
+## Epic-based commitment
 
 ### shape-up
 **Shape Up — "shape → bet → build" cycle** — Ryan Singer / Basecamp, *Shape Up* (2019). Six-week appetite-bounded cycles; work is shaped before it's committed; the bet table replaces backlogs.
 
-### helmer-bet-portfolio
-**Helmer's mathematical bet portfolio model** — Hamilton Helmer / Deep Strategy investment firm methodology. Frames strategic decisions as a portfolio of bets sized by 7 Powers' expected value; informs how Compass treats foundational + feature bets as a measurable wager set.
+### helmer-epic-portfolio
+**Helmer's mathematical bet portfolio model** — Hamilton Helmer / Deep Strategy investment firm methodology. Frames strategic decisions as a portfolio of bets sized by 7 Powers' expected value; informs how Compass treats foundational + feature epics as a measurable wager set.
 
 ## Communication discipline
 
@@ -51,7 +51,7 @@ Cited via short-form in workflows: e.g., `[working-backwards]` → links to that
 ## Goal-setting
 
 ### okrs
-**OKRs (Objectives & Key Results)** — Andy Grove (Intel, 1970s) → John Doerr, *Measure What Matters* (2018). Objective = ambitious qualitative goal; Key Results = measurable outcomes that prove the objective. Compass uses for foundational + quarterly OKR bets.
+**OKRs (Objectives & Key Results)** — Andy Grove (Intel, 1970s) → John Doerr, *Measure What Matters* (2018). Objective = ambitious qualitative goal; Key Results = measurable outcomes that prove the objective. Compass uses for foundational + quarterly OKR epics.
 
 ### north-star
 **North Star Framework** — Amplitude (Sean Ellis lineage, formalized ~2017-2019). Single metric that captures core customer value; serves as the strategic compass for cross-functional alignment.
