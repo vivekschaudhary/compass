@@ -90,6 +90,32 @@ export async function pinInputs(taskId: string, engagementId: string): Promise<n
   return rows.length;
 }
 
+
+/**
+ * The pinned inputs, pinning them first if nobody has.
+ *
+ * Pinning used to live only inside `startTask`, so an agent invoked by any OTHER route — the job
+ * page's Run button, a retry, a script — built its context from zero pins. The prompt then told it
+ * "this task declares no input documents", which is a lie when the step declares one, and the agent
+ * did the reasonable thing: it asked the human to paste the SOW that Compass had already filed,
+ * published and versioned.
+ *
+ * So the guarantee lives here, where EVERY agent call passes, rather than on one UI path. Pinning is
+ * an upsert keyed on (task, path), so a task started normally is unaffected and the versions fixed
+ * at start are not moved. Lazy pinning still honours the point of pinning: inputs are fixed at the
+ * moment work actually began.
+ */
+async function ensureInputs(taskId: string, engagementId: string): Promise<PinnedInput[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { count } = await sb.from("task_input")
+    .select("*", { count: "exact", head: true }).eq("task_id", taskId);
+  if (!count) await pinInputs(taskId, engagementId);
+
+  return loadInputs(taskId, engagementId);
+}
+
 /** Load the pinned documents' text, at the pinned version. */
 async function loadInputs(taskId: string, engagementId: string): Promise<PinnedInput[]> {
   const sb = supabaseAdmin();
@@ -270,7 +296,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     roleCode: task.role_code,
     agentFile,
     produces,
-    inputs: await loadInputs(taskId, actor.engagementId),
+    inputs: await ensureInputs(taskId, actor.engagementId),
     doneCriteria,
     inventory: await loadInventory(actor.orgId),
     priorDraft: await loadPriorDraft(actor.engagementId, produces),
@@ -384,6 +410,9 @@ export function revisionPrompt(ctx: AgentContext): string | null {
 /** The user turn: the pinned material, with absences stated rather than omitted. */
 export function inputPrompt(ctx: AgentContext): string {
   if (!ctx.inputs.length) {
+    // True only when the STEP declares no reads. It used to be said whenever pinning had not
+    // happened, which told an agent it had no inputs while its step declared one — and it went and
+    // asked the human for a document already filed and published.
     return "This task declares no input documents. Say so before doing anything else.";
   }
 

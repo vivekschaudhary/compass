@@ -18,6 +18,7 @@ import { conversation, openQuestions } from "../data/job";
 import { publishToDocs } from "../data/publish";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
+import { nestedWorkflowOf } from "../data/phases";
 
 const MODEL = "claude-opus-5";
 
@@ -217,6 +218,20 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
 
   const ctx = await buildContext(actor, taskId);
   if (!ctx) return { kind: "error", message: "That task is not in your engagement." };
+
+  // A row that NESTS a workflow has no agent to run. Its work happens in the child run's own steps,
+  // each with its own agent and its own gates. The queue knows this and offers "open" instead of
+  // "start", but the job page's Run button did not — so an agent was invoked on a `kind: workflow`
+  // row, given the row's task slug (`define-product-foundation`) that no agent file defines, and
+  // produced eight questions from a blank context. Refused here, where every call passes.
+  const nests = await nestedWorkflowOf(taskId);
+  if (nests) {
+    return {
+      kind: "error",
+      message: `This row is satisfied by the ${nests} workflow, not by an agent. Start it to open ` +
+               `that run — its steps are where the work happens.`,
+    };
+  }
 
   // Mark who is executing BEFORE the call, so a run that dies mid-flight is visibly attributed
   // rather than looking like a task nobody ever picked up.
