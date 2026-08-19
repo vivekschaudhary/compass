@@ -16,7 +16,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { readShippedDocTree } from "../doctree";
 import { publishToDocs } from "./publish";
-import { canonicalSpaceKey, canonicalProjectKey, type DocEng } from "../docstore";
+import { checkSpaceKey, checkProjectKey, type DocEng } from "../docstore";
 import { emit } from "./events";
 
 export type NewEngagement = {
@@ -49,18 +49,7 @@ export type OnboardResult = {
   sowSections: number;
   openedWorkflow: string | null;
   published: number;
-  /**
-   * Things that went wrong. Rendered as failures, so nothing belongs here that succeeded.
-   */
   problems: string[];
-  /**
-   * Things that went RIGHT but changed what you typed.
-   *
-   * "Confluence space 'Test' resolved to 'Test1'" was filed as a problem and shown under "some
-   * parts did not complete" — so the canonicaliser doing exactly its job read as a failure. An
-   * adjustment is worth reporting and is not a fault.
-   */
-  notes: string[];
 };
 
 const slug = (s: string) =>
@@ -110,45 +99,52 @@ export function sectionise(text: string): { heading: string; body: string }[] {
 export async function createEngagement(input: NewEngagement): Promise<OnboardResult> {
   const sb = supabaseAdmin();
   const problems: string[] = [];
-  const notes: string[] = [];
-  if (!sb) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [], problems: ["Supabase is not configured."] };
+  if (!sb) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, problems: ["Supabase is not configured."] };
 
   if (!input.deliveryManager?.trim()) {
     // Found by creating the second engagement: intake happily made one with no members, so no role
     // had a holder, the queue resolved to nobody and the page 404'd. An engagement is work someone
     // does; creating one without saying who is creating something unusable.
-    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
+    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
       problems: ["No delivery manager. An engagement with nobody on it has no queue to open."] };
   }
 
   if (!input.sowText?.trim()) {
-    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
+    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
       problems: ["No SOW text. Everything downstream derives from it, so intake refuses without one."] };
   }
 
   const { data: org } = await sb.from("org").select("id").eq("code", input.orgCode ?? "default").maybeSingle();
-  if (!org) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
+  if (!org) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
     problems: [`No org '${input.orgCode ?? "default"}'. Import the seed first.`] };
 
   const id = `${slug(input.client || input.name)}-${Date.now().toString(36).slice(-4)}`;
 
-  // What a person types is not what the API expects. `Test` is a Jira project key only in
-  // uppercase, and in Confluence it is a space NAME whose key is `Test1`. Both were typed exactly
-  // that way on the first real intake, and both failed several steps later with an error about
-  // something else. Resolve once, here, and store canonical.
+  // Check the keys BEFORE creating anything, and refuse rather than correct.
+  //
+  // This used to resolve `Test` to `Test1` and report the change. Rewriting what a person entered
+  // is not the app's call — it decides what you meant, and the correction is invisible in the
+  // record afterwards. Refusing names the right value and leaves the fix with the person, so what
+  // is stored is what they typed.
+  //
+  // Refusing BEFORE the insert matters as much: a half-made engagement with a wrong space is worse
+  // than no engagement, because the next person has to know to delete it.
   const docsProvider = input.docsProvider ?? "confluence";
-  const jiraProject = input.jiraProject ? canonicalProjectKey(input.jiraProject) : null;
-  const confluenceSpace = input.confluenceSpace && docsProvider === "confluence"
-    ? await canonicalSpaceKey(
-        { id, name: input.name, docs_provider: docsProvider } as DocEng, input.confluenceSpace)
-    : (input.confluenceSpace ?? null);
+  const probe = { id, name: input.name, docs_provider: docsProvider } as DocEng;
 
-  if (input.confluenceSpace && confluenceSpace !== input.confluenceSpace) {
-    notes.push(`Confluence space '${input.confluenceSpace}' resolved to '${confluenceSpace}'.`);
+  const keyProblems = (await Promise.all([
+    input.confluenceSpace && docsProvider === "confluence"
+      ? checkSpaceKey(probe, input.confluenceSpace) : null,
+    input.jiraProject ? checkProjectKey(probe, input.jiraProject) : null,
+  ])).filter(Boolean) as string[];
+
+  if (keyProblems.length) {
+    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0,
+             openedWorkflow: null, published: 0, problems: keyProblems };
   }
-  if (input.jiraProject && jiraProject !== input.jiraProject) {
-    notes.push(`Jira project '${input.jiraProject}' resolved to '${jiraProject}'.`);
-  }
+
+  const confluenceSpace = input.confluenceSpace ?? null;
+  const jiraProject = input.jiraProject ?? null;
 
   const { error: engErr } = await sb.from("engagement").insert({
     id, name: input.name, client: input.client,
@@ -163,7 +159,7 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     cost_spent: 0, cost_spark: [0], scope_spark: [], stories_late: 0,
     time_spark: [], quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
   });
-  if (engErr) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
+  if (engErr) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
     problems: [`create engagement: ${engErr.message}`] };
 
   // The first person on it. The rest are staffed by `staff-engagement`, which is a job — but
@@ -267,6 +263,6 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     documents: docRows.length,
     sowVersionId: (sowVersionId as string) ?? null,
     sowSections: sections.length,
-    openedWorkflow, published, problems, notes,
+    openedWorkflow, published, problems,
   };
 }

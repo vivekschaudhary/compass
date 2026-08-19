@@ -919,6 +919,3 @@ textarea.verdict-reason {
   white-space: pre-wrap; background: var(--color-surface); border-left: 2px solid var(--color-text);
 }
 
-/* Adjustments are informational — they must not wear the failure styling. */
-.onboard-notes { margin-top: var(--space-3); font-size: 12.5px; }
-.onboard-notes ul { margin: 4px 0 0; padding-left: 18px; }

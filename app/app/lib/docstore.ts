@@ -165,39 +165,52 @@ export async function deleteProviderDoc(
 }
 
 /**
- * Turn what a person typed into what the API expects.
+ * Check a Confluence space key, and say what to type when it is wrong.
  *
- * Two different mistakes, both made on the first real intake:
+ * It used to CORRECT the value — `Test` became `Test1` and intake reported the change. That is a
+ * silent rewrite of something a person entered, and it read as a failure precisely because it was
+ * confusing: the app decided what you meant. It now refuses and names the candidate, so the value
+ * stored is the one you typed and the correction is yours to make.
  *
- *   Jira      `Test` instead of `TEST` — project keys are uppercase. Pure case.
- *   Confluence `Test` instead of `Test1` — that is the space's NAME, not its key. Case-folding
- *             would not have caught it, so the name is matched too. Keys are unique; names are
- *             not guaranteed to be, so a name match only wins when exactly one space carries it.
- *
- * Resolved once, at intake, and stored canonical — rather than folding at every call site, where
- * the next reader has to remember. Returns the input unchanged when nothing matches, so a genuinely
- * wrong value still fails loudly at the gate instead of being silently rewritten.
+ * Returns null when the key is good, or a sentence saying what to use instead.
  */
-export async function canonicalSpaceKey(eng: DocEng, given: string): Promise<string> {
+export async function checkSpaceKey(eng: DocEng, given: string): Promise<string | null> {
   const a = cfAuth(eng);
-  if (!a || !given) return given;
+  if (!a || !given) return null;      // not configured is a different problem, reported elsewhere
   try {
     const res = await fetch(`${a.base}/wiki/rest/api/space?limit=200`, { headers: a.headers });
-    if (!res.ok) return given;
+    if (!res.ok) return null;         // cannot check is not the same as wrong
     const spaces: { key: string; name: string }[] = (await res.json()).results ?? [];
+
+    if (spaces.some((sp) => sp.key === given)) return null;
+
     const want = given.trim().toLowerCase();
-
-    const byKey = spaces.find((sp) => sp.key?.toLowerCase() === want);
-    if (byKey) return byKey.key;
-
-    const byName = spaces.filter((sp) => sp.name?.toLowerCase() === want);
-    return byName.length === 1 ? byName[0].key : given;
-  } catch { return given; }
+    const near = spaces.find((sp) => sp.key?.toLowerCase() === want)
+              ?? spaces.filter((sp) => sp.name?.toLowerCase() === want)[0];
+    return near
+      // The name/key distinction is the one people actually hit: Confluence shows "Test" and the
+      // API wants "Test1", so say both.
+      ? `No Confluence space with key '${given}'. Use '${near.key}' — that is the key of the space named '${near.name}'.`
+      : `No Confluence space with key '${given}'. Check the key in Confluence — it is not the space's display name.`;
+  } catch { return null; }
 }
 
-/** Jira project keys are uppercase. That is the whole rule. */
-export function canonicalProjectKey(given: string): string {
-  return (given ?? "").trim().toUpperCase();
+/** Check a Jira project key the same way. Keys are uppercase; `test` is not `TEST`. */
+export async function checkProjectKey(eng: DocEng & { jira_project?: string }, given: string): Promise<string | null> {
+  const a = cfAuth(eng);
+  if (!a || !given) return null;
+  try {
+    const res = await fetch(`${a.base}/rest/api/3/project/search?maxResults=100`, { headers: a.headers });
+    if (!res.ok) return null;
+    const projects: { key: string; name: string }[] = (await res.json()).values ?? [];
+
+    if (projects.some((pr) => pr.key === given)) return null;
+
+    const near = projects.find((pr) => pr.key?.toLowerCase() === given.trim().toLowerCase());
+    return near
+      ? `No Jira project with key '${given}'. Use '${near.key}' — project keys are uppercase.`
+      : `No Jira project with key '${given}'. Check the key on the board.`;
+  } catch { return null; }
 }
 
 export async function writeProviderDoc(eng: DocEng, title: string, html: string): Promise<{ id: string; url: string } | null> {

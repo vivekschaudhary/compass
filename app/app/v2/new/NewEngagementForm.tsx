@@ -5,7 +5,7 @@ import { Field, Input, Textarea, Button } from "../_ui/primitives";
 
 type Result = {
   engagementId: string; documents: number; sowSections: number;
-  openedWorkflow: string | null; published: number; problems: string[]; notes: string[];
+  openedWorkflow: string | null; published: number; problems: string[];
 };
 
 export function NewEngagementForm() {
@@ -52,15 +52,6 @@ export function NewEngagementForm() {
         </ul>
         {/* Problems are shown, not swallowed. An engagement created with a failed publish is a real
             state and the person who created it should know before they go looking for the page. */}
-        {/* An adjustment is not a fault. "Confluence space 'Test' resolved to 'Test1'" was shown
-            under "some parts did not complete", so the canonicaliser doing its job read as a
-            failure — worth telling you, worth not alarming you. */}
-        {result.notes.length > 0 && (
-          <div className="onboard-notes">
-            <strong>Adjusted to match your systems:</strong>
-            <ul>{result.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
-          </div>
-        )}
 
         {result.problems.length > 0 && (
           <div className="onboard-problems">
