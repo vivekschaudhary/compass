@@ -18,7 +18,11 @@ export function PhaseStarter({ engagement, role, phases }: {
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  // Keyed BY PHASE, and only rendered while that phase is still startable. A single `error` string
+  // outlived the thing it described: basecamp was refused, then succeeded, and its refusal sat
+  // above a queue full of basecamp's tasks flatly contradicting it. A message about a phase that
+  // is no longer offered cannot be true.
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
   const startable = phases.filter((p) => p.state === "available");
@@ -31,25 +35,26 @@ export function PhaseStarter({ engagement, role, phases }: {
         Creating the engagement provisioned it. Nothing runs until you say so.
       </p>
 
-      <div className="phases-row">
-        {startable.map((p) => (
+      {startable.map((p) => (
+        <div key={p.code} className="phases-one">
           <button
-            key={p.code} className="btn btn-primary" disabled={pending}
+            className="btn btn-primary" disabled={pending}
             onClick={() => startTransition(async () => {
-              setError(null); setBusy(p.code);
+              setErrors((e) => ({ ...e, [p.code]: "" }));
+              setBusy(p.code);
               const r = await initiatePhaseAction(engagement, role, p.code);
               setBusy(null);
-              if (!r.ok) setError(r.error ?? `Could not start ${p.label}.`);
+              if (!r.ok) setErrors((e) => ({ ...e, [p.code]: r.error ?? `Could not start ${p.label}.` }));
               else router.refresh();
             })}
           >
             {busy === p.code ? `Starting ${p.label}…` : `Initiate ${p.label}`}
           </button>
-        ))}
-      </div>
 
-      {/* Whitespace preserved: the refusal is a list of criteria, one per line. */}
-      {error && <pre className="phases-error">{error}</pre>}
+          {/* Whitespace preserved: the refusal is a list of criteria, one per line. */}
+          {errors[p.code] && <pre className="phases-error">{errors[p.code]}</pre>}
+        </div>
+      ))}
     </div>
   );
 }

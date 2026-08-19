@@ -912,7 +912,8 @@ textarea.verdict-reason {
 .phases { border: 1px solid var(--color-divider); padding: var(--space-4); margin-bottom: var(--space-6); }
 .phases-head { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
 .phases-blurb { font-size: 12.5px; margin: 0 0 var(--space-3); }
-.phases-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.phases-one { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.phases-one + .phases-one { margin-top: var(--space-3); }
 .phases-error {
   margin: var(--space-3) 0 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.6;
   white-space: pre-wrap; background: var(--color-surface); border-left: 2px solid var(--color-text);
