@@ -57,17 +57,27 @@ def check_dispatch_graph_count(repo_root: Path) -> list:
         1 for p in _workflow_files(repo_root)
         if "## Dispatch graph" in p.read_text(encoding="utf-8")
     )
+    # The DENOMINATOR is computed too. It was hardcoded as 18, so adding a workflow made the check
+    # itself the stale claim — it demanded "N of 18" from a repo that no longer had 18. A checker
+    # that carries a literal it is policing cannot police it.
+    total = len(_workflow_files(repo_root))
+
     agents = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
-    m = re.search(r"(\d+) of 18 workflows", agents)
+    m = re.search(r"(\d+) of (\d+) workflows", agents)
     if not m:
-        return ["AGENTS.md: could not find the 'N of 18 workflows' dispatch-graph claim"]
-    claimed = int(m.group(1))
+        return ["AGENTS.md: could not find the 'N of M workflows' dispatch-graph claim"]
+    claimed, claimed_total = int(m.group(1)), int(m.group(2))
+
+    problems = []
     if claimed != actual:
-        return [
-            f"dispatch-graph count drift: AGENTS.md claims {claimed} of 18, "
-            f"actual is {actual}. Update AGENTS.md."
-        ]
-    return []
+        problems.append(
+            f"dispatch-graph count drift: AGENTS.md claims {claimed} in dispatch-graph shape, "
+            f"actual is {actual}. Update AGENTS.md.")
+    if claimed_total != total:
+        problems.append(
+            f"workflow total drift: AGENTS.md claims {claimed_total} workflows, "
+            f"actual is {total} (compass/workflows/*.md, excluding improvements.md). Update AGENTS.md.")
+    return problems
 
 
 def check_catalog_count(repo_root: Path) -> list:

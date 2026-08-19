@@ -48,7 +48,10 @@ class TestDetectsDrift(unittest.TestCase):
         # AGENTS claiming the matching truths + a host table mentioning every
         # router-supported host (chatgpt is the openai-family alias → `openai`)
         (root / "AGENTS.md").write_text(
-            "2 of 18 workflows now in dispatch-graph shape; "
+            # 2 of 2, not 2 of 18: the mirror has two workflow files and both carry a graph. The
+            # denominator used to be a literal in the checker, so this fixture could claim 18 while
+            # holding 2 and nothing noticed — the checker had the drift it was written to catch.
+            "2 of 2 workflows now in dispatch-graph shape; "
             "catalog 7 shapes / 2 patterns.\n"
             "Hosts: `claude` `claude-code` `codex` `openai` `gemini`\n",
             encoding="utf-8",
@@ -69,6 +72,22 @@ class TestDetectsDrift(unittest.TestCase):
     def test_clean_mirror_passes(self):
         root = self._mirror()
         self.assertEqual(cc.run_all(root), [])
+
+    def test_detects_a_stale_workflow_total(self):
+        """Adding a workflow must fail the check until AGENTS.md says so.
+
+        The numerator has always been computed; the denominator was a literal, so a NEW workflow
+        left the total claim stale and silent. This is that case.
+        """
+        root = self._mirror()
+        (root / "compass" / "workflows" / "c.md").write_text(
+            "# wf\n\n## Dispatch graph\n\n### Step 1. `x.y`\n", encoding="utf-8"
+        )
+        problems = cc.run_all(root)
+        self.assertTrue(
+            any("workflow total drift" in p for p in problems),
+            f"a third workflow should have made the total claim stale, got: {problems}",
+        )
 
     def test_dispatch_count_drift_caught(self):
         root = self._mirror()

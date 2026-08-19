@@ -17,6 +17,9 @@ class WorkflowStep:
     routes: Optional[list] = None          # [(label, target)] — routing gate (#96/#103);
                                            # target is int (inline step), "/<workflow>"
                                            # (cross-workflow hand-off), or "close" (terminal)
+    nests: Optional[str] = None            # the workflow this row nests — the row is done when
+                                           # that run closes. A phase mixes agent tasks and nested
+                                           # workflows freely; only the row knows which it is.
 
 
 def load_workflow_meta(workflow_file: Path) -> dict:
@@ -63,6 +66,50 @@ def _parse_route_target(raw: str):
     return raw.lower() if raw.lower() == "close" else raw
 
 
+
+# `| # | task | dispatch | owner | reads | produces | depends-on |`
+_TABLE_ROW = re.compile(r'^\|\s*(\d+)\s*\|(.+)\|\s*$', re.MULTILINE)
+_DISPATCH_AGENT = re.compile(r'`agent:\s*([a-z0-9-]+)\.([a-z0-9-]+)`')
+_DISPATCH_NESTS = re.compile(r'`workflow:\s*([a-z0-9-]+)`')
+
+
+def _load_table_steps(graph_text: str) -> list:
+    """Steps from a dispatch-graph TABLE. Empty list when the section has no such table.
+
+    `dispatch` is the whole vocabulary, and it is deliberately small:
+
+        `agent: <role>.<task>`   one agent task, defined in that agent's file
+        `workflow: <code>`       a nested run — the row is done when that run closes
+        an em-dash               nothing dispatches; something else satisfies the gate
+    """
+    steps = []
+    for m in _TABLE_ROW.finditer(graph_text):
+        ord_, rest = int(m.group(1)), m.group(2)
+        cells = [c.strip() for c in rest.split('|')]
+        joined = ' '.join(cells)
+
+        agent_m = _DISPATCH_AGENT.search(joined)
+        nests_m = _DISPATCH_NESTS.search(joined)
+        title = cells[0] if cells else ''
+        owner = next((c for c in cells if re.fullmatch(r'[a-z][a-z0-9-]+', c)), None)
+
+        if agent_m:
+            steps.append(WorkflowStep(
+                number=ord_, title=title, agent=agent_m.group(1), task=agent_m.group(2),
+                agent_file=f'compass/agents/{agent_m.group(1)}.md', is_hitl=False))
+        elif nests_m:
+            # A nested workflow is not an agent step. It carries its owner so the queue can show
+            # who is accountable, and its target so a runner knows what to open.
+            steps.append(WorkflowStep(
+                number=ord_, title=title, agent=owner, task=None,
+                agent_file=None, is_hitl=False, nests=nests_m.group(1)))
+        else:
+            steps.append(WorkflowStep(
+                number=ord_, title=title, agent=None, task=None,
+                agent_file=None, is_hitl=False))
+    return steps
+
+
 def load_workflow(workflow_file: Path) -> list:
     """
     Parse a dispatch-graph workflow .md file.
@@ -86,6 +133,15 @@ def load_workflow(workflow_file: Path) -> list:
     else:
         # Workflow may not use the heading; fall back to full text
         graph_text = text
+
+    # The TABLE form first. `basecamp.md` and `groundwork.md` express a phase as one row per unit
+    # of work — the format the whole catalogue is moving to — and a heading-only parser reads them
+    # as "declares a graph, yielded no steps", which is how a workflow with three real steps looked
+    # empty to the framework while the app ran it fine. One parser has to understand both, or the
+    # two engines drift again.
+    table_steps = _load_table_steps(graph_text)
+    if table_steps:
+        return table_steps
 
     step_pattern = re.compile(r'^### Step (\d+)\.\s+(.+?)$', re.MULTILINE)
     matches = list(step_pattern.finditer(graph_text))

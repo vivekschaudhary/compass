@@ -34,6 +34,8 @@ export type WorkflowRow = {
 export type StepRow = {
   workflow: string; ord: number; kind: string; role: string; task: string;
   produces: string; reads: string[]; conditional: string;
+  /** `kind: workflow` only — the workflow this row nests. The row is done when that run closes. */
+  nests: string;
 };
 export type CriterionRow = {
   workflow: string; stepOrd: number | null; kind: string; text: string;
@@ -72,7 +74,10 @@ export type PlanResult =
 
 const TIERS = ["oversight", "practitioner", "platform"];
 const SCOPES = ["mine", "workstream", "everyone"];
-const STEP_KINDS = ["agent", "hitl", "machine"];
+// `workflow` joins them: a row may be satisfied by a whole nested run rather than one task.
+// Previously anything larger than a single task had to BE a top-level workflow, which is how one
+// engagement ended up with nine peer runs holding six tasks.
+const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
 const CRITERION_KINDS = ["ready", "done"];
 
 /* ── parsing ─────────────────────────────────────────────────────────────── */
@@ -106,7 +111,7 @@ function readSteps(csv: string): StepRow[] {
   return parseRecords(csv).map((r) => ({
     workflow: r.workflow, ord: num(r.ord), kind: r.kind || "agent", role: r.role ?? "",
     task: r.task ?? "", produces: r.produces ?? "", reads: parseList(r.reads),
-    conditional: r.conditional ?? "",
+    conditional: r.conditional ?? "", nests: r.nests ?? "",
   }));
 }
 
@@ -199,6 +204,19 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     if (s.kind === "machine" && s.role)
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} is a machine check but names role '${s.role}'.`,
         "Nobody holds a machine check. Leave role empty, or make it a criterion on a gate instead of a step.");
+
+    // A nesting row must name what it nests, and a non-nesting row must not. Caught here rather
+    // than left to the database so the import reports it with a file and a row number — a check
+    // constraint violation surfaces as a 400 with no idea which line caused it.
+    if (s.kind === "workflow" && !s.nests)
+      add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} nests a workflow but names none.`,
+        "Put the workflow's code in the `nests` column, e.g. create-product-brief.");
+    if (s.kind !== "workflow" && s.nests)
+      add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} names nests='${s.nests}' but its kind is '${s.kind}'.`,
+        "Only a `workflow` step nests. Change the kind, or clear the nests column.");
+    if (s.kind === "workflow" && s.nests && !knownWorkflows.has(s.nests))
+      add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} nests '${s.nests}', which is not in this import.`,
+        "A row cannot nest a workflow that does not exist — add it, or point at one that does.");
     if (s.kind !== "machine" && !s.role)
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} names no role.`,
         "A step someone has to hold needs a role, or it lands in nobody's queue.");

@@ -50,9 +50,46 @@ describe("the shipped seed", () => {
 
   // The invariant, not the count — the seed will grow, and a hardcoded length would just have to
   // be edited each time without ever catching anything.
-  it("has exactly one workflow triggered by project-created", () => {
-    const onCreate = planned().workflows.filter((w) => w.row.trigger === "project-created");
-    expect(onCreate.map((w) => w.row.code)).toEqual(["plan-kickoff"]);
+  it("has no workflow that starts itself — a person initiates", () => {
+    // This used to assert exactly one `project-created` trigger (plan-kickoff), which encoded the
+    // old design: creating a project silently opened work. Basecamp is initiated by the delivery
+    // manager instead, because an engagement existing is not the same as an engagement being ready
+    // to start — the admin may create it days before anyone is available to run it.
+    const selfStarting = planned().workflows.filter((w) => w.row.trigger);
+    expect(selfStarting.map((w) => w.row.code)).toEqual([]);
+  });
+
+  it("seeds basecamp and groundwork, owned by the delivery manager", () => {
+    const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
+    expect(byCode.get("basecamp")?.ownerRole).toBe("delivery-manager");
+    expect(byCode.get("groundwork")?.ownerRole).toBe("delivery-manager");
+  });
+
+  it("gives every basecamp and groundwork row a Done gate", () => {
+    // The vacuous-close bug: close_task builds its refusal with string_agg over the Done criteria,
+    // and over zero rows that returns NULL — so a step with no criteria closes green with no
+    // evidence at all. A phase whose rows have no gates is worse than no phase.
+    for (const code of ["basecamp", "groundwork"]) {
+      const wf = planned().workflows.find((w) => w.row.code === code)!;
+      for (const step of wf.steps) {
+        const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepOrd === step.ord);
+        expect(gates.length, `${code} step ${step.ord} has no Done criteria`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("only a `workflow` step nests, and it nests something that exists", () => {
+    const codes = new Set(planned().workflows.map((w) => w.row.code));
+    for (const wf of planned().workflows) {
+      for (const s of wf.steps) {
+        if (s.kind === "workflow") {
+          expect(s.nests, `${wf.row.code} step ${s.ord} nests nothing`).toBeTruthy();
+          expect(codes.has(s.nests), `${wf.row.code} step ${s.ord} nests unknown '${s.nests}'`).toBe(true);
+        } else {
+          expect(s.nests, `${wf.row.code} step ${s.ord} is ${s.kind} but nests`).toBe("");
+        }
+      }
+    }
   });
 
   it("opens everything else off the kickoff backlog, not off project creation", () => {
@@ -225,7 +262,7 @@ describe("import is versioning", () => {
     workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "" }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "" }],
       criteria: [{ workflow: "build", stepOrd: 1, kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };

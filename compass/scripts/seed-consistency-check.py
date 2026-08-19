@@ -41,8 +41,48 @@ STEP = re.compile(r"^#{2,4}\s*Step\s+(\d+)\.\s*(.+?)\s*$", re.M)
 AGENT_TASK = re.compile(r"`([a-z0-9-]+)\.([a-z0-9-]+)`")
 
 
+# The dispatch-graph TABLE — the format basecamp.md and groundwork.md use, and the one everything
+# should move to. One row per step:
+#
+#   | # | task | dispatch | owner | reads | produces | depends-on |
+#   | 2 | Shape the kickoff backlog | `agent: delivery-manager.propose-kickoff-backlog` | ... |
+#
+# `dispatch` is the whole vocabulary: `agent: <role>.<task>`, `workflow: <code>`, or an em-dash for
+# a row nothing dispatches.
+TABLE_ROW = re.compile(r"^\|\s*(\d+)\s*\|(.+)\|\s*$", re.M)
+DISPATCH_AGENT = re.compile(r"`agent:\s*([a-z0-9-]+)\.([a-z0-9-]+)`")
+DISPATCH_NESTS = re.compile(r"`workflow:\s*([a-z0-9-]+)`")
+
+
+def table_steps(text: str) -> list[dict]:
+    """Steps from a `## Dispatch graph` table. Empty when the file has no such table."""
+    if "## Dispatch graph" not in text:
+        return []
+    body = text.split("## Dispatch graph", 1)[1].split("\n## ", 1)[0]
+
+    out = []
+    for ord_, rest in TABLE_ROW.findall(body):
+        cells = [c.strip() for c in rest.split("|")]
+        joined = " ".join(cells)
+        m_agent = DISPATCH_AGENT.search(joined)
+        m_nests = DISPATCH_NESTS.search(joined)
+        # The owner column carries the role for a nesting row — the agent form carries its own.
+        owner = next((c for c in cells if re.fullmatch(r"[a-z][a-z0-9-]+", c)), "")
+        if m_agent:
+            out.append({"ord": int(ord_), "kind": "agent", "role": m_agent.group(1), "task": m_agent.group(2)})
+        elif m_nests:
+            out.append({"ord": int(ord_), "kind": "workflow", "role": owner, "task": "", "nests": m_nests.group(1)})
+        else:
+            # Nothing dispatches. The seed calls this `machine` and holds no role for it.
+            out.append({"ord": int(ord_), "kind": "machine", "role": "", "task": ""})
+    return sorted(out, key=lambda s: s["ord"])
+
+
 def graph_steps(path: Path) -> list[dict]:
-    """The steps a dispatch graph declares, in order."""
+    """The steps a dispatch graph declares, in order — table format first, then the old headings."""
+    table = table_steps(path.read_text(encoding="utf-8"))
+    if table:
+        return table
     out = []
     for ord_, heading in STEP.findall(path.read_text(encoding="utf-8")):
         m = AGENT_TASK.search(heading)
@@ -70,6 +110,7 @@ def seed_steps() -> dict[str, list[dict]]:
     for r in rows:
         by.setdefault(r["workflow"], []).append({
             "ord": int(r["ord"]), "kind": r["kind"], "role": r["role"], "task": r["task"],
+            "nests": r.get("nests", ""),
         })
     for v in by.values():
         v.sort(key=lambda s: s["ord"])
@@ -111,13 +152,14 @@ def main() -> int:
                 f"step-count     {code}: dispatch graph has {len(g)} step(s), seed has {len(s)}")
             continue
         for a, b in zip(g, s):
-            for field in ("kind", "role", "task"):
+            for field in ("kind", "role", "task", "nests"):
                 # An empty side is silence, not disagreement — the graph does not name a role for a
                 # gate step, and saying so every time would drown the real drift.
-                if a[field] and b[field] and a[field] != b[field]:
+                av, bv = a.get(field, ""), b.get(field, "")
+                if av and bv and av != bv:
                     problems.append(
                         f"step-shape     {code} step {a['ord']}: {field} is "
-                        f"'{a[field]}' in the graph, '{b[field]}' in the seed")
+                        f"'{av}' in the graph, '{bv}' in the seed")
 
     # The known-drift baseline. Thirteen discrepancies existed the day this check was written, and
     # a check that fails on every commit from birth is a check everyone learns to skip. So it fails

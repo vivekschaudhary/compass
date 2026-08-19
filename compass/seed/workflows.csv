@@ -1,20 +1,16 @@
 code,label,workstream,phase,owner_role,trigger,enabled
-plan-kickoff,Shape the kickoff backlog,Delivery,Pre-Sprint 0,delivery-manager,project-created,true
-staff-engagement,Staff the engagement,Delivery,Pre-Sprint 0,delivery-manager,kickoff-published,true
 build,Workflow: /build,Engineering,,engineer,,true
 create-bet-architecture,Workflow: /create-bet-architecture,Engineering,,architect,,true
 create-bet-portfolio,Workflow: /create-bet-portfolio,Product,,pm,,true
 create-brief,Workflow: /create-brief,Product,,researcher,,true
 create-product-brief,Workflow: /create-product-brief,Product,,researcher,,true
 create-story,Workflow: /create-story,Product,,pm,,true
-dashboard,Workflow: /dashboard,Delivery,,delivery-manager,,true
 fix,Workflow: /fix,Engineering,,engineer,,true
-improvements,Compass Improvements Log,Product,,pm,,true
 ops,Workflow: /ops,Engineering,,enterprise-architect,,true
 plan,Workflow: /plan,Delivery,,delivery-manager,,true
-retro,Workflow: /retro,Delivery,,delivery-manager,,true
-scan,Workflow: /scan,Security,,scanner,,true
 setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,true
 status,Workflow: /status,Delivery,,delivery-manager,,true
 tech-design,Workflow: /tech-design,Engineering,,architect,,true
 triage,Workflow: /triage,Support,,support,,true
+basecamp,Basecamp,Delivery,Basecamp,delivery-manager,,true
+groundwork,Groundwork,Delivery,Groundwork,delivery-manager,,true

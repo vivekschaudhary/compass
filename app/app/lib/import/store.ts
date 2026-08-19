@@ -127,6 +127,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         role_code: s.kind === "machine" ? null : s.role,   // the check constraint enforces this too
         task: s.task, produces: s.produces || null, reads: s.reads,
         conditional: s.conditional || null,
+        nests_workflow_code: s.kind === "workflow" ? s.nests : null,
       })))).error);
     },
 
@@ -185,7 +186,7 @@ export async function readExisting(
     if (!ver) { workflows.push({ code: wf.code, steps: [], criteria: [] }); continue; }
 
     const { data: steps } = await sb.from("workflow_step")
-      .select("ord, kind, role_code, task, produces, reads, conditional")
+      .select("ord, kind, role_code, task, produces, reads, conditional, nests_workflow_code")
       .eq("workflow_version_id", ver.id).order("ord");
     const { data: crits } = await sb.from("criterion")
       .select("step_ord, kind, statement, subject_kind, subject_ref, operator, value")
@@ -196,6 +197,7 @@ export async function readExisting(
       steps: (steps ?? []).map((s): StepRow => ({
         workflow: wf.code, ord: s.ord, kind: s.kind, role: s.role_code ?? "", task: s.task,
         produces: s.produces ?? "", reads: s.reads ?? [], conditional: s.conditional ?? "",
+        nests: s.nests_workflow_code ?? "",
       })),
       criteria: (crits ?? []).map((c): CriterionRow => ({
         workflow: wf.code, stepOrd: c.step_ord, kind: c.kind, text: c.statement ?? "",

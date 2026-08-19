@@ -171,21 +171,15 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
   });
   if (sowErr) problems.push(`file the SOW: ${sowErr.message}`);
 
-  // Open whatever the framework says starts when a project is created. Not "the first workflow" —
-  // the one that DECLARES that trigger, so changing the seed changes what opens.
-  let openedWorkflow: string | null = null;
-  const { data: trigger } = await sb.from("workflow")
-    .select("code").eq("org_id", org.id).eq("trigger", "project-created").eq("enabled", true).maybeSingle();
-  if (trigger) {
-    const { error } = await sb.rpc("open_workflow_run", {
-      p_org_id: org.id, p_engagement_id: id, p_workflow_code: trigger.code,
-      p_actor: "intake", p_actor_role: "engagement-admin",
-    });
-    if (error) problems.push(`open ${trigger.code}: ${error.message}`);
-    else openedWorkflow = trigger.code;
-  } else {
-    problems.push("No workflow declares the `project-created` trigger, so nothing opened. The queue will be empty.");
-  }
+  // Intake opens NOTHING, and that is the change.
+  //
+  // It used to open whichever workflow declared `project-created`, so creating a project silently
+  // started work. An engagement existing is not the same as an engagement being ready to start —
+  // the admin may create it days before anyone is free to run it, and the delivery manager is the
+  // one who decides. So intake provisions and stops; the DM initiates basecamp when they mean to.
+  //
+  // The empty queue is therefore correct, not a failure, and must not be reported as one.
+  const openedWorkflow: string | null = null;
 
   // Publishing last, and failures are reported rather than thrown: a doc-store outage must not
   // cost an intake that otherwise succeeded.

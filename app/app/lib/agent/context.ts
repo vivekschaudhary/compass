@@ -11,13 +11,10 @@
 // quietly proceeds on a third of its inputs produces a confident answer built on nothing.
 
 import "server-only";
-import { readFile } from "fs/promises";
-import { join } from "path";
+import { resolveSpec } from "../specs";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./../data/actor";
 
-const COMPASS_DIR = process.env.COMPASS_DIR
-  ?? join(process.env.COMPASS_REPO ?? join(process.cwd(), ".."), "compass");
 
 export type PinnedInput = {
   path: string;
@@ -234,16 +231,19 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   const { data: role } = await sb.from("role")
     .select("agent").eq("org_id", actor.orgId).eq("code", task.role_code).maybeSingle();
 
-  let agentFile: string | null = null;
-  if (role?.agent) {
-    try {
-      agentFile = await readFile(join(COMPASS_DIR, "agents", `${role.agent}.md`), "utf-8");
-    } catch {
-      // A missing agent file is reported, never substituted. Inventing a role description would
-      // produce an agent that behaves plausibly and follows none of the actual discipline.
-      agentFile = null;
-    }
-  }
+  // Through the spec spine, not off the disk.
+  //
+  // v1 resolves every framework file in three tiers — engagement override, then org default, then
+  // what compass/ ships — and `specs.ts` says plainly that BOTH runtimes read through it. v2 was
+  // meant to be a new surface on that spine and instead read `compass/agents/<agent>.md` straight
+  // from the filesystem, which silently dropped the first two tiers: an engagement that had
+  // customised how its delivery manager works got the framework default and no error saying so.
+  const resolved = role?.agent
+    ? await resolveSpec(actor.engagementId, `agents/${role.agent}.md`)
+    : null;
+  // A missing agent file is reported, never substituted. Inventing a role description would
+  // produce an agent that behaves plausibly and follows none of the actual discipline.
+  const agentFile: string | null = resolved?.content ?? null;
 
   let produces: string | null = null;
   let doneCriteria: string[] = [];
