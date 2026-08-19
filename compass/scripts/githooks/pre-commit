@@ -25,6 +25,12 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX \
 echo "[pre-commit] consistency-check …"
 python3 compass/scripts/consistency-check.py --repo-root "$repo_root"
 
+# The app executes the seed, not the dispatch graphs. Nothing compared them until #, so
+# plan-kickoff and staff-engagement ran a live engagement without existing in the framework at all.
+# Fails on NEW drift only — the 13 that existed on the day are recorded in compass/seed/known-drift.txt.
+echo "[pre-commit] seed ↔ dispatch-graph …"
+python3 compass/scripts/seed-consistency-check.py --check
+
 echo "[pre-commit] orchestrator tests …"
 python3 -m unittest discover -s compass/orchestrator/tests >/dev/null
 

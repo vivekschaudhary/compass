@@ -1,0 +1,20 @@
+# Known seed <-> dispatch-graph drift.
+# Written by: python3 compass/scripts/seed-consistency-check.py --write-baseline
+# This is DEBT, not permission. The check fails on anything NOT listed here.
+# Fix an entry, then delete its line — the check tells you when one is resolved.
+#
+# The no-graph-steps entries are why open_workflow_run opens runs that create no task:
+# the .md is prose and the seed has zero steps, so nothing is ever dispatched.
+missing-graph  plan-kickoff
+missing-graph  staff-engagement
+no-graph-steps create-bet-portfolio
+no-graph-steps dashboard
+no-graph-steps improvements
+no-graph-steps plan
+no-graph-steps retro
+no-graph-steps scan
+no-graph-steps status
+step-count     build
+unseeded       advance
+unseeded       measure
+unseeded       metrics

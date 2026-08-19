@@ -30,6 +30,12 @@ jobs:
       - name: Consistency check (counts + version self-claims)
         run: python compass/scripts/consistency-check.py
 
+      # The app executes the SEED, not the dispatch graphs, and nothing compared the two — which
+      # is how plan-kickoff and staff-engagement came to run a live engagement without existing in
+      # the framework. Fails on NEW drift; today's 13 are recorded in compass/seed/known-drift.txt.
+      - name: Seed reconciles with the dispatch graphs
+        run: python compass/scripts/seed-consistency-check.py --check
+
       - name: Orchestrator test suite
         run: python -m unittest discover -s compass/orchestrator/tests
 
