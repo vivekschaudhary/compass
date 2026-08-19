@@ -3,7 +3,7 @@ Exec control-tower view — the live Work Breakdown Structure (#3).
 
 Where the cockpit (cockpit.py) folds the event spine into per-RUN state, this builds
 the **program → bet/epic → story** tree from the *artifact* frontmatter
-(`docs/bets/*/brief.md` + `stories/*/story.md`), correlates it with spine run-state,
+(`docs/epics/*/brief.md` + `stories/*/story.md`), correlates it with spine run-state,
 and surfaces **manage-by-exception** (what needs the exec's attention) + the
 **SOW-conformance** dimension (from logger.build_audit). Ground-truth status: every
 node reflects the actual artifacts + actual runs, not a self-report.
@@ -164,7 +164,7 @@ def build_wbs(project_dir, with_conformance: bool = False,
     injected (tests); when None it is loaded best-effort via gh. Returns
     {program, bets, summary, attention}."""
     project_dir = Path(project_dir)
-    bets_dir = project_dir / "docs" / "bets"
+    bets_dir = project_dir / "docs" / "epics"
     from datetime import datetime, timezone
     now, threshold = datetime.now(timezone.utc), ev.stale_timeout()
     if reconcile and pr_map is None:
@@ -172,7 +172,7 @@ def build_wbs(project_dir, with_conformance: bool = False,
 
     runs_by_bet, runs_by_story = {}, {}
     for r in fold_runs(ev.load_events()).values():
-        runs_by_bet.setdefault(r.get("bet_id"), []).append(r)
+        runs_by_bet.setdefault(r.get("epic_id"), []).append(r)
         if r.get("story_id"):
             runs_by_story.setdefault(r.get("story_id"), []).append(r)
 
@@ -300,7 +300,7 @@ def build_wbs(project_dir, with_conformance: bool = False,
         conformance = None
         if with_conformance:
             from .logger import build_audit
-            conf = build_audit(project_dir, bet_id=b["id"]).get("conformance")
+            conf = build_audit(project_dir, epic_id=b["id"]).get("conformance")
             if conf:
                 conformance = {"conformant": conf.get("conformant"), "summary": conf.get("summary")}
                 if not conf.get("conformant"):
@@ -320,10 +320,10 @@ def build_wbs(project_dir, with_conformance: bool = False,
             "declared_status": b["declared_status"], "status_derived": b["status_derived"],
         })
 
-    summary = {"bets": len(bets), "needs_attention": sum(1 for b in bets if b["attention"]),
+    summary = {"epics": len(bets), "needs_attention": sum(1 for b in bets if b["attention"]),
                "in_flight": sum(b["in_flight"] for b in bets),
                "awaiting_gates": sum(b["open_gates"] for b in bets)}
-    return {"program": project_dir.name, "bets": bets, "summary": summary,
+    return {"program": project_dir.name, "epics": bets, "summary": summary,
             "attention": attention}
 
 
@@ -335,7 +335,7 @@ def render_wbs(wbs: dict) -> str:
     (manage-by-exception), then the program→bet→story tree with ground-truth status."""
     s = wbs.get("summary", {})
     lines = [f"━━ Control tower — {wbs.get('program','')} ━━",
-             f"{s.get('bets',0)} bets · {s.get('needs_attention',0)} need attention · "
+             f"{s.get('epics',0)} bets · {s.get('needs_attention',0)} need attention · "
              f"{s.get('in_flight',0)} in flight · {s.get('awaiting_gates',0)} awaiting a gate", ""]
 
     att = wbs.get("attention", [])
@@ -346,7 +346,7 @@ def render_wbs(wbs: dict) -> str:
         lines.append("")
 
     lines.append("WBS (program → bet → story)")
-    for b in wbs.get("bets", []):
+    for b in wbs.get("epics", []):
         conf = ""
         if b.get("conformance"):
             conf = "  · conformance " + ("✅" if b["conformance"]["conformant"] else "⚠ gaps")

@@ -6,9 +6,9 @@ build,4,agent,engineer,respond-to-review,,,,,
 build,5,agent,pm,arbitrate-dispute,,,,,
 build,6,hitl,engineer,approve,,,,,
 build,7,machine,,mechanical check,,,,,
-create-bet-architecture,1,agent,architect,draft-bet-architecture,,,,,
-create-bet-architecture,2,hitl,architect,approve,,,,,
-create-bet-architecture,3,agent,delivery-manager,update-status,,,,,
+create-epic-architecture,1,agent,architect,draft-epic-architecture,,,,,
+create-epic-architecture,2,hitl,architect,approve,,,,,
+create-epic-architecture,3,agent,delivery-manager,update-status,,,,,
 create-brief,1,agent,researcher,cite-evidence-6-category-9-moat,,,,,
 create-brief,2,agent,pm,draft-brief,,,,,
 create-brief,3,hitl,researcher,approve,,,,,
@@ -20,7 +20,7 @@ create-product-brief,4,hitl,researcher,approve,,,,,
 create-product-brief,5,agent,designer,spec-design-foundation,,,,,
 create-product-brief,6,hitl,researcher,approve,,,,,
 create-product-brief,7,agent,delivery-manager,update-status,,,,,
-create-story,1,agent,pm,decompose-bet-to-story,,,,,
+create-story,1,agent,pm,decompose-epic-to-story,,,,,
 create-story,2,agent,designer,draft-design-spec,,,,,
 create-story,3,agent,ux-writer,write-copy,,,,,
 create-story,4,hitl,pm,approve,,,,,
@@ -61,6 +61,6 @@ basecamp,2,agent,delivery-manager,propose-kickoff-backlog,01-foundation/kickoff-
 basecamp,3,agent,delivery-manager,propose-staffing,01-foundation/team,"02-scope/sow,01-foundation/kickoff-backlog",,,Staff the engagement
 groundwork,1,workflow,researcher,define-product-foundation,docs/foundation/product.md,"02-scope/sow,01-foundation/kickoff-backlog",,create-product-brief,Define the product foundation
 groundwork,2,workflow,enterprise-architect,establish-foundation-architecture,docs/foundation/architecture.md,"docs/foundation/product.md",,setup-foundation-architecture,Establish the foundation architecture
-groundwork,3,workflow,pm,agree-bet-portfolio,docs/bets/portfolio.md,"docs/foundation/product.md",,create-bet-portfolio,Agree the bet portfolio
-groundwork,4,workflow,delivery-manager,plan-first-milestone,docs/plan.md,"docs/bets/portfolio.md",,plan,Plan the first milestone
+groundwork,3,workflow,pm,agree-the-epics,docs/epics/portfolio.md,"docs/foundation/product.md",,create-epics,Agree the epics
+groundwork,4,workflow,delivery-manager,plan-first-milestone,docs/plan.md,"docs/epics/portfolio.md",,plan,Plan the first milestone
 groundwork,5,workflow,delivery-manager,start-rolling-status,docs/status.md,"docs/plan.md",,status,Start the rolling status

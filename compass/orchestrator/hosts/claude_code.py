@@ -28,7 +28,7 @@ from ..events import terminal_sink as _default_tool_event
 
 # #152: timeout discipline, corrected. The original #131 guard was a blunt
 # WALL-CLOCK cap (default 900s): kill the CLI after N seconds total. Reproduction
-# (a WLT-26 create-bet-architecture that "halted: hung on a dev server") proved
+# (a WLT-26 create-epic-architecture that "halted: hung on a dev server") proved
 # that wrong — the step wasn't hung at all; it was a healthy 448s Opus drafting
 # run that read ~10 files + thought hard, and a sibling run simply ran past 900s.
 # A wall-clock cap can't tell "stuck" from "long but working", and buffered

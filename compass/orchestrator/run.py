@@ -13,7 +13,7 @@ Options:
     --dry-run            Print the dispatch graph without executing
     --pipeline W1,W2,…   Run multiple workflows in sequence, passing context
                          from each to the next (e.g. create-brief,
-                         create-bet-architecture,build)
+                         create-epic-architecture,build)
     --step N             Execute only step N in the single workflow (ignored
                          when --pipeline is set)
     --from-step N        Resume from step N, loading steps 1..N-1 from prior
@@ -152,12 +152,12 @@ def _pr_url_any_state(project_dir, branch):
         return None
 
 
-def _merge_next_steps(pr_url, bet_id) -> str:
+def _merge_next_steps(pr_url, epic_id) -> str:
     """#157: the explicit next-step block printed when a MERGE gate is approved but
     NOT auto-merged — so the operator isn't left at '[handle manually]' with no idea
     what to do (the live gap: gate cleared, run 'completed', nothing shipped)."""
     pr = f"merge the PR — {pr_url}" if pr_url else "merge the PR on your host"
-    nxt = f"/create-story {bet_id}" if bet_id else "/create-story <bet> for the next slice"
+    nxt = f"/create-story {epic_id}" if epic_id else "/create-story <bet> for the next slice"
     return (f"\n✅ Approved — your turn to ship:\n"
             f"   1. {pr}\n"
             f"   2. Then cut the next slice: {nxt}\n"
@@ -214,8 +214,8 @@ _STACK_CHECKS = {
 # #159: workflows whose WHOLE JOB is to author a doc artifact (brief, story,
 # foundation/portfolio/architecture docs), reviewed via their HITL gate — not a PR.
 _AUTHORING_WORKFLOWS = (
-    "create-product-brief", "setup-foundation-architecture", "create-bet-portfolio",
-    "create-brief", "create-bet-architecture", "create-story",
+    "create-product-brief", "setup-foundation-architecture", "create-epics",
+    "create-brief", "create-epic-architecture", "create-story",
 )
 
 # #179: every PRODUCING workflow — authoring (docs) OR code (build/fix/ops) — needs to
@@ -427,7 +427,7 @@ _WORKFLOW_BRANCH_TYPE = {
     "build": "feat",
     "create-story": "feat",
     "create-brief": "feat",
-    "create-bet-architecture": "feat",
+    "create-epic-architecture": "feat",
 }
 
 
@@ -449,7 +449,7 @@ def _slug(text: str, words: int = 6) -> str:
     return slug[:40] or "work"
 
 
-def _work_branch_name(workflow: str, bet_id: str, context: str) -> str:
+def _work_branch_name(workflow: str, epic_id: str, context: str) -> str:
     """
     Branch name per config.yaml `<type>/<id>-<slug>` (#99). Strips a leading
     'bug:'/'incident:' label from the context before slugging.
@@ -457,7 +457,7 @@ def _work_branch_name(workflow: str, bet_id: str, context: str) -> str:
     typ = _WORKFLOW_BRANCH_TYPE.get(workflow, "chore")
     ctx = re.sub(r"^\s*(bug|incident|enhancement|change)\s*:\s*", "", context or "", flags=re.IGNORECASE)
     slug = _slug(ctx)
-    return f"{typ}/{bet_id}-{slug}" if bet_id else f"{typ}/{slug}"
+    return f"{typ}/{epic_id}-{slug}" if epic_id else f"{typ}/{slug}"
 
 
 def _prior_run_branch(run_id):
@@ -570,7 +570,7 @@ def _project_artifact(project_dir: Path, compass_dir, rel: str, transport=None) 
 def _bet_doc_paths(project_dir: Path, bet: str) -> list:
     """#34: the product docs of a bet, in push order — brief/architecture/research
     (→ Confluence) then each story (→ Jira). Only paths that exist on disk."""
-    base = Path("docs") / "bets" / bet
+    base = Path("docs") / "epics" / bet
     rels = []
     for name in ("brief.md", "architecture.md", "research.md"):
         if (project_dir / base / name).exists():
@@ -588,7 +588,7 @@ def _remove_local_stories(project_dir: Path, bet: str) -> list:
     prune the now-empty story dirs, the `stories/` dir, and the bet dir if nothing else lives
     there). Returns the repo-relative paths removed, so the caller can report them. Only
     called once the Jira projection succeeded (no fallback), so we never delete unshipped work."""
-    base = Path("docs") / "bets" / bet
+    base = Path("docs") / "epics" / bet
     stories = project_dir / base / "stories"
     removed = []
     if not stories.is_dir():
@@ -1009,12 +1009,12 @@ def _producer_hint(rel_path: str) -> str:
     if rel_path.endswith("brief.md"):
         return "create-brief"
     if rel_path.endswith("architecture.md"):
-        return "create-bet-architecture"
+        return "create-epic-architecture"
     return None
 
 
 def _manual_hitl_decision(
-    project_dir: Path, path_arg: str, decision: str, feedback: str, bet_id: str
+    project_dir: Path, path_arg: str, decision: str, feedback: str, epic_id: str
 ) -> int:
     """
     Manual approval bridge (#70 / C6): one command satisfies BOTH gate
@@ -1054,7 +1054,7 @@ def _manual_hitl_decision(
         project_dir=project_dir,
         run_id=run_id,
         workflow="manual",
-        bet_id=bet_id,
+        epic_id=epic_id,
         step=0,
         artifact_path=rel,
         decision=decision,
@@ -1168,7 +1168,7 @@ def _load_full_project_context(project_dir: Path) -> str:
       docs/foundation/plan.md
       docs/foundation/portfolio.md
       docs/status.md
-      docs/bets/*/brief.md   (first 600 chars each — status overview, not full)
+      docs/epics/*/brief.md   (first 600 chars each — status overview, not full)
       PROJECT.md
     """
     parts = ["## Full project context\n"]
@@ -1182,7 +1182,7 @@ def _load_full_project_context(project_dir: Path) -> str:
     if status_file.exists():
         parts.append(f"### docs/status.md\n\n{status_file.read_text(encoding='utf-8')}\n")
 
-    bets_dir = project_dir / "docs" / "bets"
+    bets_dir = project_dir / "docs" / "epics"
     if bets_dir.exists():
         bet_dirs = sorted(d for d in bets_dir.iterdir() if d.is_dir())
         if bet_dirs:
@@ -1194,7 +1194,7 @@ def _load_full_project_context(project_dir: Path) -> str:
                 raw = brief.read_text(encoding="utf-8")
                 summary = raw.strip()[:600]
                 if len(raw.strip()) > 600:
-                    summary += f"\n[... full brief at docs/bets/{bd.name}/brief.md ...]"
+                    summary += f"\n[... full brief at docs/epics/{bd.name}/brief.md ...]"
                 parts.append(f"**{bd.name}:**\n{summary}\n")
 
     project_md = project_dir / "PROJECT.md"
@@ -1206,19 +1206,19 @@ def _load_full_project_context(project_dir: Path) -> str:
 
 def _load_bet_catalog(project_dir: Path) -> str:
     """
-    Compact catalog of existing bets (#109) — one line per `docs/bets/*/brief.md`:
+    Compact catalog of existing bets (#109) — one line per `docs/epics/*/brief.md`:
     `<id> (<type>, <status>): <one-liner>`. Lets the front-door classifier match
     an enhancement to an existing bet (→ `/create-story --bet <id>`) instead of
     minting a redundant bet. Returns "" when there are no bets (→ recommend a new
     bet). Reads brief frontmatter + the first heading/hypothesis only — planning
     docs, not source.
     """
-    bets_dir = project_dir / "docs" / "bets"
+    bets_dir = project_dir / "docs" / "epics"
     if not bets_dir.exists():
         return ""
     lines = []
     for brief in sorted(bets_dir.glob("*/brief.md")):
-        bet_id = brief.parent.name
+        epic_id = brief.parent.name
         try:
             text = brief.read_text(encoding="utf-8")
         except OSError:
@@ -1248,7 +1248,7 @@ def _load_bet_catalog(project_dir: Path) -> str:
         oneliner = (oneliner or "").lstrip("# ").strip()
         if len(oneliner) > 120:
             oneliner = oneliner[:120] + "…"
-        lines.append(f"- {bet_id} ({btype}, {status}): {oneliner}")
+        lines.append(f"- {epic_id} ({btype}, {status}): {oneliner}")
 
     if not lines:
         return ""
@@ -1259,24 +1259,24 @@ def _load_bet_catalog(project_dir: Path) -> str:
     )
 
 
-def _load_bet_context(project_dir: Path, bet_id: str) -> str:
+def _load_bet_context(project_dir: Path, epic_id: str) -> str:
     """
     Load all existing artifacts for a bet as structured context.
 
     Reads (in order, if they exist):
-      docs/bets/<ID>/brief.md
-      docs/bets/<ID>/architecture.md
-      docs/bets/<ID>/stories/*/story.md   (summaries — first 400 chars each)
+      docs/epics/<ID>/brief.md
+      docs/epics/<ID>/architecture.md
+      docs/epics/<ID>/stories/*/story.md   (summaries — first 400 chars each)
       PROJECT.md
 
     Returns a context string ready to prepend to the first agent step.
     """
-    bet_dir = project_dir / "docs" / "bets" / bet_id
+    bet_dir = project_dir / "docs" / "epics" / epic_id
     if not bet_dir.exists():
         # Bet dir doesn't exist yet — that's fine for create-brief
-        return f"## Bet context\n\nBet ID: {bet_id}\n(No existing artifacts — new bet)\n"
+        return f"## Bet context\n\nBet ID: {epic_id}\n(No existing artifacts — new bet)\n"
 
-    parts = [f"## Bet context — {bet_id}\n"]
+    parts = [f"## Bet context — {epic_id}\n"]
 
     for artifact_name in ("brief.md", "architecture.md"):
         artifact = bet_dir / artifact_name
@@ -1309,16 +1309,16 @@ def _load_bet_context(project_dir: Path, bet_id: str) -> str:
 def _resolve_bet_for_story(project_dir: Path, story_id: str):
     """#172: map a story id (e.g. WLT-27-1) to its parent bet so a story-scoped
     build/fix can run. Authoritative source is the filesystem — the bet whose
-    `docs/bets/<bet>/stories/<story_id>/story.md` exists. Falls back to stripping
+    `docs/epics/<bet>/stories/<story_id>/story.md` exists. Falls back to stripping
     the trailing `-<n>` segment (WLT-27-1 → WLT-27) when the dir isn't found yet
     (e.g. a dry-run before stories exist). Returns the bet id, or None if neither
     resolves."""
     if not story_id:
         return None
-    bets_dir = project_dir / "docs" / "bets"
+    bets_dir = project_dir / "docs" / "epics"
     if bets_dir.is_dir():
         for story_md in bets_dir.glob(f"*/stories/{story_id}/story.md"):
-            # docs/bets/<bet>/stories/<story_id>/story.md → parent bet is 3 up
+            # docs/epics/<bet>/stories/<story_id>/story.md → parent bet is 3 up
             return story_md.parent.parent.parent.name
     # Fallback: strip the trailing numeric story segment.
     m = re.match(r"^(.*)-\d+$", story_id)
@@ -1326,41 +1326,41 @@ def _resolve_bet_for_story(project_dir: Path, story_id: str):
 
 
 def _is_story_id(project_dir: Path, candidate: str) -> bool:
-    """#172: True if `candidate` names a story (a `docs/bets/*/stories/<candidate>/`
-    dir exists) rather than a bet (`docs/bets/<candidate>/`). Lets a single id field
+    """#172: True if `candidate` names a story (a `docs/epics/*/stories/<candidate>/`
+    dir exists) rather than a bet (`docs/epics/<candidate>/`). Lets a single id field
     (the dashboard's, or `--bet`) accept either — a story id auto-resolves to its
     parent bet + story scope instead of failing the requirement gate on a bet brief
     that never existed (the WLT-27-1 'looks hung' bug)."""
     if not candidate:
         return False
-    bets_dir = project_dir / "docs" / "bets"
+    bets_dir = project_dir / "docs" / "epics"
     if (bets_dir / candidate).is_dir():
         return False  # it's a bet
     return any(bets_dir.glob(f"*/stories/{candidate}/story.md"))
 
 
-def _build_story_gate(project_dir: Path, workflow_name: str, bet_id, story_id, from_step=None):
+def _build_story_gate(project_dir: Path, workflow_name: str, epic_id, story_id, from_step=None):
     """#103: /build is STORY-scoped (`/build <story-id>` implements ONE story). If an
-    operator names a BET instead (bet_id resolved, story_id not), refuse — building a
+    operator names a BET instead (epic_id resolved, story_id not), refuse — building a
     bet collapses the whole Epic into one un-decomposed, un-reviewable mega-PR (live:
     `/build WLT-28` implemented the entire debt bet — 28 files — as PR #144). `fix` and
     `ops` are NOT story-scoped, so this gate is build-only. Returns a refusal message,
     or None when the invocation is fine (a real story, or a non-build workflow).
 
     #107: ENTRY gate only — returns None on a RESUME (`from_step` set). The cockpit's
-    merge-gate resume passes the PARENT bet_id (--bet WLT-28) for the requirement gate
+    merge-gate resume passes the PARENT epic_id (--bet WLT-28) for the requirement gate
     plus `--from-step N`, WITHOUT the story scope — re-running this gate then mis-read
     that as a bet-level build and halted the human's merge approval (live: WLT-28-3 stuck
     at step 6). On resume the story was already chosen at dispatch, so never re-gate."""
-    if from_step or workflow_name != "build" or story_id or not bet_id:
+    if from_step or workflow_name != "build" or story_id or not epic_id:
         return None
     stories = sorted(
-        (project_dir / "docs" / "bets" / bet_id / "stories").glob("*/story.md"))
+        (project_dir / "docs" / "epics" / epic_id / "stories").glob("*/story.md"))
     if stories:
-        return (f"{bet_id} is a bet with {len(stories)} story(ies) — /build is "
+        return (f"{epic_id} is a bet with {len(stories)} story(ies) — /build is "
                 f"story-scoped. Run /build <story-id> (e.g. {stories[0].parent.name}).")
-    return (f"{bet_id} is a bet, not a story, and has no stories yet — run "
-            f"/create-story {bet_id} to slice it, then /build <story-id>.")
+    return (f"{epic_id} is a bet, not a story, and has no stories yet — run "
+            f"/create-story {epic_id} to slice it, then /build <story-id>.")
 
 
 def _story_dependencies(content: str) -> list:
@@ -1387,7 +1387,7 @@ def _story_dependencies(content: str) -> list:
             if x.strip().strip("\"'") and not x.strip().startswith("<")]
 
 
-def _story_human_deliverable_blockers(project_dir: Path, bet_id: str, story_id: str) -> list:
+def _story_human_deliverable_blockers(project_dir: Path, epic_id: str, story_id: str) -> list:
     """#171: the 'always block' design/copy gate. Returns a list of
     (dep_id, dep_type, dep_status) for each of the target story's dependencies that is
     a **design/copy story not yet `ready`** (i.e. a human hasn't delivered the Figma/
@@ -1395,9 +1395,9 @@ def _story_human_deliverable_blockers(project_dir: Path, bet_id: str, story_id: 
     feature-ordering dependency does NOT — so stories predating #171 are never
     false-blocked. Missing/unreadable files are skipped (fail-open per dep)."""
     from .connector import _frontmatter_field
-    if not (bet_id and story_id):
+    if not (epic_id and story_id):
         return []
-    stories = project_dir / "docs" / "bets" / bet_id / "stories"
+    stories = project_dir / "docs" / "epics" / epic_id / "stories"
     try:
         content = (stories / story_id / "story.md").read_text(encoding="utf-8")
     except OSError:
@@ -1415,12 +1415,12 @@ def _story_human_deliverable_blockers(project_dir: Path, bet_id: str, story_id: 
     return blockers
 
 
-def _read_story_fm_list(project_dir: Path, bet_id: str, story_id: str, field: str) -> set:
+def _read_story_fm_list(project_dir: Path, epic_id: str, story_id: str, field: str) -> set:
     """#26: read a story's frontmatter list field (e.g. `area_tags`, `dependencies`) as a
     set of ids/tags. Handles inline (`[a, b]`/`a, b`) + block (`  - a`) forms; drops
     template placeholders (`<…>`). Empty set on any miss."""
     try:
-        content = (Path(project_dir) / "docs" / "bets" / bet_id / "stories"
+        content = (Path(project_dir) / "docs" / "epics" / epic_id / "stories"
                    / story_id / "story.md").read_text(encoding="utf-8")
     except OSError:
         return set()
@@ -1441,17 +1441,17 @@ def _read_story_fm_list(project_dir: Path, bet_id: str, story_id: str, field: st
             if x.strip().strip("\"'") and not x.strip().startswith("<")}
 
 
-def _overlapping_inflight_builds(project_dir: Path, bet_id: str, story_id: str,
+def _overlapping_inflight_builds(project_dir: Path, epic_id: str, story_id: str,
                                  runs: dict = None) -> list:
     """#26: a story-scoped build that overlaps another IN-FLIGHT build of the SAME module
     will conflict at merge — same-module stories merge serially (live: WLT-27-2/3/4 on
     the CSV module). Overlap = shared `area_tags`, or a declared dependency, between the
     target story and an in-flight build's story. Returns [(other_story_id, reason)].
     `runs` is the folded spine (injectable for tests). Best-effort; never raises."""
-    if not (bet_id and story_id):
+    if not (epic_id and story_id):
         return []
-    target_tags = _read_story_fm_list(project_dir, bet_id, story_id, "area_tags")
-    target_deps = _read_story_fm_list(project_dir, bet_id, story_id, "dependencies")
+    target_tags = _read_story_fm_list(project_dir, epic_id, story_id, "area_tags")
+    target_deps = _read_story_fm_list(project_dir, epic_id, story_id, "dependencies")
     if runs is None:
         try:
             from . import events as ev
@@ -1467,10 +1467,10 @@ def _overlapping_inflight_builds(project_dir: Path, bet_id: str, story_id: str,
         if not other or other == story_id:
             continue
         reasons = []
-        shared = target_tags & _read_story_fm_list(project_dir, bet_id, other, "area_tags")
+        shared = target_tags & _read_story_fm_list(project_dir, epic_id, other, "area_tags")
         if shared:
             reasons.append("shared area: " + ", ".join(sorted(shared)))
-        other_deps = _read_story_fm_list(project_dir, bet_id, other, "dependencies")
+        other_deps = _read_story_fm_list(project_dir, epic_id, other, "dependencies")
         if other in target_deps or story_id in other_deps:
             reasons.append("a declared dependency between them")
         if reasons:
@@ -1478,14 +1478,14 @@ def _overlapping_inflight_builds(project_dir: Path, bet_id: str, story_id: str,
     return overlaps
 
 
-def _load_story_context(project_dir: Path, bet_id: str, story_id: str) -> str:
+def _load_story_context(project_dir: Path, epic_id: str, story_id: str) -> str:
     """#172: focused context for a story-scoped build — the parent bet's brief +
     architecture (the load-bearing decisions) plus the FULL target story, with an
     explicit instruction to implement ONLY this story. Distinct from
     _load_bet_context (which summarizes every story for whole-bet work): a parallel
     story build must not wander into sibling stories' scope."""
-    bet_dir = project_dir / "docs" / "bets" / bet_id
-    parts = [f"## Build scope — story {story_id} (bet {bet_id})\n",
+    bet_dir = project_dir / "docs" / "epics" / epic_id
+    parts = [f"## Build scope — story {story_id} (bet {epic_id})\n",
              f"**Implement ONLY story {story_id}.** Other stories in this bet are "
              f"out of scope for this run — they build in their own runs/branches.\n"]
     for artifact_name in ("brief.md", "architecture.md"):
@@ -1497,7 +1497,7 @@ def _load_story_context(project_dir: Path, bet_id: str, story_id: str) -> str:
         parts.append(f"### story {story_id}\n\n{story_md.read_text(encoding='utf-8')}\n")
     else:
         parts.append(f"### story {story_id}\n\n(No story.md on disk at "
-                     f"docs/bets/{bet_id}/stories/{story_id}/ — run /create-story first.)\n")
+                     f"docs/epics/{epic_id}/stories/{story_id}/ — run /create-story first.)\n")
     project_md = project_dir / "PROJECT.md"
     if project_md.exists():
         parts.append(f"### PROJECT.md\n\n{project_md.read_text(encoding='utf-8')}\n")
@@ -1619,7 +1619,7 @@ def _fix_title(output: str) -> str:
     return ""
 
 
-def _render_fix_record(fid, ftype, bet_id, severity, pr_url, title, today) -> str:
+def _render_fix_record(fid, ftype, epic_id, severity, pr_url, title, today) -> str:
     """#71: a minimal fix record (Compass-primary). `type:` drives the Jira issue type
     (bug→Bug, enhancement→Story). The PR carries the full triage; this is the tracked item.
 
@@ -1642,8 +1642,8 @@ def _render_fix_record(fid, ftype, bet_id, severity, pr_url, title, today) -> st
         "---\n"
         f"id: {fid}\n"
         f"type: {ftype}\n"
-        f"bet: {bet_id or 'null'}\n"
-        f"hygiene: {'false' if bet_id else 'true'}\n"
+        f"bet: {epic_id or 'null'}\n"
+        f"hygiene: {'false' if epic_id else 'true'}\n"
         f"status: {'in_review' if shipped else 'unshipped'}\n"
         f"severity: {severity}\n"
         f"pr: {pr_url or 'null'}\n"
@@ -1658,14 +1658,14 @@ def _render_fix_record(fid, ftype, bet_id, severity, pr_url, title, today) -> st
     )
 
 
-def _work_item_jira_key(project_dir, bet_id, story_id):
+def _work_item_jira_key(project_dir, epic_id, story_id):
     """#MVP1: the Jira key of the ticket THIS run is delivering — the story (build) whose
     `jira_key` was stored on its artifact by create-story's projection. None when there's no
     story/key (a hygiene fix has no ticket yet; Jira may not be wired)."""
     from .connector import _frontmatter_field
-    if not (bet_id and story_id):
+    if not (epic_id and story_id):
         return None
-    story = Path(project_dir) / "docs" / "bets" / bet_id / "stories" / story_id / "story.md"
+    story = Path(project_dir) / "docs" / "epics" / epic_id / "stories" / story_id / "story.md"
     if not story.exists():
         return None
     return _frontmatter_field(story.read_text(encoding="utf-8"), "jira_key")
@@ -1908,7 +1908,7 @@ def _apply_tech_design(story_key, approach_text, transport=None):
     return {"ok": True, "key": story_key, "action": "tech-ready", "url": push.get("url")}
 
 
-def _advance_ticket(project_dir, bet_id, story_id, target, emit, key=None):
+def _advance_ticket(project_dir, epic_id, story_id, target, emit, key=None):
     """#MVP1: transition the run's work-item ticket toward a lifecycle state so the Jira board
     reflects reality (`to_do → in_progress` on start, `→ done` on merge) instead of sitting at
     "To Do" forever. `key` (#Phase1a) is the explicit ticket when the run was launched from a
@@ -1919,7 +1919,7 @@ def _advance_ticket(project_dir, bet_id, story_id, target, emit, key=None):
     auth = jira_auth()
     if not auth:
         return
-    key = key or _work_item_jira_key(project_dir, bet_id, story_id)
+    key = key or _work_item_jira_key(project_dir, epic_id, story_id)
     if not key:
         return
     try:
@@ -1933,7 +1933,7 @@ def _advance_ticket(project_dir, bet_id, story_id, target, emit, key=None):
         emit(ev.NOTE, text=f"⚠ jira {key} → {target} not applied ({res.get('action')}): {(res.get('response') or {}).get('error','')}")
 
 
-def _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
+def _project_fix_record(project_dir, compass_dir, epic_id, work_branch,
                         last_agent_output, run_id):
     """#71: the ORCHESTRATOR (not the agent) writes the fix record from the engineer's
     classification + PR and PROJECTS it to Jira as a Bug (defect) / Story (enhancement).
@@ -1960,9 +1960,9 @@ def _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
         slug = ((work_branch or run_id or "fix").split("/")[-1]
                 .replace("fix--", "").replace("fix/", "")[:40].strip("-") or "fix")
         fid = f"FIX-{today}-{slug}"
-        rel = (f"docs/bets/{bet_id}/fixes/{fid}.md" if bet_id
+        rel = (f"docs/epics/{epic_id}/fixes/{fid}.md" if epic_id
                else f"docs/fixes/{fid}.md")
-        content = _render_fix_record(fid, ftype, bet_id, severity, pr_url,
+        content = _render_fix_record(fid, ftype, epic_id, severity, pr_url,
                                      _fix_title(out), today)
         # idempotency: if the record already exists, carry its stored jira_key into the
         # regenerated content so a re-projection UPDATES the same issue, not a duplicate.
@@ -1976,20 +1976,20 @@ def _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
         conn = resolve_connector_for_artifact(rel, project_dir, None)
         label = push_artifact(project_dir, rel, content, conn,
                               issue_type=resolve_issue_type(rel, content))
-        if bet_id and label and label.startswith("jira ("):   # bet-linked → under the Epic
-            _parent_fix_under_epic(project_dir, bet_id, rel)
+        if epic_id and label and label.startswith("jira ("):   # bet-linked → under the Epic
+            _parent_fix_under_epic(project_dir, epic_id, rel)
         return label
     except Exception as exc:
         return f"filesystem fallback — fix projection error: {exc}"
 
 
-def _parent_fix_under_epic(project_dir, bet_id, fix_rel):
+def _parent_fix_under_epic(project_dir, epic_id, fix_rel):
     """#71/#35: put a bet-linked fix's Jira issue under the bet's Epic. Best-effort."""
     from .connector import _frontmatter_field, project_bet_jira_structure
     from . import stores
     try:
-        project_bet_jira_structure(project_dir, bet_id)   # ensure the Epic exists
-        brief = Path(project_dir) / "docs" / "bets" / bet_id / "brief.md"
+        project_bet_jira_structure(project_dir, epic_id)   # ensure the Epic exists
+        brief = Path(project_dir) / "docs" / "epics" / epic_id / "brief.md"
         epic_key = (_frontmatter_field(brief.read_text(encoding="utf-8"), "jira_epic_key")
                     if brief.exists() else None)
         fix_key = _frontmatter_field(
@@ -2235,7 +2235,7 @@ def _run_workflow(
     project_dir: Path,
     compass_dir: Path,
     context: str = "",
-    bet_id: str = None,
+    epic_id: str = None,
     story_id: str = None,
     full_project: bool = False,
     model: str = None,
@@ -2306,11 +2306,11 @@ def _run_workflow(
         unmet = []
         print(f"\nRequirement gate — {workflow_name} requires approved:")
         for req in requirements:
-            if "<bet-id>" in req and not bet_id:
-                print(f"  ✗ {req}  (pass --bet <ID> to resolve <bet-id>)")
+            if "<epic-id>" in req and not epic_id:
+                print(f"  ✗ {req}  (pass --bet <ID> to resolve <epic-id>)")
                 unmet.append(req)
                 continue
-            rel = req.replace("<bet-id>", bet_id or "")
+            rel = req.replace("<epic-id>", epic_id or "")
             ok, how = _requirement_met(project_dir, rel)
             if ok:
                 print(f"  ✓ {rel}  ({how})")
@@ -2350,18 +2350,18 @@ def _run_workflow(
         if unmet and dry_run:
             print("  [dry-run: reporting only — a live run would halt here (exit 3)]")
 
-    # ── build story-scope gate (#103) — /build is story-scoped; refuse a bet-id ──────
+    # ── build story-scope gate (#103) — /build is story-scoped; refuse a epic-id ──────
     # `/build <story-id>` implements ONE story. Given a BET (no story resolved) it would
     # collapse the whole Epic into one un-decomposed, un-reviewable mega-PR (live: /build
     # WLT-28 built the entire debt bet as PR #144). Refuse loud, point at /create-story.
     # fix/ops are not story-scoped → _build_story_gate returns None for them.
     #
     # #107: ENTRY gate only — never fires on a RESUME. The cockpit's merge-gate resume
-    # passes the PARENT bet_id (--bet WLT-28) for the requirement gate + `--from-step N`,
+    # passes the PARENT epic_id (--bet WLT-28) for the requirement gate + `--from-step N`,
     # WITHOUT the story scope. Re-running the gate then mis-read that as a bet-level build
     # and halted the human's merge approval (live: WLT-28-3 stuck at step 6). On resume the
     # story was already chosen at dispatch, so `from_step` set ⇒ skip this gate entirely.
-    _bsg = _build_story_gate(project_dir, workflow_name, bet_id, story_id, from_step)
+    _bsg = _build_story_gate(project_dir, workflow_name, epic_id, story_id, from_step)
     if _bsg:
         print(f"\nBuild scope gate — {_bsg}")
         if not dry_run:
@@ -2377,7 +2377,7 @@ def _run_workflow(
     # design/copy-TYPE deps block — a plain feature-ordering dependency never does, so
     # old-shape stories that predate #171 are never false-blocked.
     if story_id and workflow_name in _CODE_WORKFLOWS:
-        blockers = _story_human_deliverable_blockers(project_dir, bet_id, story_id)
+        blockers = _story_human_deliverable_blockers(project_dir, epic_id, story_id)
         if blockers:
             print(f"\nDesign/copy gate — {story_id} is blocked by un-delivered human deliverables:")
             for dep, dtype, dstatus in blockers:
@@ -2415,9 +2415,9 @@ def _run_workflow(
     # A story-scoped build that overlaps another IN-FLIGHT build of the same module will
     # conflict at merge (live: WLT-27-4 vs the CSV-module siblings). Warn loudly but do
     # NOT block — the operator may know what they're doing; the PM should have sequenced
-    # them (decompose-bet-to-story #26). Non-fatal.
+    # them (decompose-epic-to-story #26). Non-fatal.
     if story_id and workflow_name in _CODE_WORKFLOWS:
-        for other, reason in _overlapping_inflight_builds(project_dir, bet_id, story_id):
+        for other, reason in _overlapping_inflight_builds(project_dir, epic_id, story_id):
             print(f"⚠ overlap (#26): {story_id} overlaps the in-flight build of {other} "
                   f"({reason}). Same-module stories merge SERIALLY — building them in "
                   f"parallel will conflict at merge. Consider waiting for {other} to merge "
@@ -2469,7 +2469,7 @@ def _run_workflow(
     # cockpit's ⏸ awaiting queue forever and the resume shows as a duplicate run.
     # #172: a story-scoped run keys its identity on the story (parallel story
     # builds get distinct run ids / logs / branches), falling back to the bet.
-    _scope_id = story_id or bet_id
+    _scope_id = story_id or epic_id
     run_id = run_id_override or f"{workflow_name}--{_scope_id or 'no-bet'}--{_ts}"
     actor = default_actor(project_dir)  # who launched this run — the audit-trail identity
 
@@ -2500,16 +2500,16 @@ def _run_workflow(
     # --story: focused single-story context (#172) — only the target story + the
     # parent bet's brief/architecture, so a parallel story build stays in scope.
     # Falls through to whole-bet context when no story scope is set.
-    if story_id and bet_id:
-        story_context = _load_story_context(project_dir, bet_id, story_id)
+    if story_id and epic_id:
+        story_context = _load_story_context(project_dir, epic_id, story_id)
         context = story_context + ("\n\n" + context if context else "")
-        print(f"[story] Scoped to {story_id} (bet {bet_id}) — "
-              f"docs/bets/{bet_id}/stories/{story_id}/")
-    elif bet_id:
+        print(f"[story] Scoped to {story_id} (bet {epic_id}) — "
+              f"docs/epics/{epic_id}/stories/{story_id}/")
+    elif epic_id:
         # --bet: load existing bet artifacts as initial context
-        bet_context = _load_bet_context(project_dir, bet_id)
+        bet_context = _load_bet_context(project_dir, epic_id)
         context = bet_context + ("\n\n" + context if context else "")
-        print(f"[bet] Loaded context for {bet_id} from docs/bets/{bet_id}/")
+        print(f"[bet] Loaded context for {epic_id} from docs/epics/{epic_id}/")
 
     # Stack profile (stack-agnostic core): the delivery agents stay stack-neutral and
     # read the project's build/test/runtime contracts from a pluggable profile selected
@@ -2573,7 +2573,7 @@ def _run_workflow(
             # #172: a story-scoped build branches on the story id (feat/<story>-…)
             # so multiple stories of one bet can build in parallel without colliding
             # on a single feat/<bet>-… branch.
-            bname = _work_branch_name(workflow_name, story_id or bet_id, user_context)
+            bname = _work_branch_name(workflow_name, story_id or epic_id, user_context)
             work_branch, exec_dir = _place_work(bname)
 
     # Event spine (#104): one emit per run, stamping project/run_id/workflow onto
@@ -2598,7 +2598,7 @@ def _run_workflow(
         event.setdefault("project", _project)
         event.setdefault("run_id", run_id)
         event.setdefault("workflow", workflow_name)
-        event.setdefault("bet_id", bet_id)
+        event.setdefault("epic_id", epic_id)
         if story_id:
             event.setdefault("story_id", story_id)
         _fan(event)
@@ -2625,7 +2625,7 @@ def _run_workflow(
     # stops lying (best-effort; no-op for non-code workflows / no key / no creds). #Phase1a:
     # `work_item_key` is the explicit ticket when launched from a Jira key (/fix KAN-99).
     if allow_write and workflow_name in _CODE_WORKFLOWS:
-        _advance_ticket(project_dir, bet_id, story_id, "in_progress", emit, key=work_item_key)
+        _advance_ticket(project_dir, epic_id, story_id, "in_progress", emit, key=work_item_key)
 
     last_artifact_path = None
     # On a --from-step resume the prior agent step was loaded from disk (not re-run),
@@ -2688,7 +2688,7 @@ def _run_workflow(
                 project_dir=project_dir,
                 run_id=run_id,
                 workflow=workflow_name,
-                bet_id=bet_id,
+                epic_id=epic_id,
                 step=step.number,
                 artifact_path=None,
                 decision=choice["route"],
@@ -2765,8 +2765,8 @@ def _run_workflow(
             # approval-gated); (2) only for EXTERNAL connectors (jira/confluence), so a
             # filesystem-only setup is unchanged.
             if (step.artifact_target and not no_write
-                    and not ("<bet-id>" in step.artifact_target and not bet_id)):
-                _draft_rel = step.artifact_target.replace("<bet-id>", bet_id or "")
+                    and not ("<epic-id>" in step.artifact_target and not epic_id)):
+                _draft_rel = step.artifact_target.replace("<epic-id>", epic_id or "")
                 from .connector import resolve_connector_for_artifact
                 if ((project_dir / _draft_rel).exists()
                         and resolve_connector_for_artifact(
@@ -2807,7 +2807,7 @@ def _run_workflow(
             # the draft projection above already created — the pointer is on disk).
             canonical_rel = connector_label = None
             if result["approved"] and step.artifact_target:
-                if "<bet-id>" in step.artifact_target and not bet_id:
+                if "<epic-id>" in step.artifact_target and not epic_id:
                     print(
                         f"Warning: cannot promote — artifact target "
                         f"'{step.artifact_target}' needs --bet <ID>. "
@@ -2820,7 +2820,7 @@ def _run_workflow(
                         file=sys.stderr,
                     )
                 else:
-                    canonical_rel = step.artifact_target.replace("<bet-id>", bet_id or "")
+                    canonical_rel = step.artifact_target.replace("<epic-id>", epic_id or "")
                     if no_write:
                         print(f"[no-write: would promote → {canonical_rel}]")
                         canonical_rel = None
@@ -2834,7 +2834,7 @@ def _run_workflow(
                 project_dir=project_dir,
                 run_id=run_id,
                 workflow=workflow_name,
-                bet_id=bet_id,
+                epic_id=epic_id,
                 step=step.number,
                 artifact_path=artifact_rel,
                 decision=decision,
@@ -2862,7 +2862,7 @@ def _run_workflow(
                 # #157: no auto-merge → don't leave the operator at "[handle manually]"
                 # with no idea what to do. Spell out the next step (merge the PR, then
                 # the next story) and point at the actual PR when we can find it.
-                steps_msg = _merge_next_steps(_open_pr_url(project_dir, work_branch), bet_id)
+                steps_msg = _merge_next_steps(_open_pr_url(project_dir, work_branch), epic_id)
                 print(steps_msg)
                 emit(ev.NOTE, text="merge gate approved — next: merge the PR, then /create-story")
 
@@ -2870,7 +2870,7 @@ def _run_workflow(
             # manual is a formality) → move the ticket to Done so the board isn't stuck at To Do
             # after deploy. Idempotent (no-op if already Done); best-effort. [#98 folds in here.]
             if result["approved"] and _is_merge_gate(step.title):
-                _advance_ticket(project_dir, bet_id, story_id, "done", emit, key=work_item_key)
+                _advance_ticket(project_dir, epic_id, story_id, "done", emit, key=work_item_key)
 
             if not result["approved"]:
                 if not no_write:
@@ -3128,7 +3128,7 @@ def _run_workflow(
             project_dir=project_dir,
             run_id=run_id,
             workflow=workflow_name,
-            bet_id=bet_id,
+            epic_id=epic_id,
             step=step.number,
             agent=step.agent,
             task=step.task,
@@ -3246,7 +3246,7 @@ def _run_workflow(
 
     # #159: an authoring workflow whose whole job is to write a doc artifact must
     # FAIL LOUD if a step produced no real work (permission-blocked / plan-only) —
-    # otherwise the run reports "completed" while docs/bets/ stays empty (the live
+    # otherwise the run reports "completed" while docs/epics/ stays empty (the live
     # create-brief that "worked" but landed no WLT-27 brief). [fail-loud-not-silent].
     if workflow_name in _AUTHORING_WORKFLOWS and incomplete_steps and not handed_off:
         names = ", ".join(f"step {n} ({a}.{t})" for n, a, t, _ in incomplete_steps)
@@ -3267,7 +3267,7 @@ def _run_workflow(
     if workflow_name == "fix" and not handed_off and not no_write and not work_item_key:
         _eng_output = next((p["output"] for p in prior_outputs
                             if p.get("task") == "triage-and-fix"), last_agent_output)
-        _fix_label = _project_fix_record(project_dir, compass_dir, bet_id, work_branch,
+        _fix_label = _project_fix_record(project_dir, compass_dir, epic_id, work_branch,
                                          _eng_output, run_id)
         if _fix_label:
             print(f"\n[fix tracked → {_fix_label}]")
@@ -3337,7 +3337,7 @@ def main(argv=None):
 
             Pipeline — PM → Architect → Build (cross-workflow handoff):
               python3 -m compass.orchestrator.run \\
-                --pipeline create-brief,create-bet-architecture,build \\
+                --pipeline create-brief,create-epic-architecture,build \\
                 --context "We are building a crypto portfolio tracker."
 
             Resume after HITL rejection on step 3:
@@ -3384,7 +3384,7 @@ def main(argv=None):
         metavar="ID",
         help=(
             "Bet ID to work on (e.g., CB-4). Automatically loads "
-            "docs/bets/<ID>/brief.md, architecture.md, and story summaries "
+            "docs/epics/<ID>/brief.md, architecture.md, and story summaries "
             "as context for the first agent step."
         ),
     )
@@ -3572,7 +3572,7 @@ def main(argv=None):
         dest="controls",
         default=None,
         help="Path to a control framework (controls.md) for --export-audit "
-             "conformance mapping. Auto-discovered from docs/bets/<bet>/controls.md "
+             "conformance mapping. Auto-discovered from docs/epics/<bet>/controls.md "
              "or docs/controls.md if omitted.",
     )
     parser.add_argument(
@@ -3655,7 +3655,7 @@ def main(argv=None):
         action="store_true",
         help=(
             "#127: external-mode projection — after --push-bet --epic authors the stories "
-            "into Jira, REMOVE the local docs/bets/<bet>/stories/*/story.md files so the "
+            "into Jira, REMOVE the local docs/epics/<bet>/stories/*/story.md files so the "
             "Story ticket is the single record. No-op without --push-bet --epic (or when the "
             "push fell back to the filesystem cache — unshipped work is never deleted)."
         ),
@@ -3721,7 +3721,7 @@ def main(argv=None):
             path_arg=args.approve or args.reject,
             decision="approved" if args.approve else "rejected",
             feedback=args.feedback,
-            bet_id=args.bet,
+            epic_id=args.bet,
         )
         sys.exit(code)
 
@@ -3841,7 +3841,7 @@ def main(argv=None):
             print_hitl_table(project_dir)
         if args.export_audit:
             from .logger import build_audit, format_audit_markdown
-            audit = build_audit(project_dir, bet_id=args.bet, run_id=args.run_id,
+            audit = build_audit(project_dir, epic_id=args.bet, run_id=args.run_id,
                                 controls_path=args.controls)
             if args.audit_format == "md":
                 print(format_audit_markdown(audit))
@@ -3877,7 +3877,7 @@ def main(argv=None):
     # #172: story-scoped build/fix. A story id may arrive via --story OR be typed
     # into --bet (the dashboard's single id field) — auto-detect the latter so
     # `/build WLT-27-1` resolves the parent bet for the requirement gate instead
-    # of halting on a docs/bets/WLT-27-1/brief.md that never existed (the "looks
+    # of halting on a docs/epics/WLT-27-1/brief.md that never existed (the "looks
     # hung" bug). Resolve the parent bet; --bet always carries the BET id downstream.
     story_id = args.story
     if not story_id and args.bet and _is_story_id(project_dir, args.bet):
@@ -3888,7 +3888,7 @@ def main(argv=None):
         if not args.bet:
             parser.error(
                 f"--story {story_id}: could not resolve a parent bet "
-                f"(no docs/bets/*/stories/{story_id}/ and no <bet>-<n> pattern).")
+                f"(no docs/epics/*/stories/{story_id}/ and no <bet>-<n> pattern).")
 
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
@@ -3944,7 +3944,7 @@ def main(argv=None):
             project_dir=project_dir,
             compass_dir=compass_dir,
             context=args.context,
-            bet_id=args.bet,
+            epic_id=args.bet,
             story_id=story_id,
             full_project=args.full_project,
             model=args.model,
@@ -4016,7 +4016,7 @@ def main(argv=None):
             project_dir=project_dir,
             compass_dir=compass_dir,
             context=next_context,
-            bet_id=args.bet if idx == 0 else None,
+            epic_id=args.bet if idx == 0 else None,
             story_id=story_id if idx == 0 else None,
             full_project=args.full_project,
             model=args.model,

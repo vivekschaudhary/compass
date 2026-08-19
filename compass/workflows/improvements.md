@@ -28,7 +28,7 @@ Retros every **10** entries (framework altitude; **changed from 5 → 10 at #146
 - **Retro #006** (v0.3.9 → v0.3.13): [retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md](retros/2026-06-02-retro-006-v0.3.9-to-v0.3.13.md) — **fired ON TIME at #30** (2nd consecutive on-time retro; hard line worked again). 5 improvements in 1 day. Surfaces 3 codification-ready candidates: `[user-as-load-bearing-oversight]` (3+ instances) · `[L-layered-progressive-rollout]` (2 instances) · `[surface-shapes-output]` (2 instances). `[hard-line-declaration]` empirically validated 3rd time (cadence-class commitments). Release-class taxonomy stable at 7 classes (capability-extension introduced v0.3.13).
 - **Retro #007** (v0.3.14 → v0.3.18): [retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md](retros/2026-06-07-retro-007-v0.3.14-to-v0.3.18.md) — **fired ON TIME at #35** (3rd consecutive on-time retro; hard line worked 4th time). 5 improvements in 3 days. **First retro under v0.3.17 `[fractal-retro]` schema** (explicit `altitude: framework` + `consolidates_from: []` frontmatter). **Cleanest QUEUED → SHIPPED cycle in framework history visible end-to-end** (v0.3.16 QUEUED → v0.3.17 SHIPPED on trigger fire within same session). **100% user-driven origin** across all 5 improvements — `[user-as-load-bearing-oversight]` at 11+ total instances, **PROMOTE TO CANON recommended** as 1st observability-class candidate (would join `[role-boundary]` as 2nd observability member). Other codification candidates: `[agent-file-compression]` (1 instance — wait for 2nd); `[tool-wrappers-own-their-cadence]` + `[no-padded-status]` + `[freshness-markers-follow-source-of-truth]` (1 instance each — wait). Drift signals: workflow-refactor cadence (12+ workflows still in v0.3.0-alpha shape); Custom GPT cap compounding without structural defense; watch-for latency (3 releases for v0.3.15 flagged item to be addressed). Architecture-discipline class validated as durable (2 members).
 - **Retro #008** (v0.3.19 → v0.3.23): [retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md](retros/2026-06-08-retro-008-v0.3.19-to-v0.3.23.md) — **fired ON TIME at #40**
-- **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-bet-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
+- **Retro #009** (v0.3.24 → v0.4.0-alpha-1): [retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md](retros/2026-06-08-retro-009-v0.3.24-to-v0.4.0-alpha-1.md) — **fired ON TIME at #45** (5th consecutive on-time retro; first orchestrator-version cycle). 5 improvements: `[workflow-as-dispatch-graph]` codified + orchestrator alpha-0 + Architect migration + `/create-epic-architecture` dispatch-graph + orchestrator alpha-1 artifact write + state passing. No PROMOTEs this cycle (all execution-class). Watch-for: `[discipline-as-muscle-memory]` + `[goal-driven-high-cadence-arc]` + `[orchestrator-as-residual-shrinker]`.
 - **Retro #010** (v0.4.0-alpha-2 → v0.4.0-alpha-2 + field learnings): [retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md](retros/2026-06-09-retro-010-v0.4.0-alpha-2-to-field-learnings.md) — **fired ON TIME at #50** (6th consecutive on-time retro). 2 field-signal improvements: friction-as-principle + Engineer prod-parity. First retro with consumer-project evidence (crypto app prod failures). `[discipline-as-muscle-memory]` watch-for validated: cadence held with tightened header prose.
 - **Retro #011** (v0.3.29 → v0.3.32): [retros/2026-06-09-retro-011-v0.3.29-to-v0.3.32.md](retros/2026-06-09-retro-011-v0.3.29-to-v0.3.32.md) — **fired ON TIME at #55** (7th consecutive on-time retro). 4 improvements in 1 session: Engineer prod-parity discipline + Principle #17 friction + Support migration + Scanner migration. `[discipline-as-muscle-memory]` PROMOTE executed this cycle. Counter resets to #60.
 - **Retro #012** (v0.3.33 → v0.4.0-alpha-3): [retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md](retros/2026-06-09-retro-012-v0.3.33-to-v0.4.0-alpha-3.md) — **fired ON TIME at #58** (8th consecutive on-time retro; counter tracking note: fired at +3 not +5 per [discipline-as-muscle-memory] drift; horizon corrected to #63). 3 improvements: Automation migration + [discipline-as-muscle-memory] canon + HITL context passing. Watch-fors: orchestrator test coverage gap + HITL feedback ceremony risk + pre-push-grep-discipline 2nd instance.
@@ -981,7 +981,7 @@ The retro cadence's promised lag-shrinking worked on its first try: drift signal
 - `compass/workflows/scan.md` — removed "Auto-invoked by /advance"; kept `/build` phase-boundary auto-invocation (independent of /advance, stands on its own).
 - `compass/workflows/dashboard.md` — removed transitive-via-/plan-from-/advance trigger entry; kept the 4 writer auto-triggers.
 - `compass/workflows/status.md` — removed "or /advance (which auto-runs /plan)" suggestion.
-- `compass/workflows/create-bet-portfolio.md` — rephrased plan-refresh-on-/advance to manual + cron.
+- `compass/workflows/create-epics.md` — rephrased plan-refresh-on-/advance to manual + cron.
 - `compass/workflows/build.md` — rephrased "matching /advance behavior" → "matching the scanner's strict-mode block semantics."
 - `compass/roles/project-manager.md` — removed auto-trigger-from-/advance annotations on `/plan` and output artifacts.
 - `compass/roles/scanner.md` — removed /advance from "When you play this role" list.
@@ -994,7 +994,7 @@ The retro cadence's promised lag-shrinking worked on its first try: drift signal
 - `README.md` flow diagram: removed Navigate bucket (whose only member was /advance); now 4 buckets (Bootstrap / Plan / Execute / Observe). Added explanatory note: phase transitions are direct status-field flips, no canonical advance command.
 - `SETUP.md`: removed /advance from "Anytime" section + rephrased the v0.1.14 plan-auto-refresh sentence.
 
-**Files touched:** 21 — `compass/workflows/advance.md`, `.claude/skills/advance/SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `SETUP.md`, `compass/workflows/plan.md`, `compass/workflows/scan.md`, `compass/workflows/dashboard.md`, `compass/workflows/status.md`, `compass/workflows/create-bet-portfolio.md`, `compass/workflows/build.md`, `compass/roles/project-manager.md`, `compass/roles/scanner.md`, `compass/templates/scan-report.md`, `compass/templates/brief.md`, `compass/templates/plan.md`, `.claude/skills/plan/SKILL.md`, `.claude/skills/scan/SKILL.md`, `CHANGELOG.md` (0.3.0), `compass/workflows/improvements.md`.
+**Files touched:** 21 — `compass/workflows/advance.md`, `.claude/skills/advance/SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `SETUP.md`, `compass/workflows/plan.md`, `compass/workflows/scan.md`, `compass/workflows/dashboard.md`, `compass/workflows/status.md`, `compass/workflows/create-epics.md`, `compass/workflows/build.md`, `compass/roles/project-manager.md`, `compass/roles/scanner.md`, `compass/templates/scan-report.md`, `compass/templates/brief.md`, `compass/templates/plan.md`, `.claude/skills/plan/SKILL.md`, `.claude/skills/scan/SKILL.md`, `CHANGELOG.md` (0.3.0), `compass/workflows/improvements.md`.
 
 **Files NOT touched** (deliberately):
 - All 3 retro archives — they reference /advance as an active workflow, accurate as-of-write; immutability preserved.
@@ -1009,7 +1009,7 @@ The retro cadence's promised lag-shrinking worked on its first try: drift signal
 
 **What we explicitly did NOT replace /advance with:**
 - No new "canonical phase advance" command. The drift-signal insight was that this command wasn't needed; replacing it with a renamed equivalent would re-introduce the same loophole.
-- No new auto-trigger from `/create-brief`, `/create-bet-architecture`, `/create-story`, `/build` to `/plan`. The /plan auto-refresh story is now: manual + cron + (existing) `/build` phase boundaries. If /plan going stale becomes a real problem, that's a future patch — not bundled with deprecation.
+- No new auto-trigger from `/create-brief`, `/create-epic-architecture`, `/create-story`, `/build` to `/plan`. The /plan auto-refresh story is now: manual + cron + (existing) `/build` phase boundaries. If /plan going stale becomes a real problem, that's a future patch — not bundled with deprecation.
 - No new role.
 
 **Watch for (improvements #17-20):**
@@ -1191,12 +1191,12 @@ That reframe is the load-bearing insight. The fix isn't "bet architects should c
 - Engineer role Definition of Done: "Production build green" added as a required item.
 
 *Issue 2 (Foundational-first signal consultation + bet-arch deviation gate):*
-- `/create-bet-architecture` new step 7: **foundational-stack deviation gate.** Refuses to proceed if the bet needs tools/services/frameworks/data stores/runtimes/dependencies outside `docs/foundation/architecture.md` Stack table. Tells user to run `/setup-foundation-architecture` amend first. Logs the deviation as a DRI Issue on the bet.
+- `/create-epic-architecture` new step 7: **foundational-stack deviation gate.** Refuses to proceed if the bet needs tools/services/frameworks/data stores/runtimes/dependencies outside `docs/foundation/architecture.md` Stack table. Tells user to run `/setup-foundation-architecture` amend first. Logs the deviation as a DRI Issue on the bet.
 - `/setup-foundation-architecture` Phase A: 4-category signal-consultation framework (production observability / recent PR feedback / prior architectural decisions across bets / bet-arch deviation pressure). Each cite-or-mark-n/a-with-reason. Especially load-bearing on amend flows.
 - Architect role: Input list extended to call out foundational Stack table as canonical; DoD requires explicit "no deviation" assertion or escalation note.
 - `foundation-architecture.md` template: new **ADR / Amendments** section with structured entry shape (Triggered by / What changed / Why / Reversibility / Cited signal). Required to have ≥1 entry on any foundational version > 1.
 
-**Files touched:** `compass/workflows/build.md`, `compass/roles/engineer.md`, `compass/workflows/create-bet-architecture.md`, `compass/workflows/setup-foundation-architecture.md`, `compass/roles/architect.md`, `compass/templates/foundation-architecture.md`, `CHANGELOG.md` (0.2.4), `compass/workflows/improvements.md`.
+**Files touched:** `compass/workflows/build.md`, `compass/roles/engineer.md`, `compass/workflows/create-epic-architecture.md`, `compass/workflows/setup-foundation-architecture.md`, `compass/roles/architect.md`, `compass/templates/foundation-architecture.md`, `CHANGELOG.md` (0.2.4), `compass/workflows/improvements.md`.
 
 **Watch for:**
 
@@ -1251,8 +1251,8 @@ This is the same anti-pattern shape as the Researcher "log-and-walk-away" (v0.1.
 |---|---|---|
 | `docs/dashboard.html` | No — pure view | ❌ ignored |
 | `docs/foundation/plan.md` | Yes — refinement log accumulates per-refresh entries | ✅ tracked |
-| `docs/bets/<id>/scan-report.md` | Yes — preserves suppressions with HITL approvals | ✅ tracked |
-| `docs/metrics/<bet-id>-<date>.{md,json}` | Yes — dated time-series, never overwritten | ✅ tracked |
+| `docs/epics/<id>/scan-report.md` | Yes — preserves suppressions with HITL approvals | ✅ tracked |
+| `docs/metrics/<epic-id>-<date>.{md,json}` | Yes — dated time-series, never overwritten | ✅ tracked |
 | `docs/status.md` | Yes — humans read history in retros | ✅ tracked |
 
 **Watch for:**
@@ -1264,7 +1264,7 @@ This is the same anti-pattern shape as the Researcher "log-and-walk-away" (v0.1.
 
 ### 2026-05-24 — Living artifacts were IDE-only; stakeholders needed a browser view (v0.2.1)
 
-**Friction:** v0.2.0 produced a lot of living artifacts — scan reports per bet, metrics snapshots, plan, portfolio, status. Useful inside the IDE (engineers reading markdown in their editor) and useful for AI consumption (workflows read them). But **stakeholders skim**: PMs, leadership, on-call rotation, anyone outside the IDE wanted to open a URL or attach a file and see current state. Spelunking `docs/bets/*/scan-report.md` across 12 bets is not skim-friendly. Markdown rendered on GitHub is OK if the repo is public and the audience knows the URL — but most teams' repos are private and stakeholders don't have GitHub access. Result: the living artifacts were structurally invisible to the people they were ultimately for.
+**Friction:** v0.2.0 produced a lot of living artifacts — scan reports per bet, metrics snapshots, plan, portfolio, status. Useful inside the IDE (engineers reading markdown in their editor) and useful for AI consumption (workflows read them). But **stakeholders skim**: PMs, leadership, on-call rotation, anyone outside the IDE wanted to open a URL or attach a file and see current state. Spelunking `docs/epics/*/scan-report.md` across 12 bets is not skim-friendly. Markdown rendered on GitHub is OK if the repo is public and the audience knows the URL — but most teams' repos are private and stakeholders don't have GitHub access. Result: the living artifacts were structurally invisible to the people they were ultimately for.
 
 The user named the gap: "we should have the scan and metrics open in an html view." Extended in brainstorm to all derived/living artifacts (plan, portfolio, status too) — same audience, same shape.
 
@@ -1277,7 +1277,7 @@ The user named the gap: "we should have the scan and metrics open in an html vie
 - Project Manager role owns `/dashboard` (rolling-visibility mandate alongside `/status` and `/plan`).
 - AGENTS.md workflow count: 16 → 17.
 
-**Files touched:** new — `compass/workflows/dashboard.md`, `compass/templates/dashboard.html.template`, `.claude/skills/dashboard/SKILL.md`. Edited — `compass/workflows/scan.md`, `metrics.md`, `plan.md`, `status.md`, `create-bet-portfolio.md`, `advance.md`, `compass/roles/project-manager.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `SETUP.md`, `CHANGELOG.md` (0.2.1), `compass/workflows/improvements.md`.
+**Files touched:** new — `compass/workflows/dashboard.md`, `compass/templates/dashboard.html.template`, `.claude/skills/dashboard/SKILL.md`. Edited — `compass/workflows/scan.md`, `metrics.md`, `plan.md`, `status.md`, `create-epics.md`, `advance.md`, `compass/roles/project-manager.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `SETUP.md`, `CHANGELOG.md` (0.2.1), `compass/workflows/improvements.md`.
 
 **Watch for:**
 - **Diff churn.** Every `/scan`, `/metrics`, `/plan`, `/status` run rewrites the entire `docs/dashboard.html`. Diffs will be large because the file inlines all artifacts. Consider git-ignoring `docs/dashboard.html` if reviewers find the noise unhelpful (the file regenerates anyway).
@@ -1330,9 +1330,9 @@ The user named the deeper principle: **each phase's output should be an input to
 - Refinement log inside `plan.md` writes a row every time a date moves, naming the triggering artifact. This is the audit trail for "output → input" causality.
 - **`/advance` auto-runs `/plan` as its final step.** This is the load-bearing mechanic — users never have to remember to refresh the plan; every phase advance does it.
 - `/status` now reads the plan rather than recomputing schedule data; adds plan-freshness signal to health metrics.
-- `/create-bet-portfolio` Output section points at `/plan` as the immediate next step after portfolio HITL approval (seeds the schedule).
+- `/create-epics` Output section points at `/plan` as the immediate next step after portfolio HITL approval (seeds the schedule).
 
-**Files touched:** new — `compass/workflows/plan.md`, `compass/templates/plan.md`, `.claude/skills/plan/SKILL.md`. Edited — `compass/workflows/advance.md` (auto-trigger), `compass/workflows/status.md` (reads plan), `compass/workflows/create-bet-portfolio.md` (next-step pointer), `compass/templates/brief.md` (estimate block), `compass/roles/project-manager.md`, `AGENTS.md`, `CLAUDE.md`, `SETUP.md`, `README.md`, `CHANGELOG.md` (0.1.14), `compass/workflows/improvements.md`.
+**Files touched:** new — `compass/workflows/plan.md`, `compass/templates/plan.md`, `.claude/skills/plan/SKILL.md`. Edited — `compass/workflows/advance.md` (auto-trigger), `compass/workflows/status.md` (reads plan), `compass/workflows/create-epics.md` (next-step pointer), `compass/templates/brief.md` (estimate block), `compass/roles/project-manager.md`, `AGENTS.md`, `CLAUDE.md`, `SETUP.md`, `README.md`, `CHANGELOG.md` (0.1.14), `compass/workflows/improvements.md`.
 
 **Watch for:**
 - **Hand-editing `plan.md`** — anti-pattern; the next `/plan` run will overwrite. If users start hand-editing, they're probably trying to express something the estimate model can't capture (custom override, manual lock). Watch for it and consider an `override` field on the bet's `estimate` block rather than letting plan-edits land.
@@ -1349,20 +1349,20 @@ The user named the deeper principle: **each phase's output should be an input to
 The user observed the real-world pattern: "create the bets across all and then have the build start in parallel." But this needed to be **bootstrap-only** to avoid becoming a waterfall mini-roadmap, and **strictly MVP** to avoid scope padding.
 
 **Change:**
-- New workflow `/create-bet-portfolio` — bootstrap-only, runs once per project after foundation product + architecture are approved.
+- New workflow `/create-epics` — bootstrap-only, runs once per project after foundation product + architecture are approved.
 - Workflow elicits MVP definition via a forcing question ("what does this product need to do for one real user to complete the core value loop once?"). Verbatim user answer becomes the load-bearing scope statement at the top of the portfolio doc.
 - Drafts 3-6 stub briefs (MVP bets only) with new frontmatter fields `portfolio_stub`, `depends_on`, `parallel_with`. Each stub traces its one-line hypothesis back to a specific line in the product bet.
 - Drafts `docs/foundation/portfolio.md` with Mermaid `flowchart` dependency graph + explicit parallel-build candidates + a "Deliberately out of MVP" section for the user's "tempted to include but actually post-MVP" items.
-- `/create-brief` gained a promote-stub mode: `/create-brief <bet-id>` fills in the full content for a portfolio stub and clears the flag. Fresh-bet creation mode is unchanged.
-- State detection prevents re-bootstrapping: once any stub has been promoted, `/create-bet-portfolio` refuses re-invocation. New bets after MVP go through `/create-brief` fresh.
+- `/create-brief` gained a promote-stub mode: `/create-brief <epic-id>` fills in the full content for a portfolio stub and clears the flag. Fresh-bet creation mode is unchanged.
+- State detection prevents re-bootstrapping: once any stub has been promoted, `/create-epics` refuses re-invocation. New bets after MVP go through `/create-brief` fresh.
 - Two distinct HITL approvals per bootstrap bet: portfolio approval ("yes, this is the wedge") + per-brief approval after promotion ("yes, this is what bet N specifically should be"). Deliberate.
 - Researcher engagement is mandatory in the new workflow (same enforcement as setup-product) — surfaces MVP wedge patterns from comparable products as a sanity check on the user's MVP definition.
 
-**Files touched:** new — `compass/workflows/create-bet-portfolio.md`, `compass/templates/portfolio.md`, `.claude/skills/create-bet-portfolio/SKILL.md`. Edited — `compass/workflows/create-brief.md` (promote-stub mode), `compass/workflows/setup-foundation-architecture.md` (next-step pointer), `compass/templates/brief.md` (new frontmatter fields), `compass/roles/pm.md`, `compass/roles/researcher.md`, `AGENTS.md`, `CLAUDE.md`, `SETUP.md`, `README.md`, `CHANGELOG.md` (0.1.13), `compass/workflows/improvements.md`.
+**Files touched:** new — `compass/workflows/create-epics.md`, `compass/templates/portfolio.md`, `.claude/skills/create-epics/SKILL.md`. Edited — `compass/workflows/create-brief.md` (promote-stub mode), `compass/workflows/setup-foundation-architecture.md` (next-step pointer), `compass/templates/brief.md` (new frontmatter fields), `compass/roles/pm.md`, `compass/roles/researcher.md`, `AGENTS.md`, `CLAUDE.md`, `SETUP.md`, `README.md`, `CHANGELOG.md` (0.1.13), `compass/workflows/improvements.md`.
 
 **Watch for:**
 - **Scope creep at the MVP line.** The "Deliberately out of MVP" section is where this gets tested. If users keep proposing 7-10 MVP bets, the forcing question isn't biting. Consider tightening to a hard cap of 6 (warning today is soft).
-- **Re-bootstrap requests** — users may want to re-run `/create-bet-portfolio` mid-project for a new strategic batch (post-PMF expansion, new vertical). The current refusal is intentional, but if it becomes a common pain, the answer is probably an OKR bet that decomposes via `/create-brief`, not a re-bootstrap. Watch for the request and resist building the wrong escape hatch.
+- **Re-bootstrap requests** — users may want to re-run `/create-epics` mid-project for a new strategic batch (post-PMF expansion, new vertical). The current refusal is intentional, but if it becomes a common pain, the answer is probably an OKR bet that decomposes via `/create-brief`, not a re-bootstrap. Watch for the request and resist building the wrong escape hatch.
 - **Promotion order vs. dependency graph.** If users promote stubs out of dependency order (e.g., promote a dependent bet before its prerequisite), nothing in the workflow stops them — the dependency graph is informational. If misuse becomes common, add a refusal in `/create-brief` promote-mode that checks `depends_on` status.
 - **Stub brief content drift before promotion.** If users hand-edit stub briefs between portfolio approval and `/create-brief` promotion, the promotion may overwrite their edits. Watch for this and consider an "extend rather than overwrite" mode if it bites.
 
@@ -1384,7 +1384,7 @@ The user observed the real-world pattern: "create the bets across all and then h
 **Watch for:**
 - The trace-back-to-product-bet rule is the load-bearing enforcement here. If users hit a case where the product bet genuinely doesn't imply a needed entity (e.g., billing entities in a product bet that focuses on the user experience), they'll either invent the entity (bypassing the rule) or amend the product bet. Amending is correct; if invention becomes common, the rule needs softening with an explicit "system-required entity" carve-out.
 - Mermaid ERD may grow stale faster than the rest of the doc — refreshing it should be a step in any `/setup-foundation-architecture` amend flow (creates v2).
-- Per-bet `/create-bet-architecture` should be the next place to audit: does it inherit + extend the foundational data model cleanly, or does it duplicate decisions? Probably needs a "delta from foundation" enforcement.
+- Per-bet `/create-epic-architecture` should be the next place to audit: does it inherit + extend the foundational data model cleanly, or does it duplicate decisions? Probably needs a "delta from foundation" enforcement.
 
 ---
 
@@ -1407,7 +1407,7 @@ The user observed the real-world pattern: "create the bets across all and then h
 **Files touched:** `compass/workflows/setup-foundation-architecture.md`, `compass/roles/enterprise-architect.md`, `compass/templates/foundation-architecture.md`, `CHANGELOG.md` (0.1.11), `compass/workflows/improvements.md`.
 
 **Watch for:**
-- The next instance of this anti-pattern is likely `/create-bet-architecture` — the per-bet Architect role has the same "make decisions" shape and currently no derivation framework. If/when it surfaces, mirror the Phase-A/Phase-B split with bet-scoped fitness functions instead of foundational ones.
+- The next instance of this anti-pattern is likely `/create-epic-architecture` — the per-bet Architect role has the same "make decisions" shape and currently no derivation framework. If/when it surfaces, mirror the Phase-A/Phase-B split with bet-scoped fitness functions instead of foundational ones.
 - The pillar scoring may become rote check-the-box. If that happens, tighten on *evidence quality* (specific citations, primary sources, comparable workloads) rather than presence.
 - The HITL split adds friction — measure whether users complete both phases or get stuck after Phase A. If stuck, the rejection rationale should be a real DRI Risk, not an abandoned workflow.
 
@@ -1415,15 +1415,15 @@ The user observed the real-world pattern: "create the bets across all and then h
 
 ### 2026-05-24 — Architecture rename was half-applied; skill pointed at a missing file
 
-**Friction:** The intended rename (`setup-architecture` → `setup-foundation-architecture`; `create-architecture` → `create-bet-architecture`) had been applied to *documentation* (AGENTS.md, SETUP.md, CLAUDE.md) and to the create-architecture file/skill — but the `setup-architecture` workflow file and skill directory still used the old name. The `.claude/skills/setup-architecture/SKILL.md` told the runtime to execute `compass/workflows/setup-foundation-architecture.md`, a file that did not exist on disk. The skill would have failed silently on first invocation. Stale `/setup architecture` (space-form) and `/create-architecture` command references were scattered across role docs, README, PROJECT.md, and docs/status.md. A duplicate `compass/improvements.md` had also been created next to the canonical `compass/workflows/improvements.md`.
+**Friction:** The intended rename (`setup-architecture` → `setup-foundation-architecture`; `create-architecture` → `create-epic-architecture`) had been applied to *documentation* (AGENTS.md, SETUP.md, CLAUDE.md) and to the create-architecture file/skill — but the `setup-architecture` workflow file and skill directory still used the old name. The `.claude/skills/setup-architecture/SKILL.md` told the runtime to execute `compass/workflows/setup-foundation-architecture.md`, a file that did not exist on disk. The skill would have failed silently on first invocation. Stale `/setup architecture` (space-form) and `/create-architecture` command references were scattered across role docs, README, PROJECT.md, and docs/status.md. A duplicate `compass/improvements.md` had also been created next to the canonical `compass/workflows/improvements.md`.
 
 **Change:**
 - `git mv` for `compass/workflows/setup-architecture.md` → `setup-foundation-architecture.md` and the matching skill directory.
 - Updated `name:` field in the renamed SKILL.md.
-- Standardized all command references on hyphen-slug form (`/setup-product`, `/setup-foundation-architecture`, `/create-bet-architecture`) across README, AGENTS, CLAUDE, PROJECT, SETUP, docs/status, and all role + workflow files.
+- Standardized all command references on hyphen-slug form (`/setup-product`, `/setup-foundation-architecture`, `/create-epic-architecture`) across README, AGENTS, CLAUDE, PROJECT, SETUP, docs/status, and all role + workflow files.
 - Merged the duplicate improvements log into the canonical `compass/workflows/improvements.md`; deleted the duplicate at `compass/improvements.md`.
 
-**Files touched:** `compass/workflows/setup-foundation-architecture.md` (renamed), `.claude/skills/setup-foundation-architecture/SKILL.md` (renamed dir + content), `compass/workflows/setup-product.md`, `compass/workflows/create-bet-architecture.md`, `compass/workflows/create-brief.md`, `compass/roles/architect.md`, `compass/roles/enterprise-architect.md`, `compass/roles/pm.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `README.md`, `SETUP.md`, `docs/status.md`, `compass/workflows/improvements.md`, `CHANGELOG.md` (0.1.10).
+**Files touched:** `compass/workflows/setup-foundation-architecture.md` (renamed), `.claude/skills/setup-foundation-architecture/SKILL.md` (renamed dir + content), `compass/workflows/setup-product.md`, `compass/workflows/create-epic-architecture.md`, `compass/workflows/create-brief.md`, `compass/roles/architect.md`, `compass/roles/enterprise-architect.md`, `compass/roles/pm.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `README.md`, `SETUP.md`, `docs/status.md`, `compass/workflows/improvements.md`, `CHANGELOG.md` (0.1.10).
 
 **Watch for:**
 - Future renames: do them with `git mv` + `grep -rn` sweep + skill `name:` field check, all in one PR. The half-applied state here was nearly invisible because docs and skill name diverged silently.
@@ -1721,7 +1721,7 @@ QUEUED entry's "Trigger to actually build this" listed 4 conditions. **Trigger #
 
 **Change:** Trimmed both files using the v0.3.18 compression playbook.
 
-- **`compass/agents/pm.md`** 12,664 → 7,983 chars (37% reduction; 17 chars headroom under cap). Strategy: combined 3 opening notes into one Notes paragraph; tightened Identity; compressed each Core principle to one line (kept INLINED — discipline cannot be deferred); restructured `setup-product-foundation` task to Gate + Work (compressed step sequence) + Postcondition (dropped verbose Inputs enumeration; dropped Handoffs detail; dropped Triggered-by lines); compressed `draft-brief` / `decompose-bet-to-story` / `arbitrate-dispute` tasks to terse stubs; folded Framework knowledge section into Host-cap-degradation tail (one-line list of Compass-originals + external-framework references + 9-moat names); compressed Anti-patterns from bullet list to inline-separated line; compressed Host capability degradation from 3-column markdown table to bullet list. Frontmatter `version:` bumped 0.3.14 → 0.3.21.
+- **`compass/agents/pm.md`** 12,664 → 7,983 chars (37% reduction; 17 chars headroom under cap). Strategy: combined 3 opening notes into one Notes paragraph; tightened Identity; compressed each Core principle to one line (kept INLINED — discipline cannot be deferred); restructured `setup-product-foundation` task to Gate + Work (compressed step sequence) + Postcondition (dropped verbose Inputs enumeration; dropped Handoffs detail; dropped Triggered-by lines); compressed `draft-brief` / `decompose-epic-to-story` / `arbitrate-dispute` tasks to terse stubs; folded Framework knowledge section into Host-cap-degradation tail (one-line list of Compass-originals + external-framework references + 9-moat names); compressed Anti-patterns from bullet list to inline-separated line; compressed Host capability degradation from 3-column markdown table to bullet list. Frontmatter `version:` bumped 0.3.14 → 0.3.21.
 - **`compass/agents/researcher.md`** 12,115 → 7,981 chars (34% reduction; 19 chars headroom). Same playbook + researcher-specific compression on the 6-category research framework: each category's source-list paragraph compressed to a single inline-separated line of starting points (framework SHAPE preserved as load-bearing); 9-moat evaluation moved from `| Question | Where to research |` 3-column table to numbered inline list with verdict-required-per-row preserved as load-bearing rule; moat-sources paragraph compressed to inline list; "Moat-specific" anti-patterns folded into general Anti-patterns line. Frontmatter `version:` bumped 0.3.14 → 0.3.21.
 
 **No behavior change** verified by content sanity: same task names · same Gate + Postcondition pairs preserved · same Refusal rules count · same Anti-patterns coverage · same `preferred_hosts:` + `required_tools:` + `optional_tools:` + `participates_in_workflows:` frontmatter values. Same agent identity; same workflow contract.
@@ -1869,16 +1869,16 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Watch for:**
 
 - **v0.4-beta scope:** multi-host dispatch per `preferred_hosts:` (Codex for Reviewer — the cross-model independence that makes Compass reviews load-bearing); artifact write automation; structured state passing between steps; `pip install compass` entry point.
-- **Next workflow migration = next automatable path.** The orchestrator can already run `/setup-product` (4 steps) and `/build` (8 steps, 5 dispatchable). Each additional dispatch-graph migration adds one more path without touching orchestrator code. Priority per `compass/framework/mvp.md`: `/create-bet-architecture` (requires Architect migration) + `/create-brief`.
+- **Next workflow migration = next automatable path.** The orchestrator can already run `/setup-product` (4 steps) and `/build` (8 steps, 5 dispatchable). Each additional dispatch-graph migration adds one more path without touching orchestrator code. Priority per `compass/framework/mvp.md`: `/create-epic-architecture` (requires Architect migration) + `/create-brief`.
 - **`anthropic` SDK version pinning.** Currently uses whatever is installed. Before v0.4-beta, pin to a specific version in `requirements.txt` or `pyproject.toml`.
 - **Single-host limitation.** All steps go to Claude API including Reviewer steps — which violates the cross-model independence constraint (`[role-boundary]` v0.3.4 + Reviewer `preferred_hosts: [codex, gemini]`). This is explicitly scoped to alpha; multi-host dispatch is the first v0.4-beta requirement. Don't run the orchestrator's reviewer steps against production code until multi-host ships.
 
-### 2026-06-08 — Architect agent migrated from `compass/roles/` → `compass/agents/` (v0.3.25) — 6th migrated agent; unlocks `/create-bet-architecture` dispatch-graph refactor
+### 2026-06-08 — Architect agent migrated from `compass/roles/` → `compass/agents/` (v0.3.25) — 6th migrated agent; unlocks `/create-epic-architecture` dispatch-graph refactor
 
-**Friction:** Architect was the highest-leverage unblocked migration per `compass/framework/mvp.md` — without it, `/create-bet-architecture` can't become a dispatch-graph workflow, and the orchestrator has no architecture step to walk. The legacy `compass/roles/architect.md` was 71 lines of embedded methodology with no task definitions, no gate/work/postcondition structure, no frontmatter.
+**Friction:** Architect was the highest-leverage unblocked migration per `compass/framework/mvp.md` — without it, `/create-epic-architecture` can't become a dispatch-graph workflow, and the orchestrator has no architecture step to walk. The legacy `compass/roles/architect.md` was 71 lines of embedded methodology with no task definitions, no gate/work/postcondition structure, no frontmatter.
 
 **Change:**
-- `compass/agents/architect.md` (new, v0.3.25, 7779 chars) — full agent file: `preferred_hosts: [claude, codex, gemini]` (CLI-class; excludes chatgpt — can't read codebase); `draft-bet-architecture` task (6-step with foundational-stack deviation gate as load-bearing hard stop); `assess-pr-compliance` task (PR vs approved architecture verification); 6 refusal rules; host capability degradation; logging patterns. Size: 7779 chars (221 headroom; chatgpt not targeted so cap N/A, but within threshold regardless).
+- `compass/agents/architect.md` (new, v0.3.25, 7779 chars) — full agent file: `preferred_hosts: [claude, codex, gemini]` (CLI-class; excludes chatgpt — can't read codebase); `draft-epic-architecture` task (6-step with foundational-stack deviation gate as load-bearing hard stop); `assess-pr-compliance` task (PR vs approved architecture verification); 6 refusal rules; host capability degradation; logging patterns. Size: 7779 chars (221 headroom; chatgpt not targeted so cap N/A, but within threshold regardless).
 - `AGENTS.md` — migration table Architect `legacy` → `✅ v0.3.25`; agent count prose updated.
 - `CHANGELOG.md` — v0.3.25 entry added.
 - `compass/workflows/improvements.md` — this entry + counter v0.4.0-alpha-0=#42 → v0.3.25=#43 (3 of 5 before Retro #009).
@@ -1886,29 +1886,29 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Files touched (3 modified + 1 new):** `compass/agents/architect.md` · `AGENTS.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
 
 **Watch for:**
-- **`/create-bet-architecture` dispatch-graph refactor** — Task 2 (next). Architect agent file is now the source of truth; the workflow can become a thin dispatch contract.
-- **`[explicit-dispatch-surfaces-latent-participation]`** — watch whether refactoring `/create-bet-architecture` surfaces any agents whose participation was previously implicit (Enterprise Architect is explicitly named in the legacy workflow as "always engages"). Does it get its own dispatch step or remain a note?
+- **`/create-epic-architecture` dispatch-graph refactor** — Task 2 (next). Architect agent file is now the source of truth; the workflow can become a thin dispatch contract.
+- **`[explicit-dispatch-surfaces-latent-participation]`** — watch whether refactoring `/create-epic-architecture` surfaces any agents whose participation was previously implicit (Enterprise Architect is explicitly named in the legacy workflow as "always engages"). Does it get its own dispatch step or remain a note?
 - **Counter at #43 — 2 more improvements to Retro #009.**
 
-### 2026-06-08 — `/create-bet-architecture` refactored to dispatch-graph shape (v0.3.26) — 3rd workflow migrated; orchestrator can now walk Product → Architecture chain
+### 2026-06-08 — `/create-epic-architecture` refactored to dispatch-graph shape (v0.3.26) — 3rd workflow migrated; orchestrator can now walk Product → Architecture chain
 
-**Friction:** `/create-bet-architecture` was 61 lines of embedded methodology with no frontmatter, no agent dispatch labels, no HITL step declaration — not parseable by the orchestrator. With architect.md migrated (v0.3.25), the methodology IP moved into the agent file, making the workflow ready for dispatch-graph refactor.
+**Friction:** `/create-epic-architecture` was 61 lines of embedded methodology with no frontmatter, no agent dispatch labels, no HITL step declaration — not parseable by the orchestrator. With architect.md migrated (v0.3.25), the methodology IP moved into the agent file, making the workflow ready for dispatch-graph refactor.
 
 **Change:**
-- `compass/workflows/create-bet-architecture.md` refactored to standard dispatch-graph shape (version: 0.3.26): 3-step dispatch graph (architect.draft-bet-architecture · HITL · delivery-manager.update-status) · 3 workflow-level preconditions · 9-item verification checklist · Notes covering ADR-not-gate + Enterprise Architect handling + 3 named anti-patterns.
+- `compass/workflows/create-epic-architecture.md` refactored to standard dispatch-graph shape (version: 0.3.26): 3-step dispatch graph (architect.draft-epic-architecture · HITL · delivery-manager.update-status) · 3 workflow-level preconditions · 9-item verification checklist · Notes covering ADR-not-gate + Enterprise Architect handling + 3 named anti-patterns.
 - `AGENTS.md` — workflow count 2 → 3 dispatch-graph workflows.
 - `CHANGELOG.md` — v0.3.26 entry.
 - `compass/workflows/improvements.md` — this entry + counter v0.3.25=#43 → v0.3.26=#44 (4 of 5 before Retro #009).
 
-**Verification:** `python3 -m compass.orchestrator.run create-bet-architecture --dry-run` — 3 steps parsed correctly.
+**Verification:** `python3 -m compass.orchestrator.run create-epic-architecture --dry-run` — 3 steps parsed correctly.
 
 **`[explicit-dispatch-surfaces-latent-participation]` did NOT fire** — no new implicit agent participation surfaced. Still at 1 instance.
 
-**Files touched (3 modified):** `compass/workflows/create-bet-architecture.md` · `AGENTS.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
+**Files touched (3 modified):** `compass/workflows/create-epic-architecture.md` · `AGENTS.md` · `CHANGELOG.md` · `compass/workflows/improvements.md`.
 
 **Watch for:**
 - **Counter at #44 — 1 more improvement to Retro #009.** Next task (orchestrator artifact write + state passing) fires the retro.
-- **Orchestrator end-to-end test ready.** With 3 dispatch-graph workflows, the chain setup-product → create-bet-architecture is now fully walkable. Run the new project to validate.
+- **Orchestrator end-to-end test ready.** With 3 dispatch-graph workflows, the chain setup-product → create-epic-architecture is now fully walkable. Run the new project to validate.
 
 ### 2026-06-08 — Orchestrator v0.4-alpha-1: artifact write + state passing shipped — full multi-step runs now produce files on disk (v0.4.0-alpha-1) — **fires Retro #009**
 
@@ -1940,7 +1940,7 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 **Friction:** `/create-brief` workflow embedded 83 lines of methodology prose (gate check → PM → Researcher → source gather → bet ID → draft → mirror → HITL → Delivery Manager). Not walkable by orchestrator. PM agent had a stub `draft-brief` task: *"Task migration pending; follow compass/workflows/create-brief.md"* — circular reference: the workflow pointed at the agent, the agent pointed at the workflow.
 
 **Change:**
-- `compass/agents/pm.md` — `draft-brief` stub replaced with real gate/work/postcondition (mode detection: stub+portfolio_stub:true → promote; URL/text → fresh; bet-id without stub → refuse). Size: 7991 chars, 9 headroom — PASS (strict 8000-char cap; chatgpt in preferred_hosts).
+- `compass/agents/pm.md` — `draft-brief` stub replaced with real gate/work/postcondition (mode detection: stub+portfolio_stub:true → promote; URL/text → fresh; epic-id without stub → refuse). Size: 7991 chars, 9 headroom — PASS (strict 8000-char cap; chatgpt in preferred_hosts).
 - `compass/workflows/create-brief.md` — 83-line embedded methodology → thin 4-step dispatch graph: Step 1 `researcher.cite-evidence-6-category-9-moat` → Step 2 `pm.draft-brief` → Step 3 HITL → Step 4 `delivery-manager.update-status`. Standard frontmatter (version: 0.3.27). Framework grounding (working-backwards · lean-mvp · jtbd · shape-up + 5 Compass-originals). 3 workflow-level preconditions. 9-item verification checklist. 4 named anti-patterns.
 - `AGENTS.md` — workflow-migration count: 3 → 4 dispatch-graph workflows; `/create-brief` (v0.3.27, 4th) added.
 - `CHANGELOG.md` — v0.3.27 entry.
@@ -2160,7 +2160,7 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 
 ### 2026-06-09 — Orchestrator pipeline mode: cross-workflow chaining PM → Architect → Reviewer → Support (v0.4.0-alpha-4)
 
-**Friction:** Orchestrator v0.4-alpha-3 could only run one workflow at a time. PM brief lived in `/create-brief`, Architect design in `/create-bet-architecture`, and Engineer+Reviewer in `/build`. To chain PM → Architect → Reviewer → Support, the operator had to restart the orchestrator 3× with no automated context passing between runs. Workflow host routing (PM → Claude/OpenAI/Gemini, Architect → Claude, Reviewer → Codex) was already correct via `preferred_hosts:`; what was missing was the pipeline runner.
+**Friction:** Orchestrator v0.4-alpha-3 could only run one workflow at a time. PM brief lived in `/create-brief`, Architect design in `/create-epic-architecture`, and Engineer+Reviewer in `/build`. To chain PM → Architect → Reviewer → Support, the operator had to restart the orchestrator 3× with no automated context passing between runs. Workflow host routing (PM → Claude/OpenAI/Gemini, Architect → Claude, Reviewer → Codex) was already correct via `preferred_hosts:`; what was missing was the pipeline runner.
 
 **Change (IMPLEMENTED — v0.4.0-alpha-4):**
 
@@ -2175,12 +2175,12 @@ Retro #008 may PROMOTE either to canon at 2 instances if it judges the structura
 ```bash
 # Full PM → Architect → Build pipeline
 python3 -m compass.orchestrator.run \
-  --pipeline create-brief,create-bet-architecture,build \
+  --pipeline create-brief,create-epic-architecture,build \
   --context "Crypto portfolio tracker for retail investors."
 
 # Dry-run to see dispatch graph for full chain
 python3 -m compass.orchestrator.run \
-  --pipeline create-brief,create-bet-architecture,build \
+  --pipeline create-brief,create-epic-architecture,build \
   --dry-run
 ```
 
@@ -2207,7 +2207,7 @@ Each workflow's HITL gates still fire in sequence. The pipeline halts at any rej
 2. No way to tell the orchestrator WHICH bet to work on — `--context "$(cat brief.md)"` is fragile and doesn't load architecture, stories, or PROJECT.md automatically.
 3. Agent output was raw markdown with no structured extraction — no way to query DRI decisions, gate results, or file lineage across runs.
 
-All three surfaced within a single live test session (CB-4 create-bet-architecture against crypto-app).
+All three surfaced within a single live test session (CB-4 create-epic-architecture against crypto-app).
 
 **Change (IMPLEMENTED — v0.4.0-alpha-5):**
 
@@ -2216,13 +2216,13 @@ All three surfaced within a single live test session (CB-4 create-bet-architectu
 python3 -m compass.orchestrator.run \
   --project-dir /Volumes/VivekSSD/apps/crypto-app \
   --compass-dir /Volumes/VivekSSD/apps/compass/compass \
-  create-bet-architecture --bet CB-4
+  create-epic-architecture --bet CB-4
 ```
 
-**`--bet ID`** — auto-loads `docs/bets/<ID>/brief.md` + `architecture.md` (if exists) + story summaries + `PROJECT.md` as structured `## Bet context — <ID>` block prepended to Step 1's user message. Architect received CB-4's full brief automatically; ran the gate correctly (found `architecture_required: false`, produced DRI Decision, exited without drafting a redundant architecture.md).
+**`--bet ID`** — auto-loads `docs/epics/<ID>/brief.md` + `architecture.md` (if exists) + story summaries + `PROJECT.md` as structured `## Bet context — <ID>` block prepended to Step 1's user message. Architect received CB-4's full brief automatically; ran the gate correctly (found `architecture_required: false`, produced DRI Decision, exited without drafting a redundant architecture.md).
 
 **`compass/orchestrator/logger.py`** (new module) — parses every agent step output for structured sections and appends a record to `docs/orchestrator-runs/runs.jsonl`:
-- Fields: `run_id`, `ts`, `workflow`, `bet_id`, `step`, `agent`, `task`, `host`, `model`, `gate_result`, `tldr`, `dri_decisions` (list), `files_created`, `files_modified`, `next_command`, `risks`, `output_chars`, `artifact_path`
+- Fields: `run_id`, `ts`, `workflow`, `epic_id`, `step`, `agent`, `task`, `host`, `model`, `gate_result`, `tldr`, `dri_decisions` (list), `files_created`, `files_modified`, `next_command`, `risks`, `output_chars`, `artifact_path`
 - **`--log`** flag: prints tabular summary of all logged steps
 - **`--dri`** flag: prints all DRI decisions extracted across all runs
 - Parse logic extracts: `## State check` → gate_result; `## DRI Decision logged` → decision blocks; `## Output summary` → TL;DR, files, next command, risks
@@ -2263,7 +2263,7 @@ python3 -m compass.orchestrator.run \
   --compass-dir /Volumes/VivekSSD/apps/compass/compass \
   --full-project \
   --bet CB-4 \
-  create-bet-architecture
+  create-epic-architecture
 ```
 
 `--full-project` and `--bet` compose: project-wide context loads first, then bet-specific detail layers on top. Delivery manager in Step 3 now sees all bets + foundation + prior status before producing the update.
@@ -2344,7 +2344,7 @@ Root cause: context-free dispatch is correct for pure structural checks (syntax,
 **Change (IMPLEMENTED):**
 
 - **`dispatch.py --context-files`** (new flag, `nargs='*'`): accepts a list of additional files injected as a structured preamble before the primary input. Each file becomes a labeled `### <path>` block under a `## Context` header. Separator (`---`) before the `Execute task:` line ensures the agent sees context vs. input as distinct sections.
-- **`agent-handoff.yml` Option A updated**: added `--context-files PROJECT.md docs/foundation/product.md docs/foundation/architecture.md` to the default reviewer invocation. Comment explains when to include vs. omit (include for bet-aware reviews; omit for pure structural checks). Bet-specific example inline: `docs/bets/CB-4/brief.md`.
+- **`agent-handoff.yml` Option A updated**: added `--context-files PROJECT.md docs/foundation/product.md docs/foundation/architecture.md` to the default reviewer invocation. Comment explains when to include vs. omit (include for bet-aware reviews; omit for pure structural checks). Bet-specific example inline: `docs/epics/CB-4/brief.md`.
 - **Missing context files handled gracefully**: warning printed, file skipped, dispatch continues with remaining context.
 
 **Usage:**
@@ -2354,7 +2354,7 @@ python3 compass/scripts/dispatch.py \
   --task review-pr \
   --input-file pr.diff \
   --output review.md \
-  --context-files PROJECT.md docs/bets/CB-4/brief.md docs/bets/CB-4/architecture.md
+  --context-files PROJECT.md docs/epics/CB-4/brief.md docs/epics/CB-4/architecture.md
 ```
 
 **Verified:** context preamble assembles correctly; labeled blocks + separator; missing files skip with warning; `--help` shows flag; routing (`preferred_hosts` read) unchanged.
@@ -2402,7 +2402,7 @@ Currently HITL is a silent status flip. What's not captured: how long the review
 {
   "run_id": "create-brief--CB-5--2026-06-09",
   "step": "pm.draft-brief",
-  "artifact": "docs/bets/CB-5/brief.md",
+  "artifact": "docs/epics/CB-5/brief.md",
   "decision": "revised",
   "time_to_review_seconds": 847,
   "revision_count": 2,
@@ -2442,7 +2442,7 @@ The v0.4 data layer (`runs.jsonl`) was designed with no downstream analytics in 
 
 **Convention candidate:** `[data-as-institutional-memory]` — the real moat of a Compass-running org is not the methodology files (copyable) but the accumulated HITL decisions, DRI logs, and run patterns that encode the organization's judgment about what good looks like. 1 instance. Surface when 2nd instance appears (likely when first org-altitude retro runs with multi-project data).
 
-**Architecture amendment (2026-06-10):** Initial framing assumed artifact routing = auto-write to `docs/bets/<id>/brief.md` after each step. User correctly identified this as wrong — `runs.jsonl` IS the source of truth; writing to local `docs/` is just the no-connector fallback. The canonical location is connector-dependent:
+**Architecture amendment (2026-06-10):** Initial framing assumed artifact routing = auto-write to `docs/epics/<id>/brief.md` after each step. User correctly identified this as wrong — `runs.jsonl` IS the source of truth; writing to local `docs/` is just the no-connector fallback. The canonical location is connector-dependent:
 
 ```
 Confluence org  → brief pushed to Confluence page
@@ -2504,7 +2504,7 @@ AGENTS.md cross-cutting principles: inserted #17 `[cross-artifact-sweep-on-contr
 
 **Change (IMPLEMENTED):**
 
-`compass/orchestrator/logger.py` — added `log_hitl()` (appends one JSON record to `docs/orchestrator-runs/hitl.jsonl` on every HITL gate decision), `load_hitl_log()`, `print_hitl_table()`. Schema: `run_id · ts · workflow · bet_id · step · artifact_path · decision (approved|rejected) · feedback · reviewer (human) · connector (null until connector built)`. Also fixed `_extract_files` regex to accept `**Files created:**` format (colon inside bold) — was silently dropping file paths from the runs.jsonl parser.
+`compass/orchestrator/logger.py` — added `log_hitl()` (appends one JSON record to `docs/orchestrator-runs/hitl.jsonl` on every HITL gate decision), `load_hitl_log()`, `print_hitl_table()`. Schema: `run_id · ts · workflow · epic_id · step · artifact_path · decision (approved|rejected) · feedback · reviewer (human) · connector (null until connector built)`. Also fixed `_extract_files` regex to accept `**Files created:**` format (colon inside bold) — was silently dropping file paths from the runs.jsonl parser.
 
 `compass/orchestrator/run.py` — imports `log_hitl`; calls it after every `handle_hitl_gate()` return (approved AND rejected), logs `[hitl → approved]` / `[hitl → rejected]` to stdout; adds `--hitl-log` CLI flag that prints the HITL decision table and exits.
 
@@ -2516,7 +2516,7 @@ AGENTS.md cross-cutting principles: inserted #17 `[cross-artifact-sweep-on-contr
 
 ### 2026-06-11 — enterprise-architect agent migration (#73)
 
-**Friction:** `compass/roles/enterprise-architect.md` (211 lines) was the last of the 3 unmigrated "big" agents. Workflows referencing it still loaded a legacy fat-role file with no `preferred_hosts:`, no gate/work/postcondition triplets, and no HITL gate placement — blocking v0.4 orchestrator dispatch for the `/setup-foundation-architecture` and `/create-bet-architecture` paths.
+**Friction:** `compass/roles/enterprise-architect.md` (211 lines) was the last of the 3 unmigrated "big" agents. Workflows referencing it still loaded a legacy fat-role file with no `preferred_hosts:`, no gate/work/postcondition triplets, and no HITL gate placement — blocking v0.4 orchestrator dispatch for the `/setup-foundation-architecture` and `/create-epic-architecture` paths.
 
 **Change (IMPLEMENTED):**
 
@@ -2544,7 +2544,7 @@ AGENTS.md cross-cutting principles: inserted #17 `[cross-artifact-sweep-on-contr
 
 **Change (IMPLEMENTED):**
 
-`compass/agents/tech-writer.md` (NEW, v0.3.36) — 2 tasks: `accumulate-changelog` (per merged PR; append-only changelog entry format; gates on bet changelog existence; never edits prior entries) + `finalize-brief-docs` (at bet close; gate on all stories shipped + HITL-approved brief; assembles `docs/bets/<bet_id>/finalized/`; connector push or filesystem fallback; DRI Decision logged). `preferred_hosts: [claude, codex, gemini]`.
+`compass/agents/tech-writer.md` (NEW, v0.3.36) — 2 tasks: `accumulate-changelog` (per merged PR; append-only changelog entry format; gates on bet changelog existence; never edits prior entries) + `finalize-brief-docs` (at bet close; gate on all stories shipped + HITL-approved brief; assembles `docs/epics/<epic_id>/finalized/`; connector push or filesystem fallback; DRI Decision logged). `preferred_hosts: [claude, codex, gemini]`.
 
 Also updated `MIGRATION.md` Gotchas note: was "3 agents not yet migrated"; now reads "All 14 agents migrated as of v0.3.36."
 
@@ -2556,11 +2556,11 @@ Also updated `MIGRATION.md` Gotchas note: was "3 agents not yet migrated"; now r
 
 **Friction:** An independent (context-free) review agent audited the full framework post-v0.3.36 and found the migration batch violated `[cross-artifact-sweep-on-contract-shift]` on its own contract shift: "all 14 agents migrated" was never swept through README.md (still "11 of 14"), SETUP.md (3 stale counts + the install `cp` trailing-slash bug that breaks BSD/macOS installs), CLAUDE.md (commands list missing /scan /retro /advance; "Security Reviewer still pending migration"; "orchestrator not yet present"), build.md (5 legacy `compass/roles/` refs), scan.md, and 5 more workflow files + 2 skill stubs still loading `compass/roles/` for migrated agents. Plus: AGENTS.md host-table drift (support `[any]` vs frontmatter; tech-writer in the chatgpt row vs `[claude, codex, gemini]` frontmatter; automation missing), the scanner six-phase block orphaned under Principle #18 instead of #13, `config.yaml` `framework_version: 1.0`, "4 of 14 workflows", stale orchestrator version claims (alpha-2 vs alpha-5), a duplicated README line, and MIGRATION.md Path B never copying `compass/orchestrator/` yet verifying with `python3 -m compass.orchestrator.run`.
 
-**Change (IMPLEMENTED):** Single-PR sweep of all stale mentions. README.md (version, migration count, HITL claim honesty, reviewer-skip caveat, venv install, artifact-promotion caveat, dedup). SETUP.md (cp trailing-slash fix + comment, counts: 14 migrated / 17 workflows / 18 skills). CLAUDE.md (migration status, +3 commands, security-reviewer migrated, orchestrator section rewritten present-tense with promotion-is-manual caveat). AGENTS.md (host table: +automation +tech-writer to CLI-class row, support → explicit host list; six-phase block re-homed to Principle #13; "4 of 17"; roles/ note). build.md + scan.md + fix.md + ops.md + create-story.md + create-bet-portfolio.md + setup-foundation-architecture.md + dashboard/scan SKILL.md → `compass/agents/` refs. config.yaml `framework_version: 0.3.36`. MIGRATION.md Path B: orchestrator copy step + retros/ exclusion.
+**Change (IMPLEMENTED):** Single-PR sweep of all stale mentions. README.md (version, migration count, HITL claim honesty, reviewer-skip caveat, venv install, artifact-promotion caveat, dedup). SETUP.md (cp trailing-slash fix + comment, counts: 14 migrated / 17 workflows / 18 skills). CLAUDE.md (migration status, +3 commands, security-reviewer migrated, orchestrator section rewritten present-tense with promotion-is-manual caveat). AGENTS.md (host table: +automation +tech-writer to CLI-class row, support → explicit host list; six-phase block re-homed to Principle #13; "4 of 17"; roles/ note). build.md + scan.md + fix.md + ops.md + create-story.md + create-epics.md + setup-foundation-architecture.md + dashboard/scan SKILL.md → `compass/agents/` refs. config.yaml `framework_version: 0.3.36`. MIGRATION.md Path B: orchestrator copy step + retros/ exclusion.
 
 **Note:** 2nd instance of `[pre-push-grep-discipline]` (1st: v0.3.33 reviewer/automation split missed reviewer.md — fixed as #77). Candidate now eligible for codification discussion per 2-instance threshold (user-gated).
 
-**Files touched (15):** `README.md` · `SETUP.md` · `CLAUDE.md` · `AGENTS.md` · `MIGRATION.md` · `compass/config.yaml` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `compass/workflows/create-story.md` · `compass/workflows/create-bet-portfolio.md` · `compass/workflows/setup-foundation-architecture.md` · `.claude/skills/dashboard/SKILL.md` · `.claude/skills/scan/SKILL.md` (+ this file). Counter: #76. 4 of 5 before Retro #016 → next retro fires after #77.
+**Files touched (15):** `README.md` · `SETUP.md` · `CLAUDE.md` · `AGENTS.md` · `MIGRATION.md` · `compass/config.yaml` · `compass/workflows/build.md` · `compass/workflows/scan.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `compass/workflows/create-story.md` · `compass/workflows/create-epics.md` · `compass/workflows/setup-foundation-architecture.md` · `.claude/skills/dashboard/SKILL.md` · `.claude/skills/scan/SKILL.md` (+ this file). Counter: #76. 4 of 5 before Retro #016 → next retro fires after #77.
 
 ---
 
@@ -2616,7 +2616,7 @@ Retro still reports, never prescribes — audit findings become improvements via
 
 `compass/orchestrator/graph.py` — formatting-tolerant gate detection: any bold/colon/dash placement on the Dispatches line (`^[*_>\s-]*Dispatches[*_\s:—–-]*HUMAN\b`, multiline + case-insensitive) OR `\bHITL\b` in the step title. Failure direction is now safe: a false positive adds a visible gate; the old failure removed one invisibly. Verified zero behavior change on all 4 current dispatch-graph workflows (same step counts, same gate positions).
 
-`compass/orchestrator/tests/test_graph.py` (NEW) — 17 tests: 8 HITL-detection cases (canonical + 4 formatting variants + title marker + 2 negative cases incl. HUMAN-in-prose), 5 step-parsing cases (backtick agent.task, Task-definition file resolution, workflow-level steps, section scoping, markup stripping), 4 integration tests parsing the real setup-product/build/create-brief/create-bet-architecture graphs and asserting gate positions. Suite: 32/32 pass (`python3 -m unittest discover -s compass/orchestrator/tests`).
+`compass/orchestrator/tests/test_graph.py` (NEW) — 17 tests: 8 HITL-detection cases (canonical + 4 formatting variants + title marker + 2 negative cases incl. HUMAN-in-prose), 5 step-parsing cases (backtick agent.task, Task-definition file resolution, workflow-level steps, section scoping, markup stripping), 4 integration tests parsing the real setup-product/build/create-brief/create-epic-architecture graphs and asserting gate positions. Suite: 32/32 pass (`python3 -m unittest discover -s compass/orchestrator/tests`).
 
 **Note:** 2nd instance of `[test-alongside-implementation]` (1st: #72 logger tests) — new parsing behavior shipped with its tests in the same commit. Candidate now at the 2-instance threshold from Retro #015's watch-for.
 
@@ -2683,7 +2683,7 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 
 **Change (IMPLEMENTED, v0.4.0-alpha-6 / agents v0.3.40):**
 
-- **Requirement gates:** `requires_approved:` workflow frontmatter (graph.py `load_workflow_meta()`, no YAML dependency) checked before dispatch via `_requirement_met()` — **dual acceptance during v0.3.x:** approved hitl.jsonl record (latest decision per path wins) OR `status: approved` frontmatter. Unmet → halt exit 3 naming the producing workflow + the `--approve` remedy; `--dry-run` reports without halting; `<bet-id>` resolved from `--bet`. Declared on create-brief / create-bet-architecture / build.
+- **Requirement gates:** `requires_approved:` workflow frontmatter (graph.py `load_workflow_meta()`, no YAML dependency) checked before dispatch via `_requirement_met()` — **dual acceptance during v0.3.x:** approved hitl.jsonl record (latest decision per path wins) OR `status: approved` frontmatter. Unmet → halt exit 3 naming the producing workflow + the `--approve` remedy; `--dry-run` reports without halting; `<epic-id>` resolved from `--bet`. Declared on create-brief / create-epic-architecture / build.
 - **Artifact promotion:** HITL steps declare `**Artifact target:**` (parsed tolerantly into `WorkflowStep.artifact_target`). On approval the gated draft is promoted — `## Output summary` tail stripped, `status: approved` + `approved:` + `source_run:` frontmatter set — via new `connector.py` (filesystem backend only per `[declare-not-implement]`; unimplemented configured connectors fall back with an honest label). hitl.jsonl gains `canonical_path`; `connector` now populated. Approval is the write trigger, exactly as #70 declared.
 - **Manual bridge:** `--approve PATH` / `--reject PATH [--feedback]` CLI — one command satisfies BOTH mechanisms (frontmatter flip + journal record, `workflow: "manual"`). EA + tech-writer gates updated to dual acceptance (v0.3.40); SETUP.md presents both approval paths as equivalent; orchestrator README documents gates/promotion/exit code 3.
 - **Tests:** `tests/test_gates.py` (NEW, 22 tests) — suite 32 → 54, all green. **`[test-alongside-implementation]` 3rd instance.**
@@ -2691,7 +2691,7 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 
 **What stays declared, not built:** real Confluence/Notion connector backends (interface documented in connector.py); gate wiring for the 13 non-dispatch-graph workflows (C7 track); runs.jsonl step-completion gating for resume.
 
-**Files touched (14):** `compass/orchestrator/connector.py` (NEW) · `compass/orchestrator/graph.py` · `compass/orchestrator/run.py` · `compass/orchestrator/logger.py` · `compass/orchestrator/README.md` · `compass/orchestrator/tests/test_gates.py` (NEW) · `compass/workflows/setup-product.md` · `compass/workflows/create-brief.md` · `compass/workflows/create-bet-architecture.md` · `compass/workflows/build.md` · `compass/agents/enterprise-architect.md` · `compass/agents/tech-writer.md` · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #84. 2 of 5 before Retro #018 (fires after #87). **Hard-line clock on #70 cleared.**
+**Files touched (14):** `compass/orchestrator/connector.py` (NEW) · `compass/orchestrator/graph.py` · `compass/orchestrator/run.py` · `compass/orchestrator/logger.py` · `compass/orchestrator/README.md` · `compass/orchestrator/tests/test_gates.py` (NEW) · `compass/workflows/setup-product.md` · `compass/workflows/create-brief.md` · `compass/workflows/create-epic-architecture.md` · `compass/workflows/build.md` · `compass/agents/enterprise-architect.md` · `compass/agents/tech-writer.md` · `SETUP.md` · `CHANGELOG.md` (+ this file). Counter: #84. 2 of 5 before Retro #018 (fires after #87). **Hard-line clock on #70 cleared.**
 
 ---
 
@@ -2717,15 +2717,15 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 
 **Trigger origin (Principle #19):** framework-internal — completes the strategic "open the full chain" arc (paired with #85). No new consumer signal this batch; this is the last gap blocking an end-to-end consumer pipeline run (kindtree bootstrap), so it is upstream of the next consumer validation, not ceremony. The pm.md host change additionally draws on prior consumer-signal evidence (see below).
 
-**Friction:** `/create-story` was the second gap in the orchestrator's chain — `/build` requires an approved story, but nothing orchestratable produced one. Its drift was the INVERSE of #85's: the workflow held the full method while `compass/agents/pm.md` → `decompose-bet-to-story` was a 2-line stub pointing BACK at the workflow. That breaks orchestrator dispatch (the agent receives only its own file as system prompt — never the workflow), so a dispatched PM would have no method. Making the task self-sufficient was blocked by pm.md sitting at 7991/8000 of the ChatGPT instructions cap (9 chars free).
+**Friction:** `/create-story` was the second gap in the orchestrator's chain — `/build` requires an approved story, but nothing orchestratable produced one. Its drift was the INVERSE of #85's: the workflow held the full method while `compass/agents/pm.md` → `decompose-epic-to-story` was a 2-line stub pointing BACK at the workflow. That breaks orchestrator dispatch (the agent receives only its own file as system prompt — never the workflow), so a dispatched PM would have no method. Making the task self-sufficient was blocked by pm.md sitting at 7991/8000 of the ChatGPT instructions cap (9 chars free).
 
 **Change (IMPLEMENTED):**
 
-- `compass/agents/pm.md` → v0.3.42: **`chatgpt` dropped from `preferred_hosts`** → `[claude, codex, gemini]`, lifting the 8000-char cap (it is ChatGPT-only). `decompose-bet-to-story` rewritten from a workflow-pointing stub into a full self-sufficient gate/work/postcondition (slice selection · story ID · conditional Designer/UX-Writer · story.md per template · Standard Experience Checklist gate). **Resolves the pm half of `[host-preference-validation]`** — two independent drivers now: (1) consumer-signal evidence (2026-06-08) that ChatGPT underperformed on pm output, (2) the cap blocking orchestration (2026-06-14). `researcher.md` half stays queued. User-approved decision.
-- `compass/workflows/create-story.md` → v0.3.42: fat 10-step process → thin 5-step dispatch graph (`pm.decompose-bet-to-story` → conditional `designer.draft-design-spec` + `ux-writer.write-copy` → HITL gate → `delivery-manager.update-status`). `requires_approved: [docs/bets/<bet-id>/brief.md]`; conditional architecture requirement stays in the PM task gate (not machine-checkable unconditionally). HITL gate carries `**Artifact target:**` for #84 promotion. Methodology now lives in the pm task + `compass/templates/story.md` (Standard Experience Checklist already there). **6th workflow in dispatch-graph shape.**
+- `compass/agents/pm.md` → v0.3.42: **`chatgpt` dropped from `preferred_hosts`** → `[claude, codex, gemini]`, lifting the 8000-char cap (it is ChatGPT-only). `decompose-epic-to-story` rewritten from a workflow-pointing stub into a full self-sufficient gate/work/postcondition (slice selection · story ID · conditional Designer/UX-Writer · story.md per template · Standard Experience Checklist gate). **Resolves the pm half of `[host-preference-validation]`** — two independent drivers now: (1) consumer-signal evidence (2026-06-08) that ChatGPT underperformed on pm output, (2) the cap blocking orchestration (2026-06-14). `researcher.md` half stays queued. User-approved decision.
+- `compass/workflows/create-story.md` → v0.3.42: fat 10-step process → thin 5-step dispatch graph (`pm.decompose-epic-to-story` → conditional `designer.draft-design-spec` + `ux-writer.write-copy` → HITL gate → `delivery-manager.update-status`). `requires_approved: [docs/epics/<epic-id>/brief.md]`; conditional architecture requirement stays in the PM task gate (not machine-checkable unconditionally). HITL gate carries `**Artifact target:**` for #84 promotion. Methodology now lives in the pm task + `compass/templates/story.md` (Standard Experience Checklist already there). **6th workflow in dispatch-graph shape.**
 - `AGENTS.md` host table: pm split to its own row with rationale; count 5→6 of 17 + the full-chain statement. `SETUP.md`: 5→6 dispatch graphs.
 
-**Capstone verification — the full chain is open:** scripted end-to-end gate-unlock simulation (`--approve` at each gate) confirmed `/setup-product` → `/setup-foundation-architecture` → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build` gates unlock in sequence (each via both hitl.jsonl record AND `status: approved` frontmatter paths). Full suite 57 tests green (+2 create-story integration tests).
+**Capstone verification — the full chain is open:** scripted end-to-end gate-unlock simulation (`--approve` at each gate) confirmed `/setup-product` → `/setup-foundation-architecture` → `/create-brief` → `/create-epic-architecture` → `/create-story` → `/build` gates unlock in sequence (each via both hitl.jsonl record AND `status: approved` frontmatter paths). Full suite 57 tests green (+2 create-story integration tests).
 
 **Files touched (5):** `compass/agents/pm.md` · `compass/workflows/create-story.md` · `compass/orchestrator/tests/test_graph.py` · `AGENTS.md` · `SETUP.md` (+ this file). Counter: #86. 4 of 5 before Retro #018 (fires after #87).
 
@@ -2775,7 +2775,7 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 
 **Change (IMPLEMENTED, v0.3.44):** companion rule on `[per-surface-vertical-test]` (not a new catalog pattern — a rider on #88, keeps the count honest at 21).
 - `compass/agents/automation.md` → v0.3.44: `write-e2e-tests` Work step 7 (teardown deletes OR soft-deletes created records; soft-delete is the floor when hard delete isn't possible — append-only / audit / RLS-restricted) + postcondition.
-- `compass/agents/pm.md` → v0.3.44: `decompose-bet-to-story` postcondition — data-mutating stories must carry ≥1 cleanup AC (PM authors it).
+- `compass/agents/pm.md` → v0.3.44: `decompose-epic-to-story` postcondition — data-mutating stories must carry ≥1 cleanup AC (PM authors it).
 - `compass/templates/story.md`: Test-data-cleanup AC requirement note + example AC. **Swept the last stale "Codex writes E2E" ref** here → "Automation writes E2E" (Principle #17; #77 split residue).
 - `compass/framework/canon.md`: companion rule + anti-pattern `orphaned-test-data` added to the `[per-surface-vertical-test]` entry.
 - `/build` verification (Step 2 cleanup check) + `/scan` BUILD-09 (new finding, Medium).
@@ -2804,7 +2804,7 @@ Verified: 32/32 tests pass; env-override precedence unit-checked.
 
 **Caveat recorded:** the orchestrator's hosts are text-only, so orchestrated `/fix` and `/ops` produce text plans, not applied code/infra — actual execution stays interactive (Claude Code, fs/shell). The dispatch-graph shape is the prerequisite for orchestratability + single-source methodology + the future `[pluggable-graph-executor]` (#87), and it benefits interactive execution too (agents own the method).
 
-**Files touched (8):** `compass/agents/engineer.md` · `compass/agents/reviewer.md` · `compass/agents/tech-writer.md` · `compass/agents/security-reviewer.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #90. 3 of 5 before Retro #019 (fires after #92). Tier-2 reactive workflows done; remaining 9 (create-bet-portfolio, triage, status, plan, measure, scan, metrics, dashboard, retro) are v0.4-beta scope.
+**Files touched (8):** `compass/agents/engineer.md` · `compass/agents/reviewer.md` · `compass/agents/tech-writer.md` · `compass/agents/security-reviewer.md` · `compass/workflows/fix.md` · `compass/workflows/ops.md` · `AGENTS.md` · `compass/orchestrator/tests/test_graph.py` · `CHANGELOG.md` (+ this file). Counter: #90. 3 of 5 before Retro #019 (fires after #92). Tier-2 reactive workflows done; remaining 9 (create-epics, triage, status, plan, measure, scan, metrics, dashboard, retro) are v0.4-beta scope.
 
 ---
 
@@ -2996,7 +2996,7 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 **Friction:** write mode (#92) edited the working tree on whatever branch was checked out — `main` by default. The user had to remember to create a throwaway branch manually; forget, and the agent commits straight to main.
 
 **Change (IMPLEMENTED, v0.4.0-alpha-12):**
-- `run.py:_work_branch_name(workflow, bet_id, context)` — derives `<type>/<id>-<slug>` per config.yaml `branch_pattern`: type by workflow (fix/ops/triage→fix|ops; build/create-story/brief/bet-arch→feat), id from `--bet` if present, slug from the context (strips a leading `bug:`/`incident:`/`enhancement:`/`change:` label). Pure + tested.
+- `run.py:_work_branch_name(workflow, epic_id, context)` — derives `<type>/<id>-<slug>` per config.yaml `branch_pattern`: type by workflow (fix/ops/triage→fix|ops; build/create-story/brief/bet-arch→feat), id from `--bet` if present, slug from the context (strips a leading `bug:`/`incident:`/`enhancement:`/`change:` label). Pure + tested.
 - `run.py:_ensure_work_branch(project_dir, name)` — git ops scoped to `project_dir`: if on `main`/`master`, create+checkout the work branch (carrying any working changes); if already on a non-main branch, reuse it; no-op outside a git repo.
 - Called at the top of `_run_workflow` **only when `--allow-write`** (read-only/dry-run runs never touch git), before the step loop. Prints `[branch] write-mode work on '<name>' (not main) — open a PR + merge after review`.
 - Tests: +6 (branch-name derivation with/without bet + label-strip + type-by-workflow; `_ensure_work_branch` in a real tmp git repo: creates off main, reuses on a work branch; no-op for non-git). **107 total, green.**
@@ -3088,7 +3088,7 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 
 **What shipped (slice 1 — the cockpit is sliced like #87→#91/#92):**
 - **`events.py` (new) — the spine.** Event types (`run_start · step_start · gate_open · gate_decision · handoff · step_end · run_end` + re-homed `tool_use/tool_result/note`); `make_event`; sinks `terminal_sink` / `jsonl_sink` / `multi_sink` (fan-out that isolates a failing sink — telemetry is best-effort); `load_events`; `compass_home()`/`events_path()`.
-- **Spine threaded end-to-end.** `run.py` builds one `emit` closure per run (stamps `project`/`run_id`/`workflow`/`bet_id`), emits lifecycle events at every seam **and every exit path** (normal end, rejected gate, hand-off, missing host/agent, dispatch error), and passes `emit` as `on_event` into `dispatch_to_host` → `dispatch_with_tools` so tool events join the same stream. `router.py` forwards `on_event`; `claude.py`'s `_default_tool_event` now aliases `events.terminal_sink`.
+- **Spine threaded end-to-end.** `run.py` builds one `emit` closure per run (stamps `project`/`run_id`/`workflow`/`epic_id`), emits lifecycle events at every seam **and every exit path** (normal end, rejected gate, hand-off, missing host/agent, dispatch error), and passes `emit` as `on_event` into `dispatch_to_host` → `dispatch_with_tools` so tool events join the same stream. `router.py` forwards `on_event`; `claude.py`'s `_default_tool_event` now aliases `events.terminal_sink`.
 - **`cockpit.py` (new) — first consumer.** `python3 -m compass.orchestrator.cockpit` folds the spine into per-run state and renders the VISION view: **⏸ Awaiting your decision** (open gates across every project + ready-to-run approve/reject command), **▶ In flight**, **✓ Done/halted**. `--project` filter, `--limit`, `--home`.
 
 **Key decision — user-local store (user's steer):** the durable spine is `~/.compass/orchestrator/events.jsonl` (`$COMPASS_HOME` override), **not** in the project repo. Rationale: (1) a *portfolio* cockpit must span every project from one place; (2) live telemetry shouldn't churn project git or collide between concurrent worktrees (#102); (3) the in-repo `runs.jsonl`/`hitl.jsonl` stay the auditable per-project decision journal — different purpose, both persist. `--no-events` opt-out; `--dry-run` skips the durable sink. This establishes the `$COMPASS_HOME` convention (none existed before).
@@ -3174,7 +3174,7 @@ Honest gap analysis folded in: most roles exist; **SRE + Monitor are gaps**; sid
 
 **What shipped:**
 - **`classify-intake` right-sizes** (support.md v0.3.51) — for enhancement/problem it picks the lane and recommends the specific right-sized command, instead of a reflexive `/create-brief`.
-- **The classifier names the bet** (the DRI's add) — new `run.py` helpers `_load_bet_catalog(project_dir)` (compact catalog: each `docs/bets/*/brief.md`'s id + type + status + one-liner from its hypothesis/heading) + `_reads_bet_catalog(agent_file)` (a `loads_bet_catalog: true` frontmatter flag). The orchestrator injects the catalog into any flagged agent's step context; `support.md` opts in. So for a slice the recommendation is `/create-story --bet <matched id>` **by name**. Empty catalog (no bets) → recommend a new bet.
+- **The classifier names the bet** (the DRI's add) — new `run.py` helpers `_load_bet_catalog(project_dir)` (compact catalog: each `docs/epics/*/brief.md`'s id + type + status + one-liner from its hypothesis/heading) + `_reads_bet_catalog(agent_file)` (a `loads_bet_catalog: true` frontmatter flag). The orchestrator injects the catalog into any flagged agent's step context; `support.md` opts in. So for a slice the recommendation is `/create-story --bet <matched id>` **by name**. Empty catalog (no bets) → recommend a new bet.
 - **Mechanical guard** (create-brief.md v0.3.51) — a new precondition refuses to mint a redundant bet for a slice of an already-approved bet, pointing to `/create-story` (mirrors the existing "Brief already drafted → refuse"; `[refuse-escalate]` spirit).
 - **Policy + lane prose** — AGENTS.md "Two paths for work" gains the right-size policy + extends `hygiene` to trivial enhancements (Lane 3 destination **declared**, not wired); triage.md Step 2 names the lanes under the enhancement route.
 
@@ -3677,7 +3677,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 ### 2026-06-25 — claude-code host: idle-timeout + streaming (not a wall-clock hang guess) (#152)
 
-**Trigger origin (Principle #19):** a **live `create-bet-architecture` (WLT-26)** halted with *"hung on a dev server / interactive prompt"* — and the DRI couldn't tell if that was true, because the run left no trace.
+**Trigger origin (Principle #19):** a **live `create-epic-architecture` (WLT-26)** halted with *"hung on a dev server / interactive prompt"* — and the DRI couldn't tell if that was true, because the run left no trace.
 
 **Diagnosis (reproduced, not theorized — `[reproduce-before-diagnose]`):** re-ran the exact step with `--output-format stream-json --verbose` and watched it. It was **never hung** — a healthy **448s / 22-turn** Opus drafting run that read ~10 files (brief, research, foundation arch, the template, WLT-24/25 prior arch, the *actual* `anomaly.ts`/`budget.ts`/`YearSpread.tsx` source) and thought hard before writing a 33KB `architecture.md`. The #131 guard was a blunt **wall-clock cap** (900s); a sibling run merely ran past it. Two root faults: a wall-clock cap **can't distinguish *stuck* from *long-but-working***, and buffered `--output-format json` gives a killed run **zero observability** (`[observability-before-trust]`).
 
@@ -3736,7 +3736,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Trigger origin (Principle #19):** the DRI: *"I have a waiting request I approved but it did not do anything"* — and then the sharper clue: *"this happens multiple times... a couple of times before something happened."* The intermittency was the tell.
 
-**Diagnosis (reproduced from the spine, not guessed — `[reproduce-before-diagnose]`):** the `build--WLT-26` run reached step 6 (`HITL gate — human approves merge`), `gate_open` recorded, and **no `gate_decision` ever followed** — the approval never reached the orchestrator. Root cause in code: the cockpit's `_build_run_argv` added `--bet` only for `action=="run"`, never for `"decide"`. So a dashboard approve spawned a resume with **no `--bet`** → the requirement gate (`docs/bets/<bet-id>/brief.md`) hit `if "<bet-id>" in req and not bet_id` → `unmet` → `sys.exit(3)` **before** the gate step (run.py:993/1019). No decision, no error the operator could see. The "sometimes it worked" was real signal: `create-brief`'s requirement gate has **no `<bet-id>`**, so its gates were immune; only bet-scoped workflows (`build`/`create-story`/`create-bet-architecture`) silently failed.
+**Diagnosis (reproduced from the spine, not guessed — `[reproduce-before-diagnose]`):** the `build--WLT-26` run reached step 6 (`HITL gate — human approves merge`), `gate_open` recorded, and **no `gate_decision` ever followed** — the approval never reached the orchestrator. Root cause in code: the cockpit's `_build_run_argv` added `--bet` only for `action=="run"`, never for `"decide"`. So a dashboard approve spawned a resume with **no `--bet`** → the requirement gate (`docs/epics/<epic-id>/brief.md`) hit `if "<epic-id>" in req and not epic_id` → `unmet` → `sys.exit(3)` **before** the gate step (run.py:993/1019). No decision, no error the operator could see. The "sometimes it worked" was real signal: `create-brief`'s requirement gate has **no `<epic-id>`**, so its gates were immune; only bet-scoped workflows (`build`/`create-story`/`create-epic-architecture`) silently failed.
 
 **What shipped:**
 - `_build_run_argv`: `--bet`, `--allow-write`, `--claude-cli`, `--codex-cli` moved to a shared block applied to **both** `run` and `decide` (was run-only). The decide button + copy-paste now resolve the bet.
@@ -3752,7 +3752,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Two bugs, reproduced from the spine + the run log:**
 1. **Spurious branch on resume.** The dashboard merge-gate `/decide` resumed `--from-step 6 --allow-write`; the work-branch block re-ran with the **bet-context blob as `context`** and cut `feat/WLT-26-bet-context-wlt-26-briefmd-----id`, stranding the e2e tests in the working tree and confusing the delivery check. Fix: on resume (`from_step is not None`), recover the **original run's branch** from the spine — `_prior_run_branch(run_id)` reads `run_start.branch` (recorded since #156/#147) — and check it out; never regenerate a name. Fresh runs are unchanged.
-2. **Merge gate gave no next step.** Approval cleared the gate, then steps 7/8 printed `[workflow-level step — no agent dispatch; handle manually]` and the run "completed" — with a misfiring `⚠ DELIVERY INCOMPLETE` (the work was in an open PR). Nothing told the operator to merge. Fix: when a merge gate is approved and `auto_merge` is off, print `_merge_next_steps(pr_url, bet_id)` — *"1. merge the PR — <url>  2. then /create-story <bet>  (set COMPASS_AUTO_MERGE=1 to automate)."* `_open_pr_url` finds the PR best-effort.
+2. **Merge gate gave no next step.** Approval cleared the gate, then steps 7/8 printed `[workflow-level step — no agent dispatch; handle manually]` and the run "completed" — with a misfiring `⚠ DELIVERY INCOMPLETE` (the work was in an open PR). Nothing told the operator to merge. Fix: when a merge gate is approved and `auto_merge` is off, print `_merge_next_steps(pr_url, epic_id)` — *"1. merge the PR — <url>  2. then /create-story <bet>  (set COMPASS_AUTO_MERGE=1 to automate)."* `_open_pr_url` finds the PR best-effort.
 
 **Validated against the live run:** this `/build WLT-26-1` is exactly what broke — and after merging PR #118 (one lint fix: an unused `CategorySpendChart` type import the engineer left, which failed CI's `no-unused-vars` and blocked the merge), **WLT-26-1 shipped to `main`**: the first fully-orchestrated, cross-model (claude implements → codex reviews → PM arbitrates), subscription-only story.
 
@@ -3764,25 +3764,25 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 **Trigger origin (DRI direction, not a consumer defect):** mid-strategy session, the DRI called it directly — *"remove the gate of not allowing more than 1 story for a bet … let's create all the stories once we have a bet."* Driven by the control-tower thesis (see the strategic memo): a bet's **complete plan should be visible end-to-end the moment the bet is approved** — delivery transparency wants the whole backlog up front, not a slice revealed per run. This reverses a standing design stance, so it's logged as a DRI decision, not a bug fix.
 
-**What changed.** `decompose-bet-to-story` was *ONE approved bet → ONE story*, gated on *"the prior story under this bet has shipped (one story at a time — never decompose the whole backlog upfront)"*, with a matching refusal rule and a shape-up "one shaped piece at a time" grounding. Now it's *ONE approved bet → ALL stories (full backlog)*: enumerate the **whole set of shippable slices** in one pass (each smallest-valuable · independently shippable · sequenced by dependency/priority) and write a `story.md` per slice. The prior-shipped gate, the "don't decompose all stories upfront" refusal, and the matching anti-pattern/edge-case lines are removed; re-running on a bet adds only newly-discovered slices (no duplicates).
+**What changed.** `decompose-epic-to-story` was *ONE approved bet → ONE story*, gated on *"the prior story under this bet has shipped (one story at a time — never decompose the whole backlog upfront)"*, with a matching refusal rule and a shape-up "one shaped piece at a time" grounding. Now it's *ONE approved bet → ALL stories (full backlog)*: enumerate the **whole set of shippable slices** in one pass (each smallest-valuable · independently shippable · sequenced by dependency/priority) and write a `story.md` per slice. The prior-shipped gate, the "don't decompose all stories upfront" refusal, and the matching anti-pattern/edge-case lines are removed; re-running on a bet adds only newly-discovered slices (no duplicates).
 
 **What deliberately did NOT change — the load-bearing distinction.** `/build` still builds **one story at a time** (each `/build` = one story → PR → review → merge). Full-backlog *planning* ≠ parallel *building*. Sibling stories that touch the same files still merge serially — building them concurrently re-introduces the sibling merge-conflict class (the durable merge-coherence fix is still pending, see the architecture roadmap), so the PM notes dependency ordering between slices. This is stated in pm.md's postcondition, the workflow purpose/migration note, and the brief template, so nobody reads "full backlog" as "build in parallel."
 
-**One structural guardrail kept intact.** The every_phase HITL gate's `artifact_target` stays the single-story path `docs/bets/<bet-id>/stories/<story-id>/story.md` — the graph parser extracts it and the orchestrator's single-artifact promotion targets it. An earlier draft changed it to a glob/prose, which parsed to `None` and broke `test_create_story`. **Batch-promoting the whole set on one approval is a named follow-up**, not silently dropped — the gate prose and migration note both flag it.
+**One structural guardrail kept intact.** The every_phase HITL gate's `artifact_target` stays the single-story path `docs/epics/<epic-id>/stories/<story-id>/story.md` — the graph parser extracts it and the orchestrator's single-artifact promotion targets it. An earlier draft changed it to a glob/prose, which parsed to `None` and broke `test_create_story`. **Batch-promoting the whole set on one approval is a named follow-up**, not silently dropped — the gate prose and migration note both flag it.
 
-**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **293 pass** (no count change — doc/policy edit, no new code path; the existing `test_create_story` invariants — step 1 = `pm.decompose-bet-to-story`, gate `artifact_target` — still hold). consistency-check CONSISTENT. Pre-push straggler grep clean (only intentional v0.3.56 refs remain).
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **293 pass** (no count change — doc/policy edit, no new code path; the existing `test_create_story` invariants — step 1 = `pm.decompose-epic-to-story`, gate `artifact_target` — still hold). consistency-check CONSISTENT. Pre-push straggler grep clean (only intentional v0.3.56 refs remain).
 
 **Files touched (4):** `compass/agents/pm.md` · `compass/workflows/create-story.md` (v0.3.42→0.3.56) · `compass/roles/pm.md` (legacy grace-period) · `compass/templates/brief.md` (+ CHANGELOG + this file). Counter: #158. **(#030 batch opens: #158–#167 — Retro #030 fires at #167.)** Known follow-up: batch-promotion of the full story set on one gate approval (the orchestrator currently promotes one artifact path); carry into the coherence-layer build.
 
 ### 2026-06-26 — authoring workflows write by default; a browser run can't silently produce nothing (#159)
 
-**Trigger origin (Principle #19, live consumer signal):** the DRI ran `/create-brief` from the **browser dashboard**; it "worked" — all steps ran, the spine logged `run_end: completed` — but `docs/bets/WLT-27/` was **empty**. Classic `[reproduce-before-diagnose]`: the browser log was the reproduction. Every writing step narrated *"the permission dialog should be appearing — please click Allow"* and gave up.
+**Trigger origin (Principle #19, live consumer signal):** the DRI ran `/create-brief` from the **browser dashboard**; it "worked" — all steps ran, the spine logged `run_end: completed` — but `docs/epics/WLT-27/` was **empty**. Classic `[reproduce-before-diagnose]`: the browser log was the reproduction. Every writing step narrated *"the permission dialog should be appearing — please click Allow"* and gave up.
 
 **Root cause (one fact).** The run dispatched with `allow_write=False` (the dashboard's "allow writes" checkbox was unchecked). For the `claude-code` host that maps to `--permission-mode default` — so in headless `claude -p` **every** `Write`/`Edit` hangs on a permission prompt no UI can answer. The researcher's `research.md`, the pm's `brief.md`, and the delivery-manager's `status.md` were all authored in-memory and then blocked at the write. The only files that landed were the orchestrator's own `docs/orchestrator-runs/create-brief/step-*.md` captures (the engine writes those, not the agent) — which is exactly why it *looked* successful. `create-brief` is a write workflow; running it read-only is a guaranteed no-op.
 
 **Fix (two layers, user-chosen "default-on + fail-loud").**
-1. **Default-on.** New `_AUTHORING_WORKFLOWS` set (`create-brief`, `create-story`, `create-bet-architecture`, `setup-product`, `setup-foundation-architecture`, `create-bet-portfolio`) — workflows whose whole job is to author a doc artifact, reviewed via their HITL gate, not a PR. `_resolve_allow_write()` forces `allow_write=True` for them regardless of the caller; `_run_workflow` applies it early (before RUN_START + the branch logic) and prints why. Code workflows (`build`/`fix`/`ops`) keep explicit `--allow-write` (the branch→PR lane stays opt-in). **One engine change fixes every surface** — CLI, dashboard, pipeline, programmatic — so no per-surface patching (the surface-independence discipline).
-2. **Fail loud.** `_classify_outcome`'s regex now catches the no-TTY write-block phrasings that slipped through last time (only step 4's wording matched #149's regex; steps 1–2 were marked ✓): *"click Allow"*, *"permission dialog"*, *"waiting/pending/blocked on … approval"*, *"awaiting/pending … permission"*, *"approve (both/the) writes"*, *"please approve … write/dialog"*. And an authoring run that ends with any incomplete step prints a loud `⚠ AUTHORING INCOMPLETE` banner + spine NOTE — `completed` can no longer mask an empty `docs/bets/`. `[fail-loud-not-silent]`. Dashboard checkbox relabeled to say authoring workflows write by default.
+1. **Default-on.** New `_AUTHORING_WORKFLOWS` set (`create-brief`, `create-story`, `create-epic-architecture`, `setup-product`, `setup-foundation-architecture`, `create-epics`) — workflows whose whole job is to author a doc artifact, reviewed via their HITL gate, not a PR. `_resolve_allow_write()` forces `allow_write=True` for them regardless of the caller; `_run_workflow` applies it early (before RUN_START + the branch logic) and prints why. Code workflows (`build`/`fix`/`ops`) keep explicit `--allow-write` (the branch→PR lane stays opt-in). **One engine change fixes every surface** — CLI, dashboard, pipeline, programmatic — so no per-surface patching (the surface-independence discipline).
+2. **Fail loud.** `_classify_outcome`'s regex now catches the no-TTY write-block phrasings that slipped through last time (only step 4's wording matched #149's regex; steps 1–2 were marked ✓): *"click Allow"*, *"permission dialog"*, *"waiting/pending/blocked on … approval"*, *"awaiting/pending … permission"*, *"approve (both/the) writes"*, *"please approve … write/dialog"*. And an authoring run that ends with any incomplete step prints a loud `⚠ AUTHORING INCOMPLETE` banner + spine NOTE — `completed` can no longer mask an empty `docs/epics/`. `[fail-loud-not-silent]`. Dashboard checkbox relabeled to say authoring workflows write by default.
 
 **Why this is framework, not user error.** A write workflow with write as an unchecked opt-in, that reports `completed` after writing nothing, is the coherence-layer "gate-no-TTY-safety / fail-loud" class from the architecture roadmap — the same "a one-tap browser run must not silently produce nothing" thesis. Default-on removes the footgun; fail-loud is the backstop.
 
@@ -3814,7 +3814,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **What shipped.**
 - **Actor identity** — `logger.default_actor()` resolves the operating human (`$COMPASS_ACTOR` → `git config user.email` → `unknown`), stamped on the `run_start` event (the launcher) and every `hitl.jsonl` gate decision (the approver). Documented in both the events.py spine schema and the HITL_SCHEMA. log_hitl gained an `actor` param defaulting to `default_actor(project_dir)`, so all existing call sites get it for free.
 - **Role classification** — `_role_for(agent)` maps agent→role (engineer→implementer, reviewer/security-reviewer→their role, …) so the audit can reason about implementer-vs-reviewer.
-- **`build_audit(project_dir, bet_id?, run_id?)`** — assembles the who-did-what lineage from `runs.jsonl` + `hitl.jsonl` + the user-local spine: per-step agent/role/host/model + gate-result, gate decisions + approver + timestamp, DRI decisions, and the **cross-model-independence verdict** (the set of reviewer-role `(host,model)` identities must be disjoint from the implementer's — the reviewer-≠-implementer invariant turned into a *checkable* audit fact, where before it was only inferable from the logs). `format_audit_markdown()` renders it as a Confluence-projectable doc.
+- **`build_audit(project_dir, epic_id?, run_id?)`** — assembles the who-did-what lineage from `runs.jsonl` + `hitl.jsonl` + the user-local spine: per-step agent/role/host/model + gate-result, gate decisions + approver + timestamp, DRI decisions, and the **cross-model-independence verdict** (the set of reviewer-role `(host,model)` identities must be disjoint from the implementer's — the reviewer-≠-implementer invariant turned into a *checkable* audit fact, where before it was only inferable from the logs). `format_audit_markdown()` renders it as a Confluence-projectable doc.
 - **`--export-audit` CLI** (`--audit-format json|md`, scoped by `--bet`/`--run-id`) — wired into the existing report-mode dispatch; smoke-tested end-to-end (exit 0 on an empty project).
 
 **Why it's the wedge's foundation.** This is the "governed + auditable" half the MD buys at N=1: every AI change carries an independent-review provenance + an approver identity, exportable for a risk/compliance function. #2b layers the **control framework** (hand-authored `controls.md`) + the **controls→evidence conformance mapping** on top of this lineage.
@@ -3830,7 +3830,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **What shipped.**
 - **Control framework** — a hand-authored `controls.md`: each control is a `## <ID> — <title>` heading + `- key: value` fields (category · requirement · `check:` · `attest:`). `check:` binds a control to evidence Compass verifies automatically — `cross-model-review` · `human-approval` · `security-review` · `tests-present` — or `manual` (human-attested). Shipped as the standard template `compass/templates/controls.md` with the common governance/security/quality controls pre-filled (the industry-standard sample); overridable via `compass-overrides/`.
 - **`parse_controls()` + `evaluate_conformance(audit, controls)`** — maps each control → the delivery evidence in the #2a lineage (the cross-model verdict, gate approvals, security-review/automation steps) → status **met / unmet / at-risk / exceeded**, with the evidence string. A `conformant` verdict = all controls met/exceeded.
-- **Integration** — `build_audit()` auto-discovers the framework (`docs/bets/<bet>/controls.md` → `docs/controls.md`; `--controls <path>` overrides) and folds `conformance` into the export; `format_audit_markdown()` gets a **SOW-conformance** section (the headline table). JSON export carries it automatically.
+- **Integration** — `build_audit()` auto-discovers the framework (`docs/epics/<bet>/controls.md` → `docs/controls.md`; `--controls <path>` overrides) and folds `conformance` into the export; `format_audit_markdown()` gets a **SOW-conformance** section (the headline table). JSON export carries it automatically.
 
 **Why this is the wedge complete.** #2a proved *who did what*; #2b proves *we hit the contract*. The MD's N=1 sale — "prove every control in the SOW is met, with evidence, in real time" — now renders from a single command. Smoke-test: a 2-step run (engineer/claude + reviewer/codex) against a 2-control framework → CTRL-1 **met** ("reviewer codex ≠ implementer claude"), CTRL-5 **at-risk** (manual, pending) → `⚠ gaps`.
 
@@ -3859,7 +3859,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 **Trigger origin (MVP plan):** capability #3 — the demo's *face*. The cockpit folds the spine into per-RUN state (flat); the WBS lives in artifact frontmatter. This adds the **program→bet→story** view an exec reads to manage by exception, tying together everything the earlier capabilities produce.
 
 **What shipped.** New `wbs.py`:
-- **`build_wbs(project_dir, with_conformance=)`** — reads `docs/bets/*/brief.md` + `stories/*/story.md` frontmatter (id · status · type · priority · depends_on · jira_key) into a program→bet→story tree, **correlated with spine run-state** (`cockpit.fold_runs(load_events())` grouped by bet) for in-flight runs + open gates.
+- **`build_wbs(project_dir, with_conformance=)`** — reads `docs/epics/*/brief.md` + `stories/*/story.md` frontmatter (id · status · type · priority · depends_on · jira_key) into a program→bet→story tree, **correlated with spine run-state** (`cockpit.fold_runs(load_events())` grouped by bet) for in-flight runs + open gates.
 - **Manage-by-exception** — per-node attention reasons: awaiting gate (from the spine) · run halted · **blocked by an unshipped dependency** (the `depends_on` graph) · not-started · **SOW-conformance gaps** (folded from `logger.build_audit` when `controls.md` exists). A red/amber/green rollup per bet.
 - **`render_wbs()`** — the text control-tower view: needs-attention FIRST (manage by exception), then the tree with ground-truth status + story→Jira pointers (#163).
 - **`--wbs` CLI** — `python3 -m compass.orchestrator.run --wbs` prints it; smoke-tested.
@@ -3921,7 +3921,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 ### 2026-06-28 — live /create-* dogfood fixes: designer/ux-writer host · gate-resume promotion · awaiting-approval false-positive (#168)
 
-**Trigger origin (Principle #19 — live consumer signal):** the DRI ran `/create-brief` → `/create-bet-architecture` → `/create-story` for WLT-27 through the **orchestrator browser** on home-app and asked for a review. Two things worked beautifully — **full-backlog `/create-story` (#158) produced 6 stories in one pass**, and the architect drafted a substantive `architecture.md` (currency-fix-as-prerequisite). Three real bugs surfaced; first batch of #031.
+**Trigger origin (Principle #19 — live consumer signal):** the DRI ran `/create-brief` → `/create-epic-architecture` → `/create-story` for WLT-27 through the **orchestrator browser** on home-app and asked for a review. Two things worked beautifully — **full-backlog `/create-story` (#158) produced 6 stories in one pass**, and the architect drafted a substantive `architecture.md` (currency-fix-as-prerequisite). Three real bugs surfaced; first batch of #031.
 
 **The three fixes.**
 - **(1) "Failed on copy" — `designer` + `ux-writer` led `preferred_hosts` with `chatgpt`.** On a live run the orchestrator dispatched the design-spec + copy steps to **chatgpt, a tool-less host** → both refused (`[refuse-escalate]`) demanding the story/brief/design-system be pasted, because they can't read files. Dropped chatgpt → `[claude, codex, gemini]` (a tool-capable host reads the repo). **3rd acted-on instance of `[host-capability-validation]`** (pm #86 · researcher #137 · designer+ux-writer #168) — strong enough to codify the convention now (surface at Retro #030).
@@ -3946,7 +3946,7 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 ### 2026-06-29 — idle guard no longer false-kills a working compose turn: stream partial messages (#170)
 
-**Trigger origin (live consumer signal):** the DRI ran `create-bet-architecture` for WLT-27 (a cross-cutting bet) on home-app. The architect did **40+ exploration reads/greps** (correct, deep grounding — dedup, currency, the spend pipeline), then went silent and was killed: *"claude CLI produced no output for 300s … Last activity: Read …/aggregation/index.ts."* It wasn't hung — it had finished exploring and was **composing the 12-section architecture doc in one long generation turn**, which emits nothing to stdout until it completes. The #152 idle guard (silence = hang) can't tell "quietly generating" from "stuck."
+**Trigger origin (live consumer signal):** the DRI ran `create-epic-architecture` for WLT-27 (a cross-cutting bet) on home-app. The architect did **40+ exploration reads/greps** (correct, deep grounding — dedup, currency, the spend pipeline), then went silent and was killed: *"claude CLI produced no output for 300s … Last activity: Read …/aggregation/index.ts."* It wasn't hung — it had finished exploring and was **composing the 12-section architecture doc in one long generation turn**, which emits nothing to stdout until it completes. The #152 idle guard (silence = hang) can't tell "quietly generating" from "stuck."
 
 **The DRI's question — "can the orchestrator check the run is working and not let it fail?"** Yes, and the clean answer is to make the work *visible* rather than guess at silence: the **stream IS the liveness signal** — make it fine-grained.
 
@@ -3960,10 +3960,10 @@ Together with #121 (the gate now actually clears after one decision), double-rou
 
 ### 2026-06-29 — story-scoped build: `/build <story-id>` runs ONE story so stories build in parallel (#172)
 
-**Trigger origin (live consumer signal):** the DRI launched `/build WLT-27-1` from the dashboard and it "looked hung." It wasn't — `build` was **bet-scoped only**, so the orchestrator read `WLT-27-1` as a *bet* id and the requirement gate looked for `docs/bets/WLT-27-1/brief.md`, which never existed → instant halt (`✗ no approval found`), a sub-second exit that left the board showing nothing running. The DRI's intent was the opposite of a bug to merely guard against: *"yes please pass story id, so we can have multiple instances of stories developing at a time."* A bet decomposes into N stories; each should build independently, in parallel, on its own branch.
+**Trigger origin (live consumer signal):** the DRI launched `/build WLT-27-1` from the dashboard and it "looked hung." It wasn't — `build` was **bet-scoped only**, so the orchestrator read `WLT-27-1` as a *bet* id and the requirement gate looked for `docs/epics/WLT-27-1/brief.md`, which never existed → instant halt (`✗ no approval found`), a sub-second exit that left the board showing nothing running. The DRI's intent was the opposite of a bug to merely guard against: *"yes please pass story id, so we can have multiple instances of stories developing at a time."* A bet decomposes into N stories; each should build independently, in parallel, on its own branch.
 
 **Fix — story scope is now first-class.** A story id (e.g. `WLT-27-1`) passed via the new `--story` flag **or auto-detected when typed into `--bet`** (the dashboard's single id field) now:
-- **Resolves its parent bet** (`_resolve_bet_for_story`) — filesystem-authoritative (`docs/bets/*/stories/<id>/story.md`), falling back to stripping the trailing `-<n>` — so the **requirement gate checks the bet brief** (`docs/bets/WLT-27/brief.md` ✓), not a phantom story brief. This kills the "looks hung" instant-halt.
+- **Resolves its parent bet** (`_resolve_bet_for_story`) — filesystem-authoritative (`docs/epics/*/stories/<id>/story.md`), falling back to stripping the trailing `-<n>` — so the **requirement gate checks the bet brief** (`docs/epics/WLT-27/brief.md` ✓), not a phantom story brief. This kills the "looks hung" instant-halt.
 - **Loads focused single-story context** (`_load_story_context`): the parent bet's brief + architecture + the **full target story**, with an explicit *"implement ONLY this story"* instruction — a parallel build can't wander into a sibling story's scope (the sibling's text is deliberately excluded).
 - **Branches on the story id** (`feat/<story-id>-<slug>`) and **keys the run id / per-run log on the story** — so two stories of one bet build concurrently without colliding on a single `feat/<bet>-…` branch or run identity.
 
@@ -3971,7 +3971,7 @@ Auto-detection (`_is_story_id`) keeps the dashboard launch form unchanged in sha
 
 **Honest scope:** this scopes *which* story an engineer builds; it does not yet enforce design/copy-dependency gating (that's #171, in flight) or parallel-branch *merge* orchestration (each story still opens its own PR → review → merge, as today). The bet-scoped `/build <bet>` path is untouched.
 
-**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **349 pass** (+8: `TestStoryScoping` — bet resolution from FS + fallback + unresolvable; story-id-vs-bet-id detection; focused-context includes target/bet & excludes sibling; story-keyed branch). consistency-check CONSISTENT. End-to-end dry-run proof: `--bet WLT-27-1` resolves to `WLT-27` and the gate passes on `docs/bets/WLT-27/brief.md` (no halt).
+**Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **349 pass** (+8: `TestStoryScoping` — bet resolution from FS + fallback + unresolvable; story-id-vs-epic-id detection; focused-context includes target/bet & excludes sibling; story-keyed branch). consistency-check CONSISTENT. End-to-end dry-run proof: `--bet WLT-27-1` resolves to `WLT-27` and the gate passes on `docs/epics/WLT-27/brief.md` (no halt).
 
 **Files touched (3):** `compass/orchestrator/run.py` · `compass/orchestrator/cockpit.py` · `compass/orchestrator/tests/test_gates.py` (+ CHANGELOG + this file). Counter: #172. **(#031 batch: #168–#170, #172 of #168–#177 — #171 design/copy-as-stories interleaving.)** On branch `feat/build-by-story-id` → PR #13, merged. Cross-model review (Codex/Gemini, not Claude).
 
@@ -3981,7 +3981,7 @@ Auto-detection (`_is_story_id`) keeps the dashboard launch form unchanged in sha
 
 **The two insights.** (1) **If it's work, it belongs on the board.** A `design.md`/`copy.md` *sidecar* next to a story is invisible to Jira, the WBS, conformance, and the audit — the control tower can't see it. Design + copy are real work → they must be **tracked stories** (→ tickets → WBS → audit). (2) **AI can't produce enterprise design/copy yet.** A human designer makes the Figma; a human writer writes the strings. So AI's job is to **decompose + spec the requirements**; the human **delivers** into the story.
 
-**The model.** Per UI slice, `decompose-bet-to-story` now emits a **trio** instead of one story + two sidecars:
+**The model.** Per UI slice, `decompose-epic-to-story` now emits a **trio** instead of one story + two sidecars:
 - a **design story** (`type: design`, `owner: human`, `status: needs-design`) — the **Designer** fills the *requirements* (flows · screens · every state · a11y · the 6-category Standard Experience Checklist) + a `## Design deliverable (human)` section left `Figma: <TBD>`; a human designer pastes the Figma and flips `needs-design → ready`.
 - a **copy story** (`type: copy`, `owner: human`, `status: needs-copy`) — the **UX Writer** fills the *copy-slot inventory* (every slot + its context/constraint; error slots must demand a *typed* message; empty-state slots demand why + next-action) in a `## Copy deliverable (human)` table with `Final copy (human)` cells left `<TBD>`; a human writes the strings and flips `needs-copy → ready`.
 - the **feature story** (`type: story`, `owner: agent`) — `dependencies:` name the design + copy story ids; `design_link:` points at the design story.
@@ -4036,7 +4036,7 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Fix.** **(1) Telemetry self-ignores.** New `logger.ensure_runs_dir(project_dir)` mkdirs `docs/orchestrator-runs/` and drops a `.gitignore` (`*` + `!.gitignore`) on first write; routed through every telemetry write (`log_step`, `log_hitl`) and the step-artifact writers in `run.py`. Run state stays untracked; audit/cockpit/WBS read the on-disk files regardless of git-tracking, so nothing downstream breaks. **(2) Worktree pruning.** `prune_worktrees(project_dir)` removes **clean** compass-managed worktrees (work committed/pushed, or paused — a resume recreates from the branch) and keeps **dirty** ones (in-flight builds), then `git worktree prune`s admin entries; exposed as `--prune-worktrees` (selects the repo via `--project-dir`).
 
-**Honest scope.** Existing projects that already committed telemetry need a **one-time** `git rm --cached docs/orchestrator-runs/*.jsonl` (home-app does — its `origin/main` carries `runs.jsonl`/`hitl.jsonl`); the `.gitignore` then keeps them out going forward. Auto-pruning isn't wired into the run loop yet (explicit `--prune-worktrees` for now — avoids surprise deletion of a sibling's paused worktree); a cockpit self-heal hook (like stale-run reaping) is the follow-up. The stray `docs/bets/WLT-27/stories/<story-id>/` placeholder dir from a contaminated build is only on a dead branch (not origin/main); the create-story guard against emitting a literal-placeholder story dir is a separate small fix.
+**Honest scope.** Existing projects that already committed telemetry need a **one-time** `git rm --cached docs/orchestrator-runs/*.jsonl` (home-app does — its `origin/main` carries `runs.jsonl`/`hitl.jsonl`); the `.gitignore` then keeps them out going forward. Auto-pruning isn't wired into the run loop yet (explicit `--prune-worktrees` for now — avoids surprise deletion of a sibling's paused worktree); a cockpit self-heal hook (like stale-run reaping) is the follow-up. The stray `docs/epics/WLT-27/stories/<story-id>/` placeholder dir from a contaminated build is only on a dead branch (not origin/main); the create-story guard against emitting a literal-placeholder story dir is a separate small fix.
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **369 pass** (+3: `ensure_runs_dir` writes the `.gitignore`; `log_step` creates it on first telemetry write; `prune_worktrees` removes a clean worktree + keeps a dirty one). consistency-check CONSISTENT.
 
@@ -4046,9 +4046,9 @@ A non-UI slice stays a single feature story (unchanged). AI never fabricates a F
 
 **Trigger origin (live consumer signal).** Watching two parallel builds in the browser, the DRI spotted: the run card read `home-app · build · WLT-27 step 1/8` — the parent **bet**, not the story being built. *"build says WLT-27 not the story id."* The run log confirmed everything underneath was correct (`[story] Scoped to WLT-27-2`, `[worktree] isolated build in …/feat__WLT-27-2-work`, building in parallel with WLT-27-3) — so #172/#174 were working live; only the **label** was wrong.
 
-**Root cause.** #172 emits `story_id` on every event, but the cockpit's `fold_runs` only captured `bet_id`, and all seven run-card labels rendered `r.get("bet_id")`. So a story-scoped run displayed its parent bet.
+**Root cause.** #172 emits `story_id` on every event, but the cockpit's `fold_runs` only captured `epic_id`, and all seven run-card labels rendered `r.get("epic_id")`. So a story-scoped run displayed its parent bet.
 
-**Fix.** `fold_runs` now captures `story_id`; a `_scope_label(run)` helper returns the story id when present, else the bet id, and drives every run-card label (the per-run header, in-flight/done/awaiting rows, HTML surface). `bet_id` is deliberately untouched in the resume/`--bet` command path — the requirement gate resolves `docs/bets/<bet-id>/…` against the parent, so the displayed scope and the resume scope are correctly different. Cosmetic only; no behavior change to the build.
+**Fix.** `fold_runs` now captures `story_id`; a `_scope_label(run)` helper returns the story id when present, else the bet id, and drives every run-card label (the per-run header, in-flight/done/awaiting rows, HTML surface). `epic_id` is deliberately untouched in the resume/`--bet` command path — the requirement gate resolves `docs/epics/<epic-id>/…` against the parent, so the displayed scope and the resume scope are correctly different. Cosmetic only; no behavior change to the build.
 
 **Verification:** `python3 -m unittest discover -s compass/orchestrator/tests` → **370 pass** (+1: `fold_runs` keeps `story_id`; `_scope_label` prefers story then bet). Live-confirmed: the WLT-27-2 / WLT-27-3 in-flight runs now label `WLT-27-2` / `WLT-27-3`. consistency-check CONSISTENT.
 

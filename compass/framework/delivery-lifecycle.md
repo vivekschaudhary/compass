@@ -35,7 +35,7 @@ earns its own status, and that's the state an exec manages by exception.
 Each story is owned by exactly one delivery role, and that ownership is the routing axis — each role
 pulls its own tickets, and the workflow that runs against a story is the owning role's. In the agent
 methodology this is the story's `owner:` + `type:` pair (see `compass/agents/pm.md`
-`decompose-bet-to-story` — non-UI → a feature story; UI → a design + copy + feature trio). In the
+`decompose-epic-to-story` — non-UI → a feature story; UI → a design + copy + feature trio). In the
 projected board it surfaces as the ticket's role label.
 
 ## The playbook — a deliverable's action items become tracked work

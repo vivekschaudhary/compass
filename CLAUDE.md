@@ -30,9 +30,9 @@ Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 
 - `/create-product-brief` — `compass/workflows/create-product-brief.md`
 - `/setup-foundation-architecture` — `compass/workflows/setup-foundation-architecture.md`
-- `/create-bet-portfolio` — `compass/workflows/create-bet-portfolio.md`
+- `/create-epics` — `compass/workflows/create-epics.md`
 - `/create-brief` — `compass/workflows/create-brief.md`
-- `/create-bet-architecture` — `compass/workflows/create-bet-architecture.md`
+- `/create-epic-architecture` — `compass/workflows/create-epic-architecture.md`
 - `/create-story` — `compass/workflows/create-story.md`
 - `/tech-design` — `compass/workflows/tech-design.md`
 - `/build` — `compass/workflows/build.md`
@@ -77,7 +77,7 @@ So: framework → GitHub issues + PRs; consumer work → Jira/Conf. (1.0 sequenc
 2. **Do not skip workflow steps silently.** No silent skips — declined engagements get logged as DRI decisions with rationale per `[refuse-escalate]`.
 3. **Do not amend commits** unless explicitly asked. Pre-commit hook failures mean the commit didn't happen — fix the issue, re-stage, create a NEW commit. `--amend` modifies the PREVIOUS commit and can destroy work.
 4. **Do not force-push** to `main` / `master`. Warn the user if they request it.
-   - **4a. Write-mode work lands on a branch, never `main` (#99/#126 — interactive-surface parity).** The orchestrator enforces this mechanically via `_ensure_work_branch`; interactive sessions must do it by hand. Before you edit files for a build/fix task on `main`/`master`, create + switch to a work branch (e.g. `git switch -c fix/<slug>` or `<bet-id>/<slug>`). Framework-doc edits to this repo's `main` (the Compass repo itself) are the standing exception the user has authorized; product/consumer code changes are not.
+   - **4a. Write-mode work lands on a branch, never `main` (#99/#126 — interactive-surface parity).** The orchestrator enforces this mechanically via `_ensure_work_branch`; interactive sessions must do it by hand. Before you edit files for a build/fix task on `main`/`master`, create + switch to a work branch (e.g. `git switch -c fix/<slug>` or `<epic-id>/<slug>`). Framework-doc edits to this repo's `main` (the Compass repo itself) are the standing exception the user has authorized; product/consumer code changes are not.
 5. **Do not skip git hooks** (`--no-verify`, `--no-gpg-sign`) unless user explicitly requests. Fix root causes, don't bypass.
 6. **Do not commit secrets** (`.env`, credentials.json, etc.).
 7. **Do not run destructive git operations** (`reset --hard`, `push --force`, `clean -f`, `branch -D`) unless user explicitly requests.
@@ -115,6 +115,6 @@ The orchestrator (framework version 1.0.0-rc.1 — `framework_version` in `compa
 1. Reads `compass/workflows/<workflow>.md` dispatch graph
 2. For each step, looks up the agent's `preferred_hosts:` and dispatches via the appropriate host's API (Claude API / OpenAI API / Gemini API per `router.py`)
 3. Passes agent file contents as system prompt; task-step inputs as user prompt
-4. Writes step outputs to `docs/orchestrator-runs/<workflow>/` and advances the graph. (Committing outputs to canonical artifact paths — `docs/foundation/`, `docs/bets/` — is NOT yet implemented; promotion is manual.)
+4. Writes step outputs to `docs/orchestrator-runs/<workflow>/` and advances the graph. (Committing outputs to canonical artifact paths — `docs/foundation/`, `docs/epics/` — is NOT yet implemented; promotion is manual.)
 
 This file (CLAUDE.md) becomes irrelevant to the orchestrator's routing — Claude is just one of several configured hosts. CLAUDE.md remains useful for **interactive Claude Code sessions** where the human runs Compass workflows manually.

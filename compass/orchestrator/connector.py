@@ -238,7 +238,7 @@ def _frontmatter_list(content: str, field: str) -> list:
             if x.strip().strip("\"'") and not x.strip().startswith("<")]
 
 
-def project_bet_jira_structure(project_dir, bet_id: str, transport=None,
+def project_bet_jira_structure(project_dir, epic_id: str, transport=None,
                                epic_key: str = None, ready_label: bool = False) -> list:
     """#35: after a bet's stories are projected to Jira (flat issues with stored
     `jira_key`s), wire the STRUCTURE so the program is visible in Jira, not a flat pile:
@@ -261,7 +261,7 @@ def project_bet_jira_structure(project_dir, bet_id: str, transport=None,
     project_key = os.environ.get("JIRA_PROJECT")
     if not auth or not project_key:
         return ["structure skipped — jira not configured (JIRA_* / JIRA_PROJECT)"]
-    bet_dir = _Path(project_dir) / "docs" / "bets" / bet_id
+    bet_dir = _Path(project_dir) / "docs" / "epics" / epic_id
     actions = []
 
     # 1) resolve the bet Epic — an explicit `epic_key` (external mode) wins; otherwise
@@ -273,9 +273,9 @@ def project_bet_jira_structure(project_dir, bet_id: str, transport=None,
         bc = brief.read_text(encoding="utf-8") if brief.exists() else ""
         epic_key = _frontmatter_field(bc, "jira_epic_key")
         if not epic_key:
-            title = _artifact_title(bc, f"docs/bets/{bet_id}/brief.md") if bc else bet_id
-            res = stores.jira_push(auth, project_key, "Epic", f"{bet_id}: {title}",
-                                   bc or f"# {bet_id}", transport=transport)
+            title = _artifact_title(bc, f"docs/epics/{epic_id}/brief.md") if bc else epic_id
+            res = stores.jira_push(auth, project_key, "Epic", f"{epic_id}: {title}",
+                                   bc or f"# {epic_id}", transport=transport)
             if res.get("ok") and res.get("pointer"):
                 epic_key = res["pointer"]
                 if brief.exists():

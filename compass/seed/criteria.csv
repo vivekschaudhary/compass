@@ -20,8 +20,8 @@ groundwork,1,done,The Product Manager approved it,,,,
 groundwork,2,done,The foundation architecture is published,document,docs/foundation/architecture.md,status,published
 groundwork,2,done,Every scope-level feature has a named home in the architecture,,,,
 groundwork,2,done,The Enterprise Architect approved it,,,,
-groundwork,3,done,The bet portfolio is published,document,docs/bets/portfolio.md,status,published
-groundwork,3,done,Every bet traces to a commitment in the SOW,,,,
+groundwork,3,done,The epic list is published,document,docs/epics/portfolio.md,status,published
+groundwork,3,done,Every epic traces to a commitment in the SOW,,,,
 groundwork,3,done,The Product Manager approved it,,,,
 groundwork,4,done,The plan is published,document,docs/plan.md,status,published
 groundwork,4,done,Every row carries an estimate or an explicit tbd with a reason,,,,

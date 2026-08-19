@@ -12,7 +12,7 @@ from compass.orchestrator import wbs, events as ev
 
 
 def _bet(project, bid, status, depends_on="[]", stories=None):
-    bdir = project / "docs" / "bets" / bid
+    bdir = project / "docs" / "epics" / bid
     bdir.mkdir(parents=True, exist_ok=True)
     (bdir / "brief.md").write_text(
         f"---\nid: {bid}\ntype: feature\nstatus: {status}\npriority: P1\n"
@@ -40,37 +40,37 @@ class TestWbs(unittest.TestCase):
         _bet(self.project, "CB-1", "in-build",
              stories=[("CB-1-1", "merged", "PROJ-7"), ("CB-1-2", "ready")])
         w = wbs.build_wbs(self.project)
-        self.assertEqual(w["summary"]["bets"], 1)
-        bet = w["bets"][0]
+        self.assertEqual(w["summary"]["epics"], 1)
+        bet = w["epics"][0]
         self.assertEqual((bet["id"], bet["story_count"]), ("CB-1", 2))
         self.assertEqual(bet["stories"][0]["jira_key"], "PROJ-7")
 
     def test_blocked_by_unshipped_dep_is_red(self):
         _bet(self.project, "CB-1", "proposed")            # dep not shipped
         _bet(self.project, "CB-2", "approved", depends_on="[CB-1]")
-        cb2 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-2")
+        cb2 = next(b for b in wbs.build_wbs(self.project)["epics"] if b["id"] == "CB-2")
         self.assertEqual(cb2["rag"], "red")
         self.assertTrue(any("blocked by CB-1" in a["reason"] for a in cb2["attention"]))
 
     def test_shipped_is_green_no_attention(self):
         _bet(self.project, "CB-9", "shipped")
-        bet = wbs.build_wbs(self.project)["bets"][0]
+        bet = wbs.build_wbs(self.project)["epics"][0]
         self.assertEqual(bet["rag"], "green")
         self.assertEqual(bet["attention"], [])
 
     def test_proposed_no_runs_flags_not_started(self):
         _bet(self.project, "CB-5", "proposed")
-        bet = wbs.build_wbs(self.project)["bets"][0]
+        bet = wbs.build_wbs(self.project)["epics"][0]
         self.assertTrue(any(a["reason"] == "not started" for a in bet["attention"]))
 
     def test_awaiting_gate_from_spine(self):
         _bet(self.project, "CB-3", "in-build")
         sink = ev.jsonl_sink()
-        sink(ev.make_event(ev.RUN_START, run_id="r1", bet_id="CB-3", workflow="build",
+        sink(ev.make_event(ev.RUN_START, run_id="r1", epic_id="CB-3", workflow="build",
                            project_dir=str(self.project)))
-        sink(ev.make_event(ev.GATE_OPEN, run_id="r1", bet_id="CB-3", workflow="build",
+        sink(ev.make_event(ev.GATE_OPEN, run_id="r1", epic_id="CB-3", workflow="build",
                            step=5, title="HITL gate"))
-        cb3 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-3")
+        cb3 = next(b for b in wbs.build_wbs(self.project)["epics"] if b["id"] == "CB-3")
         self.assertEqual(cb3["open_gates"], 1)
         self.assertTrue(any("awaiting gate" in a["reason"] for a in cb3["attention"]))
 
@@ -97,7 +97,7 @@ class TestWbs(unittest.TestCase):
         _bet(self.project, "CB-1", "shipped")
         _bet(self.project, "CB-2", "approved",
              depends_on="[CB-1] # the shared substrate + orthogonality discipline")
-        cb2 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-2")
+        cb2 = next(b for b in wbs.build_wbs(self.project)["epics"] if b["id"] == "CB-2")
         self.assertEqual(cb2["depends_on"], ["CB-1"])
         # dep is shipped -> no phantom "(unknown)" blocker
         self.assertFalse(any("unknown" in a["reason"] for a in cb2["attention"]))
@@ -129,7 +129,7 @@ class TestStoryDependencies(unittest.TestCase):
         self.home = tempfile.mkdtemp()
         self._old = os.environ.get("COMPASS_HOME")
         os.environ["COMPASS_HOME"] = self.home
-        self.bdir = self.project / "docs" / "bets" / "WLT-27"
+        self.bdir = self.project / "docs" / "epics" / "WLT-27"
         self.bdir.mkdir(parents=True, exist_ok=True)
         (self.bdir / "brief.md").write_text(
             "---\nid: WLT-27\ntype: feature\nstatus: in-build\npriority: P1\n"
@@ -140,7 +140,7 @@ class TestStoryDependencies(unittest.TestCase):
             else os.environ.__setitem__("COMPASS_HOME", self._old)
 
     def _bet_node(self):
-        return wbs.build_wbs(self.project)["bets"][0]
+        return wbs.build_wbs(self.project)["epics"][0]
 
     def test_feature_blocked_by_undelivered_design(self):
         _story(self.bdir, "WLT-27-2", status="needs-design", type="design", owner="human")
@@ -199,7 +199,7 @@ class TestBetStatusDerivation(unittest.TestCase):
             else os.environ.__setitem__("COMPASS_HOME", self._old)
 
     def _node(self, bid):
-        return next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == bid)
+        return next(b for b in wbs.build_wbs(self.project)["epics"] if b["id"] == bid)
 
     def test_all_stories_shipped_promotes_stale_bet_to_shipped(self):
         # frontmatter says approved, but every story shipped → effective shipped
@@ -255,7 +255,7 @@ class TestStoryReconcile(unittest.TestCase):
             else os.environ.__setitem__("COMPASS_HOME", self._old)
 
     def _story(self, bid, sid):
-        return next(s for b in wbs.build_wbs(self.project, reconcile=True, pr_map=self.pr)["bets"]
+        return next(s for b in wbs.build_wbs(self.project, reconcile=True, pr_map=self.pr)["epics"]
                     if b["id"] == bid for s in b["stories"] if s["id"] == sid)
 
     def test_id_in_branch_bounded(self):
@@ -270,7 +270,7 @@ class TestStoryReconcile(unittest.TestCase):
         s = self._story("CB-1", "CB-1-1")
         self.assertEqual((s["status"], s["status_reconciled"]), ("merged", True))
         # reconciled story feeds Layer A → bet derives shipped
-        bet = next(b for b in wbs.build_wbs(self.project, reconcile=True, pr_map=self.pr)["bets"]
+        bet = next(b for b in wbs.build_wbs(self.project, reconcile=True, pr_map=self.pr)["epics"]
                    if b["id"] == "CB-1")
         self.assertEqual(bet["status"], "shipped")
 
@@ -290,9 +290,9 @@ class TestStoryReconcile(unittest.TestCase):
     def test_no_pr_but_halted_run_is_ready(self):
         _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
         sink = ev.jsonl_sink()
-        sink(ev.make_event(ev.RUN_START, run_id="r1", bet_id="CB-1", story_id="CB-1-1",
+        sink(ev.make_event(ev.RUN_START, run_id="r1", epic_id="CB-1", story_id="CB-1-1",
                            workflow="build", project_dir=str(self.project)))
-        sink(ev.make_event(ev.RUN_END, run_id="r1", bet_id="CB-1", story_id="CB-1-1",
+        sink(ev.make_event(ev.RUN_END, run_id="r1", epic_id="CB-1", story_id="CB-1-1",
                            workflow="build", status="halted", reason="boom"))
         self.pr = []  # gh available, no PR for this story
         s = self._story("CB-1", "CB-1-1")
@@ -313,7 +313,7 @@ class TestStoryReconcile(unittest.TestCase):
         self.assertEqual(self._story("CB-1", "CB-1-1")["status"], "merged")
 
     def test_human_owned_design_story_left_alone(self):
-        bdir = self.project / "docs" / "bets" / "CB-1"
+        bdir = self.project / "docs" / "epics" / "CB-1"
         (bdir / "stories" / "CB-1-1").mkdir(parents=True)
         (bdir / "brief.md").write_text(
             "---\nid: CB-1\ntype: feature\nstatus: in-build\ndepends_on: []\n---\n# CB-1\n")
@@ -327,7 +327,7 @@ class TestStoryReconcile(unittest.TestCase):
 
     def test_reconcile_off_by_default_keeps_declared(self):
         _bet(self.project, "CB-1", "approved", stories=[("CB-1-1", "in_review")])
-        bet = wbs.build_wbs(self.project)["bets"][0]   # no reconcile
+        bet = wbs.build_wbs(self.project)["epics"][0]   # no reconcile
         self.assertEqual(bet["stories"][0]["status"], "in_review")
 
     def test_render_shows_reconcile_marker_and_note(self):
@@ -351,9 +351,9 @@ class TestHaltCollapse(unittest.TestCase):
             else os.environ.__setitem__("COMPASS_HOME", self._old)
 
     def _halt(self, sink, bet, rid, reason, ts):
-        sink(ev.make_event(ev.RUN_START, run_id=rid, bet_id=bet, workflow="build",
+        sink(ev.make_event(ev.RUN_START, run_id=rid, epic_id=bet, workflow="build",
                            project_dir=str(self.project), ts=ts))
-        sink(ev.make_event(ev.RUN_END, run_id=rid, bet_id=bet, workflow="build",
+        sink(ev.make_event(ev.RUN_END, run_id=rid, epic_id=bet, workflow="build",
                            status="halted", reason=reason, ts=ts))
 
     def test_superseded_halts_collapse_to_latest(self):
@@ -362,7 +362,7 @@ class TestHaltCollapse(unittest.TestCase):
         self._halt(sink, "CB-1", "r1", "old timeout", "2026-06-30T01:00:00+00:00")
         self._halt(sink, "CB-1", "r2", "older refuse", "2026-06-30T02:00:00+00:00")
         self._halt(sink, "CB-1", "r3", "latest failure", "2026-06-30T03:00:00+00:00")
-        cb1 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-1")
+        cb1 = next(b for b in wbs.build_wbs(self.project)["epics"] if b["id"] == "CB-1")
         halt_lines = [a for a in cb1["attention"] if "run halted" in a["reason"]]
         self.assertEqual(len(halt_lines), 1)
         self.assertIn("latest failure", halt_lines[0]["reason"])
@@ -373,7 +373,7 @@ class TestHaltCollapse(unittest.TestCase):
         sink = ev.jsonl_sink()
         self._halt(sink, "CB-2", "r1", "a", "2026-06-30T01:00:00+00:00")
         self._halt(sink, "CB-2", "r2", "b", "2026-06-30T02:00:00+00:00")
-        cb2 = next(b for b in wbs.build_wbs(self.project)["bets"] if b["id"] == "CB-2")
+        cb2 = next(b for b in wbs.build_wbs(self.project)["epics"] if b["id"] == "CB-2")
         self.assertEqual([a for a in cb2["attention"] if "run halted" in a["reason"]], [])
         self.assertEqual(cb2["rag"], "green")
         self.assertEqual(cb2["hidden_halts"], 2)
@@ -386,7 +386,7 @@ class TestHaltCollapse(unittest.TestCase):
         self._halt(sink, "CB-1", "r1", "a", "2026-06-30T01:00:00+00:00")
         self._halt(sink, "CB-1", "r2", "b", "2026-06-30T02:00:00+00:00")
         self._halt(sink, "CB-1", "r3", "c", "2026-06-30T03:00:00+00:00")
-        cb1 = next(b for b in wbs.build_wbs(self.project, show_halt_history=True)["bets"]
+        cb1 = next(b for b in wbs.build_wbs(self.project, show_halt_history=True)["epics"]
                    if b["id"] == "CB-1")
         halt_lines = [a for a in cb1["attention"] if "run halted" in a["reason"]]
         self.assertEqual(len(halt_lines), 3)

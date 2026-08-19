@@ -45,7 +45,7 @@ TOOL_SCHEMAS = [
         "name": "glob",
         "description": (
             "List files matching a glob pattern (e.g. 'src/**/*.ts', "
-            "'docs/bets/*/brief.md'), relative to the project root."
+            "'docs/epics/*/brief.md'), relative to the project root."
         ),
         "input_schema": {
             "type": "object",

@@ -57,7 +57,7 @@ Reviewer + security-reviewer declare `preferred_hosts: [claude, codex, gemini]` 
 
 | Workflow | Status |
 |---|---|
-| `/create-product-brief` · `/setup-foundation-architecture` · `/create-brief` · `/create-bet-architecture` · `/create-story` · `/build` · `/fix` · `/triage` · `/ops` | ✅ dispatch-graph |
+| `/create-product-brief` · `/setup-foundation-architecture` · `/create-brief` · `/create-epic-architecture` · `/create-story` · `/build` · `/fix` · `/triage` · `/ops` | ✅ dispatch-graph |
 | Visibility/analysis (`/status`, `/plan`, `/dashboard`, `/metrics`, `/measure`, `/scan`, `/retro`) | prose (run interactively; orchestration post-MVP) |
 
 ---

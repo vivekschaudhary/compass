@@ -92,7 +92,7 @@ consolidates_from: []
 
 ## Meta-observations
 
-**The MVP unlock landed this batch.** #84–#86 made the full `setup-product → setup-foundation-architecture → create-brief → create-bet-architecture → create-story → build` chain mechanically orchestratable end-to-end — the single thing `compass/framework/mvp.md` calls "the MVP unlock." The home-app run is the first exercise of it. Compass is, by its own checklist, at or near "start sending."
+**The MVP unlock landed this batch.** #84–#86 made the full `setup-product → setup-foundation-architecture → create-brief → create-epic-architecture → create-story → build` chain mechanically orchestratable end-to-end — the single thing `compass/framework/mvp.md` calls "the MVP unlock." The home-app run is the first exercise of it. Compass is, by its own checklist, at or near "start sending."
 
 **Second consecutive retro where the mandatory audit caught real drift the amendment's own commit missed.** Retro #017 caught orchestrator version self-claims; Retro #018 caught more version drift + a stale behavior claim (skip vs halt). The #78 audit step is not ceremony — it has a 2-for-2 hit rate. But the deeper signal is that the #82 *commit-time* script isn't being run, so the *retro-time* audit is doing work that should happen earlier. Mechanize the script (pre-commit hook) is the structural fix.
 

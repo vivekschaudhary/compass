@@ -188,7 +188,7 @@ async function evaluateBacklog(actor: Actor, c: CriterionRow, taskId: string | n
       const roleCell = cells[roleIdx] ?? "";
 
       rows.push({
-        // `\`plan-kickoff\` (1 step)` or `create-bet-portfolio — **STEPS UNSPECIFIED**`
+        // `\`plan-kickoff\` (1 step)` or `create-epics — **STEPS UNSPECIFIED**`
         workflow: (wfCell.match(/`([a-z0-9-]+)`/) ?? wfCell.match(/^([a-z0-9-]+)/))?.[1] ?? null,
         // `delivery-manager — John`
         role: (roleCell.match(/^\**([a-z-]+)/) ?? [])[1] ?? null,

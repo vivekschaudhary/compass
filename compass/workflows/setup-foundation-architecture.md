@@ -97,7 +97,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 **Dispatches:** Delivery Manager agent
 **Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`
-**What it covers:** record the foundational architecture bet approved + scaffolded in `docs/status.md`; surface next recommended workflow — `/create-bet-portfolio` (new projects) or `/create-brief` (mid-project bet).
+**What it covers:** record the foundational architecture bet approved + scaffolded in `docs/status.md`; surface next recommended workflow — `/create-epics` (new projects) or `/create-brief` (mid-project bet).
 
 ## Workflow-level verification (final GATE)
 
@@ -113,7 +113,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 ## Output summary contract
 
-**TL;DR** (3 lines: phase reached / status / pending) · **Files created/modified** table · **Next recommended command** (`/create-bet-portfolio` or `/create-brief`) · **Open questions/risks**.
+**TL;DR** (3 lines: phase reached / status / pending) · **Files created/modified** table · **Next recommended command** (`/create-epics` or `/create-brief`) · **Open questions/risks**.
 
 ## Notes
 

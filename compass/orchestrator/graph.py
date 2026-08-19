@@ -29,7 +29,7 @@ def load_workflow_meta(workflow_file: Path) -> dict:
     Currently extracts `requires_approved:` — the list of artifact paths that
     must be HITL-approved before this workflow may dispatch (improvement #70
     gate redesign). Supports both inline (`requires_approved: [a, b]`) and
-    block list forms. Paths may contain a `<bet-id>` placeholder.
+    block list forms. Paths may contain a `<epic-id>` placeholder.
     """
     text = workflow_file.read_text()
     fm_match = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)

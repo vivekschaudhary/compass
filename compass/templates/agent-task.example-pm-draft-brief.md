@@ -11,7 +11,7 @@ pre:    foundation.product == approved && foundation.arch == approved && source.
 post:   brief.sections-complete && hypothesis.falsifiable && ~every-claim-cited ⟨pm⟩ && dri.count >= 1 && !self-approved
 ```
 **Work** (the *how* — the brief-authoring methodology):
-1. **Mode detection** — fresh (new bet from source) vs promote-stub (a `/create-bet-portfolio` stub).
+1. **Mode detection** — fresh (new bet from source) vs promote-stub (a `/create-epics` stub).
 2. Gather the source → draft the brief: problem · user · why-this-matters · hypothesis · primary metric · guardrails · measurement window · scope · architecture-required.
 3. **Promote-stub:** keep the stub's frontmatter + hypothesis (do NOT re-derive), clear `portfolio_stub`, update the portfolio.
 4. **Seed DRI** — ≥1 Decision.

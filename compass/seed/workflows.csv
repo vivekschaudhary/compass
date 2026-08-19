@@ -1,7 +1,7 @@
 code,label,workstream,phase,owner_role,trigger,enabled
 build,Workflow: /build,Engineering,,engineer,,true
-create-bet-architecture,Workflow: /create-bet-architecture,Engineering,,architect,,true
-create-bet-portfolio,Workflow: /create-bet-portfolio,Product,,pm,,true
+create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,true
+create-epics,Workflow: /create-epics,Product,,pm,,true
 create-brief,Workflow: /create-brief,Product,,researcher,,true
 create-product-brief,Workflow: /create-product-brief,Product,,researcher,,true
 create-story,Workflow: /create-story,Product,,pm,,true

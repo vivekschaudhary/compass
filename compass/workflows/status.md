@@ -12,7 +12,7 @@ Surfaces current state of all in-flight work. Invokes Delivery Manager agent.
 2. **Gather state:**
    - Last `docs/status.md`
    - **`docs/foundation/plan.md`** if it exists — the living project plan owns the time-bound schedule. `/status` reads it to populate ETAs / in-flight / next-up. Don't recompute schedule data here; `/plan` does that.
-   - All bets in `docs/bets/` and their statuses
+   - All bets in `docs/epics/` and their statuses
    - Open PRs via GitHub MCP
    - Open Linear/Jira tickets via MCP
    - `docs/changelog.md` for recent shipped

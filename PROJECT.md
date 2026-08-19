@@ -16,7 +16,7 @@ _See `docs/foundation/architecture.md` for the foundational architecture bet._
 ## Where things live
 
 - Foundation: `docs/foundation/`
-- All bets: `docs/bets/<bet-id>/`
+- All bets: `docs/epics/<epic-id>/`
 - Standalone ops/fixes/incidents: `docs/ops/`, `docs/fixes/`, `docs/incidents/`
 - Sprint comms: `docs/sprints/<year>/sprint-<n>.md`
 - Metrics snapshots: `docs/metrics/`

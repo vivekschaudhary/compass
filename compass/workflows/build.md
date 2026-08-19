@@ -5,7 +5,7 @@ owner: engineer
 auto_invokes: []
 invoked_by: []
 version: 0.3.40
-requires_approved: [docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
+requires_approved: [docs/foundation/architecture.md, docs/epics/<epic-id>/brief.md]
 ---
 
 # Workflow: /build
@@ -47,8 +47,8 @@ The per-step gate/work/postcondition detail is NOT in this file. Read the named 
 
 - **Story is `ready`:** AC present (required) · design link present (required if UI work) · **`## Technical approach` present** (the *how*, authored by the code-grounded tech-design step `/tech-design` — NOT the PM; `[functional-story]` + `[architecture-grounded-in-code]`, #127) · dependencies + priority noted.
 - **Where the story lives (`source_of_truth`, #127 — Phase 1d).** When `config.yaml source_of_truth: external`, **`/build <STORY-KEY>`** reads the story from Jira (not a repo `story.md`) and gates on the ticket: it builds only a story that is **both Ready** (`ready` label — DoR met, `/create-story`) **AND Tech-ready** (`tech-ready` label — arch-reviewed, `/tech-design`). Refuses loud otherwise, naming the ONE next move: not Ready → `/create-story`; Ready-but-not-Tech-ready → `/tech-design <KEY>`; already Done → reopen/file new. This **generalizes the #171 design/copy gate into the ticket-read ready-to-build gate**; building a Jira-sourced story drives its status To Do → In Progress → Done (#124). Under the default `source_of_truth: repo`, the classic behavior holds (read `story.md`; the repo design/copy readiness gate applies).
-- **Brief is `status: approved`.** If `proposed` or `superseded`, refuse with: *"Brief <bet-id> is not approved (status: <current>). Approve via PM workflow first."*
-- **If `architecture_required: true` on the bet, bet architecture is `status: approved`.** If missing or unapproved, refuse with: *"Bet architecture missing or unapproved. Run `/create-bet-architecture` first."*
+- **Brief is `status: approved`.** If `proposed` or `superseded`, refuse with: *"Brief <epic-id> is not approved (status: <current>). Approve via PM workflow first."*
+- **If `architecture_required: true` on the bet, bet architecture is `status: approved`.** If missing or unapproved, refuse with: *"Bet architecture missing or unapproved. Run `/create-epic-architecture` first."*
 - **Foundation architecture exists.** If missing, refuse with: *"`docs/foundation/architecture.md` missing. Run `/setup-foundation-architecture` first."*
 - **If any precondition fails → refuse and flag to HITL. Do not proceed.**
 
@@ -167,7 +167,7 @@ If a bug is found post-merge on this story → reopen the story, fix it right. D
 
 ### Scanner at phase boundaries
 
-Invoke `/scan <bet-id>` at each phase boundary so the bet enters the next phase with a fresh findings snapshot:
+Invoke `/scan <epic-id>` at each phase boundary so the bet enters the next phase with a fresh findings snapshot:
 
 - **Build → Production Ready:** triggered when all stories of the brief ship (Step 8 final). Surfaces runbook / SLO / monitoring / rollback / on-call / backup / cost / compliance gaps before the bet is treated as production-bound.
 - **Production Ready → GTM:** triggered when Production Ready findings are resolved or suppressed. Surfaces user-docs / API-docs / sales / support / pricing / launch-comms / customer-comms / legal gaps.
@@ -204,7 +204,7 @@ After completion (or refusal), report in this exact shape:
 - **Files created/modified** — table with path + change type
 - **Runtime-artifact verification** — what build-output files were inspected; what they confirmed (e.g., "functions-config-manifest.json shows /_middleware registered")
 - **Reviewer findings summary** — BLOCKERs count + ISSUEs count + disputes count
-- **Next recommended command** — `/build <next-story-id>` if more stories in brief; `/scan <bet-id>` if all stories shipped (Build → Production Ready boundary)
+- **Next recommended command** — `/build <next-story-id>` if more stories in brief; `/scan <epic-id>` if all stories shipped (Build → Production Ready boundary)
 - **Open questions or risks** — only if applicable
 - **Per-step agent dispatch** — which agent ran on which host (informs Finance / Time tracking when v0.4 orchestrator ships)
 

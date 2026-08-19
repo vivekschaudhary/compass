@@ -21,7 +21,7 @@ fields. `check:` binds the control to evidence Compass verifies automatically:
 - `tests-present` — a test/automation step ran
 - `manual` — not auto-checkable; human-attested via `attest:` (met | pending | exceeded)
 
-Place this file at `docs/controls.md` (engagement-wide) or `docs/bets/<bet-id>/controls.md`
+Place this file at `docs/controls.md` (engagement-wide) or `docs/epics/<epic-id>/controls.md`
 (per bet). Override the shipped defaults via `compass-overrides/templates/controls.md`.
 
 ## CTRL-1 — Independent code review

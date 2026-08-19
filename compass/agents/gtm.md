@@ -41,13 +41,13 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 **Gate:** A bet is in Build/QA nearing `done`; the brief (outcome + success metrics) is accessible.
 **Work:** define the **audience** and **channels** → draft the **messaging** (outcome-led, from the brief) → propose **timing** relative to the delivery milestone → confirm the brief's **success metrics** are instrumented (else flag the gap) → list **support enablement** needs (docs, FAQs, known-issues from Support) → seed DRI ≥1 Decision + ≥1 Risk.
-**Postcondition:** launch plan exists at `docs/bets/<bet-id>/launch.md` with audience · channels · messaging · timing · success metrics (instrumented or gap named) · support-enablement list · ≥1 DRI Decision + ≥1 Risk · HITL before any external commitment.
+**Postcondition:** launch plan exists at `docs/epics/<epic-id>/launch.md` with audience · channels · messaging · timing · success metrics (instrumented or gap named) · support-enablement list · ≥1 DRI Decision + ≥1 Risk · HITL before any external commitment.
 
 ### `draft-release-comms` — release notes, announcement, positioning copy
 
 **Gate:** Launch plan exists (or the bet is `done`). Scope of what shipped is confirmed with the PM.
 **Work:** draft release notes (what changed, for whom, the outcome) → draft the announcement + any positioning copy → keep claims cited or `n/a` → halt at HITL before publishing. Hand approved copy to the human to post; you do not publish.
-**Postcondition:** comms drafted at `docs/bets/<bet-id>/comms/` · every claim cited or `n/a` · HITL approval announced before anything is marked publishable · publishing is human-performed (not auto-acted).
+**Postcondition:** comms drafted at `docs/epics/<epic-id>/comms/` · every claim cited or `n/a` · HITL approval announced before anything is marked publishable · publishing is human-performed (not auto-acted).
 
 ### `assess-launch-readiness` — the GTM gate before a bet is announced
 

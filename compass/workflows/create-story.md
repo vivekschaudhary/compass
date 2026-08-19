@@ -5,7 +5,7 @@ owner: pm
 auto_invokes: []
 invoked_by: [manual]
 version: 0.3.59
-requires_approved: [docs/bets/<bet-id>/brief.md]
+requires_approved: [docs/epics/<epic-id>/brief.md]
 ---
 
 # Workflow: /create-story
@@ -29,29 +29,29 @@ PM decomposes an approved bet into its **full set** of shippable stories in one 
 
 ## Architectural shape (v0.3.42)
 
-Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodology lives in `compass/agents/pm.md` → Task `decompose-bet-to-story` (rewritten from a workflow-pointing stub to a self-sufficient gate/work/postcondition in v0.3.42) and `compass/templates/story.md` (story structure + the load-bearing Standard Experience Checklist). The agent task + template are the single source of truth.
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodology lives in `compass/agents/pm.md` → Task `decompose-epic-to-story` (rewritten from a workflow-pointing stub to a self-sufficient gate/work/postcondition in v0.3.42) and `compass/templates/story.md` (story structure + the load-bearing Standard Experience Checklist). The agent task + template are the single source of truth.
 
 ## Preconditions (workflow-level GATE)
 
-- **Brief approved** — `docs/bets/<bet-id>/brief.md` with an approved HITL record or `status: approved` (machine-checked via `requires_approved:`; orchestrator halts exit 3 if unmet). **On failure:** *"Brief not approved. Run `/create-brief <bet-id>` first."*
-- **Bet architecture (conditional)** — if the brief's `architecture_required: true`, `docs/bets/<bet-id>/architecture.md` must be `status: approved`. This is conditional on a brief field, so it is enforced in the PM task's gate (not machine-checkable via the unconditional `requires_approved:` list). **On failure:** *"Architecture required by this brief but not approved. Run `/create-bet-architecture <bet-id>` first."*
+- **Brief approved** — `docs/epics/<epic-id>/brief.md` with an approved HITL record or `status: approved` (machine-checked via `requires_approved:`; orchestrator halts exit 3 if unmet). **On failure:** *"Brief not approved. Run `/create-brief <epic-id>` first."*
+- **Bet architecture (conditional)** — if the brief's `architecture_required: true`, `docs/epics/<epic-id>/architecture.md` must be `status: approved`. This is conditional on a brief field, so it is enforced in the PM task's gate (not machine-checkable via the unconditional `requires_approved:` list). **On failure:** *"Architecture required by this brief but not approved. Run `/create-epic-architecture <epic-id>` first."*
 - **Full-backlog decomposition** — once the bet (and architecture, if required) is approved, decompose the **whole story set** at once. No "prior story must ship first" gate (removed v0.3.56). Re-running on the same bet adds any newly-discovered slices without duplicating existing ones.
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/pm.md` — Task `decompose-bet-to-story` (enumerates the full slice set; for a UI slice drafts the design + copy + feature trio; owns the Standard Experience Checklist gate)
+- `compass/agents/pm.md` — Task `decompose-epic-to-story` (enumerates the full slice set; for a UI slice drafts the design + copy + feature trio; owns the Standard Experience Checklist gate)
 - `compass/agents/designer.md` — Task `draft-design-spec` (per UI slice — specs design **requirements** INTO the `design` story; human produces the Figma)
 - `compass/agents/ux-writer.md` — Task `write-copy` (per UI slice — specs the **copy-slot inventory** INTO the `copy` story; human writes the strings)
 - `compass/agents/delivery-manager.md` — Task `update-status`
 
 ## Dispatch graph
 
-### Step 1. `pm.decompose-bet-to-story` (PM agent owns)
+### Step 1. `pm.decompose-epic-to-story` (PM agent owns)
 
 **Dispatches:** PM agent
-**Task definition:** `compass/agents/pm.md` → Task `decompose-bet-to-story`
-**Input:** `docs/bets/<bet-id>/brief.md` · bet architecture (if any) · any stories already under the bet · `compass/templates/story.md`
-**What it covers:** confirm gate (brief approved; arch approved if required) → **enumerate the full set of shippable slices** (each smallest valuable · independent · sequenced by dependency/priority) → generate a story ID per slice → **for each UI slice, create the design + copy + feature trio** (design + copy = `owner: human`, `status: needs-design`/`needs-copy`; the feature story's `dependencies:` name them, `status: needs-design` until they're delivered); non-UI slice → a single feature story (`type: story`, `status: ready`) → draft each `docs/bets/<bet-id>/stories/<story-id>/story.md` per the template with the **Standard Experience Checklist** (6 categories, each AC-covered or `n/a — <reason>`) → mirror each to tracker.
+**Task definition:** `compass/agents/pm.md` → Task `decompose-epic-to-story`
+**Input:** `docs/epics/<epic-id>/brief.md` · bet architecture (if any) · any stories already under the bet · `compass/templates/story.md`
+**What it covers:** confirm gate (brief approved; arch approved if required) → **enumerate the full set of shippable slices** (each smallest valuable · independent · sequenced by dependency/priority) → generate a story ID per slice → **for each UI slice, create the design + copy + feature trio** (design + copy = `owner: human`, `status: needs-design`/`needs-copy`; the feature story's `dependencies:` name them, `status: needs-design` until they're delivered); non-UI slice → a single feature story (`type: story`, `status: ready`) → draft each `docs/epics/<epic-id>/stories/<story-id>/story.md` per the template with the **Standard Experience Checklist** (6 categories, each AC-covered or `n/a — <reason>`) → mirror each to tracker.
 **Output:** the bet's full backlog — a feature `story.md` per slice (UI slices also get a `design` + `copy` story), each with the correct `type`/`owner`/`status`
 
 ### Step 2. `designer.draft-design-spec` (Designer agent owns) — per UI slice (into the `design` story)
@@ -71,7 +71,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 ### Step 4. **HITL gate** (human — only when `hitl_level: every_phase`)
 
 **Dispatches:** HUMAN (not an agent)
-**Artifact target:** docs/bets/<bet-id>/stories/<story-id>/story.md
+**Artifact target:** docs/epics/<epic-id>/stories/<story-id>/story.md
 **What it covers:** under `every_phase`, human reviews the **backlog** (each story's AC complete; Standard Experience Checklist has no empty category; each UI slice has its design + copy + feature trio with the feature's `dependencies:` wired; slice sequencing/dependencies sane). Approve → **feature** stories promote to `status: ready` (frontmatter flip / `--approve` CLI; single-artifact promotion targets the path above — **batch-promoting the set is a known follow-up**, see migration note). **Design + copy stories stay `needs-design`/`needs-copy`** — a human designer/writer delivers the Figma/strings and flips them to `ready`, which unblocks the dependent feature. Under lighter `hitl_level`, feature stories auto-advance once the checklist gate passes. **Per Principle #16:** PM must NOT self-approve when the gate applies.
 
 ### Step 5. `delivery-manager.update-status` (Delivery Manager agent owns)
@@ -113,9 +113,9 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 - **What changed:** `/create-story` now decomposes an approved bet into its **complete story set** in one pass, instead of one slice per run gated on "the prior story must have shipped." The "one at a time / no upfront backlog" gate is removed (DRI decision — the full backlog is wanted up front for end-to-end planning + delivery transparency).
 - **What did NOT change:** `/build` still builds **one story at a time** (each `/build` run = one story → PR → review → merge). Full-backlog *planning* ≠ parallel *building*. Sibling stories that touch the same files still merge serially — building them concurrently re-introduces the sibling merge-conflict class (the durable merge-coherence fix is still pending), so the PM notes dependency ordering between slices.
-- **Reverses:** the shape-up "one shaped piece at a time / no upfront backlog" stance for stories. (Bets remain one-at-a-time via `/create-brief`; `create-bet-portfolio` already batches bets at bootstrap.)
+- **Reverses:** the shape-up "one shaped piece at a time / no upfront backlog" stance for stories. (Bets remain one-at-a-time via `/create-brief`; `create-epics` already batches bets at bootstrap.)
 
 ### Migration (pre-v0.3.42 → v0.3.42)
 
-- **Before:** fat 10-step process workflow; `compass/agents/pm.md` → `decompose-bet-to-story` was a 2-line stub pointing BACK at this workflow (inverse of the `embedded-methodology` anti-pattern — the agent task delegated to the workflow, breaking orchestrator dispatch since the agent only gets its own file as system prompt).
-- **v0.3.42:** thin dispatch graph (6th workflow in dispatch-graph shape). Methodology moved INTO `pm.md`'s `decompose-bet-to-story` task (now a full gate/work/postcondition) + `compass/templates/story.md` (story structure + Standard Experience Checklist). To fit a self-sufficient task, `chatgpt` was dropped from pm.md's `preferred_hosts` (lifting the 8000-char cap) — resolving the pm half of `[host-preference-validation]` (consumer-signal evidence + the cap blocking orchestration = 2 independent drivers). No methodology dropped; agent task + template are the single source of truth.
+- **Before:** fat 10-step process workflow; `compass/agents/pm.md` → `decompose-epic-to-story` was a 2-line stub pointing BACK at this workflow (inverse of the `embedded-methodology` anti-pattern — the agent task delegated to the workflow, breaking orchestrator dispatch since the agent only gets its own file as system prompt).
+- **v0.3.42:** thin dispatch graph (6th workflow in dispatch-graph shape). Methodology moved INTO `pm.md`'s `decompose-epic-to-story` task (now a full gate/work/postcondition) + `compass/templates/story.md` (story structure + Standard Experience Checklist). To fit a self-sufficient task, `chatgpt` was dropped from pm.md's `preferred_hosts` (lifting the 8000-char cap) — resolving the pm half of `[host-preference-validation]` (consumer-signal evidence + the cap blocking orchestration = 2 independent drivers). No methodology dropped; agent task + template are the single source of truth.

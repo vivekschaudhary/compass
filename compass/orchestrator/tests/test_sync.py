@@ -42,7 +42,7 @@ def _fake_consumer(root: Path):
     (root / "compass" / "config.yaml").write_text("hitl_level: strict  # MINE", encoding="utf-8")
     (root / "compass" / "roles").mkdir()
     (root / "compass" / "roles" / "legacy.md").write_text("keep", encoding="utf-8")
-    (root / "docs" / "bets").mkdir(parents=True)
+    (root / "docs" / "epics").mkdir(parents=True)
     (root / "docs" / "keep.md").write_text("MY PROJECT DOC", encoding="utf-8")
     (root / "PROJECT.md").write_text("MY PROJECT", encoding="utf-8")
     (root / ".github" / "workflows").mkdir(parents=True)

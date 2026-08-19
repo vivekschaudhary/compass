@@ -41,7 +41,7 @@ def fold_runs(events: list) -> dict:
     """
     Fold the flat event stream into per-run state, keyed by run_id.
 
-    Each run: {run_id, project, workflow, bet_id, started, ended, status,
+    Each run: {run_id, project, workflow, epic_id, started, ended, status,
                reason, current_step, current_task, open_gate}. `open_gate` is the
                last gate_open with no following gate_decision / run_end (None if
                none) — that's the "awaiting your decision" signal.
@@ -55,7 +55,7 @@ def fold_runs(events: list) -> dict:
             "run_id": rid,
             "project": e.get("project"),
             "workflow": e.get("workflow"),
-            "bet_id": e.get("bet_id"),
+            "epic_id": e.get("epic_id"),
             "story_id": e.get("story_id"),   # #172/#176: story-scoped build label
             "started": None, "ended": False, "status": None, "reason": None,
             "current_step": None, "current_task": None, "open_gate": None,
@@ -73,7 +73,7 @@ def fold_runs(events: list) -> dict:
             "context": None,       # #108 — what the operator typed at launch (run label)
         })
         # keep identity fields fresh (first non-null wins, but tolerate updates)
-        for k in ("project", "workflow", "bet_id", "story_id"):
+        for k in ("project", "workflow", "epic_id", "story_id"):
             if e.get(k) is not None:
                 r[k] = e[k]
         r["last_ts"] = e.get("ts") or r["last_ts"]
@@ -139,8 +139,8 @@ def fold_runs(events: list) -> dict:
 def _scope_label(r) -> str:
     """#176: the id to SHOW for a run — the story id for a story-scoped build
     (`/build WLT-27-2`), else the bet id. The displayed scope matches what the run
-    actually built; `bet_id` stays the parent for resume/--bet (the requirement gate)."""
-    return r.get("story_id") or r.get("bet_id")
+    actually built; `epic_id` stays the parent for resume/--bet (the requirement gate)."""
+    return r.get("story_id") or r.get("epic_id")
 
 
 # ── step-level view (#111) ───────────────────────────────────────────────────
@@ -308,8 +308,8 @@ def _approve_cmd(run: dict) -> str:
     ]
     if run.get("compass_dir"):   # #178: target the right framework dir, not project/compass
         parts.append(f"--compass-dir {run['compass_dir']}")
-    if run.get("bet_id"):
-        parts.append(f"--bet {run['bet_id']}")
+    if run.get("epic_id"):
+        parts.append(f"--bet {run['epic_id']}")
     if run.get("run_id"):
         parts.append(f"--run-id {run['run_id']}")   # load-bearing: closes THIS gate
     if gate and gate.get("step"):
@@ -492,7 +492,7 @@ def _decide_forms(r: dict, cdir) -> str:
     # empty values, so an absent bet / read-only / API run just omits them.
     hid = _hidden(run_id=r.get("run_id"), workflow=r.get("workflow"),
                   project_dir=r.get("project_dir"), step=g.get("step"),
-                  bet=r.get("bet_id"),
+                  bet=r.get("epic_id"),
                   allow_write="1" if r.get("allow_write") else "",
                   claude_cli="1" if r.get("claude_cli") else "",
                   codex_cli="1" if r.get("codex_cli") else "")
@@ -795,7 +795,7 @@ def _build_run_argv(action, params, defaults):
 
     # #156: these apply to BOTH actions. A /decide that DROPS --bet was the
     # "I approved but nothing happened" bug: a bet-scoped resume (build /
-    # create-story / create-bet-architecture) can't resolve `docs/bets/<bet-id>/...`,
+    # create-story / create-epic-architecture) can't resolve `docs/epics/<epic-id>/...`,
     # so the requirement gate exits 3 BEFORE the gate step — no decision recorded.
     # --allow-write + --claude-cli/--codex-cli carry the run's ORIGINAL mode
     # (recovered from the spine via run_start) so the resume keeps write perms and

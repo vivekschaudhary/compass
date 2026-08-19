@@ -126,7 +126,7 @@ jobs:
                              docs/foundation/product.md \
                              docs/foundation/architecture.md
           # To scope to a specific bet, add its artifacts:
-          #   --context-files PROJECT.md docs/bets/CB-4/brief.md docs/bets/CB-4/architecture.md
+          #   --context-files PROJECT.md docs/epics/CB-4/brief.md docs/epics/CB-4/architecture.md
 
       # ── Option B: Claude Code headless (Anthropic) ───────────────────────
       # - name: Install Claude Code CLI

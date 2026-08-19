@@ -5,7 +5,7 @@
 name: create-brief
 owner: pm
 scope: epic
-trigger: "/create-brief <source | stub-bet-id>"
+trigger: "/create-brief <source | stub-epic-id>"
 status: active
 version: 0.4.0
 
@@ -13,7 +13,7 @@ requires:                                        # authoring — the gate is pri
   - foundation.product == approved               # else → /create-product-brief
   - foundation.arch == approved                  # else → /setup-foundation-architecture
   - source.present == true                        # a link · free text · portfolio stub  (else → provide a source)
-  - epic.brief_status != drafted                 # else → /create-story or /create-bet-architecture (already drafted)
+  - epic.brief_status != drafted                 # else → /create-story or /create-epic-architecture (already drafted)
   - ~request.new-capability ⟨pm⟩                 # JUDGMENT: genuinely a new bet, not a slice → else /create-story <id>
 produces:
   - research@docs: published
@@ -38,7 +38,7 @@ Canon: [working-backwards] · [lean-mvp] · [jtbd] · [shape-up] · [cite-or-mar
 The *how* lives in the agent files: researcher → compass/agents/researcher.md#research · pm → compass/agents/pm.md#draft-brief · delivery-manager → #update-status
 
 ## Notes
-- **Two modes:** fresh (new bet from source) · promote-stub (fill a `/create-bet-portfolio` stub — keep the hypothesis, don't re-derive).
+- **Two modes:** fresh (new bet from source) · promote-stub (fill a `/create-epics` stub — keep the hypothesis, don't re-derive).
 - **Not-a-slice gate** (`~request.new-capability`): a slice of an already-approved bet → `/create-story <id>`, NOT a new brief. This is a PM judgment, recorded.
 - **Orchestrator promote** (mechanical): on approval, flips `brief.status` proposed → approved.
 

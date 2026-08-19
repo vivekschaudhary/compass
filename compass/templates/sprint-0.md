@@ -48,5 +48,5 @@ is Done only when its artifact is actually approved.
 - **This table is editable — and load-bearing.** To change what a new engagement starts with, add /
   remove rows. The intake creates whatever rows are here (data-driven; no code change to add a task).
 - **Sprint 1+ is derived, not planned.** After the foundation is approved, each bet flows
-  `/create-brief → /create-bet-architecture → /create-story → /tech-design → /build`, each its own
+  `/create-brief → /create-epic-architecture → /create-story → /tech-design → /build`, each its own
   ticket, pulled from current state (`[derive-from-state]`) — not scheduled up front.

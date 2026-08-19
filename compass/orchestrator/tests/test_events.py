@@ -108,7 +108,7 @@ class TestCockpitFold(unittest.TestCase):
 
     def test_open_gate_is_awaiting(self):
         events = [
-            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="triage", bet_id=None),
+            ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="triage", epic_id=None),
             ev.make_event(ev.STEP_START, run_id="r1", step=2, agent="support", task="classify-intake"),
             ev.make_event(ev.GATE_OPEN, run_id="r1", step=2, kind="routing", title="intake gate"),
         ]
@@ -164,7 +164,7 @@ class TestCockpitFold(unittest.TestCase):
     def test_approve_command_well_formed(self):
         events = [
             ev.make_event(ev.RUN_START, run_id="r1", project="home", workflow="build",
-                          bet_id="CB-7", project_dir="/repos/home",
+                          epic_id="CB-7", project_dir="/repos/home",
                           compass_dir="/repos/compass/compass"),
             ev.make_event(ev.GATE_OPEN, run_id="r1", step=6, kind="hitl", title="review gate"),
         ]
@@ -206,14 +206,14 @@ class TestCockpitFold(unittest.TestCase):
         # #176: a story-scoped build's card shows the STORY id, not the parent bet.
         events = [
             ev.make_event(ev.RUN_START, run_id="b1", project="home", workflow="build",
-                          bet_id="WLT-27", story_id="WLT-27-2"),
+                          epic_id="WLT-27", story_id="WLT-27-2"),
         ]
         run = cockpit.fold_runs(events)["b1"]
         self.assertEqual(run["story_id"], "WLT-27-2")
-        self.assertEqual(run["bet_id"], "WLT-27")          # parent kept for resume/--bet
+        self.assertEqual(run["epic_id"], "WLT-27")          # parent kept for resume/--bet
         self.assertEqual(cockpit._scope_label(run), "WLT-27-2")
         # bet-scoped build (no story) → label falls back to the bet
-        self.assertEqual(cockpit._scope_label({"bet_id": "WLT-27", "story_id": None}), "WLT-27")
+        self.assertEqual(cockpit._scope_label({"epic_id": "WLT-27", "story_id": None}), "WLT-27")
 
 
 class TestCostRollup(unittest.TestCase):
@@ -299,7 +299,7 @@ class TestStepCockpit(unittest.TestCase):
 
     def test_render_run_shows_pending_from_graph(self):
         run = {
-            "run_id": "r1", "project": "home", "workflow": "fix", "bet_id": None,
+            "run_id": "r1", "project": "home", "workflow": "fix", "epic_id": None,
             "ended": False, "status": None, "reason": None,
             "steps": {1: {"status": "done", "agent": "engineer", "task": "triage-and-fix"},
                       2: {"status": "running", "agent": "automation", "task": "write-e2e-tests"}},
@@ -317,7 +317,7 @@ class TestStepCockpit(unittest.TestCase):
 
     def test_render_run_ended_no_pending(self):
         run = {
-            "run_id": "r1", "project": "home", "workflow": "triage", "bet_id": None,
+            "run_id": "r1", "project": "home", "workflow": "triage", "epic_id": None,
             "ended": True, "status": "completed", "reason": "handed off to /fix",
             "steps": {1: {"status": "done", "agent": "support", "task": "classify-intake"},
                       2: {"status": "done", "title": "intake gate"}},
@@ -328,7 +328,7 @@ class TestStepCockpit(unittest.TestCase):
         self.assertNotIn("·", out)          # ended run shows no pending steps
 
     def test_render_run_graph_unavailable_fallback(self):
-        run = {"run_id": "r1", "project": "home", "workflow": "x", "bet_id": None,
+        run = {"run_id": "r1", "project": "home", "workflow": "x", "epic_id": None,
                "ended": False, "status": None, "reason": None,
                "steps": {1: {"status": "done", "agent": "a", "task": "t"}}}
         out = cockpit.render_run(run, [])     # no graph
@@ -352,7 +352,7 @@ class TestHtmlCockpit(unittest.TestCase):
             ev.make_event(ev.STEP_END, run_id="r1", step=1),
             ev.make_event(ev.STEP_START, run_id="r1", step=2, title="intake gate"),
             ev.make_event(ev.GATE_OPEN, run_id="r1", step=2, kind="routing", title="intake gate"),
-            ev.make_event(ev.RUN_START, run_id="r2", project="crypto", workflow="build", bet_id="CB-7"),
+            ev.make_event(ev.RUN_START, run_id="r2", project="crypto", workflow="build", epic_id="CB-7"),
             ev.make_event(ev.STEP_START, run_id="r2", step=3, agent="engineer", task="implement-story"),
             ev.make_event(ev.RUN_START, run_id="r3", project="home", workflow="fix"),
             ev.make_event(ev.RUN_END, run_id="r3", status="completed", reason="all steps complete"),
@@ -470,7 +470,7 @@ class TestCockpitStaleness(unittest.TestCase):
 
     def test_step_rows_parity_text_and_html(self):
         # _run_step_rows is the single source both renderers use → no drift.
-        run = {"run_id": "r", "project": "home", "workflow": "fix", "bet_id": None,
+        run = {"run_id": "r", "project": "home", "workflow": "fix", "epic_id": None,
                "ended": False, "status": None, "reason": None,
                "steps": {1: {"status": "done", "agent": "engineer", "task": "triage-and-fix"}}}
         graph = [(1, "engineer", "triage-and-fix", False, ""),
@@ -675,7 +675,7 @@ class TestActionEndpoints(unittest.TestCase):
     def test_fold_captures_run_mode(self):
         # #156: run mode comes off run_start so a /decide resume can reuse it
         events = [
-            ev.make_event(ev.RUN_START, run_id="r1", workflow="build", bet_id="WLT-26",
+            ev.make_event(ev.RUN_START, run_id="r1", workflow="build", epic_id="WLT-26",
                           allow_write=True, codex_cli=True, claude_cli=True),
             ev.make_event(ev.GATE_OPEN, run_id="r1", step=6, kind="hitl", title="merge"),
         ]
@@ -687,7 +687,7 @@ class TestActionEndpoints(unittest.TestCase):
     def test_decide_form_includes_bet_hidden_field(self):
         # the BUTTON path (HTML form) must carry bet — the actual bug surface
         runs = {"r1": {"run_id": "r1", "project": "home", "workflow": "build",
-                       "bet_id": "WLT-26", "project_dir": self.td, "ended": False,
+                       "epic_id": "WLT-26", "project_dir": self.td, "ended": False,
                        "steps": {}, "allow_write": True, "codex_cli": True,
                        "open_gate": {"step": 6, "kind": "hitl", "title": "merge"}}}
         html = cockpit.render_html(runs, actions=True, default_project_dir=self.td)
@@ -896,7 +896,7 @@ class TestStaleRuns(unittest.TestCase):
     def test_halt_stale_runs_reaps_only_stale(self):
         events = [
             {"run_id": "stale", "type": ev.RUN_START, "ts": self.OLD,
-             "workflow": "build", "bet_id": "CB-1"},
+             "workflow": "build", "epic_id": "CB-1"},
             {"run_id": "ended", "type": ev.RUN_START, "ts": self.OLD},
             {"run_id": "ended", "type": ev.RUN_END, "ts": self.OLD, "status": "completed"},
             {"run_id": "fresh", "type": ev.RUN_START, "ts": self.RECENT},
@@ -928,7 +928,7 @@ class TestStaleRuns(unittest.TestCase):
             {"run_id": "keep", "type": ev.RUN_START, "ts": self.OLD,   # stale, but not named
              "workflow": "build"},
             {"run_id": "target", "type": ev.RUN_START, "ts": self.RECENT,  # fresh, but named
-             "workflow": "build", "bet_id": "CB-9"},
+             "workflow": "build", "epic_id": "CB-9"},
         ]
         emitted = []
         halted = ev.halt_stale_runs(now=self.NOW, threshold=100, sink=emitted.append,

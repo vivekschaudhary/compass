@@ -67,12 +67,12 @@ class TestWorkflowMeta(unittest.TestCase):
 
     def test_block_list(self):
         p = _tmp_md(
-            "---\nname: x\nrequires_approved:\n  - docs/a.md\n  - docs/bets/<bet-id>/brief.md\n---\n"
+            "---\nname: x\nrequires_approved:\n  - docs/a.md\n  - docs/epics/<epic-id>/brief.md\n---\n"
         )
         try:
             self.assertEqual(
                 load_workflow_meta(p)["requires_approved"],
-                ["docs/a.md", "docs/bets/<bet-id>/brief.md"],
+                ["docs/a.md", "docs/epics/<epic-id>/brief.md"],
             )
         finally:
             p.unlink()
@@ -124,7 +124,7 @@ class TestArtifactTargetParsing(unittest.TestCase):
         cb = load_workflow(WORKFLOWS / "create-brief.md")
         self.assertEqual(
             next(s for s in cb if s.is_hitl).artifact_target,
-            "docs/bets/<bet-id>/brief.md",
+            "docs/epics/<epic-id>/brief.md",
         )
         build = load_workflow(WORKFLOWS / "build.md")
         self.assertIsNone(next(s for s in build if s.is_hitl).artifact_target)
@@ -292,7 +292,7 @@ class TestPromoteArtifact(unittest.TestCase):
 
     def test_reads_ondisk_preserves_pointer(self):
         project = self._project()
-        rel = "docs/bets/CB-1/stories/CB-1-1/story.md"
+        rel = "docs/epics/CB-1/stories/CB-1-1/story.md"
         target = project / rel
         target.parent.mkdir(parents=True)
         target.write_text("---\nid: CB-1-1\nstatus: proposed\njira_key: PROJ-7\n---\n# Story\n",
@@ -307,7 +307,7 @@ class TestPromoteArtifact(unittest.TestCase):
 
     def test_status_none_projects_draft_asis(self):
         project = self._project()
-        rel = "docs/bets/CB-2/stories/CB-2-1/story.md"
+        rel = "docs/epics/CB-2/stories/CB-2-1/story.md"
         (project / rel).parent.mkdir(parents=True)
         (project / rel).write_text("---\nid: CB-2-1\nstatus: proposed\n---\n# S\n", encoding="utf-8")
         _promote_artifact(project, project / "compass", rel, "FB", "run1", status=None)
@@ -338,8 +338,8 @@ class TestStoryScoping(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.project = Path(self._tmp.name)
-        # docs/bets/WLT-27/{brief.md,architecture.md} + stories/WLT-27-1, -2
-        bet = self.project / "docs" / "bets" / "WLT-27"
+        # docs/epics/WLT-27/{brief.md,architecture.md} + stories/WLT-27-1, -2
+        bet = self.project / "docs" / "epics" / "WLT-27"
         (bet / "stories" / "WLT-27-1").mkdir(parents=True)
         (bet / "stories" / "WLT-27-2").mkdir(parents=True)
         (bet / "brief.md").write_text("---\nid: WLT-27\nstatus: approved\n---\n# Bet\n", encoding="utf-8")
@@ -389,7 +389,7 @@ class TestStoryScoping(unittest.TestCase):
 
     # ── #171 mechanical design/copy gate ──────────────────────────────────────
     def _set(self, story_id, **fm):
-        p = self.project / "docs" / "bets" / "WLT-27" / "stories" / story_id / "story.md"
+        p = self.project / "docs" / "epics" / "WLT-27" / "stories" / story_id / "story.md"
         p.parent.mkdir(parents=True, exist_ok=True)
         body = "".join(f"{k.replace('_', '')}: {v}\n" for k, v in fm.items())
         p.write_text(f"---\nid: {story_id}\n{body}---\n# {story_id}\n", encoding="utf-8")
@@ -438,7 +438,7 @@ class TestStoryScoping(unittest.TestCase):
 
     def test_build_refuses_bet_with_no_stories(self):
         # A bet with no stories yet → point at /create-story, not a story id.
-        (self.project / "docs" / "bets" / "CB-9").mkdir(parents=True)
+        (self.project / "docs" / "epics" / "CB-9").mkdir(parents=True)
         msg = _build_story_gate(self.project, "build", "CB-9", None)
         self.assertIsNotNone(msg)
         self.assertIn("no stories yet", msg)
@@ -472,7 +472,7 @@ class TestTicketLifecycle(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.project = Path(self._tmp.name)
-        self.story = self.project / "docs" / "bets" / "WLT-27" / "stories" / "WLT-27-2" / "story.md"
+        self.story = self.project / "docs" / "epics" / "WLT-27" / "stories" / "WLT-27-2" / "story.md"
         self.story.parent.mkdir(parents=True)
 
     def tearDown(self):
@@ -674,7 +674,7 @@ class TestCreateStoryFromEpic(unittest.TestCase):
         from compass.orchestrator.run import _remove_local_stories
         proj = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(proj, ignore_errors=True))
-        base = proj / "docs" / "bets" / "KAN-100" / "stories"
+        base = proj / "docs" / "epics" / "KAN-100" / "stories"
         for sid in ("KAN-101", "KAN-102"):
             (base / sid).mkdir(parents=True)
             (base / sid / "story.md").write_text(f"---\nid: {sid}\n---\n# {sid}\n", encoding="utf-8")
@@ -682,7 +682,7 @@ class TestCreateStoryFromEpic(unittest.TestCase):
         self.assertEqual(len(removed), 2)
         self.assertTrue(all(r.endswith("story.md") for r in removed))
         # the whole bet subtree is gone (nothing else lived there)
-        self.assertFalse((proj / "docs" / "bets" / "KAN-100").exists())
+        self.assertFalse((proj / "docs" / "epics" / "KAN-100").exists())
 
     def test_remove_local_stories_no_stories_dir(self):
         from compass.orchestrator.run import _remove_local_stories
@@ -1113,7 +1113,7 @@ class TestSiblingOverlap(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.project = Path(self._tmp.name)
-        self.stories = self.project / "docs" / "bets" / "WLT-27" / "stories"
+        self.stories = self.project / "docs" / "epics" / "WLT-27" / "stories"
 
     def tearDown(self):
         self._tmp.cleanup()

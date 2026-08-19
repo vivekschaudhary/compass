@@ -15,7 +15,7 @@ version: 0.4.0
 requires: # entry gate = predicates (was: prose Preconditions + requires_approved file paths)
 
 - epic.research_status == approved # else → /create-brief
-- epic.arch_status == approved # else → /create-bet-architecture
+- epic.arch_status == approved # else → /create-epic-architecture
 - story.ready == true # else → /create-story
 - story.tech_ready == true # else → /tech-design
   produces:
@@ -52,7 +52,7 @@ engineer → compass/agents/engineer.md#implement-story,#respond-to-review · re
 
 - Story → multiple PRs: each PR runs the full graph (steps 1–6). No shortcuts.
 - Post-merge bug: reopen the story; do NOT create a separate fix story.
-- Scanner at phase boundaries: /scan <bet-id> on Build → Production-Ready (all stories shipped).
+- Scanner at phase boundaries: /scan <epic-id> on Build → Production-Ready (all stories shipped).
 
 <!-- ── WHAT MOVED, vs the live 275-line build.md ──────────────────────────────
   Preconditions (prose bullets)          → requires:  (4 predicates)

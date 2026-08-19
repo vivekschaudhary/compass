@@ -79,16 +79,16 @@ Compass maps directly onto an OKR planning cycle. The bet IS the initiative; the
 | ------------- | ------------------------------------------------------------------- |
 | Objective     | `docs/foundation/product.md` → Vision / North-star                  |
 | Key Result    | `product.md` → OKRs section + `architecture.md` → fitness functions |
-| Initiative    | Bet (`docs/bets/<bet-id>/brief.md`)                                 |
-| Sprint work   | Story set (`docs/bets/<bet-id>/stories/`)                           |
+| Initiative    | Bet (`docs/epics/<epic-id>/brief.md`)                                 |
+| Sprint work   | Story set (`docs/epics/<epic-id>/stories/`)                           |
 | OKR check-in  | `/status` → delivery manager → `docs/status.md`                     |
 | Quarter retro | `/retro --altitude=project`                                         |
 
 **Ceremonies:**
 
-- **OKR planning** → `/create-product-brief` (O + KRs at foundation) + `/create-bet-portfolio` (map KRs → bets; dependency graph = sprint sequencing)
+- **OKR planning** → `/create-product-brief` (O + KRs at foundation) + `/create-epics` (map KRs → bets; dependency graph = sprint sequencing)
 - **Weekly check-in** → `/status` produces the check-in content automatically
-- **Bet execution** → `/create-brief` → `/create-bet-architecture` → `/create-story` → `/build`
+- **Bet execution** → `/create-brief` → `/create-epic-architecture` → `/create-story` → `/build`
 - **Quarter retro** → `/retro` at project altitude consolidates all bet outcomes
 
 **Traceability closes the OKR → PR gap.** Each bet hypothesis traces to a specific OKR line in `product.md`. Stories trace to the bet. PRs trace to stories. The chain from OKR → shipped PR is explicit and auditable — no more "which work moved which KR?" _(This traceability chain is exactly what the control-tower view renders live.)_
@@ -104,14 +104,14 @@ Compass maps directly onto an OKR planning cycle. The bet IS the initiative; the
 ```
 /create-product-brief                  → Product brief, docs-primary (PM + Researcher)
 /setup-foundation-architecture  → Foundation architecture bet + data model (Enterprise Architect)
-/create-bet-portfolio           → MVP wedge: 3-6 stub briefs + dependency graph (PM + Researcher)
+/create-epics           → MVP wedge: 3-6 stub briefs + dependency graph (PM + Researcher)
 ```
 
 ### 2. Plan — per bet
 
 ```
 /create-brief                   → New bet — fresh OR promote portfolio stub (PM + Researcher)
-/create-bet-architecture        → Bet-level technical strategy (Architect + Enterprise Arch)
+/create-epic-architecture        → Bet-level technical strategy (Architect + Enterprise Arch)
 /create-story                   → Decompose the bet into its full story backlog (PM, +Designer/UX Writer if UI)
 ```
 
@@ -171,7 +171,7 @@ Or run **flat-cost on subscriptions** (no metered keys):
 python3 -m compass.orchestrator.run build --claude-cli --codex-cli --context "story-id: PROJ-43"
 ```
 
-> **Where output lands:** orchestrator step outputs are written to `docs/orchestrator-runs/<workflow>/step-NN-<agent>-<task>.md`. Promote approved outputs to their canonical paths (`docs/foundation/`, `docs/bets/`) yourself — automatic artifact promotion is on the roadmap.
+> **Where output lands:** orchestrator step outputs are written to `docs/orchestrator-runs/<workflow>/step-NN-<agent>-<task>.md`. Promote approved outputs to their canonical paths (`docs/foundation/`, `docs/epics/`) yourself — automatic artifact promotion is on the roadmap.
 
 See `compass/orchestrator/README.md` for full options.
 

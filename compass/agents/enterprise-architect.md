@@ -3,7 +3,7 @@ name: enterprise-architect
 preferred_hosts: [claude, codex, gemini]
 required_tools: [filesystem_read, filesystem_write, text_input, github_read_artifact, github_write_artifact]
 optional_tools: [web_search, mcp_confluence, mcp_jira, shell_exec]
-participates_in_workflows: [setup-foundation-architecture, create-bet-architecture, ops, triage, build]
+participates_in_workflows: [setup-foundation-architecture, create-epic-architecture, ops, triage, build]
 version: 0.3.42
 ---
 
@@ -86,7 +86,7 @@ Read in order: `AGENTS.md` → `docs/foundation/product.md` (note target users, 
 
 Document findings per category. Explicitly mark unknowns — do not invent answers.
 
-**3. Signal consultation (5-category)** — consult *existing project signal* in addition to external research; mostly `n/a — greenfield` on v1, load-bearing on amends. Per `[cite-or-mark-n/a]`, each category produces a citation OR explicit `n/a — <reason>`: (1) production observability baselines (MCP: Sentry/Datadog) · (2) recent PR feedback in foundational scope (~10 PRs) · (3) prior architectural decisions across `docs/bets/*/architecture.md` · (4) bet-architecture deviation pressure (open bets waiting on a foundational amend) · (5) team playbooks (`docs/playbooks/*` by `stack_combo`).
+**3. Signal consultation (5-category)** — consult *existing project signal* in addition to external research; mostly `n/a — greenfield` on v1, load-bearing on amends. Per `[cite-or-mark-n/a]`, each category produces a citation OR explicit `n/a — <reason>`: (1) production observability baselines (MCP: Sentry/Datadog) · (2) recent PR feedback in foundational scope (~10 PRs) · (3) prior architectural decisions across `docs/epics/*/architecture.md` · (4) bet-architecture deviation pressure (open bets waiting on a foundational amend) · (5) team playbooks (`docs/playbooks/*` by `stack_combo`).
 
 **Postconditions:**
 - Findings written to `docs/foundation/architecture-phase-a-research.md` (frontmatter `status: proposed`) containing: fitness functions (≥1 per pillar, numeric — empty pillars fail) + all 6 research categories + all 5 signal categories, each cited or `n/a — <reason>` (Principle #15; blank cells fail)
@@ -201,19 +201,19 @@ Third `/setup-foundation-architecture` task (the legacy workflow's "Phase B — 
 
 **Handoffs:**
 - Upstream: PM's `create-product-brief` task → `research-architecture` → `derive-architecture` (each HITL-gated)
-- Downstream: `create-bet-architecture` Architect task reads `docs/foundation/architecture.md` as the constraint envelope; `security-reviewer` reads auth model section; Engineer reads storage and API contract decisions; `/create-bet-portfolio` runs next for new projects
+- Downstream: `create-epic-architecture` Architect task reads `docs/foundation/architecture.md` as the constraint envelope; `security-reviewer` reads auth model section; Engineer reads storage and API contract decisions; `/create-epics` runs next for new projects
 
 ---
 
 ### Task: `join-bet-architecture`
 
 **Gate:**
-- A bet-level `docs/bets/<bet_id>/architecture.md` has been drafted by the Architect
+- A bet-level `docs/epics/<epic_id>/architecture.md` has been drafted by the Architect
 - PM or Architect requests an enterprise-architect review join (not routine — triggered by: new infrastructure category, change to external integration pattern, potential foundational constraint violation)
 
 **Work:**
 
-Read: `AGENTS.md` → `docs/foundation/architecture.md` → `docs/bets/<bet_id>/architecture.md` → relevant bet brief.
+Read: `AGENTS.md` → `docs/foundation/architecture.md` → `docs/epics/<epic_id>/architecture.md` → relevant bet brief.
 
 Check for:
 1. **Foundational constraint violations** — does the bet-level architecture contradict any `[hard-line-declaration]` in the foundation doc? (e.g., auth pattern differs, new PII surface not in scope, new infrastructure tier not approved)
@@ -230,7 +230,7 @@ If no violations: log approval with specific coverage note (which checks passed)
 - If blocked: Architect receives specific named violations (not vague "doesn't fit") to resolve
 
 **Handoffs:**
-- Upstream: Architect's `draft-bet-architecture` task
+- Upstream: Architect's `draft-epic-architecture` task
 - Downstream: Architect resolves violations and requests re-review; or PM arbitrates escalation
 
 ---
@@ -322,7 +322,7 @@ Read: `AGENTS.md` → triage item → `docs/foundation/architecture.md` → rele
 
 **Files created / modified:**
 - `docs/foundation/architecture.md` (or amendment file)
-- `docs/bets/<bet_id>/architecture.md` (if join review logged changes)
+- `docs/epics/<epic_id>/architecture.md` (if join review logged changes)
 
 **DRI Decision logged:** yes
 
@@ -331,7 +331,7 @@ Read: `AGENTS.md` → triage item → `docs/foundation/architecture.md` → rele
 - <Well-Architected gaps below score 3>
 - <structural violations found in join-bet-architecture review>
 
-**Next recommended command:** <e.g., `/create-bet-architecture CB-4` or `/ops` or `/triage`>
+**Next recommended command:** <e.g., `/create-epic-architecture CB-4` or `/ops` or `/triage`>
 ```
 
 ## Logging patterns mid-task (v0.3.17)

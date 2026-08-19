@@ -47,7 +47,7 @@ class TestFixProjection(unittest.TestCase):
     def test_bet_linked_enhancement_is_story(self):
         label = R._project_fix_record(self.proj, self.proj / "compass", "WLT-9",
                                       "fix/add-thing", "CLASSIFICATION: enhancement", "run2")
-        rec, c = self._only_record("docs/bets/WLT-9/fixes")
+        rec, c = self._only_record("docs/epics/WLT-9/fixes")
         self.assertIn("type: enhancement", c)
         self.assertIn("bet: WLT-9", c)
         self.assertIn("hygiene: false", c)

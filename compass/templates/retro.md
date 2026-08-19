@@ -11,7 +11,7 @@ author: <agent — typically Delivery Manager for project retros, framework Arch
 # parent_log: where THIS retro reads its source data from. Altitude-specific:
 #   - framework altitude → compass/workflows/improvements.md
 #   - project altitude   → docs/improvements.md
-#   - bet altitude       → docs/bets/<bet-id>/ (DRI logs + outcome)
+#   - bet altitude       → docs/epics/<epic-id>/ (DRI logs + outcome)
 #   - role altitude      → docs/role-activity/<role>.md
 #   - workflow altitude  → docs/workflow-runs/<workflow>.md
 #   - org altitude       → multiple paths via compass/scripts/aggregate-retros.py (v0.4+)

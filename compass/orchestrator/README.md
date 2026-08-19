@@ -58,7 +58,7 @@ python3 -m compass.orchestrator.run create-product-brief --step 1 \
 | `--step N` | Execute only step N (1-indexed) |
 | `--from-step N` | Resume from step N (prior step outputs loaded from disk) |
 | `--context TEXT` | Inline context for the first agent step (skips interactive prompt) |
-| `--bet ID` | Auto-load `docs/bets/<ID>/` brief + architecture + story summaries as context |
+| `--bet ID` | Auto-load `docs/epics/<ID>/` brief + architecture + story summaries as context |
 | `--full-project` | Load foundation docs + status + all bet summaries as context |
 | `--model ID` | Model override applied to whichever host is selected (see also `COMPASS_MODEL_<CLAUDE\|OPENAI\|GEMINI>` env vars) |
 | `--no-write` | Print output to stdout only; do not write artifact files |
@@ -71,7 +71,7 @@ Exit codes: `0` complete · `1` HITL rejection (run halted) · `2` missing host/
 
 ## Requirement gates + artifact promotion (improvement #70)
 
-- A workflow's frontmatter may declare `requires_approved:` — artifact paths that must be approved before dispatch. PASS per path (v0.3.x dual acceptance): an approved hitl.jsonl record (latest decision wins) **or** the file existing with `status: approved` frontmatter. Unmet → live runs halt (exit 3) naming the producing workflow; `--dry-run` reports without halting. Paths may use a `<bet-id>` placeholder resolved from `--bet`.
+- A workflow's frontmatter may declare `requires_approved:` — artifact paths that must be approved before dispatch. PASS per path (v0.3.x dual acceptance): an approved hitl.jsonl record (latest decision wins) **or** the file existing with `status: approved` frontmatter. Unmet → live runs halt (exit 3) naming the producing workflow; `--dry-run` reports without halting. Paths may use a `<epic-id>` placeholder resolved from `--bet`.
 - HITL gate steps may declare `**Artifact target:** \`<path>\``. On approval, the orchestrator promotes the gated draft (the preceding step's output, with its `## Output summary` tail stripped) to that canonical path with `status: approved` frontmatter, via the connector layer (`connector.py` — filesystem backend; configured-but-unimplemented connectors fall back with an honest label in the hitl.jsonl record).
 - The two mechanisms close the loop: approval writes the canonical artifact, which satisfies the next workflow's requirement gate — `--pipeline` chains are no longer gate-broken.
 

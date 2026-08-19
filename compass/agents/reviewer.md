@@ -153,7 +153,7 @@ E2E coverage:        ✓ / ✗ / N/A
 
 [BLOCKER] <title>
   File: <path>:<line>
-  Rule violated: <source — e.g., "bet architecture / docs/bets/PROJ-42/architecture.md">
+  Rule violated: <source — e.g., "bet architecture / docs/epics/PROJ-42/architecture.md">
   Issue: <one sentence>
   Fix: <concrete recommendation in prose, no code>
 

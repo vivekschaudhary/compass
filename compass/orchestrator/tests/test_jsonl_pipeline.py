@@ -45,9 +45,9 @@ FAKE_OUTPUT = """\
 **TL;DR:** Brief CB-4 drafted. Vision + personas + defensibility complete.
 
 **Files created:**
-- `docs/bets/CB-4/brief.md`
+- `docs/epics/CB-4/brief.md`
 
-**Next recommended command:** `/create-bet-architecture CB-4`
+**Next recommended command:** `/create-epic-architecture CB-4`
 
 **Open questions / risks:**
 - Data sensitivity not confirmed; marked TBD pending legal review.
@@ -78,7 +78,7 @@ class TestRunsJsonl(unittest.TestCase):
             project_dir=self.project_dir,
             run_id="create-brief--CB-4--20260610T120000",
             workflow="create-brief",
-            bet_id="CB-4",
+            epic_id="CB-4",
             step=1,
             agent="pm",
             task="draft-brief",
@@ -92,7 +92,7 @@ class TestRunsJsonl(unittest.TestCase):
         r = json.loads(lines[0])
         self.assertEqual(r["run_id"], "create-brief--CB-4--20260610T120000")
         self.assertEqual(r["workflow"], "create-brief")
-        self.assertEqual(r["bet_id"], "CB-4")
+        self.assertEqual(r["epic_id"], "CB-4")
         self.assertEqual(r["step"], 1)
         self.assertEqual(r["agent"], "pm")
         self.assertEqual(r["task"], "draft-brief")
@@ -102,7 +102,7 @@ class TestRunsJsonl(unittest.TestCase):
         self.assertIn("tldr", r)
         self.assertGreater(r["output_chars"], 0)
         # files_created should be parsed
-        self.assertIn("docs/bets/CB-4/brief.md", r.get("files_created", []))
+        self.assertIn("docs/epics/CB-4/brief.md", r.get("files_created", []))
         # DRI decisions should be captured
         self.assertGreater(len(r.get("dri_decisions", [])), 0)
 
@@ -112,7 +112,7 @@ class TestRunsJsonl(unittest.TestCase):
                 project_dir=self.project_dir,
                 run_id=f"run-{i}",
                 workflow="create-brief",
-                bet_id="CB-4",
+                epic_id="CB-4",
                 step=i + 1,
                 agent="pm",
                 task="draft-brief",
@@ -130,7 +130,7 @@ class TestRunsJsonl(unittest.TestCase):
             project_dir=self.project_dir,
             run_id="r1",
             workflow="build",
-            bet_id="CB-5",
+            epic_id="CB-5",
             step=1,
             agent="engineer",
             task="implement-story",
@@ -162,7 +162,7 @@ class TestHitlJsonl(unittest.TestCase):
             project_dir=self.project_dir,
             run_id="create-brief--CB-4--20260610T120000",
             workflow="create-brief",
-            bet_id="CB-4",
+            epic_id="CB-4",
             step=2,
             artifact_path="docs/orchestrator-runs/create-brief/step-01-pm-draft-brief.md",
             decision="approved",
@@ -183,7 +183,7 @@ class TestHitlJsonl(unittest.TestCase):
             project_dir=self.project_dir,
             run_id="create-brief--CB-4--20260610T120000",
             workflow="create-brief",
-            bet_id="CB-4",
+            epic_id="CB-4",
             step=2,
             artifact_path="docs/orchestrator-runs/create-brief/step-01-pm-draft-brief.md",
             decision="rejected",
@@ -199,7 +199,7 @@ class TestHitlJsonl(unittest.TestCase):
                 project_dir=self.project_dir,
                 run_id="r1",
                 workflow="create-brief",
-                bet_id="CB-4",
+                epic_id="CB-4",
                 step=2,
                 artifact_path=None,
                 decision=decision,
@@ -215,7 +215,7 @@ class TestHitlJsonl(unittest.TestCase):
             project_dir=self.project_dir,
             run_id="r1",
             workflow="create-product-brief",
-            bet_id=None,
+            epic_id=None,
             step=3,
             artifact_path="docs/orchestrator-runs/create-product-brief/step-02-pm-draft-product-brief.md",
             decision="approved",
@@ -223,7 +223,7 @@ class TestHitlJsonl(unittest.TestCase):
         records = load_hitl_log(self.project_dir)
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["workflow"], "create-product-brief")
-        self.assertIsNone(records[0]["bet_id"])
+        self.assertIsNone(records[0]["epic_id"])
 
     def test_load_hitl_log_empty(self):
         records = load_hitl_log(self.project_dir)
@@ -242,7 +242,7 @@ class TestRunIdLinkage(unittest.TestCase):
             project_dir=project_dir,
             run_id=run_id,
             workflow="create-brief",
-            bet_id="CB-4",
+            epic_id="CB-4",
             step=1,
             agent="pm",
             task="draft-brief",
@@ -254,7 +254,7 @@ class TestRunIdLinkage(unittest.TestCase):
             project_dir=project_dir,
             run_id=run_id,
             workflow="create-brief",
-            bet_id="CB-4",
+            epic_id="CB-4",
             step=2,
             artifact_path="docs/orchestrator-runs/create-brief/step-01-pm-draft-brief.md",
             decision="approved",
@@ -278,7 +278,7 @@ class TestParseStepOutput(unittest.TestCase):
 
     def test_parses_files_created(self):
         parsed = parse_step_output(FAKE_OUTPUT)
-        self.assertIn("docs/bets/CB-4/brief.md", parsed["files_created"])
+        self.assertIn("docs/epics/CB-4/brief.md", parsed["files_created"])
 
     def test_parses_dri_decisions(self):
         parsed = parse_step_output(FAKE_OUTPUT)
@@ -322,22 +322,22 @@ class TestGovernanceAudit(unittest.TestCase):
         from compass.orchestrator.logger import log_hitl, load_hitl_log
         os.environ["COMPASS_ACTOR"] = "approver@x.com"
         log_hitl(project_dir=self.project_dir, run_id="r1", workflow="build",
-                 bet_id="CB-4", step=5, artifact_path=None, decision="approved")
+                 epic_id="CB-4", step=5, artifact_path=None, decision="approved")
         self.assertEqual(load_hitl_log(self.project_dir)[0]["actor"], "approver@x.com")
 
     def test_build_audit_independence_verdict_and_roles(self):
         from compass.orchestrator.logger import log_step, log_hitl, build_audit
         # implementer on claude, reviewer on codex → independent
         log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
-                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 epic_id="CB-4", step=1, agent="engineer", task="implement-story",
                  host="claude", model="claude-opus", output=FAKE_OUTPUT)
         log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
-                 bet_id="CB-4", step=3, agent="reviewer", task="review-pr",
+                 epic_id="CB-4", step=3, agent="reviewer", task="review-pr",
                  host="codex", model="gpt-5", output=FAKE_OUTPUT)
         log_hitl(project_dir=self.project_dir, run_id="b1", workflow="build",
-                 bet_id="CB-4", step=6, artifact_path=None, decision="approved",
+                 epic_id="CB-4", step=6, artifact_path=None, decision="approved",
                  actor="md@example.com")
-        audit = build_audit(self.project_dir, bet_id="CB-4")
+        audit = build_audit(self.project_dir, epic_id="CB-4")
         self.assertTrue(audit["cross_model_independence"]["independent"])
         roles = {s["agent"]: s["role"] for s in audit["steps"]}
         self.assertEqual(roles["engineer"], "implementer")
@@ -349,29 +349,29 @@ class TestGovernanceAudit(unittest.TestCase):
         # implementer AND reviewer both on claude → NOT independent
         for agent in ("engineer", "reviewer"):
             log_step(project_dir=self.project_dir, run_id="b2", workflow="build",
-                     bet_id="CB-9", step=1, agent=agent, task="t",
+                     epic_id="CB-9", step=1, agent=agent, task="t",
                      host="claude", model="claude-opus", output=FAKE_OUTPUT)
-        audit = build_audit(self.project_dir, bet_id="CB-9")
+        audit = build_audit(self.project_dir, epic_id="CB-9")
         self.assertFalse(audit["cross_model_independence"]["independent"])
 
     def test_build_audit_captures_launcher_from_spine(self):
         from compass.orchestrator import events as ev
         from compass.orchestrator.logger import log_step, build_audit
         ev.jsonl_sink()(ev.make_event(
-            ev.RUN_START, run_id="b3", bet_id="CB-4", workflow="build",
+            ev.RUN_START, run_id="b3", epic_id="CB-4", workflow="build",
             actor="launcher@x.com"))
         log_step(project_dir=self.project_dir, run_id="b3", workflow="build",
-                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 epic_id="CB-4", step=1, agent="engineer", task="implement-story",
                  host="claude", model=None, output=FAKE_OUTPUT)
-        audit = build_audit(self.project_dir, bet_id="CB-4", run_id="b3")
+        audit = build_audit(self.project_dir, epic_id="CB-4", run_id="b3")
         self.assertEqual(audit["launchers"].get("b3"), "launcher@x.com")
 
     def test_format_audit_markdown(self):
         from compass.orchestrator.logger import log_step, build_audit, format_audit_markdown
         log_step(project_dir=self.project_dir, run_id="b4", workflow="build",
-                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 epic_id="CB-4", step=1, agent="engineer", task="implement-story",
                  host="claude", model="claude-opus", output=FAKE_OUTPUT)
-        md = format_audit_markdown(build_audit(self.project_dir, bet_id="CB-4"))
+        md = format_audit_markdown(build_audit(self.project_dir, epic_id="CB-4"))
         self.assertIn("Governance audit", md)
         self.assertIn("Review independence", md)
         # #155: models are reported as EVIDENCE, never asserted as the control
@@ -425,15 +425,15 @@ class TestSowConformance(unittest.TestCase):
     def test_evaluate_conformance_statuses(self):
         from compass.orchestrator.logger import log_step, log_hitl, build_audit
         log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
-                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 epic_id="CB-4", step=1, agent="engineer", task="implement-story",
                  host="claude", model="claude-opus", output=FAKE_OUTPUT)
         log_step(project_dir=self.project_dir, run_id="b1", workflow="build",
-                 bet_id="CB-4", step=3, agent="reviewer", task="review-pr",
+                 epic_id="CB-4", step=3, agent="reviewer", task="review-pr",
                  host="codex", model="gpt-5", output=FAKE_OUTPUT)
         log_hitl(project_dir=self.project_dir, run_id="b1", workflow="build",
-                 bet_id="CB-4", step=6, artifact_path=None, decision="approved", actor="md@x.com")
+                 epic_id="CB-4", step=6, artifact_path=None, decision="approved", actor="md@x.com")
         self._write_controls(self.CONTROLS)
-        conf = build_audit(self.project_dir, bet_id="CB-4")["conformance"]
+        conf = build_audit(self.project_dir, epic_id="CB-4")["conformance"]
         by_id = {c["id"]: c["status"] for c in conf["controls"]}
         self.assertEqual(by_id["CTRL-1"], "met")      # maker ≠ checker
         self.assertEqual(by_id["CTRL-2"], "met")      # human approved
@@ -445,9 +445,9 @@ class TestSowConformance(unittest.TestCase):
         from compass.orchestrator.logger import log_step, build_audit
         self._write_controls("## CTRL-9 — Manual\n- check: manual\n- attest: met\n")
         log_step(project_dir=self.project_dir, run_id="m1", workflow="build",
-                 bet_id="CB-1", step=1, agent="engineer", task="t",
+                 epic_id="CB-1", step=1, agent="engineer", task="t",
                  host="claude", model=None, output=FAKE_OUTPUT)
-        conf = build_audit(self.project_dir, bet_id="CB-1")["conformance"]
+        conf = build_audit(self.project_dir, epic_id="CB-1")["conformance"]
         self.assertEqual(conf["controls"][0]["status"], "met")
         self.assertTrue(conf["conformant"])
 
@@ -455,18 +455,18 @@ class TestSowConformance(unittest.TestCase):
         from compass.orchestrator.logger import log_step, build_audit, format_audit_markdown
         self._write_controls(self.CONTROLS)
         log_step(project_dir=self.project_dir, run_id="x1", workflow="build",
-                 bet_id="CB-4", step=1, agent="engineer", task="implement-story",
+                 epic_id="CB-4", step=1, agent="engineer", task="implement-story",
                  host="claude", model="claude-opus", output=FAKE_OUTPUT)
-        md = format_audit_markdown(build_audit(self.project_dir, bet_id="CB-4"))
+        md = format_audit_markdown(build_audit(self.project_dir, epic_id="CB-4"))
         self.assertIn("SOW-conformance", md)
         self.assertIn("CTRL-1", md)
 
     def test_no_controls_no_conformance(self):
         from compass.orchestrator.logger import log_step, build_audit
         log_step(project_dir=self.project_dir, run_id="n1", workflow="build",
-                 bet_id="CB-4", step=1, agent="engineer", task="t",
+                 epic_id="CB-4", step=1, agent="engineer", task="t",
                  host="claude", model=None, output=FAKE_OUTPUT)
-        self.assertNotIn("conformance", build_audit(self.project_dir, bet_id="CB-4"))
+        self.assertNotIn("conformance", build_audit(self.project_dir, epic_id="CB-4"))
 
 
 if __name__ == "__main__":

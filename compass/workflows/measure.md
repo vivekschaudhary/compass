@@ -5,7 +5,7 @@ Cron-driven measurement of a bet's metrics. Pulls data via MCP, updates the brie
 ## Trigger
 
 - Cron: framework auto-runs per bet's `check_in_cadence` (weekly / biweekly / monthly)
-- Manual: `/measure <bet-id>` to check a specific bet on demand
+- Manual: `/measure <epic-id>` to check a specific bet on demand
 
 ## Owner
 
@@ -41,7 +41,7 @@ If measurement window not yet closed:
      - Guardrails: <status of each>
      - Trend: on-track / at-risk / off-track
    ```
-7. **Update `docs/metrics/<bet-id>-<date>.json`** snapshot
+7. **Update `docs/metrics/<epic-id>-<date>.json`** snapshot
 8. **If trend `off-track` or guardrails breached:** flag to PM via configured channel
 
 ### Phase 4 — final measurement
@@ -67,7 +67,7 @@ If measurement window closes:
 ## Output
 
 - Brief updated with check-in log entries OR final outcome
-- `docs/metrics/<bet-id>-<date>.{json,md}` snapshot
+- `docs/metrics/<epic-id>-<date>.{json,md}` snapshot
 - Notifications dispatched
 - Parent bet metrics updated (rollup)
 

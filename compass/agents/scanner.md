@@ -29,7 +29,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 ### `scan-bet` — full quality scan of one bet across all phases
 
-**Gate:** Bet directory exists at `docs/bets/<bet-id>/`. Check catalog accessible (`compass/workflows/scan.md`).
+**Gate:** Bet directory exists at `docs/epics/<epic-id>/`. Check catalog accessible (`compass/workflows/scan.md`).
 **Work:**
 1. Determine current phase from bet frontmatter + artifact statuses (brief approved → Architecture; arch approved + stories shipped → Build; etc.)
 2. Read all relevant artifacts + MCP data per the check catalog
@@ -39,7 +39,7 @@ Gates + postconditions = load-bearing. Work = guidance.
    - Medium: file exists but minimal substance (TODO/TBD placeholders)
    - Low: contradiction between artifact claim and MCP/cross-artifact evidence
 5. Preserve existing suppressions from previous scan report; flag stale ones (>90 days OR underlying check changed)
-6. Write `docs/bets/<bet-id>/scan-report.md` (re-render from `compass/templates/scan-report.md`)
+6. Write `docs/epics/<epic-id>/scan-report.md` (re-render from `compass/templates/scan-report.md`)
 7. Log DRI Issues for every Critical/High finding (severity-tagged, owner assigned per current-phase role)
 8. Output summary: open findings by severity · blocking status · link to report
 
@@ -47,7 +47,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 ### `scan-phase` — scan one phase across all active bets
 
-**Gate:** Phase name valid (Product / Architecture / Build / Production Ready / GTM / Operate). Active bet list derivable from `docs/bets/`.
+**Gate:** Phase name valid (Product / Architecture / Build / Production Ready / GTM / Operate). Active bet list derivable from `docs/epics/`.
 **Work:** for each active bet, run checks for the named phase only → aggregate findings → write phase-scoped summary.
 **Postcondition:** findings scoped to named phase only · per-bet scan-reports updated · aggregate summary output.
 

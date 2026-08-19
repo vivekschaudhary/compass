@@ -13,7 +13,7 @@ Maintains the **living project plan** — a time-bound schedule derived from per
 
 | State                                          | Action                                                                  |
 | ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `docs/foundation/portfolio.md` missing or not `approved` | **Refuse.** No MVP wedge to schedule yet. Tell user to run `/create-bet-portfolio` first. |
+| `docs/foundation/portfolio.md` missing or not `approved` | **Refuse.** No MVP wedge to schedule yet. Tell user to run `/create-epics` first. |
 | `docs/foundation/plan.md` missing, portfolio `approved` | **Seed run.** Initial coarse dates from dep graph + default durations. |
 | `docs/foundation/plan.md` exists               | **Refresh run.** Re-read all artifacts, refine dates, log what changed. |
 
@@ -25,9 +25,9 @@ Maintains the **living project plan** — a time-bound schedule derived from per
 4. **Read all current artifacts:**
    - `docs/foundation/portfolio.md` — bet list, dependency graph, parallel-build candidates.
    - For each MVP bet:
-     - `docs/bets/<bet-id>/brief.md` — status, `estimate` frontmatter, `portfolio_stub`, `depends_on`, `parallel_with`.
-     - `docs/bets/<bet-id>/architecture.md` if exists — effort refinement.
-     - `docs/bets/<bet-id>/stories/<story-id>/story.md` for each story if exists — story count + size.
+     - `docs/epics/<epic-id>/brief.md` — status, `estimate` frontmatter, `portfolio_stub`, `depends_on`, `parallel_with`.
+     - `docs/epics/<epic-id>/architecture.md` if exists — effort refinement.
+     - `docs/epics/<epic-id>/stories/<story-id>/story.md` for each story if exists — story count + size.
    - Build state via git log + GitHub MCP if available (PR open/merged dates → `actual_start`/`actual_end`).
 5. **Compute date refinements** using the estimate model below. For any change, write to the bet's `brief.md` frontmatter `estimate` block.
 6. **Write/update `docs/foundation/plan.md`** using `compass/templates/plan.md`:
@@ -77,7 +77,7 @@ estimate:
 ## Output
 
 - `docs/foundation/plan.md` — refreshed or seeded
-- Each affected bet's `docs/bets/<bet-id>/brief.md` frontmatter `estimate` block updated
+- Each affected bet's `docs/epics/<epic-id>/brief.md` frontmatter `estimate` block updated
 
 ## Freshness
 
@@ -85,7 +85,7 @@ The plan can go stale between manual `/plan` invocations. `/status` (which reads
 
 ## Refusal cases
 
-- `docs/foundation/portfolio.md` missing or not approved — refuse with pointer to `/create-bet-portfolio`
+- `docs/foundation/portfolio.md` missing or not approved — refuse with pointer to `/create-epics`
 - No bets exist in portfolio (empty bet list) — refuse with clarifying message
 
 ## Notes

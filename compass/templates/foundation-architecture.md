@@ -257,7 +257,7 @@ Each entry uses the shape below. ADR numbers are sequential and never reused (ev
 
 ### ADR-001 — <Short title> (YYYY-MM-DD)
 
-**Triggered by:** <bet ID + reason, OR foundational research finding, OR ops incident, OR external mandate>. Most commonly: a bet hit the deviation gate in `/create-bet-architecture` and needs new tooling in the foundational stack.
+**Triggered by:** <bet ID + reason, OR foundational research finding, OR ops incident, OR external mandate>. Most commonly: a bet hit the deviation gate in `/create-epic-architecture` and needs new tooling in the foundational stack.
 
 **What changed:** <Specific changes to the foundational doc — Stack table entries added/modified, fitness functions updated, data-model conventions amended, boundaries shifted. Be concrete: "Stack table gained `Cache layer: Redis`. Fitness function for cost-per-user adjusted +$0.02/MAU to absorb Redis infra cost.">
 

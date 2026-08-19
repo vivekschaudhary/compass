@@ -12,7 +12,7 @@ Usage:
       --task review-pr \\
       --input-file pr.diff \\
       --output review.md \\
-      [--context-files PROJECT.md docs/bets/CB-4/brief.md]  # optional context injection
+      [--context-files PROJECT.md docs/epics/CB-4/brief.md]  # optional context injection
       [--model gpt-4o]            # optional override
       [--compass-root PATH]       # if compass/ is not at repo root
 
@@ -56,7 +56,7 @@ def main(argv=None):
                         help="Output file for the agent response")
     parser.add_argument("--context-files", nargs="*", default=[], metavar="PATH",
                         help="Additional files injected as context before the input file "
-                             "(e.g. PROJECT.md docs/bets/CB-4/brief.md). "
+                             "(e.g. PROJECT.md docs/epics/CB-4/brief.md). "
                              "Each file is prepended as a labeled block so the agent sees "
                              "project/bet context alongside the primary input.")
     parser.add_argument("--model", default=None, metavar="ID",

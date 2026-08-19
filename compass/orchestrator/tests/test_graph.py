@@ -157,7 +157,7 @@ class TestRealWorkflows(unittest.TestCase):
         self.assertEqual([s.number for s in steps if s.is_hitl], [3])
 
     def test_create_bet_architecture(self):
-        steps = load_workflow(WORKFLOWS / "create-bet-architecture.md")
+        steps = load_workflow(WORKFLOWS / "create-epic-architecture.md")
         self.assertEqual([s.number for s in steps if s.is_hitl], [2])
 
     def test_setup_foundation_architecture(self):
@@ -188,7 +188,7 @@ class TestRealWorkflows(unittest.TestCase):
         steps = load_workflow(WORKFLOWS / "create-story.md")
         self.assertEqual(len(steps), 5)
         # PM decompose first, designer + ux-writer conditional, DM status last
-        self.assertEqual((steps[0].agent, steps[0].task), ("pm", "decompose-bet-to-story"))
+        self.assertEqual((steps[0].agent, steps[0].task), ("pm", "decompose-epic-to-story"))
         agents = [s.agent for s in steps]
         self.assertIn("designer", agents)
         self.assertIn("ux-writer", agents)
@@ -197,12 +197,12 @@ class TestRealWorkflows(unittest.TestCase):
         gates = [s for s in steps if s.is_hitl]
         self.assertEqual(len(gates), 1)
         self.assertEqual(
-            gates[0].artifact_target, "docs/bets/<bet-id>/stories/<story-id>/story.md"
+            gates[0].artifact_target, "docs/epics/<epic-id>/stories/<story-id>/story.md"
         )
 
     def test_create_story_requires_brief(self):
         meta = load_workflow_meta(WORKFLOWS / "create-story.md")
-        self.assertEqual(meta["requires_approved"], ["docs/bets/<bet-id>/brief.md"])
+        self.assertEqual(meta["requires_approved"], ["docs/epics/<epic-id>/brief.md"])
 
     def test_triage_front_door_graph(self):
         # #103: /triage is the front-door ITIL intake router — 9 steps,
@@ -277,9 +277,9 @@ class TestRouteParsing(unittest.TestCase):
 class TestBetCatalog(unittest.TestCase):
     # #109: the front-door classifier gets the existing-bets catalog so it can
     # right-size an enhancement and name the bet a slice belongs to.
-    def _bet(self, root, bet_id, fm, body=""):
+    def _bet(self, root, epic_id, fm, body=""):
         from pathlib import Path
-        d = Path(root) / "docs" / "bets" / bet_id
+        d = Path(root) / "docs" / "epics" / epic_id
         d.mkdir(parents=True, exist_ok=True)
         (d / "brief.md").write_text(f"---\n{fm}\n---\n{body}", encoding="utf-8")
 
@@ -601,7 +601,7 @@ class TestStepOutcome(unittest.TestCase):
         # though status.md was written). #168 tightened the regex to require
         # "permission" context, not bare "approval".
         for t in (
-            "Brief written to docs/bets/WLT-27/brief.md. Awaiting human review at the HITL gate.",
+            "Brief written to docs/epics/WLT-27/brief.md. Awaiting human review at the HITL gate.",
             "Done — added an allow-list to the route and committed.",
             "Wrote the story; the designer will pick up the UI slice next.",
             "status.md refreshed: WLT-27 awaiting human approval before build.",
@@ -632,9 +632,9 @@ class TestAllowWriteResolution(unittest.TestCase):
         self.runmod = runmod
 
     def test_authoring_workflows_default_on(self):
-        for wf in ("create-brief", "create-story", "create-bet-architecture",
+        for wf in ("create-brief", "create-story", "create-epic-architecture",
                    "create-product-brief", "setup-foundation-architecture",
-                   "create-bet-portfolio"):
+                   "create-epics"):
             self.assertTrue(self.resolve(wf, False), wf)   # forced on even when caller said False
             self.assertTrue(self.resolve(wf, True), wf)
             self.assertIn(wf, self.runmod._AUTHORING_WORKFLOWS)
@@ -788,14 +788,14 @@ class TestDeliveryCheck(unittest.TestCase):
         # #151: only code workflows cut a work branch; doc workflows skip it
         from compass.orchestrator import run as runmod
         self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops"})
-        for doc in ("create-brief", "create-bet-architecture", "create-story",
+        for doc in ("create-brief", "create-epic-architecture", "create-story",
                     "create-product-brief", "setup-foundation-architecture"):
             self.assertNotIn(doc, runmod._CODE_WORKFLOWS)
 
     def test_delivery_warning_workflow_aware(self):
         from compass.orchestrator import run as runmod
         code = runmod._delivery_warning("fix", ["AccountCard.tsx"])
-        doc = runmod._delivery_warning("create-brief", ["docs/bets/WLT-26/brief.md"])
+        doc = runmod._delivery_warning("create-brief", ["docs/epics/WLT-26/brief.md"])
         self.assertIn("no deploy", code)            # code workflow → PR/deploy framing
         self.assertNotIn("no deploy", doc)          # doc workflow → no deploy framing
         self.assertIn("commit", doc.lower())

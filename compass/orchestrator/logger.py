@@ -7,11 +7,11 @@ docs/orchestrator-runs/runs.jsonl for cross-run analysis.
 Schema (one JSON object per line):
   run_id        str   — workflow + bet + timestamp slug
   ts            str   — ISO-8601 UTC
-  workflow      str   — workflow name (e.g. create-bet-architecture)
-  bet_id        str   — bet ID if --bet was passed (e.g. CB-4), else null
+  workflow      str   — workflow name (e.g. create-epic-architecture)
+  epic_id        str   — bet ID if --bet was passed (e.g. CB-4), else null
   step          int   — step number within the workflow
   agent         str   — agent name (e.g. architect)
-  task          str   — task name (e.g. draft-bet-architecture)
+  task          str   — task name (e.g. draft-epic-architecture)
   host          str   — host that dispatched (claude / openai / gemini)
   model         str   — model override if set, else null
   gate_result   str   — pass | exit | hitl_approved | hitl_rejected | unknown
@@ -183,7 +183,7 @@ def log_step(
     project_dir: Path,
     run_id: str,
     workflow: str,
-    bet_id: str,
+    epic_id: str,
     step: int,
     agent: str,
     task: str,
@@ -202,7 +202,7 @@ def log_step(
         "run_id": run_id,
         "ts": datetime.now(timezone.utc).isoformat(),
         "workflow": workflow,
-        "bet_id": bet_id,
+        "epic_id": epic_id,
         "step": step,
         "agent": agent,
         "task": task,
@@ -266,7 +266,7 @@ def print_run_table(project_dir: Path) -> None:
             r.get("workflow", ""),
             str(r.get("step", "")),
             agent_task,
-            r.get("bet_id") or "",
+            r.get("epic_id") or "",
             r.get("host") or "",
             r.get("gate_result") or "",
             r.get("tldr") or "",
@@ -328,7 +328,7 @@ hitl.jsonl schema (one JSON object per line):
   run_id        str   — matches the step record in runs.jsonl
   ts            str   — ISO-8601 UTC of the gate decision
   workflow      str   — workflow name
-  bet_id        str   — bet ID or null
+  epic_id        str   — bet ID or null
   step          int   — step number of the HITL gate
   artifact_path str   — path of the artifact reviewed, or null
   decision      str   — "approved" | "rejected"
@@ -348,7 +348,7 @@ def log_hitl(
     project_dir: Path,
     run_id: str,
     workflow: str,
-    bet_id: str,
+    epic_id: str,
     step: int,
     artifact_path: str,
     decision: str,
@@ -364,7 +364,7 @@ def log_hitl(
         "run_id": run_id,
         "ts": datetime.now(timezone.utc).isoformat(),
         "workflow": workflow,
-        "bet_id": bet_id,
+        "epic_id": epic_id,
         "step": step,
         "artifact_path": artifact_path,
         "decision": decision,
@@ -423,7 +423,7 @@ def print_hitl_table(project_dir: Path) -> None:
             ts_short,
             r.get("workflow", ""),
             str(r.get("step", "")),
-            r.get("bet_id") or "",
+            r.get("epic_id") or "",
             r.get("decision") or "",
             r.get("feedback") or "",
         ]
@@ -441,7 +441,7 @@ def dri_decisions_report(project_dir: Path) -> None:
             decisions.append({
                 "ts": r.get("ts", "")[:10],
                 "workflow": r.get("workflow", ""),
-                "bet_id": r.get("bet_id") or "",
+                "epic_id": r.get("epic_id") or "",
                 "agent": r.get("agent", ""),
                 "decision": d,
             })
@@ -452,7 +452,7 @@ def dri_decisions_report(project_dir: Path) -> None:
     print(f"DRI DECISIONS — {len(decisions)} total")
     print(f"{'═' * 60}")
     for d in decisions:
-        print(f"\n[{d['ts']}] {d['bet_id']} | {d['agent']} via {d['workflow']}")
+        print(f"\n[{d['ts']}] {d['epic_id']} | {d['agent']} via {d['workflow']}")
         print(d["decision"][:400])
     print()
 
@@ -461,7 +461,7 @@ def dri_decisions_report(project_dir: Path) -> None:
 # Governance audit — the exportable who-did-what lineage (#2a)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
+def build_audit(project_dir: Path, epic_id: str = None, run_id: str = None,
                 controls_path: str = None) -> dict:
     """Assemble the governance audit for a bet (or a single run): the who-did-what
     lineage the SOW-conformance wedge needs — per-step agent/role/host/model, gate
@@ -474,7 +474,7 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
     def _match(rec):
         if run_id and rec.get("run_id") != run_id:
             return False
-        if bet_id and rec.get("bet_id") != bet_id:
+        if epic_id and rec.get("epic_id") != epic_id:
             return False
         return True
 
@@ -487,7 +487,7 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
             continue
         if run_id and e.get("run_id") != run_id:
             continue
-        if bet_id and e.get("bet_id") != bet_id:
+        if epic_id and e.get("epic_id") != epic_id:
             continue
         launchers[e.get("run_id")] = e.get("actor")
 
@@ -500,7 +500,7 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
     independent = bool(impl) and bool(review) and impl.isdisjoint(review)
 
     result = {
-        "bet_id": bet_id,
+        "epic_id": epic_id,
         "run_id": run_id,
         "runs": sorted({r.get("run_id") for r in steps if r.get("run_id")}),
         "launchers": launchers,
@@ -528,11 +528,11 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
     }
 
     # SOW-conformance (#2b): map controls → evidence. Auto-discover the framework if
-    # not given — docs/bets/<bet>/controls.md, else docs/controls.md.
+    # not given — docs/epics/<bet>/controls.md, else docs/controls.md.
     cpath = Path(controls_path) if controls_path else None
     if cpath is None:
-        candidates = ([project_dir / "docs" / "bets" / bet_id / "controls.md"]
-                      if bet_id else []) + [project_dir / "docs" / "controls.md"]
+        candidates = ([project_dir / "docs" / "epics" / epic_id / "controls.md"]
+                      if epic_id else []) + [project_dir / "docs" / "controls.md"]
         cpath = next((c for c in candidates if c.exists()), None)
     if cpath and Path(cpath).exists():
         result["conformance"] = evaluate_conformance(result, parse_controls(cpath))
@@ -542,7 +542,7 @@ def build_audit(project_dir: Path, bet_id: str = None, run_id: str = None,
 
 def format_audit_markdown(audit: dict) -> str:
     """Render build_audit() as a human / Confluence-projectable governance audit doc."""
-    scope = audit.get("bet_id") or audit.get("run_id") or "(all runs)"
+    scope = audit.get("epic_id") or audit.get("run_id") or "(all runs)"
     lines = [f"# Governance audit — {scope}", ""]
 
     conf = audit.get("conformance")

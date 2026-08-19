@@ -9,11 +9,11 @@ Canonical PR template content. Copied to .github/PULL_REQUEST_TEMPLATE.md
 
 ## Linked artifacts
 
-- Bet: `docs/bets/<bet-id>/brief.md`
-- Architecture: `docs/bets/<bet-id>/architecture.md` (if exists)
-- Story: `docs/bets/<bet-id>/stories/<story-id>/story.md`
-- Design story: `docs/bets/<bet-id>/stories/<design-story-id>/story.md` (if UI — the human-delivered Figma in its `## Design deliverable (human)` section)
-- Copy story: `docs/bets/<bet-id>/stories/<copy-story-id>/story.md` (if UI — the human-written strings in its `## Copy deliverable (human)` section)
+- Bet: `docs/epics/<epic-id>/brief.md`
+- Architecture: `docs/epics/<epic-id>/architecture.md` (if exists)
+- Story: `docs/epics/<epic-id>/stories/<story-id>/story.md`
+- Design story: `docs/epics/<epic-id>/stories/<design-story-id>/story.md` (if UI — the human-delivered Figma in its `## Design deliverable (human)` section)
+- Copy story: `docs/epics/<epic-id>/stories/<copy-story-id>/story.md` (if UI — the human-written strings in its `## Copy deliverable (human)` section)
 - Ticket: <Jira/Linear link>
 
 ## Changes per area

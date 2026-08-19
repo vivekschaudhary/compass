@@ -7,7 +7,7 @@ status: ready           # needs-design | needs-copy | ready | in-build | in-revi
 priority: P1
 created: YYYY-MM-DD
 author: PM
-design_link: <Figma URL, or the design story id (e.g. <bet-id>-2) this feature depends on>
+design_link: <Figma URL, or the design story id (e.g. <epic-id>-2) this feature depends on>
 area_tags: []
 dependencies:           # feature story: list its design + copy story ids — blocks build until they're human-delivered (status: ready)
   - <other story id>
@@ -117,4 +117,4 @@ _If post-merge bugs are found, story is re-opened and fixes live under `fixes/`.
 
 ---
 
-_Story closed: <date>, brief link: docs/bets/<bet-id>/brief.md_
+_Story closed: <date>, brief link: docs/epics/<epic-id>/brief.md_

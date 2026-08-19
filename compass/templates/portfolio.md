@@ -22,7 +22,7 @@ post_mvp_item_count: <N>
 
 ## MVP bets
 
-Bets that together enable the loop above. Each must be independently shippable OR clearly sequenced. Each stub brief lives at `docs/bets/<bet-id>/brief.md` with `portfolio_stub: true` until promoted via `/create-brief <bet-id>`.
+Bets that together enable the loop above. Each must be independently shippable OR clearly sequenced. Each stub brief lives at `docs/epics/<epic-id>/brief.md` with `portfolio_stub: true` until promoted via `/create-brief <epic-id>`.
 
 | Bet ID | Title | One-line hypothesis | Type | Depends on | Parallel with |
 |--------|-------|---------------------|------|------------|---------------|
@@ -65,7 +65,7 @@ Captured here so we don't lose them, **but no stub briefs created**. These come 
 
 ## Promotion log
 
-_Populated as each stub gets promoted to a full brief via `/create-brief <bet-id>`._
+_Populated as each stub gets promoted to a full brief via `/create-brief <epic-id>`._
 
 | Bet ID | Promoted on | Status after promotion |
 |--------|-------------|------------------------|

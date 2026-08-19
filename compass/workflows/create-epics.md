@@ -1,4 +1,4 @@
-# Workflow: /create-bet-portfolio
+# Workflow: /create-epics
 
 Creates the **MVP bet portfolio** — the initial bet wedge for a new project. Bootstrap-only: runs once, after foundation product + architecture are approved, before any per-bet work begins.
 
@@ -8,7 +8,7 @@ After the MVP ships, the project transitions to steady-state: new bets come one-
 
 ## Trigger
 
-`/create-bet-portfolio` once both foundation bets are approved.
+`/create-epics` once both foundation bets are approved.
 
 ## State detection (before any step)
 
@@ -35,10 +35,10 @@ After the MVP ships, the project transitions to steady-state: new bets come one-
    - **PM owns the MVP/post-MVP call.** Researcher surfaces what comparable products needed for their MVPs as a sanity check.
 6. **Draft stub briefs** (typically 3-6) for MVP bets only:
    - Generate bet IDs via the ticketing system (Jira-style epics, or Linear).
-   - For each MVP bet, create `docs/bets/<bet-id>/brief.md` with:
-     - Frontmatter: `id: <BET-ID>`, `type:` (feature / okr / tech-debt / architectural-initiative), `status: proposed`, `parent: FOUNDATION-PRODUCT`, `portfolio_stub: true`, `depends_on: [<bet-id>...]`, `parallel_with: [<bet-id>...]`, `created: <today>`, `author: PM`
+   - For each MVP bet, create `docs/epics/<epic-id>/brief.md` with:
+     - Frontmatter: `id: <BET-ID>`, `type:` (feature / okr / tech-debt / architectural-initiative), `status: proposed`, `parent: FOUNDATION-PRODUCT`, `portfolio_stub: true`, `depends_on: [<epic-id>...]`, `parallel_with: [<epic-id>...]`, `created: <today>`, `author: PM`
      - Title + one-line hypothesis traced to a specific line in `docs/foundation/product.md`
-     - Placeholder content — full brief content (problem, scope, research, guardrails) is filled later by `/create-brief <bet-id>` promotion.
+     - Placeholder content — full brief content (problem, scope, research, guardrails) is filled later by `/create-brief <epic-id>` promotion.
    - **No stub briefs for post-MVP items.** They live as one-liners in the portfolio doc only.
 7. **Draft `docs/foundation/portfolio.md`** using `compass/templates/portfolio.md`:
    - **MVP definition statement** at the top — verbatim user answer.
@@ -61,7 +61,7 @@ After the MVP ships, the project transitions to steady-state: new bets come one-
 - [ ] Mermaid `flowchart` dependency graph present (or explicit "no dependencies — all parallel" declared in writing)
 - [ ] Parallel-build candidates identified
 - [ ] PM DRI has ≥1 Decision; Researcher DRI has ≥1 Decision AND ≥1 Risk (Issues-only does not satisfy)
-- [ ] Each stub brief file exists at `docs/bets/<bet-id>/brief.md` with `status: proposed` + `portfolio_stub: true`
+- [ ] Each stub brief file exists at `docs/epics/<epic-id>/brief.md` with `status: proposed` + `portfolio_stub: true`
 - [ ] No stub briefs exist for post-MVP items (those live as one-liners in `portfolio.md` only)
 - [ ] Status: `proposed`
 
@@ -70,7 +70,7 @@ If any unchecked, workflow is NOT complete. **HITL approval cannot pass while an
 ## Output
 
 - `docs/foundation/portfolio.md` with status `proposed` → `approved` after HITL
-- 3-6 stub briefs at `docs/bets/<bet-id>/brief.md` with `portfolio_stub: true` (each with a default `estimate` block: `duration_weeks: 2, confidence: low, refined_by: stub`)
+- 3-6 stub briefs at `docs/epics/<epic-id>/brief.md` with `portfolio_stub: true` (each with a default `estimate` block: `duration_weeks: 2, confidence: low, refined_by: stub`)
 - Mirrored to ticketing system per config
 - **After portfolio HITL approval, run `/plan`** to seed `docs/foundation/plan.md` with the initial time-bound schedule (coarse dates from dep graph + default 2-week durations). Re-run `/plan` manually as estimates sharpen (after each brief / architecture approval, after build PR merges) — or rely on cron-driven refresh per `compass/config.yaml`. (`/plan` auto-runs `/dashboard`, so the browser view will reflect the new portfolio + initial schedule immediately.)
 
@@ -82,7 +82,7 @@ If any unchecked, workflow is NOT complete. **HITL approval cannot pass while an
 
 ## What happens next
 
-For each MVP bet, run `/create-brief <bet-id>` when ready to fully scope that bet. This **promotes** the stub: fills in full content (problem, user, scope, research findings, guardrails), clears `portfolio_stub: true`, and requires its own HITL approval before `/create-bet-architecture` and `/create-story` can run.
+For each MVP bet, run `/create-brief <epic-id>` when ready to fully scope that bet. This **promotes** the stub: fills in full content (problem, user, scope, research findings, guardrails), clears `portfolio_stub: true`, and requires its own HITL approval before `/create-epic-architecture` and `/create-story` can run.
 
 Parallel paths from the dependency graph can promote, design, and build concurrently — that's the point of bootstrapping via portfolio.
 

@@ -2,7 +2,7 @@
 
 Generates a **single self-contained `docs/dashboard.html`** that renders all living Compass artifacts (foundation, plan, portfolio, scan reports, metrics, status) **AND** surfaces a 7th "Actions" tab with workflow-launcher buttons (orchestrator entry point per v0.4 spec target). Opens via `file://`. No server, no build toolchain. Shareable as an attachment.
 
-**Why:** Markdown is great for git diffs, AI consumption, and engineers in the IDE. But stakeholders skim — PMs, leadership, on-call, anyone outside the IDE wants to open a URL or attach a file and see current state without spelunking `docs/bets/*/scan-report.md`. The dashboard is that view.
+**Why:** Markdown is great for git diffs, AI consumption, and engineers in the IDE. But stakeholders skim — PMs, leadership, on-call, anyone outside the IDE wants to open a URL or attach a file and see current state without spelunking `docs/epics/*/scan-report.md`. The dashboard is that view.
 
 **Orchestrator entry point (v0.3.13):** The Actions tab makes the dashboard the **first concrete user-facing piece of the v0.4 Delivery Manager vision** (per v0.3.12 spec target). Solopreneur opens `docs/dashboard.html` in browser → sees project state + pending HITL gates + Finance summary + quick-action workflow launchers → clicks a launcher → command is copied to clipboard → user pastes into preferred web app (ChatGPT, Claude.ai) → Compass-aware AI runs the workflow → outputs commit back to repo → dashboard regenerates. **L1 (clipboard-copy) ships today.** L2 (`compass://` protocol handler + CLI for one-click execution) is deferred to v0.3.14. L3 (localhost server with real-time updates) is deferred indefinitely.
 
@@ -30,8 +30,8 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
    - **Foundation:** `docs/foundation/product.md`, `architecture.md`, `architecture-research.md` (if exists)
    - **Plan:** `docs/foundation/plan.md` (if exists)
    - **Portfolio:** `docs/foundation/portfolio.md` (if exists)
-   - **Scan:** all `docs/bets/*/scan-report.md`
-   - **Metrics:** for each bet, the **most recent** `docs/metrics/<bet-id>-*.md` snapshot (sort by date in filename)
+   - **Scan:** all `docs/epics/*/scan-report.md`
+   - **Metrics:** for each bet, the **most recent** `docs/metrics/<epic-id>-*.md` snapshot (sort by date in filename)
    - **Status:** `docs/status.md`
 4. **Read project name** from the foundation product bet (first H1 or `id:` frontmatter).
 5. **Load template** at `compass/templates/dashboard.html.template`.
@@ -55,8 +55,8 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
    Inline format:
    ```html
    <article class="artifact-block">
-     <div class="artifact-path">docs/bets/PROJ-42/scan-report.md</div>
-     <script type="text/markdown" data-artifact="docs/bets/PROJ-42/scan-report.md">
+     <div class="artifact-path">docs/epics/PROJ-42/scan-report.md</div>
+     <script type="text/markdown" data-artifact="docs/epics/PROJ-42/scan-report.md">
    <!-- full markdown content here, verbatim, byte-for-byte from source, including frontmatter (which marked.js will treat as a horizontal-rule + code block — that's fine; it makes the metadata visible) -->
      </script>
      <div class="rendered"></div>
@@ -71,8 +71,8 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
 
    - **Empty project** (no product brief in either form — see the mode-aware gate above): "**No foundation yet.** Start with `/create-product-brief`." — and skip directly to a single highlighted launcher row containing only `/create-product-brief`. Omit sections 8b–8d.
    - **Foundation product approved, no architecture:** "**Product foundation approved.** Next: `/setup-foundation-architecture`."
-   - **Foundation approved, no portfolio:** "**Foundations approved.** Next: `/create-bet-portfolio` (bootstrap MVP wedge) or `/create-brief <id>` (single bet)."
-   - **Portfolio approved, bets in flight:** "**N bets in flight.**" + bullet list per bet showing bet-id + current phase (from brief's `status` and presence of architecture / stories).
+   - **Foundation approved, no portfolio:** "**Foundations approved.** Next: `/create-epics` (bootstrap MVP wedge) or `/create-brief <id>` (single bet)."
+   - **Portfolio approved, bets in flight:** "**N bets in flight.**" + bullet list per bet showing epic-id + current phase (from brief's `status` and presence of architecture / stories).
    - **All bets shipped:** "**All bets shipped.** `/measure` per cron; `/metrics` for outcomes view."
 
    Shape:
@@ -82,18 +82,18 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
    </div>
    ```
 
-   **8b. Pending HITL gates** (omit section entirely if none): scan all bet artifacts for frontmatter `status: proposed` **and, under `source_of_truth: external`, every recorded gate ticket not yet in the `done` status category** (a docs-primary artifact has no frontmatter to scan — its ticket is the pending signal). Repo-side artifacts: (`docs/foundation/product.md`, `docs/foundation/architecture.md`, `docs/foundation/portfolio.md`, `docs/bets/*/brief.md`, `docs/bets/*/architecture.md`, `docs/bets/*/stories/*.md`) for frontmatter `status: proposed`. Each surfaces as:
+   **8b. Pending HITL gates** (omit section entirely if none): scan all bet artifacts for frontmatter `status: proposed` **and, under `source_of_truth: external`, every recorded gate ticket not yet in the `done` status category** (a docs-primary artifact has no frontmatter to scan — its ticket is the pending signal). Repo-side artifacts: (`docs/foundation/product.md`, `docs/foundation/architecture.md`, `docs/foundation/portfolio.md`, `docs/epics/*/brief.md`, `docs/epics/*/architecture.md`, `docs/epics/*/stories/*.md`) for frontmatter `status: proposed`. Each surfaces as:
 
    ```html
    <div class="action-section">
      <h2>Pending approvals (HITL gates)</h2>
      <div class="hitl-gate">
        <div><strong>Brief awaiting approval:</strong> CB-2 — Mobile dashboard</div>
-       <div class="path">docs/bets/CB-2/brief.md</div>
+       <div class="path">docs/epics/CB-2/brief.md</div>
      </div>
      <div class="hitl-gate">
        <div><strong>Architecture awaiting approval:</strong> CB-3</div>
-       <div class="path">docs/bets/CB-3/architecture.md</div>
+       <div class="path">docs/epics/CB-3/architecture.md</div>
      </div>
      <p class="action-help">Approve by editing the file's <code>status:</code> frontmatter to <code>approved</code> and committing. L1 surfaces visibility; L2 (v0.3.14) will add one-click approval buttons.</p>
    </div>
@@ -112,14 +112,14 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
        <span class="label">Bootstrap</span>
        <button class="action-btn" onclick="compassCopy('/create-product-brief', this)">Start product foundation <span class="cmd">/create-product-brief</span></button>
        <button class="action-btn" onclick="compassCopy('/setup-foundation-architecture', this)">Start architecture foundation <span class="cmd">/setup-foundation-architecture</span></button>
-       <button class="action-btn" onclick="compassCopy('/create-bet-portfolio', this)">MVP bet portfolio <span class="cmd">/create-bet-portfolio</span></button>
+       <button class="action-btn" onclick="compassCopy('/create-epics', this)">MVP bet portfolio <span class="cmd">/create-epics</span></button>
      </div>
 
      <!-- Create or refine a bet (shown post-portfolio-approval) -->
      <div class="action-row">
        <span class="label">Create or refine a bet</span>
        <button class="action-btn" onclick="compassCopy('/create-brief', this)">New bet brief <span class="cmd">/create-brief</span></button>
-       <button class="action-btn" onclick="compassCopy('/create-bet-architecture', this)">Bet architecture <span class="cmd">/create-bet-architecture</span></button>
+       <button class="action-btn" onclick="compassCopy('/create-epic-architecture', this)">Bet architecture <span class="cmd">/create-epic-architecture</span></button>
        <button class="action-btn" onclick="compassCopy('/create-story', this)">Create story <span class="cmd">/create-story</span></button>
      </div>
 
@@ -136,7 +136,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
      <div class="action-row">
        <span class="label">Observe &amp; report</span>
        <button class="action-btn" onclick="compassCopy('/status', this)">Refresh status <span class="cmd">/status</span></button>
-       <button class="action-btn" onclick="compassCopy('/scan', this)">Run scanner <span class="cmd">/scan &lt;bet-id&gt;</span></button>
+       <button class="action-btn" onclick="compassCopy('/scan', this)">Run scanner <span class="cmd">/scan &lt;epic-id&gt;</span></button>
        <button class="action-btn" onclick="compassCopy('/plan', this)">Refresh plan <span class="cmd">/plan</span></button>
        <button class="action-btn" onclick="compassCopy('/metrics', this)">Update metrics <span class="cmd">/metrics</span></button>
      </div>
@@ -145,7 +145,7 @@ Generates a **single self-contained `docs/dashboard.html`** that renders all liv
    </div>
    ```
 
-   For each story in `status: ready`, the `/build <story-id>` placeholder can be templated with the actual ID (e.g., `compassCopy('/build CB-2-1', this)`). Same for `/scan <bet-id>` and `/create-bet-architecture <bet-id>` etc. — replace the placeholder with the most relevant in-flight identifier when computable; otherwise leave the placeholder.
+   For each story in `status: ready`, the `/build <story-id>` placeholder can be templated with the actual ID (e.g., `compassCopy('/build CB-2-1', this)`). Same for `/scan <epic-id>` and `/create-epic-architecture <epic-id>` etc. — replace the placeholder with the most relevant in-flight identifier when computable; otherwise leave the placeholder.
 
    **8d. Finance summary** (omit section entirely if `docs/usage/current.json` does NOT exist — do not fake numbers): read the JSON, render as:
 

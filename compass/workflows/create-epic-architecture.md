@@ -1,14 +1,14 @@
 ---
-name: create-bet-architecture
+name: create-epic-architecture
 status: active
 owner: architect
 auto_invokes: []
 invoked_by: [create-brief, manual]
 version: 0.3.26
-requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md, docs/bets/<bet-id>/brief.md]
+requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md, docs/epics/<epic-id>/brief.md]
 ---
 
-# Workflow: /create-bet-architecture
+# Workflow: /create-epic-architecture
 
 ## Framework grounding
 
@@ -19,7 +19,7 @@ requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md,
 
 ## Purpose
 
-Creates the **bet-level architecture artifact** (`docs/bets/<bet-id>/architecture.md`) — how this bet will be built within the constraints of the approved foundational stack. Must run after the bet's brief is `approved`. Engineer can start as soon as architecture is approved (no waiting for "perfect").
+Creates the **bet-level architecture artifact** (`docs/epics/<epic-id>/architecture.md`) — how this bet will be built within the constraints of the approved foundational stack. Must run after the bet's brief is `approved`. Engineer can start as soon as architecture is approved (no waiting for "perfect").
 
 ## Architectural shape (v0.3.26)
 
@@ -31,9 +31,9 @@ This workflow is a **thin dispatch graph** per `[workflow-as-dispatch-graph]` (c
 
 ## Preconditions (workflow-level GATE — checked once at start)
 
-- **Brief approved** — `docs/bets/<bet-id>/brief.md` must exist with `status: approved`. **On failure, refuse:** *"Brief for `<bet-id>` is not approved. Run `/create-brief` and obtain approval before creating the bet architecture."*
+- **Brief approved** — `docs/epics/<epic-id>/brief.md` must exist with `status: approved`. **On failure, refuse:** *"Brief for `<epic-id>` is not approved. Run `/create-brief` and obtain approval before creating the bet architecture."*
 - **Foundation docs present** — `docs/foundation/product.md` and `docs/foundation/architecture.md` must exist with `status: approved`. **On failure, refuse:** *"Foundation docs missing or unapproved. Run `/create-product-brief` and `/setup-foundation-architecture` first."*
-- **Not already approved** — if `docs/bets/<bet-id>/architecture.md` exists with `status: approved`, refuse unless the user explicitly requests amend mode.
+- **Not already approved** — if `docs/epics/<epic-id>/architecture.md` exists with `status: approved`, refuse unless the user explicitly requests amend mode.
 
 ## Roles invoked (agents dispatched)
 
@@ -44,21 +44,21 @@ This workflow is a **thin dispatch graph** per `[workflow-as-dispatch-graph]` (c
 
 Either runtime is valid:
 - **Today (no orchestrator):** human opens Architect agent on a CLI host (Claude Code, Codex), pastes workflow context, agent runs task, halts at HITL.
-- **v0.4 (orchestrator):** `python3 -m compass.orchestrator.run create-bet-architecture --context "bet-id: <bet-id>"`.
+- **v0.4 (orchestrator):** `python3 -m compass.orchestrator.run create-epic-architecture --context "epic-id: <epic-id>"`.
 
-### Step 1. `architect.draft-bet-architecture` (Architect agent owns)
+### Step 1. `architect.draft-epic-architecture` (Architect agent owns)
 
 **Dispatches:** Architect agent
-**Task definition:** `compass/agents/architect.md` → Task `draft-bet-architecture`
-**Input:** bet-id · brief · `docs/foundation/architecture.md` Stack table · `docs/foundation/product.md` · existing code (read-only) · prior bet architectures (if any)
-**What it covers:** state check (architecture_required: false → exit with DRI) → load context → foundational-stack deviation gate (STOP + escalate if new tools detected) → draft 12-section `docs/bets/<bet-id>/architecture.md` → set `status: proposed` → halt at HITL gate.
-**Output:** `docs/bets/<bet-id>/architecture.md` with `status: proposed`
+**Task definition:** `compass/agents/architect.md` → Task `draft-epic-architecture`
+**Input:** epic-id · brief · `docs/foundation/architecture.md` Stack table · `docs/foundation/product.md` · existing code (read-only) · prior bet architectures (if any)
+**What it covers:** state check (architecture_required: false → exit with DRI) → load context → foundational-stack deviation gate (STOP + escalate if new tools detected) → draft 12-section `docs/epics/<epic-id>/architecture.md` → set `status: proposed` → halt at HITL gate.
+**Output:** `docs/epics/<epic-id>/architecture.md` with `status: proposed`
 
 ### Step 2. **HITL gate** (human)
 
 **Dispatches:** HUMAN (not an agent)
-**Artifact target:** `docs/bets/<bet-id>/architecture.md`
-**What it covers:** human reviews `docs/bets/<bet-id>/architecture.md` against the Verification checklist below. If all items pass, human approves — orchestrator runs promote to the Artifact target with `status: approved` automatically; interactive sessions flip `status: proposed` → `status: approved` (or `--approve` CLI) and set `architecture_status: approved` in brief frontmatter + commit. If any item fails, reject and re-dispatch Architect. **Per Principle #16:** Architect must NOT self-approve; HITL is a hard stop.
+**Artifact target:** `docs/epics/<epic-id>/architecture.md`
+**What it covers:** human reviews `docs/epics/<epic-id>/architecture.md` against the Verification checklist below. If all items pass, human approves — orchestrator runs promote to the Artifact target with `status: approved` automatically; interactive sessions flip `status: proposed` → `status: approved` (or `--approve` CLI) and set `architecture_status: approved` in brief frontmatter + commit. If any item fails, reject and re-dispatch Architect. **Per Principle #16:** Architect must NOT self-approve; HITL is a hard stop.
 
 ### Step 3. `delivery-manager.update-status` (Delivery Manager agent owns)
 
@@ -71,7 +71,7 @@ Either runtime is valid:
 
 Before marking this workflow complete, verify:
 
-- [ ] `docs/bets/<bet-id>/architecture.md` exists with `status: approved`
+- [ ] `docs/epics/<epic-id>/architecture.md` exists with `status: approved`
 - [ ] Brief frontmatter has `architecture_status: approved`
 - [ ] All 12 architecture sections populated (Decision · Context · Approach · Data model · API/contracts · Dependencies · Cross-system implications · Alternatives · Consequences · Test strategy · Rollout · DRI Log)
 - [ ] Foundational-stack assertion explicit: either "no deviation — uses `<stack entries>`" OR "deviation escalated — awaiting ADR-NNN"
@@ -83,7 +83,7 @@ Before marking this workflow complete, verify:
 
 ## Output summary contract
 
-**TL;DR** (3 bullets max) · **Files created/modified** (paths + change types) · **Next recommended command** (typically `/create-story <bet-id>`) · **Open questions/risks** if applicable.
+**TL;DR** (3 bullets max) · **Files created/modified** (paths + change types) · **Next recommended command** (typically `/create-story <epic-id>`) · **Open questions/risks** if applicable.
 
 ## Notes
 

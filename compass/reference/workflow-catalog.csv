@@ -1,5 +1,6 @@
 workflow,step,kind,agent,practice,task,conditional,detail
 advance,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+basecamp,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
 build,1,agent,engineer,Engineering,implement-story,,engineer.implement-story (Engineer agent owns) — covers Phase 2 + Phase 4
 build,2,agent,automation,QA,write-e2e-tests,,automation.write-e2e-tests (Automation agent owns) — covers Phase 3
 build,3,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns) — covers Phase 5 review side
@@ -8,14 +9,14 @@ build,5,agent,pm,Product,arbitrate-dispute,,pm.arbitrate-dispute (PM agent owns)
 build,6,hitl,human,,approve,,HITL gate — human approves merge (human)
 build,7,machine,,,mechanical check,,Mechanical merge constraints (CI + branch protection)
 build,8,other,,,Post-merge,,Post-merge — tech-writer engagement + story status finalization
-create-bet-architecture,1,agent,architect,Engineering,draft-bet-architecture,,architect.draft-bet-architecture (Architect agent owns)
-create-bet-architecture,2,hitl,human,,approve,,HITL gate (human)
-create-bet-architecture,3,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
-create-bet-portfolio,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
 create-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,,researcher.cite-evidence-6-category-9-moat (Researcher agent owns)
 create-brief,2,agent,pm,Product,draft-brief,,pm.draft-brief (PM agent owns)
 create-brief,3,hitl,human,,approve,,HITL gate (human)
 create-brief,4,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+create-epic-architecture,1,agent,architect,Engineering,draft-epic-architecture,,architect.draft-epic-architecture (Architect agent owns)
+create-epic-architecture,2,hitl,human,,approve,,HITL gate (human)
+create-epic-architecture,3,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+create-epics,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
 create-product-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,,researcher.cite-evidence-6-category-9-moat (Researcher agent owns)
 create-product-brief,2,hitl,human,,approve,,HITL gate (human) — research review
 create-product-brief,3,agent,pm,Product,draft-product-brief,,pm.draft-product-brief (PM agent owns)
@@ -23,7 +24,7 @@ create-product-brief,4,hitl,human,,approve,,HITL gate (human) — brief approval
 create-product-brief,5,agent,designer,Design,spec-design-foundation,,designer.spec-design-foundation (Designer agent owns)
 create-product-brief,6,hitl,human,,approve,,HITL gate (human) — design foundation approval
 create-product-brief,7,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
-create-story,1,agent,pm,Product,decompose-bet-to-story,,pm.decompose-bet-to-story (PM agent owns)
+create-story,1,agent,pm,Product,decompose-epic-to-story,,pm.decompose-epic-to-story (PM agent owns)
 create-story,2,agent,designer,Design,draft-design-spec,,designer.draft-design-spec (Designer agent owns) — per UI slice (into the design story)
 create-story,3,agent,ux-writer,Design,write-copy,,ux-writer.write-copy (UX Writer agent owns) — per UI slice (into the copy story)
 create-story,4,hitl,human,,approve,,HITL gate (human — only when hitl_level: every_phase)
@@ -35,6 +36,7 @@ fix,3,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns)
 fix,4,agent,engineer,Engineering,respond-to-review,,engineer.respond-to-review (Engineer agent owns)
 fix,5,hitl,human,,approve,,HITL gate — approve merge (human)
 fix,6,agent,tech-writer,Product,accumulate-changelog,,tech-writer.accumulate-changelog (Tech Writer agent owns)
+groundwork,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 improvements,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
 measure,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 metrics,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review

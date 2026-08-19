@@ -52,7 +52,7 @@ class TestSlotDetection(unittest.TestCase):
 
     def test_repo_paths_are_not_ticket_slots(self):
         for path in ("docs/foundation/product.md",
-                     "docs/bets/<bet-id>/brief.md",
+                     "docs/epics/<epic-id>/brief.md",
                      "docs/foundation/architecture.md"):
             self.assertFalse(docs_primary.is_ticket_slot(path), path)
 
@@ -237,10 +237,10 @@ class TestExternalModeRewrite(TicketSlotCase):
         # A bet brief is ticket-projected by a different mechanism (#127) — this
         # rewrite must not swallow it.
         self._config("external")
-        p = self.project_dir / "docs" / "bets" / "X" / "brief.md"
+        p = self.project_dir / "docs" / "epics" / "X" / "brief.md"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("---\nstatus: approved\n---\n# B", encoding="utf-8")
-        met, how = _requirement_met(self.project_dir, "docs/bets/X/brief.md")
+        met, how = _requirement_met(self.project_dir, "docs/epics/X/brief.md")
         self.assertTrue(met)
         self.assertIn("frontmatter", how)
 
@@ -258,7 +258,7 @@ class TestProducerHint(unittest.TestCase):
         self.assertEqual(_producer_hint("research@tickets"), "create-product-brief")
 
     def test_repo_paths_keep_their_existing_hints(self):
-        self.assertEqual(_producer_hint("docs/bets/X/brief.md"), "create-brief")
+        self.assertEqual(_producer_hint("docs/epics/X/brief.md"), "create-brief")
         self.assertEqual(_producer_hint("docs/foundation/architecture.md"),
                          "setup-foundation-architecture")
 

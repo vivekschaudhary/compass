@@ -20,7 +20,7 @@ compass-run --help
 
 **2. The two dirs (this is the whole mental model).**
 - **`--compass-dir`** → the *framework* (this repo's `compass/`: agents, workflows, `config.yaml`).
-- **`--project-dir`** → *your project* (where artifacts land: `docs/bets/…`).
+- **`--project-dir`** → *your project* (where artifacts land: `docs/epics/…`).
 - One framework drives many projects. `compass-run` reads the framework from `--compass-dir`, writes artifacts to `--project-dir`.
 
 **3. Run flat-cost on your subscriptions (no API keys).**
@@ -150,12 +150,12 @@ Compass asks ~12 stack questions (with smart defaults), scaffolds the repo with 
 ### Step 3 — MVP bet portfolio (bootstrap, new projects only)
 
 ```
-/create-bet-portfolio
+/create-epics
 ```
 
 PM + Researcher draft the **MVP wedge** — 3-6 stub briefs that together let one real user complete the core value loop once. You'll be asked the forcing question: "What does this product need to do for one real user to complete the core value loop once?" Anything beyond that goes into "Deliberately out of MVP" and waits.
 
-Output: `docs/foundation/portfolio.md` (with Mermaid dependency graph + parallel-build candidates) + stub briefs at `docs/bets/<bet-id>/brief.md` with `portfolio_stub: true`.
+Output: `docs/foundation/portfolio.md` (with Mermaid dependency graph + parallel-build candidates) + stub briefs at `docs/epics/<epic-id>/brief.md` with `portfolio_stub: true`.
 
 **Approve** the portfolio doc before promoting any stub.
 
@@ -177,17 +177,17 @@ For each MVP bet, when you're ready to fully scope it:
 /create-brief PROJ-XX
 ```
 
-Detects the portfolio stub at `docs/bets/PROJ-XX/brief.md` and promotes it: fills in problem, user, scope, research, guardrails. Clears `portfolio_stub`. Approve when ready.
+Detects the portfolio stub at `docs/epics/PROJ-XX/brief.md` and promotes it: fills in problem, user, scope, research, guardrails. Clears `portfolio_stub`. Approve when ready.
 
 (For mid-project new bets — not from the portfolio — keep using `/create-brief <source>` or `/create-brief "<free text>"` as before.)
 
 ### Step 5 — bet-level architecture (if needed)
 
 ```
-/create-bet-architecture PROJ-XX
+/create-epic-architecture PROJ-XX
 ```
 
-Architect + Enterprise/Solution Architect produce `docs/bets/PROJ-XX/architecture.md`. Skipped automatically for small bets.
+Architect + Enterprise/Solution Architect produce `docs/epics/PROJ-XX/architecture.md`. Skipped automatically for small bets.
 
 ### Step 6 — first story
 

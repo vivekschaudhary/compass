@@ -216,7 +216,7 @@ class TestConnectorRouting(unittest.TestCase):
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
 
     def test_jira_fallback_when_unconfigured(self):
-        rel = "docs/bets/CB-1/stories/CB-1-1/story.md"
+        rel = "docs/epics/CB-1/stories/CB-1-1/story.md"
         label = connector.push_artifact(self.project_dir, rel, "# Story\nbody", "jira")
         self.assertIn("filesystem fallback — jira not configured", label)
         self.assertTrue((self.project_dir / rel).exists())  # Compass-primary cache always written
@@ -224,7 +224,7 @@ class TestConnectorRouting(unittest.TestCase):
     def test_jira_create_then_idempotent_update(self):
         os.environ.update(JIRA_BASE_URL="https://a.net", JIRA_EMAIL="e",
                           JIRA_API_TOKEN="t", JIRA_PROJECT="PROJ")
-        rel = "docs/bets/CB-1/stories/CB-1-1/story.md"
+        rel = "docs/epics/CB-1/stories/CB-1-1/story.md"
         content = "---\nid: CB-1-1\n---\n# My story\nbody"
         t1 = FakeTransport([(201, {"key": "PROJ-7"})])
         label = connector.push_artifact(self.project_dir, rel, content, "jira", transport=t1)
@@ -242,19 +242,19 @@ class TestConnectorRouting(unittest.TestCase):
         (self.project_dir / "compass" / "config.yaml").write_text(
             "connectors:\n  ticketing: jira\n  docs: confluence\n")
         self.assertEqual(connector.resolve_connector_for_artifact(
-            "docs/bets/CB-1/stories/CB-1-1/story.md", self.project_dir), "jira")
+            "docs/epics/CB-1/stories/CB-1-1/story.md", self.project_dir), "jira")
         self.assertEqual(connector.resolve_connector_for_artifact(
-            "docs/bets/CB-1/brief.md", self.project_dir), "confluence")
+            "docs/epics/CB-1/brief.md", self.project_dir), "confluence")
         # #71: a fix record routes to ticketing (Jira), not docs
         self.assertEqual(connector.resolve_connector_for_artifact(
             "docs/fixes/FIX-1.md", self.project_dir), "jira")
         self.assertEqual(connector.resolve_connector_for_artifact(
-            "docs/bets/CB-1/fixes/FIX-2.md", self.project_dir), "jira")
+            "docs/epics/CB-1/fixes/FIX-2.md", self.project_dir), "jira")
         # #72: an ops-change routes to ticketing (Jira), not docs
         self.assertEqual(connector.resolve_connector_for_artifact(
             "docs/ops/OPS-1.md", self.project_dir), "jira")
         self.assertEqual(connector.resolve_connector_for_artifact(
-            "docs/bets/CB-1/ops/OPS-2.md", self.project_dir), "jira")
+            "docs/epics/CB-1/ops/OPS-2.md", self.project_dir), "jira")
 
     def test_pointer_frontmatter_roundtrip(self):
         c = connector._set_frontmatter_field("---\nid: X\n---\nbody", "jira_key", "PROJ-9")
@@ -276,22 +276,22 @@ class TestIssueTypeResolution(unittest.TestCase):
 
     def test_resolve_from_path_fallback(self):
         r = connector.resolve_issue_type
-        self.assertEqual(r("docs/bets/CB-1/stories/CB-1-1/story.md", ""), "Story")
+        self.assertEqual(r("docs/epics/CB-1/stories/CB-1-1/story.md", ""), "Story")
         self.assertEqual(r("docs/ops/OPS-1.md", ""), "Task")
-        self.assertEqual(r("docs/bets/CB-1/architecture.md", ""), "Task")
-        self.assertEqual(r("docs/bets/CB-1/brief.md", ""), "Epic")   # back-compat default
+        self.assertEqual(r("docs/epics/CB-1/architecture.md", ""), "Task")
+        self.assertEqual(r("docs/epics/CB-1/brief.md", ""), "Epic")   # back-compat default
 
     def test_back_compat_story_unchanged(self):
         # frontmatter type wins, but a plain story path still → Story (no regression)
         self.assertEqual(connector.resolve_issue_type(
-            "docs/bets/CB-1/stories/CB-1-1/story.md", "# S\nbody"), "Story")
+            "docs/epics/CB-1/stories/CB-1-1/story.md", "# S\nbody"), "Story")
 
     def test_fix_record_types(self):
         # #71: defect → Bug, enhancement → Story; a fix path with no type defaults to Bug
         r = connector.resolve_issue_type
         self.assertEqual(r("docs/fixes/FIX-1.md", "---\ntype: bug\n---\n"), "Bug")
         self.assertEqual(r("docs/fixes/FIX-1.md", "---\ntype: enhancement\n---\n"), "Story")
-        self.assertEqual(r("docs/bets/CB-1/fixes/FIX-2.md", ""), "Bug")   # path default
+        self.assertEqual(r("docs/epics/CB-1/fixes/FIX-2.md", ""), "Bug")   # path default
 
     def test_ops_change_types(self):
         # #72: a routine ops change → Task; an emergency (incident-driven) one → Bug
@@ -330,7 +330,7 @@ class TestPushArtifactIssueType(unittest.TestCase):
 
     def test_default_still_story_for_story_path(self):
         t = FakeTransport([(201, {"key": "PROJ-3"})])
-        connector.push_artifact(self.project_dir, "docs/bets/CB-1/stories/CB-1-1/story.md",
+        connector.push_artifact(self.project_dir, "docs/epics/CB-1/stories/CB-1-1/story.md",
                                 "# S\nbody", "jira", transport=t)
         self.assertEqual(t.calls[0]["body"]["fields"]["issuetype"], {"name": "Story"})
 
@@ -364,7 +364,7 @@ class TestPushErrorSurfacing(unittest.TestCase):
                                "JIRA_PROJECT": "WLT"})
             try:
                 t = FakeTransport([(400, {"errorMessages": ["project WLT does not exist"]})])
-                label = connector.push_artifact(project, "docs/bets/B/stories/B-1/story.md",
+                label = connector.push_artifact(project, "docs/epics/B/stories/B-1/story.md",
                                                 "# S\nbody", "jira", transport=t)
             finally:
                 for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT"):
@@ -468,7 +468,7 @@ class TestProjectBetStructure(unittest.TestCase):
         os.environ.update({"JIRA_BASE_URL": "https://acme.atlassian.net",
                            "JIRA_EMAIL": "x@x.com", "JIRA_API_TOKEN": "t",
                            "JIRA_PROJECT": "KAN"})
-        b = self.project / "docs" / "bets" / "WLT-27"
+        b = self.project / "docs" / "epics" / "WLT-27"
         (b / "stories" / "WLT-27-3").mkdir(parents=True)
         (b / "stories" / "WLT-27-4").mkdir(parents=True)
         (b / "brief.md").write_text("---\nid: WLT-27\n---\n# The Bet\n", encoding="utf-8")
@@ -489,7 +489,7 @@ class TestProjectBetStructure(unittest.TestCase):
         actions = connector.project_bet_jira_structure(self.project, "WLT-27", transport=t)
         # epic created + pointer written back to brief.md
         self.assertIn("epic KAN-EPIC created", actions)
-        brief = (self.project / "docs" / "bets" / "WLT-27" / "brief.md").read_text()
+        brief = (self.project / "docs" / "epics" / "WLT-27" / "brief.md").read_text()
         self.assertIn("jira_epic_key: KAN-EPIC", brief)
         # both stories parented, and KAN-4 blocked by KAN-3
         self.assertTrue(any("KAN-3 → under KAN-EPIC" in a for a in actions))
@@ -502,7 +502,7 @@ class TestProjectBetStructure(unittest.TestCase):
 
     def test_idempotent_epic_reuse_and_skip_existing_link(self):
         # brief already has the epic; the link already exists → no epic create, no re-link
-        b = self.project / "docs" / "bets" / "WLT-27"
+        b = self.project / "docs" / "epics" / "WLT-27"
         (b / "brief.md").write_text("---\nid: WLT-27\njira_epic_key: KAN-EPIC\n---\n# The Bet\n",
                                     encoding="utf-8")
         class _Existing(self._Routing):
@@ -521,7 +521,7 @@ class TestProjectBetStructure(unittest.TestCase):
     def test_external_epic_key_override_needs_no_brief(self):
         # #127 (Phase 1c): pass an existing Epic key → parent under it WITHOUT reading or
         # creating one from brief.md (external mode has no local brief).
-        b = self.project / "docs" / "bets" / "WLT-27"
+        b = self.project / "docs" / "epics" / "WLT-27"
         (b / "brief.md").unlink()  # external mode: no brief on disk
         t = self._Routing()
         actions = connector.project_bet_jira_structure(
@@ -535,7 +535,7 @@ class TestProjectBetStructure(unittest.TestCase):
     def test_ready_label_only_on_dor_met_stories(self):
         # #127 (Phase 1c): with ready_label=True, a story whose frontmatter is `status: ready`
         # (DoR met) gets the `ready` label; a story that isn't ready does NOT.
-        b = self.project / "docs" / "bets" / "WLT-27"
+        b = self.project / "docs" / "epics" / "WLT-27"
         (b / "stories" / "WLT-27-3" / "story.md").write_text(
             "---\nid: WLT-27-3\njira_key: KAN-3\nstatus: ready\ndependencies: []\n---\n# API\n",
             encoding="utf-8")
@@ -570,7 +570,7 @@ class TestOnDemandPush(unittest.TestCase):
                   "CONFLUENCE_SPACE", "ATLASSIAN_BASE_URL", "ATLASSIAN_EMAIL",
                   "ATLASSIAN_API_TOKEN"):
             self._saved[v] = os.environ.pop(v, None)
-        b = self.project / "docs" / "bets" / "CB-1"
+        b = self.project / "docs" / "epics" / "CB-1"
         (b / "stories" / "CB-1-1").mkdir(parents=True)
         (b / "brief.md").write_text("---\nid: CB-1\n---\n# Brief\nbody\n", encoding="utf-8")
         (b / "architecture.md").write_text("---\nstatus: approved\n---\n# Arch\n", encoding="utf-8")
@@ -586,26 +586,26 @@ class TestOnDemandPush(unittest.TestCase):
     def test_bet_doc_paths_order(self):
         from compass.orchestrator.run import _bet_doc_paths
         paths = _bet_doc_paths(self.project, "CB-1")
-        self.assertEqual(paths[0], "docs/bets/CB-1/brief.md")
-        self.assertIn("docs/bets/CB-1/architecture.md", paths)
+        self.assertEqual(paths[0], "docs/epics/CB-1/brief.md")
+        self.assertIn("docs/epics/CB-1/architecture.md", paths)
         self.assertTrue(paths[-1].endswith("CB-1-1/story.md"))
 
     def test_story_routes_to_jira(self):
         from compass.orchestrator.run import _project_artifact
         _, label = _project_artifact(self.project, self.compass,
-                                     "docs/bets/CB-1/stories/CB-1-1/story.md")
+                                     "docs/epics/CB-1/stories/CB-1-1/story.md")
         self.assertIn("jira", label)          # routed to the ticketing backend
         self.assertIn("fallback", label)      # uncredentialed → honest fallback
 
     def test_brief_routes_to_confluence(self):
         from compass.orchestrator.run import _project_artifact
-        _, label = _project_artifact(self.project, self.compass, "docs/bets/CB-1/brief.md")
+        _, label = _project_artifact(self.project, self.compass, "docs/epics/CB-1/brief.md")
         self.assertIn("confluence", label)
         self.assertIn("fallback", label)
 
     def test_missing_file_errors(self):
         from compass.orchestrator.run import _project_artifact
-        _, label = _project_artifact(self.project, self.compass, "docs/bets/CB-1/nope.md")
+        _, label = _project_artifact(self.project, self.compass, "docs/epics/CB-1/nope.md")
         self.assertIn("ERROR", label)
 
 

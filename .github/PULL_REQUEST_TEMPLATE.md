@@ -9,11 +9,11 @@ Canonical PR template content. Copied to .github/PULL_REQUEST_TEMPLATE.md
 
 ## Linked artifacts
 
-- Bet: `docs/bets/<bet-id>/brief.md`
-- Architecture: `docs/bets/<bet-id>/architecture.md` (if exists)
-- Story: `docs/bets/<bet-id>/stories/<story-id>/story.md`
-- Design: `docs/bets/<bet-id>/stories/<story-id>/design.md` (if UI)
-- Copy: `docs/bets/<bet-id>/stories/<story-id>/copy.md` (if UI)
+- Bet: `docs/epics/<epic-id>/brief.md`
+- Architecture: `docs/epics/<epic-id>/architecture.md` (if exists)
+- Story: `docs/epics/<epic-id>/stories/<story-id>/story.md`
+- Design: `docs/epics/<epic-id>/stories/<story-id>/design.md` (if UI)
+- Copy: `docs/epics/<epic-id>/stories/<story-id>/copy.md` (if UI)
 - Ticket: <Jira/Linear link>
 
 ## Changes per area

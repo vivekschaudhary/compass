@@ -65,7 +65,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 **You spec what a human designer must produce; you do NOT produce the Figma or a `design.md` sidecar (#171).** AI can't yet produce enterprise design — the design is human WORK, tracked as its own story (`type: design`, `owner: human`, `status: needs-design`). You fill that story's *requirements*; a human designer pastes the Figma into its `## Design deliverable (human)` section and flips `status: needs-design → ready`, which unblocks the dependent feature story.
 
-**Gate:** A **design story** exists for the UI slice (`type: design`, `status: needs-design`) at `docs/bets/<bet-id>/stories/<design-story-id>/story.md`. Approved brief loaded. **`design-foundation@docs` and `design-library@docs` approved** — a per-story design spec that invents its own components and states is how a product accumulates a different answer per story. If either is missing, say so and refuse rather than inventing a house style one story at a time.
+**Gate:** A **design story** exists for the UI slice (`type: design`, `status: needs-design`) at `docs/epics/<epic-id>/stories/<design-story-id>/story.md`. Approved brief loaded. **`design-foundation@docs` and `design-library@docs` approved** — a per-story design spec that invents its own components and states is how a product accumulates a different answer per story. If either is missing, say so and refuse rather than inventing a house style one story at a time.
 **Work (write INTO the design story's `story.md`, not a sidecar):**
 1. Read brief + the slice; identify all flows (entry → steps → success + failure paths) — record as the story's description + acceptance criteria.
 2. Map every screen: default · empty · loading · error · success states — one requirement line per state.
@@ -87,7 +87,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 - **Don't produce the design deliverable (#171).** AI specs the *requirements* into the design story; a human designer produces the Figma. Never fabricate a Figma link or fill `## Design deliverable (human)` — leave it `<TBD>` and keep `status: needs-design`.
 - **Don't create a `design.md` sidecar.** Write requirements INTO the design story's `story.md` (it's tracked WORK → a ticket the control tower sees), not a loose file.
 - **Don't write copy.** Flag needs for UX Writer verbatim (e.g., `[copy: cta-submit-payment]`).
-- **Don't pick architecture.** Stack/data-model questions → escalate to `/create-bet-architecture`.
+- **Don't pick architecture.** Stack/data-model questions → escalate to `/create-epic-architecture`.
 - **Don't skip states.** Refuse to mark spec done if any screen's empty/error/loading states are undesigned.
 - **Don't reinvent design system.** Use existing components; flag genuinely new patterns only.
 

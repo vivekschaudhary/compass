@@ -5,15 +5,15 @@ Top-down view: foundation → OKR → feature → story → engineering metrics.
 ## Trigger
 
 - `/metrics` — all bets aggregate view
-- `/metrics <bet-id>` — single-bet drill-down
+- `/metrics <epic-id>` — single-bet drill-down
 - `/metrics --filter <window>` — time-bounded (all-time / current sprint / last quarter / custom)
 - `/metrics --hygiene` — show hygiene % of total work
 
 ## Process
 
 1. **Gather data:**
-   - Read all bets from `docs/bets/` (including foundation)
-   - **Read all `docs/bets/*/scan-report.md`** for findings posture (open/suppressed by severity, top patterns, trends)
+   - Read all bets from `docs/epics/` (including foundation)
+   - **Read all `docs/epics/*/scan-report.md`** for findings posture (open/suppressed by severity, top patterns, trends)
    - Read cached snapshots from `docs/metrics/` (JSON for machine, MD for human)
    - Pull live metrics from MCP sources (Sentry, observability, analytics) when staleness matters
    - Pull PR / commit data via GitHub MCP
@@ -21,11 +21,11 @@ Top-down view: foundation → OKR → feature → story → engineering metrics.
 2. **Compute aggregations:**
    - TL;DR at top: bet outcome rollup, **scanner posture (open/suppressed by severity)**, top trends, attention items
    - **Open findings roll-up** (see Output format below)
-   - Per-bet drill-down (when filtered or `/metrics <bet-id>`)
+   - Per-bet drill-down (when filtered or `/metrics <epic-id>`)
    - Engineering metrics per story (PRs, merge time, review cycles, CI time, deploy success, test coverage, app perf)
    - DRI risk/issue rollups
 3. **Surface trends** — always: deltas over the chosen window (including findings trends — Critical count, time-to-remediate)
-4. **Cache snapshots** to `docs/metrics/<bet-id>-<date>.{json,md}`
+4. **Cache snapshots** to `docs/metrics/<epic-id>-<date>.{json,md}`
 5. **Auto-run `/dashboard`** to refresh `docs/dashboard.html` so the latest metrics snapshot is visible in the browser view. Skip only if `docs/foundation/product.md` is missing.
 
 ## Output format

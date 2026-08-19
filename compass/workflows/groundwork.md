@@ -28,7 +28,7 @@ requires:
 produces:
   - docs/foundation/product.md@docs: approved
   - docs/foundation/architecture.md@docs: approved
-  - docs/bets/portfolio.md@docs: approved
+  - docs/epics/portfolio.md@docs: approved
 ---
 
 ## Purpose
@@ -36,7 +36,7 @@ produces:
 Establish what the engagement is building and how it will be built, so that delivery can start from
 a shared foundation rather than from each person's reading of the SOW.
 
-Ends when the first bet can be planned. It does not plan bets — that is delivery.
+Ends when the first epic can be planned. It does not plan epics — that is delivery.
 
 ## Dispatch graph
 
@@ -48,8 +48,8 @@ single agent task where that is genuinely all it is.
 |---|------|----------|-------|-------|----------|------------|
 | 1 | Define the product foundation | `workflow: create-product-brief` | researcher | `02-scope/sow` · `01-foundation/kickoff-backlog` | `docs/foundation/product.md` | — |
 | 2 | Establish the foundation architecture | `workflow: setup-foundation-architecture` | enterprise-architect | `docs/foundation/product.md` | `docs/foundation/architecture.md` | 1 |
-| 3 | Agree the bet portfolio | `workflow: create-bet-portfolio` | pm | `docs/foundation/product.md` | `docs/bets/portfolio.md` | 1 |
-| 4 | Plan the first milestone | `workflow: plan` | delivery-manager | `docs/bets/portfolio.md` | `docs/plan.md` | 3 |
+| 3 | Agree the epics | `workflow: create-epics` | pm | `docs/foundation/product.md` | `docs/epics/portfolio.md` | 1 |
+| 4 | Plan the first milestone | `workflow: plan` | delivery-manager | `docs/epics/portfolio.md` | `docs/plan.md` | 3 |
 | 5 | Start the rolling status | `workflow: status` | delivery-manager | `docs/plan.md` | `docs/status.md` | 4 |
 
 ## Gates
@@ -69,15 +69,15 @@ machine-evaluated; `judgment:` is measured by a person and recorded against thei
     judgment: every scope-level feature has a named home in the architecture
     judgment: the Enterprise Architect approved it
 
-### 3. Agree the bet portfolio
+### 3. Agree the epics
 
-    check:    docs/bets/portfolio.md is published
-    judgment: every bet traces to a commitment in the SOW
+    check:    docs/epics/portfolio.md is published
+    judgment: every epic traces to a commitment in the SOW
     judgment: the Product Manager approved it
 
 ### 4. Plan the first milestone
 
-    check:    docs/plan.md has a row per approved bet
+    check:    docs/plan.md has a row per approved epic
     check:    every row carries an estimate or an explicit `tbd — <reason>`
     judgment: the Delivery Manager approved the plan
 
@@ -89,7 +89,7 @@ machine-evaluated; `judgment:` is measured by a person and recorded against thei
 ## Not runnable yet
 
 Rows 3, 4 and 5 name workflows that exist in the catalogue with **zero steps** — no dispatch graph
-has been written for `create-bet-portfolio`, `plan` or `status`. Initiating groundwork today opens
+has been written for `create-epics`, `plan` or `status`. Initiating groundwork today opens
 their tasks and no agent can pick them up.
 
 They are listed rather than omitted because the phase genuinely requires them, and a backlog that

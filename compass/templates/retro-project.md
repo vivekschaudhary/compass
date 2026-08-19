@@ -15,7 +15,7 @@ consolidates_from:
   - docs/retros/role-engineer-<NNN>.md          # if exists
   - docs/retros/role-reviewer-<NNN>.md          # if exists
   - docs/retros/workflow-build-<NNN>.md         # if exists
-  - docs/bets/<bet-id>/retro.md                 # bet retros at outcome transition (if exists)
+  - docs/epics/<epic-id>/retro.md                 # bet retros at outcome transition (if exists)
 # Lives at docs/retros/<NNN>-<period>.md in consuming projects.
 ---
 

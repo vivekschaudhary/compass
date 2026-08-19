@@ -43,7 +43,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th work
 **Task definition:** `compass/agents/enterprise-architect.md` → Task `lead-ops-change`
 **Input:** ops description / ticket · `docs/foundation/architecture.md` · affected bet/system context
 **What it covers:** classify the change (additive / amendment / emergency) — record it as `change_class` in the doc frontmatter → determine bet-link vs standalone hygiene → assess blast radius (`[cross-artifact-sweep-on-contract-shift]`) → draft the ops-change doc (`compass/templates/ops-change.md`) with domain tag, affected systems, and a **mandatory, explicit, testable, time-bounded rollback procedure** → DRI seed → **project the ops-change to Jira (#72) as a Task** (or a **Bug** when `change_class: emergency` — an incident-driven change), **bet-linked → under the bet's Epic**, hygiene → standalone, holding the `jira_key` pointer (status derives from ground truth, #57).
-**Output:** ops-change doc (`docs/ops/<ops-id>.md` or `docs/bets/<bet-id>/ops/<ops-id>.md`), `status: proposed`, projected to Jira as a **Task** (or **Bug** if emergency)
+**Output:** ops-change doc (`docs/ops/<ops-id>.md` or `docs/epics/<epic-id>/ops/<ops-id>.md`), `status: proposed`, projected to Jira as a **Task** (or **Bug** if emergency)
 
 ### Step 2. **HITL gate — plan approved** (human)
 

@@ -62,7 +62,7 @@ Each entry uses this structure. Append-only.
 
 **Pattern surfaced:** `[story-claim-trust-without-primary-doc-verification]` — Engineer accepted the story's framework claim without verifying against current Next.js docs. The story was written 2 weeks before the implementation; framework changed in between.
 
-**Evidence:** docs/bets/PROJ-42/stories/story-3.md (the load-bearing claim); PR #18 review comment from Codex.
+**Evidence:** docs/epics/PROJ-42/stories/story-3.md (the load-bearing claim); PR #18 review comment from Codex.
 
 **Instance count (in this log):** 3 (prior: 2026-05-22 PROJ-31 story-2; 2026-05-29 PROJ-38 story-1).
 

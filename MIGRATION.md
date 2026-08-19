@@ -127,7 +127,7 @@ Expected: step list prints with `compass/agents/<agent>.md` references. No error
 
 **Half-migrated state is the dangerous one.** If you copy `compass/agents/` but leave old workflow files pointing to `compass/roles/`, the orchestrator will throw file-not-found errors. Always copy agents + workflows together.
 
-**Per-bet artifacts are untouched.** `docs/bets/`, `docs/foundation/`, `docs/status.md` — none of these are touched by the migration. Your project history is safe.
+**Per-bet artifacts are untouched.** `docs/epics/`, `docs/foundation/`, `docs/status.md` — none of these are touched by the migration. Your project history is safe.
 
 **All 14 legacy roles are now migrated as of v0.3.36.** `compass/agents/` contains the full set — the 14 migrated roles plus `gtm`, `sre`, `product-owner`, declared new at v1.0 (not yet coded; 17 agents total). `compass/roles/` is kept for the v0.3.x grace period and removed in v0.4.
 

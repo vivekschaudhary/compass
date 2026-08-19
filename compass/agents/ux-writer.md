@@ -30,7 +30,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 **You spec which copy a human must write; you do NOT write the final strings or a `copy.md` sidecar (#171).** Like design, enterprise copy is human WORK, tracked as its own story (`type: copy`, `owner: human`, `status: needs-copy`). You fill that story's *copy-slot inventory* (every slot + its context/constraint); a human writes the strings into its `## Copy deliverable (human)` table and flips `status: needs-copy → ready`, which unblocks the dependent feature story.
 
-**Gate:** A **copy story** exists for the UI slice (`type: copy`, `status: needs-copy`) at `docs/bets/<bet-id>/stories/<copy-story-id>/story.md`, with the sibling design story's copy placeholders available. Tone/voice guidelines loaded from `docs/foundation/product.md` OR absence noted.
+**Gate:** A **copy story** exists for the UI slice (`type: copy`, `status: needs-copy`) at `docs/epics/<epic-id>/stories/<copy-story-id>/story.md`, with the sibling design story's copy placeholders available. Tone/voice guidelines loaded from `docs/foundation/product.md` OR absence noted.
 **Work (write the slot inventory INTO the copy story's `story.md`, not a sidecar):**
 1. Read the design story; list **every** copy slot (e.g., `[copy: error-invalid-email]`) — labels · buttons · errors · empty states · helper text · notifications · confirmations.
 2. Read the brief for the user's mindset at each moment.

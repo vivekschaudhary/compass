@@ -14,7 +14,7 @@ The retro **reports**, it doesn't **prescribe**. Patterns surfaced feed future i
 |---|---|---|---|---|
 | `framework` | Compass framework evolution | **GitHub: closed issues + merged PRs** in `vivekschaudhary/compass` for the period (#42 — `compass/workflows/improvements.md` is **frozen at #181**, the historical source for retros ≤ #031 only) | `compass/workflows/retros/<date>-retro-<NNN>-<period>.md` | Every ~10 shipped changes (was 5 → 10 at #146) |
 | `project` | Cross-bet patterns within a consuming project | `docs/improvements.md` | `docs/retros/<NNN>-<period>.md` | Every 5 improvements (project's own) |
-| `bet` | Bet outcome + DRI log + scope drift | `docs/bets/<bet-id>/` (DRI logs + outcome) | `docs/bets/<bet-id>/retro.md` | At bet outcome transition (won / learning / inconclusive) |
+| `bet` | Bet outcome + DRI log + scope drift | `docs/epics/<epic-id>/` (DRI logs + outcome) | `docs/epics/<epic-id>/retro.md` | At bet outcome transition (won / learning / inconclusive) |
 | `role` | Per-role / per-agent activity patterns | `docs/role-activity/<role>.md` | `docs/retros/role-<role>-<NNN>.md` | Every N activity entries (default ≥5) |
 | `workflow` | Per-workflow execution patterns | `docs/workflow-runs/<workflow>.md` | `docs/retros/workflow-<workflow>-<NNN>.md` | Every N runs (default ≥5) |
 | `org` | Patterns across multiple projects | aggregator output (multiple `docs/improvements.md` files) | `<org-hub>/retros/org-<NNN>.md` | Quarterly (cron) or manual |
@@ -47,7 +47,7 @@ For each altitude, the workflow first checks state:
 
 1. **Verify gate:** source log exists at the altitude-specific path; threshold met (or `--force`).
 2. **Identify batch:** read the source log; find the next batch of entries not yet covered by a retro at this altitude. Retros are sequential and disjoint within an altitude.
-3. **Identify child retros to consolidate** (project + org altitudes only): list paths under `docs/retros/role-*.md`, `docs/retros/workflow-*.md`, `docs/bets/*/retro.md` within the project scope. These become the retro's `consolidates_from:` frontmatter.
+3. **Identify child retros to consolidate** (project + org altitudes only): list paths under `docs/retros/role-*.md`, `docs/retros/workflow-*.md`, `docs/epics/*/retro.md` within the project scope. These become the retro's `consolidates_from:` frontmatter.
 4. **Load the appropriate persona's context:**
    - framework altitude → framework-Architect persona (Compass-on-Compass)
    - project altitude → Delivery Manager agent (`compass/agents/delivery-manager.md`)
@@ -71,7 +71,7 @@ For each altitude, the workflow first checks state:
 
 Higher-altitude retros consume lower-altitude retros + source logs:
 
-- **Project retro reads:** project's `docs/improvements.md` (primary) + project's existing role retros (`docs/retros/role-*.md`) + workflow retros (`docs/retros/workflow-*.md`) + bet retros (`docs/bets/*/retro.md`). Lists consumed files in `consolidates_from:` frontmatter.
+- **Project retro reads:** project's `docs/improvements.md` (primary) + project's existing role retros (`docs/retros/role-*.md`) + workflow retros (`docs/retros/workflow-*.md`) + bet retros (`docs/epics/*/retro.md`). Lists consumed files in `consolidates_from:` frontmatter.
 - **Org retro reads:** N project paths' `docs/improvements.md` + their `docs/retros/` archives. Aggregator script (`compass/scripts/aggregate-retros.py`, deferred to when needed per `[declare-not-implement]`) walks the configured paths.
 - **Bet retro reads:** the bet's own DRI log + the outcome transition decision. Single source; no child retros.
 - **Role + workflow retros are leaf altitudes** — they read raw logs (`docs/role-activity/<role>.md` / `docs/workflow-runs/<workflow>.md`); they do NOT consolidate other retros. They produce the bottom-up signal that bubbles to project altitude.

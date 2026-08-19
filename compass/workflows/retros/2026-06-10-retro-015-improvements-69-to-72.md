@@ -40,7 +40,7 @@ consolidates_from: []
 | Anti-pattern | Instances | Hardening shape applied | Convention-ready? |
 |---|---|---|---|
 | **Counter header / entry discrepancy** | #65 gap + this retro header mismatch | Named gap in #66 entry ("logging gap honestly"), entry-level 5-of-5 tracking in #72 | No — 1 instance; minor; update the header discipline if it recurs |
-| **Architecture declared, local artifact still written** | #70 (runs.jsonl = source of truth declared) yet PM agent still writes `docs/bets/<id>/brief.md` | #70 amendment named it correctly; connector abstraction not yet built so filesystem fallback IS the connector | No — expected state; becomes anti-pattern if connector ships and PM doesn't update |
+| **Architecture declared, local artifact still written** | #70 (runs.jsonl = source of truth declared) yet PM agent still writes `docs/epics/<id>/brief.md` | #70 amendment named it correctly; connector abstraction not yet built so filesystem fallback IS the connector | No — expected state; becomes anti-pattern if connector ships and PM doesn't update |
 | **Unmigrated agents deferred again** | enterprise-architect, security-reviewer, tech-writer not migrated in this batch (was planned as #72, replaced by hitl.jsonl implementation) | Documented in MIGRATION.md as "3 not-yet-migrated agents" | No — justified tradeoff; track as drift |
 
 ## Convention candidates

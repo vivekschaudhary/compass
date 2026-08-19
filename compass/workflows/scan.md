@@ -4,7 +4,7 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 
 ## Trigger
 
-- `/scan <bet-id>` — scan one bet
+- `/scan <epic-id>` — scan one bet
 - `/scan --all` — aggregate posture across all active bets (one report per bet + aggregate roll-up in chat)
 - `/scan --phase <name>` — single-phase scan across all bets (e.g., `/scan --phase production-ready`)
 - **Auto-invoked** by `/build` at phase boundaries (Build → Production Ready, → GTM, → Operate)
@@ -15,7 +15,7 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 | State                                          | Action                                                                    |
 | ---------------------------------------------- | ------------------------------------------------------------------------- |
 | Bet ID not provided AND no `--all` / `--phase` | **Refuse.** Tell user to specify a bet or use `--all`.                    |
-| Bet doesn't exist at `docs/bets/<bet-id>/`     | **Refuse.** Pointer to `/create-brief` or `/create-bet-portfolio`.        |
+| Bet doesn't exist at `docs/epics/<epic-id>/`     | **Refuse.** Pointer to `/create-brief` or `/create-epics`.        |
 | Previous scan report exists                    | Preserve existing suppressions; re-render report; bump version.           |
 | No previous scan report                        | First scan — seed report with full check sweep.                           |
 
@@ -34,7 +34,7 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 5. **Run checks for current phase + all prior phases** (later phases not yet entered are reported as "phase not yet active").
 6. **Preserve suppressions** from previous report. Flag stale ones (rationale > 90 days old OR underlying check changed).
 7. **Compute confidence** per finding using the three signals (content depth, source freshness, cross-artifact corroboration) — state the reasoning briefly in the Reason field.
-8. **Write `docs/bets/<bet-id>/scan-report.md`** from `compass/templates/scan-report.md`. Update frontmatter (`scanned_at`, `current_phase`, `open_findings` counts, `suppressed_findings`, `blocking_advance`).
+8. **Write `docs/epics/<epic-id>/scan-report.md`** from `compass/templates/scan-report.md`. Update frontmatter (`scanned_at`, `current_phase`, `open_findings` counts, `suppressed_findings`, `blocking_advance`).
 9. **Append a Scan history row** in the report.
 10. **Output summary in chat** — open-findings counts by severity, blocking status, link to full report.
 11. **Log DRI Issues** on the bet for any Critical / High findings (severity-matched).
@@ -43,7 +43,7 @@ Continuous quality scanner for the product lifecycle. Modeled on Snyk / Semgrep 
 
 ## Verification (mandatory)
 
-- [ ] Scan report exists at `docs/bets/<bet-id>/scan-report.md` with frontmatter populated
+- [ ] Scan report exists at `docs/epics/<epic-id>/scan-report.md` with frontmatter populated
 - [ ] Every finding has severity + confidence + location + reason + fix (no blank fields)
 - [ ] Reason field states the confidence-derivation reasoning briefly
 - [ ] Suppressed findings preserved from previous report (with original metadata + suppressor + rationale)
@@ -100,8 +100,8 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 
 | ID | Title | Severity | Suppressible | Applies to |
 |---|---|---|---|---|
-| PROD_READY-01 | Runbook missing or minimal (`docs/bets/<id>/runbook.md` absent or < template threshold) | Critical | Yes (DRI) — non-suppressible for foundational-architecture | all except continuous-improvement |
-| PROD_READY-02 | SLO undefined (`docs/bets/<id>/slo.md` missing SLI / target / error budget / alert thresholds) | Critical | Yes (HITL approval) | all except continuous-improvement |
+| PROD_READY-01 | Runbook missing or minimal (`docs/epics/<id>/runbook.md` absent or < template threshold) | Critical | Yes (DRI) — non-suppressible for foundational-architecture | all except continuous-improvement |
+| PROD_READY-02 | SLO undefined (`docs/epics/<id>/slo.md` missing SLI / target / error budget / alert thresholds) | Critical | Yes (HITL approval) | all except continuous-improvement |
 | PROD_READY-03 | Monitoring not wired (observability MCP confirms no dashboards / alerts) | Critical | Yes (HITL approval) | all production-bound bets |
 | PROD_READY-04 | Rollback untested (no DRI entry confirming non-prod test) | Critical | Yes (HITL approval) | all except continuous-improvement |
 | PROD_READY-05 | On-call unprepared (no DRI ack from on-call on runbook) | High | Yes (DRI) | all production-bound bets |
@@ -175,7 +175,7 @@ Time-to-remediate (median): D days
 Trend: critical findings <↑|↓>X% over N sprints
 ```
 
-(`/metrics` consumes this same roll-up by reading all `docs/bets/*/scan-report.md` files.)
+(`/metrics` consumes this same roll-up by reading all `docs/epics/*/scan-report.md` files.)
 
 ## Auto-trigger contract
 

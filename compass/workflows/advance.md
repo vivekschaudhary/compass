@@ -10,10 +10,10 @@
 |---|---|
 | `/advance` to move to next phase | Flip the artifact's `status:` field directly (`proposed` → `approved` → `in-build` → `shipped` → etc.). That's what users were doing anyway; `/advance` just wrapped it. |
 | `/advance` to refresh the plan | `/plan` directly. |
-| `/advance` to run the scanner | `/scan <bet-id>` directly. (Auto-invoked at `/build` phase boundaries — that pattern stands without `/advance`.) |
+| `/advance` to run the scanner | `/scan <epic-id>` directly. (Auto-invoked at `/build` phase boundaries — that pattern stands without `/advance`.) |
 | `/advance` to refresh the dashboard | `/dashboard` directly. (Auto-invoked by `/scan`, `/plan`, `/metrics`, `/status` — independent of `/advance`.) |
 | `/advance` to see current state | `/status` directly. (Auto-refreshes `/dashboard`.) |
-| `/advance` to block on Critical scanner findings | Run `/scan <bet-id>` manually; resolve findings or suppress with HITL per `compass/config.yaml` `scanner.suppression_policy`. The `blocking_advance` field on scan reports stays — informational only, no longer blocks a workflow. |
+| `/advance` to block on Critical scanner findings | Run `/scan <epic-id>` manually; resolve findings or suppress with HITL per `compass/config.yaml` `scanner.suppression_policy`. The `blocking_advance` field on scan reports stays — informational only, no longer blocks a workflow. |
 
 ## Behavior if invoked
 
@@ -47,7 +47,7 @@ The sections below are **historical record** of the workflow as it existed befor
    - Determine if approval required at this transition
    - If required: check whether approved (status field flipped, PR review, etc.)
    - **If not approved:** stop. Tell user what needs approval and where. Do not advance.
-4. **Run `/scan <bet-id>` before advancing.** Read the resulting `docs/bets/<bet-id>/scan-report.md`. Apply scanner block semantics per `compass/config.yaml` `scanner.per_phase`:
+4. **Run `/scan <epic-id>` before advancing.** Read the resulting `docs/epics/<epic-id>/scan-report.md`. Apply scanner block semantics per `compass/config.yaml` `scanner.per_phase`:
    - **`strict` mode + `blocking_advance: true`:** refuse advance. Output the open Critical findings with their `Fix` field. Tell user to resolve them or suppress with HITL approval (per `scanner.suppression_policy.critical`), then re-invoke `/advance`.
    - **`advisory` mode + Critical findings:** warn loudly but allow advance. Open Criticals get logged as DRI Risks on the bet automatically.
    - **High findings (any mode):** warn but never block (suppression policy `dri_justification_required` if user chooses to suppress).

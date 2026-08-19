@@ -10,7 +10,7 @@ Some prose before the table.
 |---|---|---|---|---|
 | PS0-01 | Shape this kickoff backlog | \`plan-kickoff\` (1 step) | delivery-manager — John | This document approved |
 | PS0-02 | Confirm roster | \`staff-engagement\` (1 step) | delivery-manager — John | A named person against every load-bearing role |
-| PS0-03 | Approve the bet portfolio | \`create-bet-portfolio\` — **STEPS UNSPECIFIED** | pm — Casey | Portfolio approved |
+| PS0-03 | Approve the bet portfolio | \`create-epics\` — **STEPS UNSPECIFIED** | pm — Casey | Portfolio approved |
 | PS0-99 | Connect systems of record | — (intake/settings) | delivery-manager | tickets.wired && docs.wired |
 `;
 
@@ -21,7 +21,7 @@ describe("parseBacklog", () => {
 
   it("takes the workflow code out of the backticks, ignoring the step count beside it", () => {
     expect(parseBacklog(REAL).map((r) => r.workflowCode))
-      .toEqual(["plan-kickoff", "staff-engagement", "create-bet-portfolio", null]);
+      .toEqual(["plan-kickoff", "staff-engagement", "create-epics", null]);
   });
 
   it("leaves a row that names no workflow — intake satisfies those, as it did in v1", () => {

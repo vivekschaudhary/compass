@@ -42,7 +42,7 @@ Gates + postconditions = load-bearing. Work-steps = guidance.
 **Postcondition:** every in-flight row has non-empty Awaiting; "on track" only with evidence pointer; empty sections say `_None._`; unknown state named with reason.
 
 ### `refresh-plan` — refresh `docs/foundation/plan.md`
-**Gate:** `docs/bets/portfolio.md` approved. Refuse with pointer to `/create-bet-portfolio` otherwise.
+**Gate:** `docs/epics/portfolio.md` approved. Refuse with pointer to `/create-epics` otherwise.
 **Work:** read all per-bet artifacts + build state → apply estimate model per `/plan` workflow → write `plan.md` from `compass/templates/plan.md` → append refinement-log entry per moved date (naming triggering artifact) → bump version + `last_refreshed`.
 **Postcondition:** every approved bet has a row; refinement log captures every date change; estimates never fabricated (`estimate: tbd — <reason>` if absent).
 
@@ -65,7 +65,7 @@ Gates + postconditions = load-bearing. Work-steps = guidance.
 
 - **Don't write "on track" / "good progress" without evidence** — `[no-padded-status]`.
 - **Don't produce per-bet status docs** — one rolling `docs/status.md` only.
-- **Don't refresh `plan.md` without approved portfolio** — point at `/create-bet-portfolio`.
+- **Don't refresh `plan.md` without approved portfolio** — point at `/create-epics`.
 - **Don't publish sprint comms without HITL approval** — draft → halt → approve → publish.
 - **Don't silently summarize artifacts in dashboard** — verbatim or fail.
 - **Don't fabricate state on hosts lacking required tools** — mark unknown explicitly.

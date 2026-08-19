@@ -4,7 +4,7 @@ type: feature           # feature | okr | tech-debt | continuous-improvement | a
 status: proposed        # proposed | approved | in-build | shipped | measuring | won | learning | inconclusive
 priority: P1            # P0 | P1 | P2 | P3
 parent: <BET-ID>        # optional parent OKR or foundational bet
-portfolio_stub: false   # true if created by /create-bet-portfolio and not yet promoted via /create-brief. Cleared on promotion.
+portfolio_stub: false   # true if created by /create-epics and not yet promoted via /create-brief. Cleared on promotion.
 depends_on: []          # list of bet IDs this bet depends on (for portfolio dependency graph + sequencing)
 parallel_with: []       # list of bet IDs this bet can be built in parallel with
 architecture_required: auto    # true | false | auto
@@ -86,7 +86,7 @@ _Decomposed into the full story set (the complete backlog) via `/create-story`. 
 
 ## Scan summary
 
-Latest scanner posture for this bet. Full report at `docs/bets/<bet-id>/scan-report.md`. Re-run `/scan <bet-id>` to refresh. Auto-invoked at phase boundaries by `/build`.
+Latest scanner posture for this bet. Full report at `docs/epics/<epic-id>/scan-report.md`. Re-run `/scan <epic-id>` to refresh. Auto-invoked at phase boundaries by `/build`.
 
 - **Last scanned:** YYYY-MM-DD HH:MM UTC
 - **Current phase:** <phase>

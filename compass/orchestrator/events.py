@@ -21,7 +21,7 @@ events.jsonl schema (one JSON object per line):
   project   str  — project label (basename of --project-dir), groups the portfolio
   run_id    str  — matches the run (workflow--bet--timestamp), ties events together
   workflow  str  — workflow name
-  bet_id    str  — bet id or null
+  epic_id    str  — bet id or null
   + type-specific fields:
     run_start     : allow_write (bool), branch (str|null), actor (str — who launched),
                     context (str — the operator's launch input, one-line + capped, #108)
@@ -287,7 +287,7 @@ def halt_stale_runs(now=None, threshold=None, sink=None, events=None, run_id=Non
             reason = f"stale — no activity for {int(run_age_seconds(r, now))}s (auto-halt)"
         sink(make_event(
             RUN_END, run_id=r["run_id"], project=r.get("project"),
-            workflow=r.get("workflow"), bet_id=r.get("bet_id"), status="halted",
+            workflow=r.get("workflow"), epic_id=r.get("epic_id"), status="halted",
             reason=reason))
         halted.append(r["run_id"])
     return halted
@@ -312,7 +312,7 @@ def cancel_inflight(run_id=None, project=None, sink=None, events=None) -> list:
         elif project is not None and r.get("project") != project:
             continue
         sink(make_event(RUN_END, run_id=r["run_id"], project=r.get("project"),
-                        workflow=r.get("workflow"), bet_id=r.get("bet_id"),
+                        workflow=r.get("workflow"), epic_id=r.get("epic_id"),
                         status="halted", reason="cancelled by operator"))
         out.append(r["run_id"])
     return out

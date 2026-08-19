@@ -73,7 +73,7 @@ Each time a date moves, write a line here naming the triggering artifact. This i
 
 | Date | Bet | Field changed | From | To | Triggered by |
 |------|-----|---------------|------|-----|--------------|
-| YYYY-MM-DD | <BET-ID> | estimated_end | YYYY-MM-DD | YYYY-MM-DD | brief-approval (docs/bets/<id>/brief.md v2) |
+| YYYY-MM-DD | <BET-ID> | estimated_end | YYYY-MM-DD | YYYY-MM-DD | brief-approval (docs/epics/<id>/brief.md v2) |
 | YYYY-MM-DD | <BET-ID> | actual_start | — | YYYY-MM-DD | build PR #N opened |
 
 ## Risks to plan
