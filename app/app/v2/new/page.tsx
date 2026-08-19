@@ -13,8 +13,11 @@ export default function NewEngagementPage() {
     <div className="page">
       <h2>Start an engagement</h2>
       <p className="jobs-blurb">
-        Paste the SOW. Compass files it as the engagement&apos;s first document, scaffolds the doc
-        tree around it, and opens the workflow that runs when a project is created.
+        {/* Intake opens nothing now — the delivery manager decides when work begins. The old
+            sentence promised a workflow that no longer starts itself. */}
+        Paste the SOW, and the client&apos;s brief or BRD if they have one. Compass files them as the
+        engagement&apos;s first documents and scaffolds the doc tree around them. It starts no work:
+        the delivery manager initiates Basecamp when the engagement is ready to begin.
       </p>
       <NewEngagementForm />
     </div>

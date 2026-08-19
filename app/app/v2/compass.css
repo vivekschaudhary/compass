@@ -918,3 +918,7 @@ textarea.verdict-reason {
   margin: var(--space-3) 0 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.6;
   white-space: pre-wrap; background: var(--color-surface); border-left: 2px solid var(--color-text);
 }
+
+/* Adjustments are informational — they must not wear the failure styling. */
+.onboard-notes { margin-top: var(--space-3); font-size: 12.5px; }
+.onboard-notes ul { margin: 4px 0 0; padding-left: 18px; }

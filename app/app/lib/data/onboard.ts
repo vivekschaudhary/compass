@@ -49,7 +49,18 @@ export type OnboardResult = {
   sowSections: number;
   openedWorkflow: string | null;
   published: number;
+  /**
+   * Things that went wrong. Rendered as failures, so nothing belongs here that succeeded.
+   */
   problems: string[];
+  /**
+   * Things that went RIGHT but changed what you typed.
+   *
+   * "Confluence space 'Test' resolved to 'Test1'" was filed as a problem and shown under "some
+   * parts did not complete" — so the canonicaliser doing exactly its job read as a failure. An
+   * adjustment is worth reporting and is not a fault.
+   */
+  notes: string[];
 };
 
 const slug = (s: string) =>
@@ -99,23 +110,24 @@ export function sectionise(text: string): { heading: string; body: string }[] {
 export async function createEngagement(input: NewEngagement): Promise<OnboardResult> {
   const sb = supabaseAdmin();
   const problems: string[] = [];
-  if (!sb) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, problems: ["Supabase is not configured."] };
+  const notes: string[] = [];
+  if (!sb) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [], problems: ["Supabase is not configured."] };
 
   if (!input.deliveryManager?.trim()) {
     // Found by creating the second engagement: intake happily made one with no members, so no role
     // had a holder, the queue resolved to nobody and the page 404'd. An engagement is work someone
     // does; creating one without saying who is creating something unusable.
-    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
+    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
       problems: ["No delivery manager. An engagement with nobody on it has no queue to open."] };
   }
 
   if (!input.sowText?.trim()) {
-    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
+    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
       problems: ["No SOW text. Everything downstream derives from it, so intake refuses without one."] };
   }
 
   const { data: org } = await sb.from("org").select("id").eq("code", input.orgCode ?? "default").maybeSingle();
-  if (!org) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
+  if (!org) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
     problems: [`No org '${input.orgCode ?? "default"}'. Import the seed first.`] };
 
   const id = `${slug(input.client || input.name)}-${Date.now().toString(36).slice(-4)}`;
@@ -132,10 +144,10 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     : (input.confluenceSpace ?? null);
 
   if (input.confluenceSpace && confluenceSpace !== input.confluenceSpace) {
-    problems.push(`Confluence space '${input.confluenceSpace}' resolved to '${confluenceSpace}'.`);
+    notes.push(`Confluence space '${input.confluenceSpace}' resolved to '${confluenceSpace}'.`);
   }
   if (input.jiraProject && jiraProject !== input.jiraProject) {
-    problems.push(`Jira project '${input.jiraProject}' resolved to '${jiraProject}'.`);
+    notes.push(`Jira project '${input.jiraProject}' resolved to '${jiraProject}'.`);
   }
 
   const { error: engErr } = await sb.from("engagement").insert({
@@ -151,7 +163,7 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     cost_spent: 0, cost_spark: [0], scope_spark: [], stories_late: 0,
     time_spark: [], quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
   });
-  if (engErr) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
+  if (engErr) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0, notes: [],
     problems: [`create engagement: ${engErr.message}`] };
 
   // The first person on it. The rest are staffed by `staff-engagement`, which is a job — but
@@ -255,6 +267,6 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     documents: docRows.length,
     sowVersionId: (sowVersionId as string) ?? null,
     sowSections: sections.length,
-    openedWorkflow, published, problems,
+    openedWorkflow, published, problems, notes,
   };
 }
