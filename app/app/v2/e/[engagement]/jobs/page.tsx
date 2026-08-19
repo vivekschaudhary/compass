@@ -105,7 +105,10 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
               reads={t.reads}
               action={<StartButton taskId={t.id} engagement={engagement} role={actor.roleCode} state={t.state} executor={t.executor}
                 href={`/v2/e/${engagement}/jobs/${t.id}?role=${actor.roleCode}`}
-                openQuestions={t.openQuestions} />}
+                openQuestions={t.openQuestions}
+                // A machine row is measured, not performed. Offering "Start with agent" on one
+                // hands the agent a task slug its own file does not define.
+                machine={t.stepKind === "machine"} />}
               agent={t.agentLabel ?? undefined}
               footer={
                 <>

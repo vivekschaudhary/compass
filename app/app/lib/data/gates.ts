@@ -12,6 +12,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
+import { mirrorState } from "./tracker";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolveJira, projectStatuses } from "../jira";
 import type { Actor } from "./actor";
@@ -507,6 +508,10 @@ export async function approve(
     p_task_id: taskId, p_actor: who, p_actor_role: actor.roleCode,
   });
   if (error) return { ok: false, error: error.message };
+
+  // The board hears about it too. A ticket that never moves is worse than no ticket: it tells the
+  // team the work is still To Do while Compass knows it closed.
+  await mirrorState(actor.engagementId, taskId, "closed", actor.roleCode);
 
   // Approving the backlog no longer materialises anything.
   //

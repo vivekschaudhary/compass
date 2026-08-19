@@ -17,6 +17,7 @@ import { buildContext, systemPrompt, inputPrompt, revisionPrompt, type AgentCont
 import { conversation, openQuestions } from "../data/job";
 import { publishToDocs } from "../data/publish";
 import { emit } from "../data/events";
+import { mirrorState } from "../data/tracker";
 
 const MODEL = "claude-opus-5";
 
@@ -220,6 +221,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
   // Mark who is executing BEFORE the call, so a run that dies mid-flight is visibly attributed
   // rather than looking like a task nobody ever picked up.
   await sb.from("work_task").update({ executor: "app" }).eq("id", taskId);
+  await mirrorState(actor.engagementId, taskId, "running", ctx.roleCode);
 
   await emit({
     engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,
@@ -313,8 +315,10 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
       }
     }
 
-    // Waiting on a person is a state, not a pause. The queue should show it as such.
+    // Waiting on a person is a state, not a pause. The queue should show it as such — and so
+    // should the board, which is where everyone who does not open Compass is looking.
     await sb.from("work_task").update({ state: "awaiting", executor: null }).eq("id", taskId);
+    await mirrorState(actor.engagementId, taskId, "awaiting", ctx.roleCode);
     await finished(ctx.engagementId, taskId, ctx.roleCode, "asked", message,
       { questions: input.questions.length });
     return { kind: "asked", preamble: input.preamble, questions: input.questions };
@@ -426,6 +430,7 @@ export async function runAgent(actor: Actor, taskId: string): Promise<AgentOutco
     // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
     // would make the agent both maker and checker.
     await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
+    await mirrorState(actor.engagementId, taskId, "hitl", ctx.roleCode);
     await finished(ctx.engagementId, taskId, ctx.roleCode, "drafted", message,
       { path: ctx.produces, sections: sections.length, published: published.ok });
     return { kind: "drafted", summary: input.summary ?? "", sections: sections.length, path: ctx.produces, publishedUrl: published.ok ? published.url : null };

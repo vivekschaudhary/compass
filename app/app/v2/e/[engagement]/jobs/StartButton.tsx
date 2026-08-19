@@ -9,7 +9,7 @@ import { Button } from "../../../_ui/primitives";
 import { startTaskAction, recheckAction } from "./actions";
 
 export function StartButton({
-  taskId, engagement, role, state, executor, href, openQuestions = 0,
+  taskId, engagement, role, state, executor, href, openQuestions = 0, machine = false,
 }: {
   taskId: string; engagement: string; role: string; state: string;
   /** Which engine has the task. NULL means nothing has picked it up. */
@@ -17,6 +17,8 @@ export function StartButton({
   /** Where the job lives. A card that says "waiting on you" must give you somewhere to go. */
   href?: string;
   openQuestions?: number;
+  /** The row dispatches nothing — it is satisfied by a check, so there is nobody to start. */
+  machine?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -26,7 +28,22 @@ export function StartButton({
     // A state alone is a dead end. When there is something for a person to do, the card carries
     // the way to do it — the label told you the task was waiting and then offered nothing to press.
     if (href && (state === "awaiting" || state === "hitl" || state === "running")) {
-      return (
+      // Measured, not performed. The only useful control is re-checking the evidence.
+  if (machine) {
+    return (
+      <div className="task-state-row">
+        <button
+          className="btn btn-ghost recheck" disabled={pending}
+          onClick={() => startTransition(async () => { setError(null); await recheckAction(engagement, role, taskId); })}
+        >
+          re-check
+        </button>
+        {error && <span className="start-error">{error}</span>}
+      </div>
+    );
+  }
+
+  return (
         <div className="task-state-row">
           <a href={href} className="btn btn-primary">
             {openQuestions > 0

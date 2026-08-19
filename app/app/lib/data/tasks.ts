@@ -26,6 +26,8 @@ export type TaskCard = {
   ticketKey: string | null;
   /** The provenance line: what the agent will read. */
   reads: string[];
+  /** `machine` dispatches nothing — offering "Start with agent" on one is offering a dead end. */
+  stepKind: string | null;
   origin: "defined" | "adhoc";
   rationale: string | null;
   workflowCode: string | null;
@@ -41,13 +43,13 @@ type Row = {
   id: string; title: string; subtitle: string; state: string; kind: string;
   role_code: string; ticket_key: string | null; origin: "defined" | "adhoc";
   rationale: string | null; executor: string | null; started_at: string | null; started_by: string | null;
-  workflow_step: { reads: string[] | null } | null;
+  workflow_step: { reads: string[] | null; kind: string | null } | null;
   workflow_run: { workflow: { code: string } | null } | null;
 };
 
 const SELECT =
   "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
-  "workflow_step(reads),workflow_run!work_task_workflow_run_id_fkey(workflow(code))";
+  "workflow_step(reads,kind),workflow_run!work_task_workflow_run_id_fkey(workflow(code))";
 
 /**
  * The role's queue.
@@ -90,6 +92,7 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
     agentLabel: agentByRole.get(r.role_code) ?? null,
     ticketKey: r.ticket_key,
     reads: r.workflow_step?.reads ?? [],
+    stepKind: r.workflow_step?.kind ?? null,
     origin: r.origin,
     rationale: r.rationale,
     workflowCode: r.workflow_run?.workflow?.code ?? null,

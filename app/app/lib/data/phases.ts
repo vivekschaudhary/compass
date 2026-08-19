@@ -21,9 +21,10 @@ import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { orgIdFor } from "./events";
 import { measureTask, storedStatusFor, evaluate, type CriterionRow } from "./gates";
+import { mirrorPhase, type Mirrored } from "./tracker";
 
 export type Initiated =
-  | { ok: true; runId: string; tasks: { id: string; title: string; role: string }[] }
+  | { ok: true; runId: string; tasks: { id: string; title: string; role: string }[]; mirrored?: Mirrored }
   | { ok: false; error: string };
 
 /**
@@ -74,9 +75,40 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
   // knowable — "Connect systems of record" is satisfied by intake and should show as done on the
   // first screen, not after someone clicks re-check on it.
   const tasks = await tasksOfRun(runId as string);
-  for (const t of tasks) await measureTask(actor, t.id);
+  for (const t of tasks) {
+    const statuses = await measureTask(actor, t.id);
 
-  return { ok: true, runId: runId as string, tasks };
+    // A machine row dispatches nothing, so there is nobody to start it and nothing to approve —
+    // its evidence is the probe. basecamp.md says "Connect systems of record" closes on creation,
+    // and it did not: it sat idle offering "Start with agent", which would have handed the delivery
+    // manager agent a task slug its own file does not define.
+    //
+    // close_task still enforces the gate. If a connector stops answering, the criteria are
+    // unsatisfied, the close is refused, and the row stays open — which is the point of it being a
+    // row rather than an assumption.
+    const done = statuses.filter((s) => s.kind === "done");
+    const machine = await isMachineStep(t.id);
+    if (machine && done.length > 0 && done.every((s) => s.verdict.state === "satisfied")) {
+      const who = actor.holder ?? actor.roleCode;
+      // START, then close. close_task refuses an idle task — "never started, there is nothing to
+      // approve" — and a machine row is never started because nothing dispatches it, so the close
+      // failed silently on every phase until a live run tripped over it. Starting it is truthful:
+      // the system did pick it up, ran the checks, and finished. Both routines still enforce their
+      // gates, so a connector that stops answering leaves the row open rather than closing it.
+      const started = await sb.rpc("start_task", {
+        p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode,
+      });
+      if (!started.error) {
+        await sb.rpc("close_task", { p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode });
+      }
+    }
+  }
+
+  // The board, last: Compass is the record and the tracker is a mirror, so a Jira outage must not
+  // cost a phase that already exists locally. Problems are returned, never thrown.
+  const mirrored = await mirrorPhase(actor.engagementId, runId as string, actor.roleCode);
+
+  return { ok: true, runId: runId as string, tasks, mirrored };
 }
 
 async function tasksOfRun(runId: string) {
@@ -108,6 +140,18 @@ export async function openNested(
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true, runId: runId as string };
+}
+
+/** Is this task's row a machine check — something measured rather than performed? */
+async function isMachineStep(taskId: string): Promise<boolean> {
+  const sb = supabaseAdmin();
+  if (!sb) return false;
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_step_id").eq("id", taskId).maybeSingle();
+  if (!task?.workflow_step_id) return false;
+  const { data: step } = await sb.from("workflow_step")
+    .select("kind").eq("id", task.workflow_step_id).maybeSingle();
+  return step?.kind === "machine";
 }
 
 /** Does this task's row nest a workflow? The queue needs to know — it changes what the button does. */
