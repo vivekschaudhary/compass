@@ -1,15 +1,12 @@
 code,label,workstream,phase,owner_role,trigger,enabled
 build,Workflow: /build,Engineering,,engineer,,true
 create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,true
-create-epics,Workflow: /create-epics,Product,,pm,,true
 create-brief,Workflow: /create-brief,Product,,researcher,,true
 create-product-brief,Workflow: /create-product-brief,Product,,researcher,,true
 create-story,Workflow: /create-story,Product,,pm,,true
 fix,Workflow: /fix,Engineering,,engineer,,true
 ops,Workflow: /ops,Engineering,,enterprise-architect,,true
-plan,Workflow: /plan,Delivery,,delivery-manager,,true
 setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,true
-status,Workflow: /status,Delivery,,delivery-manager,,true
 tech-design,Workflow: /tech-design,Engineering,,architect,,true
 triage,Workflow: /triage,Support,,support,,true
 basecamp,Basecamp,Delivery,Basecamp,delivery-manager,,true

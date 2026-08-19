@@ -26,8 +26,8 @@ requires:
 # ── PRODUCES ──────────────────────────────────────────────────────────────
 produces:
   - 01-foundation/product-brief@docs: approved
-  - 01-foundation/foundational-architecture@docs: approved
   - 02-scope/deliverables@docs: approved
+  - 01-foundation/foundational-architecture@docs: approved
 ---
 
 ## Purpose
@@ -46,10 +46,15 @@ single agent task where that is genuinely all it is.
 | # | task | dispatch | owner | reads | produces | depends-on |
 |---|------|----------|-------|-------|----------|------------|
 | 1 | Define the product foundation | `workflow: create-product-brief` | researcher | `02-scope/sow` | `01-foundation/product-brief` | — |
-| 2 | Draft the high-level epics | `workflow: create-epics` | pm | `01-foundation/product-brief` · `02-scope/sow` | `02-scope/deliverables` | 1 |
+| 2 | Draft the high-level epics | `agent: pm.draft-epics` | pm | `01-foundation/product-brief` · `02-scope/sow` | `02-scope/deliverables` | 1 |
 | 3 | Establish the foundation architecture | `workflow: setup-foundation-architecture` | enterprise-architect | `01-foundation/product-brief` · `02-scope/deliverables` | `01-foundation/foundational-architecture` | 2 |
-| 4 | Plan the first milestone | `workflow: plan` | delivery-manager | `02-scope/deliverables` | `03-delivery/plan` | 3 |
-| 5 | Start the rolling status | `workflow: status` | delivery-manager | `03-delivery/plan` | `04-governance/status` | 4 |
+
+Row 2 is a TASK, not a nested workflow, and the difference is the point of the `dispatch` column:
+drafting epics from an approved brief is one agent's work ending at a human gate. As a workflow it
+needed a dispatch graph nobody had written, so the row opened a task no agent could pick up.
+
+Row 1's input is `01-foundation/product-brief` whether Compass wrote it or the client supplied their
+BRD at intake — one path, either provenance.
 
 ## Gates
 
@@ -78,27 +83,6 @@ scope item that nobody committed to, which on a fixed price is how the engagemen
     check:    01-foundation/foundational-architecture is published
     judgment: every scope-level feature has a named home in the architecture
     judgment: the Enterprise Architect approved it
-
-### 4. Plan the first milestone
-
-    check:    03-delivery/plan has a row per approved epic
-    check:    every row carries an estimate or an explicit `tbd — <reason>`
-    judgment: the Delivery Manager approved the plan
-
-### 5. Start the rolling status
-
-    check:    04-governance/status is published
-    check:    every in-flight row names a specific awaiting condition
-
-## Not runnable yet
-
-Rows 4 and 5 name workflows that exist in the catalogue with **zero steps** — no dispatch graph
-has been written for `create-epics`, `plan` or `status`. Initiating groundwork today opens
-their tasks and no agent can pick them up.
-
-They are listed rather than omitted because the phase genuinely requires them, and a backlog that
-hides its own gaps is the thing this product exists to replace. Their graphs are the next authoring
-work; see `compass/seed/known-drift.txt`.
 
 ## Grounding & methodology
 

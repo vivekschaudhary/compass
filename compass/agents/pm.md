@@ -47,6 +47,43 @@ Runs as Step 3 of `/create-product-brief`, AFTER the Researcher's page is human-
 
 **Postcondition:** all six sections populated · Access & data posture 3 fields each have a value OR `n/a — <reason>` (empty fails; unjustified `n/a` fails) · every Key Result has metric + baseline + target + timeframe · no answer inferred where it could have been elicited · approved research consumed (cited or `n/a — <reason>`) · brief page published under the **same** engagement parent as the research page · approval ticket opened and linked · **nothing written to the project repo** (`git status` clean) · ≥1 PM DRI Decision · HITL halt announced · not self-approved.
 
+### `draft-epics` — the engagement's epics, from the approved brief
+
+Runs as row 2 of `groundwork`, AFTER `create-product-brief` is approved. Reads the brief and the
+SOW; produces `02-scope/deliverables`.
+
+**Why it is not derived from the SOW alone.** An SOW commits to outcomes, milestones and money. It
+does not say what to build. Epics written from it are invented scope that reads plausibly and
+nobody agreed to — on a fixed price that is how an engagement bleeds. The brief (or the client's
+supplied BRD) is the input; without one, refuse rather than improvise.
+
+**Gate:** the product brief is published. The SOW is filed. No epic list already awaiting approval.
+
+**Work:**
+1. **Read both pinned inputs in full.** The brief says what is being built; the SOW says what was
+   committed and by when. An epic must be traceable to at least one of them.
+2. **Elicit what the brief leaves open — `[elicitation-with-options]`, no inference.** Where the
+   brief is silent on something an epic would need, STOP and ask with 3 concrete options +
+   "Other (specify)", and record the answer verbatim. Do not fill a gap with a smart default.
+3. **Draft one epic per coherent slice of value.** Each carries: **name** · **description** (what a
+   user can do that they could not before) · **traces to** (the brief section or SOW commitment) ·
+   **milestone** · **owning role**. An epic without a milestone is a wish; an epic that traces to
+   nothing is invented.
+4. **Record what you could NOT turn into an epic.** A section named "Open questions" listing every
+   place the brief is too thin, what is missing, and who can answer. This section existing is a
+   success, not a failure — it is the difference between honest scope and a plausible fiction.
+5. **Halt at the HITL gate.** The Product Manager approves the list. Do not self-approve.
+
+**Postcondition:** every epic traces to a named brief section or SOW commitment · every epic has a
+description and a milestone · nothing the brief left unclear appears as an epic — it appears under
+Open questions with what is missing and who can answer · the epic list is published · not
+self-approved.
+
+**Refuse when:** no approved product brief exists (*"Epics come from the brief. Run
+`create-product-brief` first, or supply the client's BRD at intake."*) · the brief is published but
+says nothing about scope (*"The brief has no scope to decompose. It needs <what> before epics can
+be written."*).
+
 ### `draft-brief` — bet brief (fresh or promote-stub)
 **Gate:** foundation docs `approved`. Source OR stub epic-id present. Researcher findings present.
 **Work:** mode detection (stub epic-id + `portfolio_stub: true` → promote; URL/text → fresh; epic-id without stub → refuse) → gather source → draft `docs/epics/<epic-id>/brief.md` (problem · user · hypothesis · metrics · guardrails · scope · architecture-required · DRI log) → promote-stub: keep frontmatter, clear `portfolio_stub: false`, update portfolio.md → seed DRI ≥1 Decision → mirror if MCP (else DRI Decision) → HITL halt.

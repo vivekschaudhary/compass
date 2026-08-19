@@ -5,14 +5,14 @@
 #
 # The no-graph-steps entries are why open_workflow_run opens runs that create no task:
 # the .md is prose and the seed has zero steps, so nothing is ever dispatched.
-no-graph-steps create-epics
-no-graph-steps plan
-no-graph-steps status
 step-count     build
 unseeded       advance
+unseeded       create-epics
 unseeded       dashboard
 unseeded       improvements
 unseeded       measure
 unseeded       metrics
+unseeded       plan
 unseeded       retro
 unseeded       scan
+unseeded       status
