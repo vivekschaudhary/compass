@@ -38,6 +38,10 @@ async function cfRead(eng: DocEng, pageId: string): Promise<string | null> {
 
 async function cfWrite(eng: DocEng, title: string, html: string): Promise<{ id: string; url: string } | null> {
   const a = cfAuth(eng); const space = eng.confluence_space;
+  // NOT configured is a different fact from REFUSED, and the caller reported them with one
+  // sentence. A root page id belonging to another space produced "the provider is not configured",
+  // which sent the reader to check credentials that were fine. Null means unconfigured; a refusal
+  // throws, carrying what Confluence actually said.
   if (!a || !space) return null;
   const full = `${eng.name} — ${title}`;
   try {
@@ -58,8 +62,17 @@ async function cfWrite(eng: DocEng, title: string, html: string): Promise<{ id: 
       body: JSON.stringify({ type: "page", title: full, space: { key: space }, ...(eng.confluence_root_page_id ? { ancestors: [{ id: eng.confluence_root_page_id }] } : {}), body: { storage: { value: html, representation: "storage" } } }),
     });
     if (res.ok) { const j = await res.json(); return { id: j.id, url: `${a.base}/wiki${j._links?.webui ?? ""}` }; }
-  } catch { /* fall through */ }
-  return null;
+
+    // Confluence's own words. Its 400s are specific and actionable — "Can't add a parent from
+    // another space" names the exact field that is wrong — and swallowing them cost an evening.
+    const body = await res.text().catch(() => "");
+    let detail = body.slice(0, 300);
+    try { detail = JSON.parse(body).message ?? detail; } catch { /* not json — keep the raw text */ }
+    throw new Error(`Confluence refused (${res.status}): ${detail}`);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Confluence refused")) throw e;
+    throw new Error(`Could not reach Confluence: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 // ── Teams / SharePoint ──

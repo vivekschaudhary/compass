@@ -12,6 +12,8 @@ import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { tasksFor } from "@/app/lib/data/tasks";
 import { storedStatusFor } from "@/app/lib/data/gates";
+import { phasesFor } from "@/app/lib/data/phases";
+import { PhaseStarter } from "./PhaseStarter";
 import { JobCard } from "../../../_ui/primitives";
 import { StartButton } from "./StartButton";
 import { Gate } from "./Gate";
@@ -47,6 +49,7 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
   if (!actor) notFound();
 
   const tasks = await tasksFor(actor);
+  const phases = await phasesFor(actor);
   // A delivery manager's scope is `everyone`, so this query returns the whole engagement — which is
   // right for oversight and wrong under the heading "here's your work". John opened his queue and
   // found the enterprise architect's, the architect's and the engineer's jobs sitting in it with
@@ -73,6 +76,9 @@ export default async function JobsPage(props: PageProps<"/v2/e/[engagement]/jobs
           Nothing has run yet. Each job starts a conversation with an agent when — and only when — you click it.
         </p>
       )}
+
+      {/* Above the queue, because on a new engagement it IS the queue. */}
+      <PhaseStarter engagement={engagement} role={actor.roleCode} phases={phases} />
 
       {mine.length === 0 && others.length === 0 ? (
         <div className="jobs-empty">

@@ -82,7 +82,7 @@ export async function publishToDocs(
   let failure: string | null = null;
   try {
     result = await writeProviderDoc(eng as DocEng, title, html);
-    if (!result) failure = "The provider is not configured, or refused the write.";
+    if (!result) failure = "The doc store is not configured for this engagement — no space, or no credentials.";
   } catch (e) {
     failure = e instanceof Error ? e.message : String(e);
   }

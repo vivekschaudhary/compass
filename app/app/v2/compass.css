@@ -906,3 +906,14 @@ textarea.verdict-reason {
 .jobs-others { margin-top: var(--space-6); border-top: 1px solid var(--color-divider); padding-top: var(--space-4); }
 .jobs-others-head { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
 .jobs-others-blurb { font-size: 12.5px; margin: 0 0 var(--space-4); }
+
+/* ── starting a phase ─────────────────────────────────────────────────────── */
+
+.phases { border: 1px solid var(--color-divider); padding: var(--space-4); margin-bottom: var(--space-6); }
+.phases-head { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+.phases-blurb { font-size: 12.5px; margin: 0 0 var(--space-3); }
+.phases-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.phases-error {
+  margin: var(--space-3) 0 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.6;
+  white-space: pre-wrap; background: var(--color-surface); border-left: 2px solid var(--color-text);
+}

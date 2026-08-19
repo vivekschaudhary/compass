@@ -42,7 +42,12 @@ export function NewEngagementForm() {
         <ul className="onboard-facts">
           <li>{result.documents} documents scaffolded</li>
           <li>SOW filed in {result.sowSections} section{result.sowSections === 1 ? "" : "s"}</li>
-          <li>{result.openedWorkflow ? `${result.openedWorkflow} opened — its first job is in the queue` : "no workflow opened"}</li>
+          {/* Intake provisions and stops. "no workflow opened" read as a failure when it is the
+              design — the delivery manager decides when the engagement starts, which may be days
+              after the admin creates it. Say what happens next instead of what did not happen. */}
+          <li>{result.openedWorkflow
+            ? `${result.openedWorkflow} opened — its first job is in the queue`
+            : "ready for the delivery manager to initiate Basecamp"}</li>
           <li>{result.published} published to the doc store</li>
         </ul>
         {/* Problems are shown, not swallowed. An engagement created with a failed publish is a real
