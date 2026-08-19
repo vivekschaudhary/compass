@@ -262,7 +262,7 @@ describe("import is versioning", () => {
     workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "" }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "", title: "" }],
       criteria: [{ workflow: "build", stepOrd: 1, kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };

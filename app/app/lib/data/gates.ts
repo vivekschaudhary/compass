@@ -12,7 +12,6 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
-import { materialiseBacklog, BACKLOG_PATH, type Materialised } from "./backlog";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolveJira, projectStatuses } from "../jira";
 import type { Actor } from "./actor";
@@ -459,7 +458,7 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
  */
 export async function approve(
   actor: Actor, taskId: string, confirmed: string[],
-): Promise<{ ok: true; materialised?: Materialised | null } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
@@ -509,27 +508,12 @@ export async function approve(
   });
   if (error) return { ok: false, error: error.message };
 
-  // Approving the kickoff backlog is what turns it into work. This is v1's moment — `completePhaseA`
-  // materialised Sprint 0 the instant the foundation was asserted complete — and the step v2 was
-  // missing: Provider FFS approved a nine-row backlog and got no next task, because the rows stayed
-  // prose in a published page. Failures are reported, never thrown: the close already happened.
-  const materialised = (await produces(taskId)) === BACKLOG_PATH
-    ? await materialiseBacklog(actor)
-    : null;
-
-  return { ok: true, materialised };
-}
-
-/** The document path this task's step declares it produces, if any. */
-async function produces(taskId: string): Promise<string | null> {
-  const sb = supabaseAdmin();
-  if (!sb) return null;
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id").eq("id", taskId).maybeSingle();
-  if (!task?.workflow_step_id) return null;
-  const { data: step } = await sb.from("workflow_step")
-    .select("produces").eq("id", task.workflow_step_id).maybeSingle();
-  return step?.produces ?? null;
+  // Approving the backlog no longer materialises anything.
+  //
+  // It used to open a workflow run per row, because each row WAS a workflow. Now the rows of a
+  // phase are its tasks, created when the delivery manager initiates it — so approving the backlog
+  // approves a document, which is all it ever claimed to do. See lib/data/phases.ts.
+  return { ok: true };
 }
 
 /**

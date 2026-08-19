@@ -15,6 +15,8 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * The org an engagement belongs to.
  *
@@ -61,12 +63,16 @@ export async function emit(e: Emit): Promise<void> {
     org_id: await orgIdFor(e.engagementId),
     engagement_id: e.engagementId,
     subject_type: e.subjectType,
-    subject_id: e.subjectId,
+    // `subject_id` is a uuid column, and not every subject has a uuid — an engagement's id is text
+    // (`nimbus-health-4ogm`). Passing it produced "invalid input syntax for type uuid" and, because
+    // emitting is fire-and-forget, dropped the event with only a console line to show for it. A
+    // non-uuid subject keeps its id in the payload, where it is still queryable.
+    subject_id: UUID.test(e.subjectId) ? e.subjectId : null,
     verb: e.verb,
     actor_kind: e.actorKind,
     actor_role_code: e.actorRoleCode ?? null,
     actor_user_id: e.actorUserId ?? null,
-    payload: e.payload ?? {},
+    payload: UUID.test(e.subjectId) ? (e.payload ?? {}) : { ...(e.payload ?? {}), subject: e.subjectId },
     occurred_at: new Date().toISOString(),
   });
   // Logged, not thrown — see the note at the top of this file.

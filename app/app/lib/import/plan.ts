@@ -36,6 +36,8 @@ export type StepRow = {
   produces: string; reads: string[]; conditional: string;
   /** `kind: workflow` only — the workflow this row nests. The row is done when that run closes. */
   nests: string;
+  /** What a person calls this row. The queue showed `propose-kickoff-backlog` without it. */
+  title: string;
 };
 export type CriterionRow = {
   workflow: string; stepOrd: number | null; kind: string; text: string;
@@ -111,7 +113,7 @@ function readSteps(csv: string): StepRow[] {
   return parseRecords(csv).map((r) => ({
     workflow: r.workflow, ord: num(r.ord), kind: r.kind || "agent", role: r.role ?? "",
     task: r.task ?? "", produces: r.produces ?? "", reads: parseList(r.reads),
-    conditional: r.conditional ?? "", nests: r.nests ?? "",
+    conditional: r.conditional ?? "", nests: r.nests ?? "", title: r.title ?? "",
   }));
 }
 
@@ -312,7 +314,11 @@ function describeChanges(
   criteria: CriterionRow[],
 ): string[] {
   const out: string[] = [];
-  const key = (s: StepRow) => `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.reads.join("|")}:${s.conditional}`;
+  // EVERY field a step carries. When `nests` and `title` were added and this key was not, a row
+  // could change which workflow it nests and the importer would report "unchanged" — a diff that
+  // does not compare everything is a diff that lies. Adding a column means adding it here.
+  const key = (s: StepRow) =>
+    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}`;
   const ckey = (c: CriterionRow) =>
     `${c.stepOrd ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
 
