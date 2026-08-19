@@ -24,6 +24,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { resolveJira, createIssue, transitionIssue, projectStatuses, type JiraCreds } from "../jira";
 import { emit } from "./events";
+import { sortByStep } from "./steps";
 
 /**
  * What Compass's task states mean on a board.
@@ -125,8 +126,14 @@ export async function mirrorPhase(
   }
   out.epic = epicKey;
 
-  const { data: tasks } = await sb.from("work_task")
-    .select("id, title, role_code, state, ticket_key").eq("workflow_run_id", runId).order("created_at");
+    // Ordered by the STEP's ord, not created_at. A phase creates every task in one transaction, so
+    // their timestamps are identical and created_at ordering is arbitrary — it put step 2 before
+    // step 1 on the first real run, which numbered the epic's stories backwards and would show a
+    // queue in the wrong dependency order.
+  const { data: rows } = await sb.from("work_task")
+    .select("id, title, role_code, state, ticket_key, workflow_step(ord)")
+    .eq("workflow_run_id", runId);
+  const tasks = sortByStep(rows ?? []);
 
   for (const t of tasks ?? []) {
     if (t.ticket_key) { out.stories.push({ taskId: t.id, key: t.ticket_key, title: t.title }); continue; }

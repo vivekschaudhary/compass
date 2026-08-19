@@ -20,6 +20,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { orgIdFor } from "./events";
+import { sortByStep } from "./steps";
 import { measureTask, storedStatusFor, evaluate, type CriterionRow } from "./gates";
 import { mirrorPhase, type Mirrored } from "./tracker";
 
@@ -114,9 +115,14 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
 async function tasksOfRun(runId: string) {
   const sb = supabaseAdmin();
   if (!sb) return [];
+    // Ordered by the STEP's ord, not created_at. A phase creates every task in one transaction, so
+    // their timestamps are identical and created_at ordering is arbitrary — it put step 2 before
+    // step 1 on the first real run, which numbered the epic's stories backwards and would show a
+    // queue in the wrong dependency order.
   const { data } = await sb.from("work_task")
-    .select("id, title, role_code, workflow_step_id").eq("workflow_run_id", runId).order("created_at");
-  return (data ?? []).map((t) => ({ id: t.id, title: t.title, role: t.role_code }));
+    .select("id, title, role_code, workflow_step_id, workflow_step(ord)")
+    .eq("workflow_run_id", runId);
+  return sortByStep(data ?? []).map((t) => ({ id: t.id, title: t.title, role: t.role_code }));
 }
 
 /**
