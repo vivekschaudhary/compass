@@ -32,7 +32,7 @@ export async function history(actor: Actor): Promise<DoneJob[]> {
   if (!sb) return [];
 
   let q = sb.from("work_task")
-    .select("id, title, role_code, state, closed_at, closed_by, started_at, workflow_step_id, workflow_run(workflow(code))")
+    .select("id, title, role_code, state, closed_at, closed_by, started_at, workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow(code))")
     .eq("engagement_id", actor.engagementId)
     .in("state", ["closed", "abandoned"]);
 

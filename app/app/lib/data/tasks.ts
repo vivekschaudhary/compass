@@ -47,7 +47,7 @@ type Row = {
 
 const SELECT =
   "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
-  "workflow_step(reads),workflow_run(workflow(code))";
+  "workflow_step(reads),workflow_run!work_task_workflow_run_id_fkey(workflow(code))";
 
 /**
  * The role's queue.

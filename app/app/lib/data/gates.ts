@@ -266,7 +266,7 @@ export async function criteriaForTask(taskId: string): Promise<CriterionRow[]> {
   if (!sb) return [];
 
   const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id, workflow_run(workflow_version_id)")
+    .select("workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)")
     .eq("id", taskId).maybeSingle();
   if (!task) return [];
 
@@ -396,7 +396,7 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
   if (!sb || taskIds.length === 0) return out;
 
   const { data: tasks } = await sb.from("work_task")
-    .select("id, workflow_step_id, workflow_run(workflow_version_id)").in("id", taskIds);
+    .select("id, workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)").in("id", taskIds);
 
   const { data: steps } = await sb.from("workflow_step").select("id, ord");
   const ordOf = new Map((steps ?? []).map((s) => [s.id, s.ord as number]));

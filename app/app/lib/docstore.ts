@@ -164,6 +164,42 @@ export async function deleteProviderDoc(
   return eng.docs_provider === "teams" ? teamsDelete(eng, doc.external_id) : cfDelete(eng, doc.external_id);
 }
 
+/**
+ * Turn what a person typed into what the API expects.
+ *
+ * Two different mistakes, both made on the first real intake:
+ *
+ *   Jira      `Test` instead of `TEST` — project keys are uppercase. Pure case.
+ *   Confluence `Test` instead of `Test1` — that is the space's NAME, not its key. Case-folding
+ *             would not have caught it, so the name is matched too. Keys are unique; names are
+ *             not guaranteed to be, so a name match only wins when exactly one space carries it.
+ *
+ * Resolved once, at intake, and stored canonical — rather than folding at every call site, where
+ * the next reader has to remember. Returns the input unchanged when nothing matches, so a genuinely
+ * wrong value still fails loudly at the gate instead of being silently rewritten.
+ */
+export async function canonicalSpaceKey(eng: DocEng, given: string): Promise<string> {
+  const a = cfAuth(eng);
+  if (!a || !given) return given;
+  try {
+    const res = await fetch(`${a.base}/wiki/rest/api/space?limit=200`, { headers: a.headers });
+    if (!res.ok) return given;
+    const spaces: { key: string; name: string }[] = (await res.json()).results ?? [];
+    const want = given.trim().toLowerCase();
+
+    const byKey = spaces.find((sp) => sp.key?.toLowerCase() === want);
+    if (byKey) return byKey.key;
+
+    const byName = spaces.filter((sp) => sp.name?.toLowerCase() === want);
+    return byName.length === 1 ? byName[0].key : given;
+  } catch { return given; }
+}
+
+/** Jira project keys are uppercase. That is the whole rule. */
+export function canonicalProjectKey(given: string): string {
+  return (given ?? "").trim().toUpperCase();
+}
+
 export async function writeProviderDoc(eng: DocEng, title: string, html: string): Promise<{ id: string; url: string } | null> {
   return eng.docs_provider === "teams" ? teamsWrite(eng, title, html) : cfWrite(eng, title, html);
 }

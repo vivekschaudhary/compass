@@ -16,6 +16,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { readShippedDocTree } from "../doctree";
 import { publishToDocs } from "./publish";
+import { canonicalSpaceKey, canonicalProjectKey, type DocEng } from "../docstore";
 import { emit } from "./events";
 
 export type NewEngagement = {
@@ -111,16 +112,34 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
 
   const id = `${slug(input.client || input.name)}-${Date.now().toString(36).slice(-4)}`;
 
+  // What a person types is not what the API expects. `Test` is a Jira project key only in
+  // uppercase, and in Confluence it is a space NAME whose key is `Test1`. Both were typed exactly
+  // that way on the first real intake, and both failed several steps later with an error about
+  // something else. Resolve once, here, and store canonical.
+  const docsProvider = input.docsProvider ?? "confluence";
+  const jiraProject = input.jiraProject ? canonicalProjectKey(input.jiraProject) : null;
+  const confluenceSpace = input.confluenceSpace && docsProvider === "confluence"
+    ? await canonicalSpaceKey(
+        { id, name: input.name, docs_provider: docsProvider } as DocEng, input.confluenceSpace)
+    : (input.confluenceSpace ?? null);
+
+  if (input.confluenceSpace && confluenceSpace !== input.confluenceSpace) {
+    problems.push(`Confluence space '${input.confluenceSpace}' resolved to '${confluenceSpace}'.`);
+  }
+  if (input.jiraProject && jiraProject !== input.jiraProject) {
+    problems.push(`Jira project '${input.jiraProject}' resolved to '${jiraProject}'.`);
+  }
+
   const { error: engErr } = await sb.from("engagement").insert({
     id, name: input.name, client: input.client,
     // A short label for the UI. The CONTRACT is the document — this is a chip, and v1's mistake was
     // letting the chip be the only copy.
     sow: (input.name || "SOW").split(/\s+/).slice(0, 3).join(" "),
     phase: "Kickoff · Phase 1", overall: "good",
-    docs_provider: input.docsProvider ?? "confluence",
-    confluence_space: input.confluenceSpace ?? null,
+    docs_provider: docsProvider,
+    confluence_space: confluenceSpace,
     confluence_root_page_id: input.confluenceRootPageId ?? null,
-    jira_project: input.jiraProject ?? null,
+    jira_project: jiraProject,
     cost_spent: 0, cost_spark: [0], scope_spark: [], stories_late: 0,
     time_spark: [], quality_ac_pass: 100, quality_criticals: 0, quality_spark: [],
   });
