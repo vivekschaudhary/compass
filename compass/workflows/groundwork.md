@@ -25,9 +25,9 @@ requires:
 
 # ── PRODUCES ──────────────────────────────────────────────────────────────
 produces:
-  - docs/foundation/product.md@docs: approved
-  - docs/foundation/architecture.md@docs: approved
-  - docs/epics/portfolio.md@docs: approved
+  - 01-foundation/product-brief@docs: approved
+  - 01-foundation/foundational-architecture@docs: approved
+  - 02-scope/deliverables@docs: approved
 ---
 
 ## Purpose
@@ -45,11 +45,11 @@ single agent task where that is genuinely all it is.
 
 | # | task | dispatch | owner | reads | produces | depends-on |
 |---|------|----------|-------|-------|----------|------------|
-| 1 | Define the product foundation | `workflow: create-product-brief` | researcher | `02-scope/sow` | `docs/foundation/product.md` | — |
-| 2 | Draft the high-level epics | `workflow: create-epics` | pm | `docs/foundation/product.md` · `02-scope/sow` | `docs/epics/portfolio.md` | 1 |
-| 3 | Establish the foundation architecture | `workflow: setup-foundation-architecture` | enterprise-architect | `docs/foundation/product.md` · `docs/epics/portfolio.md` | `docs/foundation/architecture.md` | 2 |
-| 4 | Plan the first milestone | `workflow: plan` | delivery-manager | `docs/epics/portfolio.md` | `docs/plan.md` | 3 |
-| 5 | Start the rolling status | `workflow: status` | delivery-manager | `docs/plan.md` | `docs/status.md` | 4 |
+| 1 | Define the product foundation | `workflow: create-product-brief` | researcher | `02-scope/sow` | `01-foundation/product-brief` | — |
+| 2 | Draft the high-level epics | `workflow: create-epics` | pm | `01-foundation/product-brief` · `02-scope/sow` | `02-scope/deliverables` | 1 |
+| 3 | Establish the foundation architecture | `workflow: setup-foundation-architecture` | enterprise-architect | `01-foundation/product-brief` · `02-scope/deliverables` | `01-foundation/foundational-architecture` | 2 |
+| 4 | Plan the first milestone | `workflow: plan` | delivery-manager | `02-scope/deliverables` | `03-delivery/plan` | 3 |
+| 5 | Start the rolling status | `workflow: status` | delivery-manager | `03-delivery/plan` | `04-governance/status` | 4 |
 
 ## Gates
 
@@ -58,13 +58,13 @@ machine-evaluated; `judgment:` is measured by a person and recorded against thei
 
 ### 1. Define the product foundation
 
-    check:    docs/foundation/product.md is published
+    check:    01-foundation/product-brief is published
     judgment: every feature the SOW commits to is defined at scope level, or named as out of scope
     judgment: the Product Manager approved it
 
 ### 2. Draft the high-level epics
 
-    check:    docs/epics/portfolio.md is published
+    check:    02-scope/deliverables is published
     judgment: every epic traces to something the brief or the SOW commits to
     judgment: every epic has a description and a milestone
     judgment: what the brief leaves unclear is recorded as an open question, not a guessed epic
@@ -75,19 +75,19 @@ scope item that nobody committed to, which on a fixed price is how the engagemen
 
 ### 3. Establish the foundation architecture
 
-    check:    docs/foundation/architecture.md is published
+    check:    01-foundation/foundational-architecture is published
     judgment: every scope-level feature has a named home in the architecture
     judgment: the Enterprise Architect approved it
 
 ### 4. Plan the first milestone
 
-    check:    docs/plan.md has a row per approved epic
+    check:    03-delivery/plan has a row per approved epic
     check:    every row carries an estimate or an explicit `tbd — <reason>`
     judgment: the Delivery Manager approved the plan
 
 ### 5. Start the rolling status
 
-    check:    docs/status.md is published
+    check:    04-governance/status is published
     check:    every in-flight row names a specific awaiting condition
 
 ## Not runnable yet

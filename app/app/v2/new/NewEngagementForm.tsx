@@ -10,7 +10,7 @@ type Result = {
 
 export function NewEngagementForm() {
   const [f, setF] = useState({
-    name: "", client: "", sowText: "", deliveryManager: "",
+    name: "", client: "", sowText: "", briefText: "", deliveryManager: "",
     confluenceSpace: "", confluenceRootPageId: "", jiraProject: "",
   });
   const [publish, setPublish] = useState(true);
@@ -75,6 +75,13 @@ export function NewEngagementForm() {
 
       <Field label="The SOW" hint="Paste it in full. Every downstream document cites this, so a summary here becomes a summary everywhere.">
         <Textarea rows={14} value={f.sowText} onChange={set("sowText")} placeholder="Project parameters, scope, milestones, commercial terms…" />
+      </Field>
+
+      {/* Optional, and supplied far more often than written — in consulting the requirements
+          document exists before the engagement does. Given one, `create-product-brief` starts from
+          the client's own words instead of a blank page, and the epics are written from it. */}
+      <Field label="Product brief or BRD" hint="If the client already has one, paste it. Groundwork writes the epics from this — without it, Compass has to draft the brief first.">
+        <Textarea rows={8} value={f.briefText} onChange={set("briefText")} placeholder="Optional. Business requirements, product brief, discovery output…" />
       </Field>
 
       <div className="onboard-row">

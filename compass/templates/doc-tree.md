@@ -48,6 +48,8 @@ parent always precedes its children.
 | 18 | 05-cadence/sprint-reviews/template | Sprint review — template | template | 05-cadence/sprint-reviews |
 | 19 | 05-cadence/retros | Retros | folder | 05-cadence |
 | 20 | 05-cadence/standups | Standup notes | folder | 05-cadence |
+| 21 | 01-foundation/team | Engagement roster | doc | 01-foundation |
+| 22 | 03-delivery/plan | Delivery plan | doc | 03-delivery |
 
 ## Notes
 - **This table is the default — and load-bearing.** The intake creates whatever rows are here

@@ -8,19 +8,19 @@ basecamp,2,done,Every role Groundwork assigns work to has a named holder,roster,
 basecamp,2,done,Roles left deliberately unstaffed are recorded with a reason,roster,deferred,has-reason,all
 basecamp,2,done,The Delivery Manager approved the roster,ticket,{{story}},status,Done
 groundwork,,ready,The roster is approved,document,01-foundation/team,status,published
-groundwork,1,done,The product foundation is published,document,docs/foundation/product.md,status,published
+groundwork,1,done,The product foundation is published,document,01-foundation/product-brief,status,published
 groundwork,1,done,Every feature the SOW commits to is defined at scope level or named out of scope,,,,
 groundwork,1,done,The Product Manager approved it,,,,
-groundwork,2,done,The epic list is published,document,docs/epics/portfolio.md,status,published
+groundwork,2,done,The epic list is published,document,02-scope/deliverables,status,published
 groundwork,2,done,Every epic traces to something the brief or the SOW commits to,,,,
 groundwork,2,done,Every epic has a description and a milestone,,,,
 groundwork,2,done,What the brief leaves unclear is recorded as an open question rather than a guessed epic,,,,
 groundwork,2,done,The Product Manager approved the epics,,,,
-groundwork,3,done,The foundation architecture is published,document,docs/foundation/architecture.md,status,published
+groundwork,3,done,The foundation architecture is published,document,01-foundation/foundational-architecture,status,published
 groundwork,3,done,Every scope-level feature has a named home in the architecture,,,,
 groundwork,3,done,The Enterprise Architect approved it,,,,
-groundwork,4,done,The plan is published,document,docs/plan.md,status,published
+groundwork,4,done,The plan is published,document,03-delivery/plan,status,published
 groundwork,4,done,Every row carries an estimate or an explicit tbd with a reason,,,,
 groundwork,4,done,The Delivery Manager approved the plan,,,,
-groundwork,5,done,The rolling status is published,document,docs/status.md,status,published
+groundwork,5,done,The rolling status is published,document,04-governance/status,status,published
 groundwork,5,done,Every in-flight row names a specific awaiting condition,,,,

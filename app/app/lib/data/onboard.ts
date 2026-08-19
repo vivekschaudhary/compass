@@ -23,6 +23,14 @@ export type NewEngagement = {
   name: string;
   client: string;
   sowText: string;
+  /**
+   * A product brief or BRD the client already has.
+   *
+   * Optional, and supplied far more often than written: in consulting the requirements document
+   * exists before the engagement does. When it is here, `create-product-brief` has an input rather
+   * than a blank page — and epics are written FROM it, which is the whole point of the ordering.
+   */
+  briefText?: string;
   /** Who runs it. Required: an engagement nobody is on cannot be worked. */
   deliveryManager: string;
   orgCode?: string;
@@ -200,6 +208,22 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
   // The empty queue is therefore correct, not a failure, and must not be reported as one.
   const openedWorkflow: string | null = null;
 
+  // The supplied brief, filed exactly as the SOW is — same routine, same versioning, same
+  // sectioning. `01-foundation/product-brief` is already in the scaffold and sits empty otherwise.
+  let briefVersionId: string | null = null;
+  if (input.briefText?.trim()) {
+    const briefSections = sectionise(input.briefText);
+    const { data: v, error } = await sb.rpc("file_document", {
+      p_org_id: org.id, p_engagement_id: id,
+      p_path: "01-foundation/product-brief", p_title: "Product brief (supplied)",
+      p_sections: briefSections, p_version: null,
+      p_actor: "intake", p_actor_role: "engagement-admin",
+      p_owner_role: "pm", p_task_id: null,
+    });
+    if (error) problems.push(`file the product brief: ${error.message}`);
+    else briefVersionId = v as string;
+  }
+
   // Publishing last, and failures are reported rather than thrown: a doc-store outage must not
   // cost an intake that otherwise succeeded.
   let published = 0;
@@ -207,6 +231,11 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     const r = await publishToDocs(id, sowVersionId as string);
     if (r.ok) published += 1;
     else problems.push(`publish the SOW: ${r.error}`);
+  }
+  if (input.publish && briefVersionId) {
+    const r = await publishToDocs(id, briefVersionId);
+    if (r.ok) published += 1;
+    else problems.push(`publish the product brief: ${r.error}`);
   }
 
   await emit({
