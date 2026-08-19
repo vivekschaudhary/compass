@@ -48,6 +48,11 @@ Skills in `.claude/skills/` map 1:1 to workflows in `compass/workflows/`:
 - `/retro` — `compass/workflows/retro.md`
 - `/advance` — `compass/workflows/advance.md` (DEPRECATED — prints the status-field migration table)
 
+**`basecamp` and `groundwork` are NOT slash commands.** They are engagement phases, initiated by the
+delivery manager in the app (`/v2/e/<engagement>/jobs`), and they have no skill in `.claude/skills/`
+because nothing about them is a Claude Code invocation. They are dispatch graphs in the table format
+and they run in v2. See "The engagement shape" below.
+
 ## Host-specific tool preferences (Claude Code as runtime)
 
 You have filesystem access via the Read / Edit / Write tools and shell access via Bash. Prefer:
@@ -100,6 +105,86 @@ When entering a workflow phase, in order:
 7. The bet's DRI log
 
 Don't skip step 6. Missing prior context is the #1 cause of off-spec work.
+
+## The app has two engines, and v2 is the one (2026-08-18)
+
+`app/` contains **v1 and v2, and they are different execution engines** — not a UI reskin. This is
+the single most confusing thing about the repo and the source of most of the drift below.
+
+| | v1 (`app/app/lib/*.ts`, `app/api/*`) | v2 (`app/app/lib/data`, `app/lib/agent`, `app/v2/*`) |
+|---|---|---|
+| executes by | spawning `python -m compass.orchestrator.run` | calling the Anthropic SDK itself |
+| step source | `compass/workflows/*.md` via `graph.py` | `workflow_step` rows imported from `compass/seed/*.csv` |
+| spec resolution | `specs.ts` — engagement override → org default → `compass/` | **bypassed**: reads files off disk |
+| host routing | `router.py` → `preferred_hosts` | **hardcoded** `new Anthropic()`, `MODEL = "claude-opus-5"` |
+
+**DRI decision (2026-08-18): v2 is the engine.** v1 is being ported into it one workflow at a time.
+v2 forking the spine was a defect, not a design — it was meant to be a new surface on v1's.
+
+## Where truth lives, and what checks it
+
+Five places describe the same workflows. Know which one executes:
+
+- `compass/workflows/*.md` — the framework's dispatch graphs. **Two formats now**: the old
+  `### Step N.` headings, and the newer **table** (`| # | task | dispatch | owner | reads | produces
+  | depends-on |`) used by `basecamp.md` and `groundwork.md`. `graph.py` parses BOTH.
+- `compass/seed/*.csv` — **what v2 imports and actually runs.** Carries `produces`, `reads`,
+  criteria, `nests` and `title`, none of which the `### Step N.` format can express.
+- the database — a *versioned* copy of the seed. Published versions match it row for row; older
+  versions accumulate, so raw counts overstate.
+- `.claude/skills/` — the slash commands.
+- `compass/reference/workflow-catalog.csv` — derived from the .md, CI-checked.
+
+**`compass/scripts/seed-consistency-check.py`** reconciles the seed against the graphs and fails on
+NEW drift only; today's known gaps are recorded in `compass/seed/known-drift.txt`. Run it before
+believing the .md files describe what runs.
+
+## The engagement shape
+
+1. **Intake** (`/v2/new` → `lib/data/onboard.ts`) provisions and **opens nothing**. It files the SOW
+   and an optionally-supplied BRD/product brief, scaffolds the 22-node doc tree, and canonicalises
+   the Confluence space and Jira project (`test` → `TEST`, and the space NAME → its key).
+2. **The delivery manager initiates a phase.** Nothing self-starts: an engagement existing is not
+   the same as an engagement being ready to start.
+3. **A phase is rows.** `basecamp` (connect systems, staff) then `groundwork` (brief → epics →
+   architecture → plan → status). Each row is satisfied by `agent: <role>.<task>`, a nested
+   `workflow: <code>`, or nothing at all — and a phase mixes them freely.
+4. **Gates are three-state everywhere**: satisfied / not satisfied / **not yet measurable**. Criteria
+   are marked `check:` (machine) or `judgment:` (a person, recorded against their name). The app
+   knows HOW to evaluate; `close_task` enforces that it WAS.
+5. **`lib/data/tracker.ts` is the only seam that writes to Jira** — epic per phase, story per row,
+   status vocabulary discovered from the board rather than assumed.
+
+## What is missing (2026-08-19)
+
+- **`preferred_hosts` is ignored in v2**, so review independence (#155) cannot hold — the reviewer
+  cannot run on codex/gemini however the agent file is written. Biggest gap.
+- **v2 bypasses `specs.ts`**, so per-engagement agent/workflow overrides silently do not apply.
+- **Three workflows have no dispatch graph** — `create-epics`, `plan`, `status` — and they are
+  groundwork rows 2, 4 and 5, so **groundwork cannot complete**.
+- **A gate with no Done criteria closes green.** `close_task` builds its refusal with `string_agg`,
+  which returns NULL over zero rows. Only basecamp and groundwork are fully gated.
+- `security-reviewer` → `security-ops` rename; `product-owner` and `security-engineer` have agent
+  files but no role row, so they cannot be dispatched.
+- Ad-hoc epics (`work_task.origin` already distinguishes `defined` from `adhoc`).
+- Nested rows have never been exercised through the UI, only in scripts.
+
+## Lessons this repo keeps re-teaching
+
+Every one of these shipped green and was caught by probing behaviour rather than reading output:
+
+- **A migration reported "Finished" and changed nothing** — `if not exists (conname = ...)` found a
+  same-named constraint from an older migration and skipped. A named constraint that must CHANGE
+  gets dropped and recreated; migrations now assert their own effect.
+- **A checker carried the literal it was policing** — `consistency-check.py` hardcoded "N of 18
+  workflows", so adding a workflow made the checker the stale claim. Compute both numbers.
+- **A diff that omits a field reports "unchanged"** — the importer's step key lacked `nests` and
+  `title`, so a row could change which workflow it nested and the import called it identical.
+- **Identical `created_at` is not an ordering.** A phase writes its rows in one transaction.
+- **A rename is a writing job.** Blind substitution produced "The epics is published", and a
+  slash-anchored pattern never saw `Path("docs") / "bets"`.
+- **Fixing the caller and not the callee** leaves the bug alive: `open_phase_run` got a fallback its
+  own first task never used, because that task comes from `open_workflow_run`.
 
 ## What was in this file before v0.3.14 (and why it moved)
 
