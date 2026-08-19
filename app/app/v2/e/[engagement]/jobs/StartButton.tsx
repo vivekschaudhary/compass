@@ -4,6 +4,7 @@
 // out of idle — and it says what happened rather than quietly re-rendering.
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "../../../_ui/primitives";
 import { startTaskAction, recheckAction } from "./actions";
 
@@ -17,6 +18,7 @@ export function StartButton({
   href?: string;
   openQuestions?: number;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +50,11 @@ export function StartButton({
           startTransition(async () => {
             setError(null);
             const r = await startTaskAction(engagement, role, taskId);
-            if (!r.ok) setError(r.error ?? "Could not start it.");
+            if (!r.ok) { setError(r.error ?? "Could not start it."); return; }
+            // Starting claims the task and passes its gate; it does not run anything. Leaving the
+            // person on the queue made "Start with agent" a lie — the task read `started`, no agent
+            // had been invoked, and the next action was on a page they had not been taken to.
+            if (href) router.push(href);
           })
         }
       >

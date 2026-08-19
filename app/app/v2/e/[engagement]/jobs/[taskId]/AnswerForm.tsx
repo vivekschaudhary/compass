@@ -3,13 +3,17 @@
 import { useState, useTransition } from "react";
 import type { OpenQuestion } from "@/app/lib/data/job";
 import { answerAction } from "./actions";
+import { requestRun } from "./run-agent";
+import { useRouter } from "next/navigation";
 
 /** The agent's questions, as a form. Blank answers are left open rather than recorded as empty. */
 export function AnswerForm({ engagement, role, taskId, questions }: {
   engagement: string; role: string; taskId: string; questions: OpenQuestion[];
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
   const [pending, startTransition] = useTransition();
   const set = (id: string, v: string) => setValues((p) => ({ ...p, [id]: v }));
 
@@ -50,18 +54,32 @@ export function AnswerForm({ engagement, role, taskId, questions }: {
 
       <div className="asks-actions">
         <button
-          className="btn btn-primary" disabled={pending}
+          className="btn btn-primary" disabled={pending || working}
           onClick={() => startTransition(async () => {
             setError(null);
             const r = await answerAction(engagement, role, taskId, values);
-            if (!r.ok) setError(r.error ?? "Could not record that.");
-            else setValues({});
+            if (!r.ok) { setError(r.error ?? "Could not record that."); return; }
+            setValues({});
+
+            // Answering the LAST open question is the whole signal the agent was waiting for.
+            // Making someone answer and then separately press Run is asking them to say go twice —
+            // John answered seven questions and the task sat at `running` with nothing running.
+            // Questions still open means it is still your turn, so nothing fires.
+            if (r.remaining === 0) {
+              setWorking(true);
+              const run = await requestRun(engagement, role, taskId);
+              setWorking(false);
+              if (!run.ok) setError(run.message);
+            }
+            router.refresh();
           })}
         >
-          {pending ? "Recording…" : "Answer"}
+          {working ? "The agent is working…" : pending ? "Recording…" : "Answer"}
         </button>
         <span className="asks-note text-muted">
-          Blank answers stay open — the agent still needs them.
+          {working
+            ? "Answered — it is drafting from what you told it. This takes a few minutes."
+            : "Blank answers stay open — the agent still needs them."}
         </span>
         {error && <span className="start-error">{error}</span>}
       </div>

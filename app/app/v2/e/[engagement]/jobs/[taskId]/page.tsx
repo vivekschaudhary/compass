@@ -88,8 +88,12 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
             <ApprovePanel engagement={engagement} role={roleCode} taskId={taskId} criteria={doneCriteria} />
           )}
 
-          {/* Always. The record stays open to comment even when the work is finished. */}
-          <NoteBox engagement={engagement} role={roleCode} taskId={taskId} closed={state === "closed"} />
+          {/* Once there is something to add TO. On a task that has never run it sat above the Run
+              button reading "Add to the conversation", so it looked like the input you had to fill
+              in before anything would happen — which is exactly how it was read. */}
+          {(turns.length > 0 || state === "closed") && (
+            <NoteBox engagement={engagement} role={roleCode} taskId={taskId} closed={state === "closed"} />
+          )}
 
           {state === "closed" ? (
             <p className="closed-note">Closed. Approved and published.</p>
