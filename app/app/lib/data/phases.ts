@@ -105,8 +105,13 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
     }
   }
 
-  // The board, last: Compass is the record and the tracker is a mirror, so a Jira outage must not
-  // cost a phase that already exists locally. Problems are returned, never thrown.
+  // The board, last: OPENING a phase must not cost anything to a Jira outage — the rows exist
+  // locally and the tickets can be created on the next attempt. (Closing is the opposite; the
+  // tracker holds the status of record there, so `approve` moves the ticket before it closes the
+  // task. See gates.ts.) Problems are returned, never thrown.
+  //
+  // Machine rows above closed with no ticket yet, which is why they close locally without the
+  // board: mirrorPhase creates their story and moves it to match, a few lines from here.
   const mirrored = await mirrorPhase(actor.engagementId, runId as string, actor.roleCode);
 
   return { ok: true, runId: runId as string, tasks, mirrored };

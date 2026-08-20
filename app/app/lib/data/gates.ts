@@ -12,7 +12,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
-import { mirrorState } from "./tracker";
+import { mirrorState, moveFailed } from "./tracker";
 import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolveJira, projectStatuses } from "../jira";
@@ -505,19 +505,33 @@ export async function approve(
     });
   }
 
+  // The BOARD closes first, and this order is the whole point.
+  //
+  // The tracker holds the status of record. Closing here and telling Jira afterwards — which is
+  // what this did — leaves Compass claiming Done while the board still says To Do whenever the
+  // move is refused or the board has no Done status to move to. Two answers, no arbiter, and the
+  // wrong one is the one people look at.
+  //
+  // "Nothing to move" is not a failure: an engagement with no tracker, or a task with no ticket
+  // (phase 1 configures the tracker, so its own rows predate it), closes exactly as before.
+  const moved = await mirrorState(actor.engagementId, taskId, "closed", actor.roleCode);
+  if (moveFailed(moved)) return { ok: false, error: moved.note ?? "The tracker refused to close this." };
+
   const { error } = await sb.rpc("close_task", {
     p_task_id: taskId, p_actor: who, p_actor_role: actor.roleCode,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // The gate refused AFTER the ticket moved. Put the ticket back rather than leave the board
+    // reading Done for work Compass will not close — best effort, and the failure the caller sees
+    // is the gate's, which is the one that explains what to fix.
+    if (moved.ok) await mirrorState(actor.engagementId, taskId, "hitl", actor.roleCode);
+    return { ok: false, error: error.message };
+  }
 
   // An approved document that the app must KNOW becomes state here — the roster into `member` rows,
   // and whatever else registers later. Only on approval: a draft is a proposal, and materialising
   // one would let an agent staff an engagement by suggesting names.
   await materialiseFrom(actor, taskId);
-
-  // The board hears about it too. A ticket that never moves is worse than no ticket: it tells the
-  // team the work is still To Do while Compass knows it closed.
-  await mirrorState(actor.engagementId, taskId, "closed", actor.roleCode);
 
   // Approving the backlog no longer materialises anything.
   //

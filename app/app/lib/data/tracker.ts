@@ -17,8 +17,11 @@
 //   Idempotent. Re-initiating a phase, a retry, a double click — none of them may produce a second
 //   copy of the board.
 //
-//   Never fatal. The tracker is a MIRROR. Compass is the record; if Jira is down the work still
-//   happened, and saying so beats refusing to work.
+//   Never fatal WHILE WORK IS IN FLIGHT. A run that cannot reach Jira still runs; saying so beats
+//   refusing to work. The CLOSE is the exception, and deliberately so: the tracker holds the status
+//   of record, so a close that Jira did not accept must not happen in Compass either. `mirrorState`
+//   therefore reports WHY it did nothing — see `reason` — so a caller can tell "there was nothing
+//   to move" (no ticket, no tracker configured) from "the move was attempted and failed".
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
@@ -171,18 +174,38 @@ export async function mirrorPhase(
  * Returns what it did, including "the board has no status for this" — which is a real answer on a
  * board with four statuses and no HITL gate, and must not read as success.
  */
+export type MoveResult = {
+  ok: boolean;
+  key?: string;
+  status?: string;
+  note?: string;
+  /**
+   * Why the move did not happen. Absent on success.
+   *
+   * The split that matters to a caller: `no-supabase` / `no-ticket` / `no-tracker` mean there was
+   * nothing to move and nothing is wrong. `no-status` / `refused` mean the move was ATTEMPTED
+   * against a real board and did not take — which is a failure a close must respect.
+   */
+  reason?: "no-supabase" | "no-ticket" | "no-tracker" | "no-status" | "refused";
+};
+
+/** True when the move was attempted against a real board and did not take. */
+export function moveFailed(r: MoveResult): boolean {
+  return !r.ok && (r.reason === "no-status" || r.reason === "refused");
+}
+
 export async function mirrorState(
   engagementId: string, taskId: string, state: string, actorRole: string,
-): Promise<{ ok: boolean; key?: string; status?: string; note?: string }> {
+): Promise<MoveResult> {
   const sb = supabaseAdmin();
-  if (!sb) return { ok: false, note: "Supabase is not configured." };
+  if (!sb) return { ok: false, reason: "no-supabase", note: "Supabase is not configured." };
 
   const { data: task } = await sb.from("work_task")
     .select("ticket_key, title").eq("id", taskId).maybeSingle();
-  if (!task?.ticket_key) return { ok: false, note: "This task has no ticket to move." };
+  if (!task?.ticket_key) return { ok: false, reason: "no-ticket", note: "This task has no ticket to move." };
 
   const creds = await credsFor(engagementId);
-  if (!creds) return { ok: false, note: "No Jira configured for this engagement." };
+  if (!creds) return { ok: false, reason: "no-tracker", note: "No Jira configured for this engagement." };
 
   const status = await statusFor(creds, state);
   if (!status) {
@@ -192,7 +215,7 @@ export async function mirrorState(
       verb: "tracker.status_missing", actorKind: "system", actorRoleCode: actorRole,
       payload: { ticket: task.ticket_key, state, wanted: PREFERRED[state] ?? [] },
     });
-    return { ok: false, key: task.ticket_key, note };
+    return { ok: false, reason: "no-status", key: task.ticket_key, note };
   }
 
   const moved = await transitionIssue(creds, task.ticket_key, status);
@@ -205,5 +228,5 @@ export async function mirrorState(
 
   return moved
     ? { ok: true, key: task.ticket_key, status }
-    : { ok: false, key: task.ticket_key, status, note: `Jira refused the move to '${status}'.` };
+    : { ok: false, reason: "refused", key: task.ticket_key, status, note: `Jira refused the move to '${status}'.` };
 }
