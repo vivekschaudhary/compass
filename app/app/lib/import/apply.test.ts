@@ -43,6 +43,20 @@ describe("retiring what the bundle no longer names", () => {
     workflows: [{ code: "build", steps: [], criteria: [] }, { code: "groundwork", steps: [], criteria: [] }],
   };
 
+  it("does not re-retire what is already out of service", () => {
+    // Both readers must filter to enabled. The role path did and the workflow path did not, so
+    // `basecamp` and `groundwork` reappeared in the retire list of every import after the one that
+    // retired them. A report that cries wolf is a report nobody reads.
+    const alreadyRetired: Existing = {
+      ...empty, workstreams: ["Engineering"], roles: ["engineer"],
+      workflows: [{ code: "build", steps: [], criteria: [] }],   // groundwork is disabled, so absent
+    };
+    const r = planImport(bundle, alreadyRetired);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.plan.retire).toEqual([]);
+  });
+
   it("names the roles and workflows the bundle dropped", () => {
     const r = planImport(bundle, existingWithExtras);
     expect(r.ok).toBe(true);

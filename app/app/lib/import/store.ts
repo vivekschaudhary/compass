@@ -200,7 +200,11 @@ export async function readExisting(
     return (data ?? []).map((r: { code: string }) => r.code);
   };
 
-  const wfQuery = sb.from("workflow").select("id, code").eq("org_id", org.id);
+  // IN SERVICE only, for the same reason `list` filters: a workflow already retired is not
+  // "existing" for planning, and listing it has the importer retire it again on every run. The role
+  // path got this right and this one did not, so `basecamp` and `groundwork` reappeared in the
+  // retire list of every subsequent import — a report that cries wolf is a report nobody reads.
+  const wfQuery = sb.from("workflow").select("id, code").eq("org_id", org.id).eq("enabled", true);
   const { data: wfRows } = await (engagementId === null
     ? wfQuery.is("engagement_id", null)
     : wfQuery.eq("engagement_id", engagementId));
