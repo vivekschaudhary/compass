@@ -8,20 +8,20 @@ commit-time check computes for free. This is that check, the mechanical
 complement to `pre-push-consistency-check.py` (which needs the human to name the
 old phrasing; this one needs nothing — it computes the truth and compares).
 
+Two checks were removed when AGENTS.md stopped describing the product's runtime:
+a dispatch-graph count and a supported-hosts list, both of which compared a PROSE
+CLAIM in AGENTS.md against reality. With no claim to police there is nothing to
+check — and seed-consistency-check.py already covers seed-vs-graph drift, which
+is the part that mattered. Do not re-add them by re-adding the prose.
+
 Checks (all COMPUTABLE, no human input):
-  1. Dispatch-graph count — AGENTS.md "N of 17 workflows" == actual count of
-     workflows containing a "## Dispatch graph" section.
-  3. Version self-claims — no hardcoded "alpha-<N>" in the doc/code surfaces
+  1. Version self-claims — no hardcoded "alpha-<N>" in the doc/code surfaces
      that should point to CHANGELOG.md as the single source (README, CLAUDE,
      orchestrator run.py + README). CHANGELOG / improvements / retros are
      exempt (they are the record).
-  4. Host-list — every host the router enumerates as supported (its
-     "Supported: ..." dispatch error string) is documented in AGENTS.md's host
-     table. Added after Retro #025 caught `claude-code` missing from the table
-     by hand — a new host must be added in code AND docs together.
-  5. Version unified — config.yaml `framework_version` (the single source, #38)
+  2. Version unified — config.yaml `framework_version` (the single source, #38)
      agrees with pyproject's `version`, normalized for rc/dash formatting.
-  6. Config declares checks — the shipped compass/config.yaml resolves a
+  3. Config declares checks — the shipped compass/config.yaml resolves a
      non-empty CI-parity suite. It is also the consumer template, and a code
      workflow resolving zero checks HALTS (#122/#123), so shipping it as
      commented-out examples means every new project's first /build or /fix dies.
@@ -49,33 +49,6 @@ def _workflow_files(repo_root: Path):
     wdir = repo_root / "compass" / "workflows"
     return [p for p in wdir.glob("*.md") if p.name != "improvements.md"]
 
-
-def check_dispatch_graph_count(repo_root: Path) -> list:
-    actual = sum(
-        1 for p in _workflow_files(repo_root)
-        if "## Dispatch graph" in p.read_text(encoding="utf-8")
-    )
-    # The DENOMINATOR is computed too. It was hardcoded as 18, so adding a workflow made the check
-    # itself the stale claim — it demanded "N of 18" from a repo that no longer had 18. A checker
-    # that carries a literal it is policing cannot police it.
-    total = len(_workflow_files(repo_root))
-
-    agents = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
-    m = re.search(r"(\d+) of (\d+) workflows", agents)
-    if not m:
-        return ["AGENTS.md: could not find the 'N of M workflows' dispatch-graph claim"]
-    claimed, claimed_total = int(m.group(1)), int(m.group(2))
-
-    problems = []
-    if claimed != actual:
-        problems.append(
-            f"dispatch-graph count drift: AGENTS.md claims {claimed} in dispatch-graph shape, "
-            f"actual is {actual}. Update AGENTS.md.")
-    if claimed_total != total:
-        problems.append(
-            f"workflow total drift: AGENTS.md claims {claimed_total} workflows, "
-            f"actual is {total} (compass/workflows/*.md, excluding improvements.md). Update AGENTS.md.")
-    return problems
 
 
 def check_version_self_claims(repo_root: Path) -> list:
@@ -119,35 +92,6 @@ def check_version_unified(repo_root: Path) -> list:
 
 # chatgpt is an OpenAI-family alias (no own AGENTS.md row); it's documented as
 # `openai`. Any other host the router names must have its own backtick mention.
-_HOST_ALIASES = {"chatgpt": "openai"}
-
-
-def _router_supported_hosts(repo_root: Path):
-    """The host tokens from router.py's authoritative 'Supported: ...' error
-    string (kept next to the dispatch arms). None if the string moved."""
-    text = (repo_root / "compass" / "orchestrator" / "hosts" / "router.py").read_text(encoding="utf-8")
-    m = re.search(r"Supported:\s*([a-z0-9,\- ]+)", text)
-    if not m:
-        return None
-    return [h.strip() for h in m.group(1).split(",") if h.strip()]
-
-
-def check_host_list(repo_root: Path) -> list:
-    hosts = _router_supported_hosts(repo_root)
-    if hosts is None:
-        return ["router.py: could not find the 'Supported: <hosts>' enumeration "
-                "(dispatch_to_host error string) to verify the host list against."]
-    agents = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
-    problems = []
-    for h in hosts:
-        token = _HOST_ALIASES.get(h, h)
-        if f"`{token}`" not in agents:
-            problems.append(
-                f"host-list drift: router.py supports '{h}' but AGENTS.md has no "
-                f"`{token}` host entry. Add it to the Supported hosts table "
-                f"(a new host lands in code AND docs together — Retro #025)."
-            )
-    return problems
 
 
 def check_config_declares_checks(repo_root: Path) -> list:
@@ -188,10 +132,8 @@ def check_config_declares_checks(repo_root: Path) -> list:
 
 def run_all(repo_root: Path) -> list:
     return (
-        check_dispatch_graph_count(repo_root)
-        + check_version_self_claims(repo_root)
+        check_version_self_claims(repo_root)
         + check_version_unified(repo_root)
-        + check_host_list(repo_root)
         + check_config_declares_checks(repo_root)
     )
 
@@ -204,8 +146,8 @@ def main(argv=None) -> int:
 
     problems = run_all(repo_root)
     if not problems:
-        print("CONSISTENT — dispatch-graph count, version self-claims, "
-              "version unified, host list, config checks all check out.")
+        print("CONSISTENT — version self-claims, "
+              "version unified, config checks all check out.")
         return 0
     print(f"DRIFT FOUND ({len(problems)}):\n", file=sys.stderr)
     for p in problems:

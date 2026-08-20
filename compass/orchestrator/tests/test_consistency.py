@@ -73,51 +73,11 @@ class TestDetectsDrift(unittest.TestCase):
         root = self._mirror()
         self.assertEqual(cc.run_all(root), [])
 
-    def test_detects_a_stale_workflow_total(self):
-        """Adding a workflow must fail the check until AGENTS.md says so.
-
-        The numerator has always been computed; the denominator was a literal, so a NEW workflow
-        left the total claim stale and silent. This is that case.
-        """
-        root = self._mirror()
-        (root / "compass" / "workflows" / "c.md").write_text(
-            "# wf\n\n## Dispatch graph\n\n### Step 1. `x.y`\n", encoding="utf-8"
-        )
-        problems = cc.run_all(root)
-        self.assertTrue(
-            any("workflow total drift" in p for p in problems),
-            f"a third workflow should have made the total claim stale, got: {problems}",
-        )
-
-    def test_dispatch_count_drift_caught(self):
-        root = self._mirror()
-        (root / "AGENTS.md").write_text(
-            "5 of 18 workflows; catalog 7 shapes / 2 patterns.\n", encoding="utf-8"
-        )
-        probs = cc.check_dispatch_graph_count(root)
-        self.assertTrue(any("dispatch-graph count drift" in p for p in probs))
-
     def test_version_self_claim_caught(self):
         root = self._mirror()
         (root / "README.md").write_text("orchestrator v0.4-alpha-7 ships\n", encoding="utf-8")
         probs = cc.check_version_self_claims(root)
         self.assertTrue(any("hardcoded orchestrator" in p for p in probs))
-
-    def test_host_list_drift_caught(self):
-        # router gains a host the AGENTS.md table doesn't document → caught
-        root = self._mirror()
-        (root / "compass" / "orchestrator" / "hosts" / "router.py").write_text(
-            'raise RuntimeError("Unknown host: x. Supported: claude, claude-code, '
-            'codex, chatgpt, openai, gemini, frobnicate")\n', encoding="utf-8"
-        )
-        probs = cc.check_host_list(root)
-        self.assertTrue(any("host-list drift" in p and "frobnicate" in p for p in probs))
-
-    def test_host_list_alias_not_flagged(self):
-        # chatgpt is satisfied by the `openai` row — must NOT be flagged
-        root = self._mirror()
-        probs = cc.check_host_list(root)
-        self.assertEqual(probs, [])
 
     def test_version_unified_drift_caught(self):
         # #38: config.yaml framework_version vs pyproject version disagree → caught
