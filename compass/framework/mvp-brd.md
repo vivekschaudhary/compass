@@ -7,6 +7,15 @@ and the requirements that follow from them. It is the single description of what
 another document in this repo describes a different MVP, a different lifecycle or a different
 status flow, this one wins and that one is stale.
 
+## Companion documents
+
+Hosted rather than committed, because they are read as pages and regenerated from live data. This
+document links them; nothing else should hold a second copy of the link.
+
+| document | what it holds |
+| -------- | ------------- |
+| [Compass Schema](https://claude.ai/code/artifact/edcdba3f-8315-4d80-8e04-7720aa39460d) | the data model — catalogue and instance tables, the ER diagram, the four phases as rows, and the four rules the schema enforces. Counts are read from the live database, so the page is dated: check its date against this one before trusting a number |
+
 ---
 
 ## 1 · The concept
