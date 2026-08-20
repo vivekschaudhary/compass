@@ -1,6 +1,6 @@
 # Compass Orchestrator — Product Vision
 
-**Status:** north star. This is the product intent in plain language — what the orchestrator is *for*. The technical design that serves it lives in [`DESIGN-pluggable-executor.md`](DESIGN-pluggable-executor.md) (#87); the current build state is tracked in `compass/workflows/improvements.md` and `compass/framework/mvp.md`. Everything we build for the orchestrator should point back here.
+**Status:** north star. This is the product intent in plain language — what the orchestrator is *for*. The technical design that serves it lives in [`DESIGN-pluggable-executor.md`](DESIGN-pluggable-executor.md) (#87); the current build state is tracked in `compass/workflows/improvements.md`. Everything we build for the orchestrator should point back here.
 
 ---
 

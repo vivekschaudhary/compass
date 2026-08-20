@@ -89,7 +89,7 @@ Before marking this workflow complete, verify:
 
 **ADR-not-gate:** architecture is an artifact, not a hard gate. Small bets can skip via `architecture_required: false` in brief DRI (Architect logs rationale and exits at Step 1 — no architecture.md produced). Engineer can start as soon as architecture is `approved`; no waiting for "perfect."
 
-**Enterprise/Solution Architect:** the legacy workflow always engaged Enterprise Architect alongside Architect. In the dispatch-graph shape, cross-system implications live in the architecture.md "Cross-system implications" section (Step 1, section 7). If Enterprise Architect review is required for a specific bet, run it as a separate `/ops` task or inline in the HITL review — do not silently skip it. Enterprise Architect agent migration deferred (non-MVP per `compass/framework/mvp.md`).
+**Enterprise/Solution Architect:** the legacy workflow always engaged Enterprise Architect alongside Architect. In the dispatch-graph shape, cross-system implications live in the architecture.md "Cross-system implications" section (Step 1, section 7). If Enterprise Architect review is required for a specific bet, run it as a separate `/ops` task or inline in the HITL review — do not silently skip it. Enterprise Architect agent migration deferred — not in the MVP.
 
 **Anti-patterns:**
 - `silent-stack-introduction` — introducing tools not in the foundational stack inside a bet doc. Deviation gate hard-stops this; never rationalize past it.

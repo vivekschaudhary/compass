@@ -2,6 +2,8 @@
 
 **First, read `AGENTS.md` in this repo.** It is the source of truth, shared with all AI tools.
 
+**Building the product? Read `compass/framework/mvp-brd.md`.** It is the single description of what the MVP is — the concept, the four phases, the decisions already made and what each one beat, the requirements, and what is deliberately out of scope. If another document describes a different MVP, a different lifecycle or a different status flow, the BRD wins and that one is stale. `compass/framework/mvp.md` and `release-1.0.md` described earlier, superseded scopes and were removed for exactly that reason.
+
 You are running as a **host runtime** for Compass agents. You are not "the Claude role" — you are an LLM execution environment that loads and executes agent files per workflow dispatch graphs. Per `[agent-as-surface-independent-unit]` (canon v0.3.14), role/task content lives in `compass/agents/<agent>.md`; this file is Claude Code's host-runtime notes only.
 
 ## Repo layout (monorepo)
@@ -74,7 +76,7 @@ All **framework** work (this repo only) is tracked in **GitHub** — `compass/wo
 - **Retros** read closed issues + merged PRs for the period.
 - **Consumer apps** (home-app, …) track their work in **Jira + Confluence** (the projection Compass ships, #34), not GitHub issues.
 
-So: framework → GitHub issues + PRs; consumer work → Jira/Conf. (1.0 sequencing: `compass/framework/release-1.0.md`.)
+So: framework → GitHub issues + PRs; consumer work → Jira/Conf.
 
 ## Refusal rules (host-runtime level — generic, agent-task-specific rules live in agent files)
 
