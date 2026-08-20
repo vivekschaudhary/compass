@@ -22,7 +22,6 @@ def _fake_framework(root: Path):
     (root / "compass" / "agents" / "support.md").write_text("FRESH support", encoding="utf-8")
     (root / "compass" / "workflows").mkdir(parents=True)
     (root / "compass" / "workflows" / "fix.md").write_text("FRESH fix", encoding="utf-8")
-    (root / "compass" / "workflows" / "improvements.md").write_text("FRAMEWORK log", encoding="utf-8")
     (root / "compass" / "workflows" / "retros").mkdir()
     (root / "compass" / "workflows" / "retros" / "r1.md").write_text("retro", encoding="utf-8")
     for d in ("framework", "templates", "scripts", "orchestrator"):
@@ -85,12 +84,13 @@ class TestApplyPlan(unittest.TestCase):
             fw, con = Path(f), Path(c)
             _fake_framework(fw)
             _fake_consumer(con)
-            # consumer also has a stale framework meta-log that must be pruned
-            (con / "compass" / "workflows").mkdir(parents=True, exist_ok=True)
-            (con / "compass" / "workflows" / "improvements.md").write_text("OLD log", encoding="utf-8")
+            # consumer also carries the framework's own retros, which must be pruned — they are
+            # the framework's meta-log and mean nothing inside a consuming project.
+            (con / "compass" / "workflows" / "retros").mkdir(parents=True, exist_ok=True)
+            (con / "compass" / "workflows" / "retros" / "old.md").write_text("OLD retro", encoding="utf-8")
 
             plan = sync.plan_sync(fw, con)
-            self.assertIn("compass/workflows/improvements.md", plan["prune"])
+            self.assertIn("compass/workflows/retros", plan["prune"])
             summary = sync.apply_plan(plan, fw, con, backup=True)
 
             # machinery overwritten
@@ -103,7 +103,7 @@ class TestApplyPlan(unittest.TestCase):
             self.assertEqual((con / ".github" / "workflows" / "ci.yml").read_text(), "MY CI")
             self.assertTrue((con / "compass" / "roles" / "legacy.md").exists())
             # framework meta-log pruned from the consumer
-            self.assertFalse((con / "compass" / "workflows" / "improvements.md").exists())
+            self.assertFalse((con / "compass" / "workflows" / "retros" / "old.md").exists())
             # backup made
             self.assertIsNotNone(summary["backup"])
             self.assertTrue(Path(summary["backup"]).exists())

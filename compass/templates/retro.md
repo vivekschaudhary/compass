@@ -9,7 +9,7 @@ improvement_count: 5               # source-entry count (improvements / log entr
 created: YYYY-MM-DD
 author: <agent — typically Delivery Manager for project retros, framework Architect for framework retros, the agent itself for role/workflow retros>
 # parent_log: where THIS retro reads its source data from. Altitude-specific:
-#   - framework altitude → compass/workflows/improvements.md
+#   - framework altitude → GitHub closed issues + merged PRs
 #   - project altitude   → docs/improvements.md
 #   - bet altitude       → docs/epics/<epic-id>/ (DRI logs + outcome)
 #   - role altitude      → docs/role-activity/<role>.md
@@ -30,7 +30,7 @@ consolidates_from: []
 > Batch retro at the **`<altitude>`** altitude per AGENTS.md principle #14 (the soft-spec-rationalization defense via periodic pattern review) + `[fractal-retro]` (canon.md v0.3.17 — same workflow shape at every altitude). **Status: archive.** Patterns surfaced here feed future improvements via normal triggers; this artifact reports, it does not prescribe.
 >
 > **Altitude reading guide:**
-> - **framework / project / org** retros aggregate from a shipped-improvements log (`compass/workflows/improvements.md` / `docs/improvements.md` / multi-project aggregator output)
+> - **framework** retros aggregate from GitHub closed issues + merged PRs; **project / org** retros from a shipped-improvements log ( `docs/improvements.md` / multi-project aggregator output)
 > - **bet** retros aggregate from per-bet DRI logs + outcome
 > - **role** retros aggregate from `docs/role-activity/<role>.md` entries written by the agent mid-task
 > - **workflow** retros aggregate from `docs/workflow-runs/<workflow>.md` entries written each time the workflow runs

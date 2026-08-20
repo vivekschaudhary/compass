@@ -7,7 +7,7 @@ import { STATUS } from "./lifecycle";
 //
 // Phase A (provisioning) is NOT a workflow: no basis, no deliverable, no approval gate. It is
 // configuration, and its control is an ASSERTED state rather than a human sign-off. See
-// compass/framework/engagement-setup.md.
+// compass/framework/mvp-brd.md.
 //
 // This exists because every failure it catches is otherwise SILENT:
 //   · no doc tree scaffolded → a workflow writes its page but `01-foundation/...` points nowhere,

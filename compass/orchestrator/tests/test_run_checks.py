@@ -88,7 +88,7 @@ class TestResolveChecks(unittest.TestCase):
 
 
 class TestResolveChecksSplitDirs(unittest.TestCase):
-    """#122: the one-framework-many-projects layout (SETUP.md) — project_dir and
+    """#122: the one-framework-many-projects layout — project_dir and
     compass_dir are DIFFERENT trees. `checks:` was read from the project's config but
     `stack:` from the framework's, so setup-foundation-architecture writing `stack:`
     into the CONSUMER's config activated nothing. TestResolveChecks' `_proj` helper

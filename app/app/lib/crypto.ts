@@ -10,7 +10,7 @@ import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypt
 // This is honest about what it is: encryption at rest with a key held in the environment. It
 // defends against database exposure, NOT against a compromised app server (which by definition
 // holds the key). The stronger answer is per-engagement OAuth so long-lived tokens are never
-// stored at all — see compass/framework/engagement-setup.md.
+// stored at all — see compass/framework/mvp-brd.md.
 //
 // Format: `enc.v1.<iv>.<tag>.<ciphertext>`, all base64url. The version segment exists so a key
 // rotation can re-wrap without guessing what an unprefixed value is.

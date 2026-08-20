@@ -12,7 +12,7 @@ tool-capable implementer can apply a fix and run its regression test. They are
 **sandboxed to project_dir**, and `bash` is screened against a denylist that
 mechanizes the framework's refusal rules (no force-push, no --no-verify, no
 reset --hard / clean -f / branch -D, no rm -rf, no sudo, …) plus a timeout.
-Per `[pluggable-graph-executor]` (compass/orchestrator/DESIGN-pluggable-executor.md).
+Per `[pluggable-graph-executor]` (canon.md).
 """
 import re
 import subprocess

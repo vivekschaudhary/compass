@@ -23,7 +23,7 @@ This log is the source for project-altitude retros. Other altitudes have their o
 - **Workflow altitude:** `docs/workflow-runs/<workflow>.md` — workflows append one entry per run
 - **Bet altitude:** per-bet DRI logs + outcome transition (no separate log; the bet's own artifacts ARE the source)
 - **Org altitude:** aggregator across multiple project `docs/improvements.md` files (v0.4+)
-- **Framework altitude:** `compass/workflows/improvements.md` in the Compass framework repo (separate from this project)
+- **Framework altitude:** GitHub issues + PRs in the Compass framework repo (separate from this project)
 
 Project retros can also consolidate child-altitude retros (role, workflow, bet) — list those in the project retro's `consolidates_from:` frontmatter.
 

@@ -44,7 +44,7 @@ export default function NewEngagement() {
   const [sow, setSow] = useState("");
   // Phase A (setup → provisioning) runs BEFORE the SOW. The SOW is the root basis of everything
   // downstream, so it belongs in the doc store at `02-scope/sow` — which needs the store wired,
-  // which needs the engagement row to exist. See compass/framework/engagement-setup.md.
+  // which needs the engagement row to exist. See compass/framework/mvp-brd.md.
   const [phase, setPhase] = useState<"setup" | "provisioning" | "input" | "analyzing" | "preview" | "clarify" | "creating">("setup");
   const [engagementId, setEngagementId] = useState("");
   const [name, setName] = useState("");

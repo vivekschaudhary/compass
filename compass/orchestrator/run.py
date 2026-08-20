@@ -1521,7 +1521,7 @@ def _config_candidates(compass_dir: Path, project_dir=None) -> list:
     """#122: the config files that may declare framework-level settings, in precedence
     order — the PROJECT's `compass/config.yaml` first, the framework's second. The two
     are the same file only when a project vendors the framework; under the documented
-    one-framework-many-projects layout (SETUP.md) they differ, which is exactly the case
+    one-framework-many-projects layout they differ, which is exactly the case
     that made a consumer's `stack:` inert. Existing files only, deduped."""
     candidates, seen = [], set()
     ordered = ([Path(project_dir) / "compass" / "config.yaml"] if project_dir is not None else [])

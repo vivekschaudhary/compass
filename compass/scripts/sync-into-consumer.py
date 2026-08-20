@@ -16,7 +16,7 @@ Policy (the load-bearing part):
              README.md, .claude/settings*.json, .codex/config.toml, .github/, .mcp.json,
              and everything else (the script ONLY ever writes paths in the overwrite set)
   PRUNE      the framework's own meta-logs (meaningless in a consumer), after copying
-             workflows → compass/workflows/improvements.md, compass/workflows/retros/
+             workflows → compass/workflows/retros/
 
 Safety: DRY-RUN by default (prints the plan, writes nothing). `--apply` performs it and
 first backs up the consumer's compass/ to <consumer>/.compass-backups/<ts>/.
@@ -48,9 +48,8 @@ FRAMEWORK_OVERWRITE = [
 ]
 
 # The framework's OWN meta-logs — removed from the consumer copy after sync (a consumer
-# has no use for the framework's improvement log / retros).
+# has no use for the framework's retros).
 PRUNE_AFTER = [
-    "compass/workflows/improvements.md",
     "compass/workflows/retros",
 ]
 

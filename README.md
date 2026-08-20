@@ -177,7 +177,7 @@ See `compass/orchestrator/README.md` for full options.
 
 ## Get started (manual — any host)
 
-Read `SETUP.md`.
+Read `compass/framework/mvp-brd.md` for what is being built, and `app/README.md` to run the control tower.
 
 ## Heads-up: AI tool memory persists across folder deletion
 

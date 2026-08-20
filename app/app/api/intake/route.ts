@@ -103,7 +103,7 @@ export async function POST(req: Request) {
 
   // ── Phase A · provision ───────────────────────────────────────────────────
   // Stand up the CONTAINER before any SOW exists. Phase A is configuration, not a workflow —
-  // no basis, no deliverable, no gate (compass/framework/engagement-setup.md). It needs only
+  // no basis, no deliverable, no gate (compass/framework/mvp-brd.md). It needs only
   // enough identity for the row to exist, because connectors are stored ON that row and the
   // doc tree cannot be scaffolded until it does.
   //

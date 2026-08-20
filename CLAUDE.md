@@ -68,11 +68,11 @@ These preferences are runtime-shape, not role-shape — they let you execute age
 
 ## Capturing framework work — GitHub is the record (#42, supersedes #180)
 
-All **framework** work (this repo only) is tracked in **GitHub** — `compass/workflows/improvements.md` is **frozen at #181** (historical only, don't append):
+All **framework** work (this repo only) is tracked in **GitHub**. There is no improvement log in the repo — the frozen `compass/workflows/improvements.md` was removed; CHANGELOG.md and the retros hold what it recorded:
 
 - **The why / proposal** → a **GitHub issue** in `vivekschaudhary/compass` (`gh issue create`), labeled `bug`/`enhancement`/`codification`/`tech-debt`/`from-retro` and tagged to a **release milestone** (1.0, …).
 - **The change** → a **PR that closes it** (`Closes #N`). The issue + PR are the record.
-- **The shipped summary** → `CHANGELOG.md` + GitHub Releases. **No improvements.md entry.**
+- **The shipped summary** → `CHANGELOG.md` + GitHub Releases.
 - **Retros** read closed issues + merged PRs for the period.
 - **Consumer apps** (home-app, …) track their work in **Jira + Confluence** (the projection Compass ships, #34), not GitHub issues.
 

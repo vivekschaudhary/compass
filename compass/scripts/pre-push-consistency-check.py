@@ -15,8 +15,7 @@ Usage:
 
 Exit codes: 0 clean · 1 stale mentions found · 2 usage error.
 
-History files (CHANGELOG.md, compass/workflows/improvements.md,
-compass/workflows/retros/) are excluded by default — they are append-only
+History files (CHANGELOG.md, compass/workflows/retros/) are excluded by default — they are append-only
 records and legitimately keep old phrasing. --include-history overrides.
 """
 import argparse
@@ -26,7 +25,6 @@ from pathlib import Path
 
 HISTORY_PREFIXES = (
     "CHANGELOG.md",
-    "compass/workflows/improvements.md",
     "compass/workflows/retros/",
 )
 
