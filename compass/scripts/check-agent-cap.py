@@ -2,7 +2,7 @@
 """
 Compass — check-agent-cap.py
 
-Per [agent-file-compression] (compass/framework/canon.md, v0.3.22).
+Per [agent-file-compression].
 
 Walks compass/agents/*.md; checks each file against the OpenAI Custom GPT
 Instructions ~8000-char cap; reports overages; exits non-zero when any

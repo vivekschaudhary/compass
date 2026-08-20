@@ -70,7 +70,7 @@ Source examples = starting points; framework SHAPE is load-bearing.
 
 ## Output summary contract
 
-**TL;DR** (3 lines — categories cited · n/a with reasons · moats verdicted + primary named) · **Files modified** (path + change type) · **Open questions unresolved** (explicit list; don't pretend closure) · **Recommendations vs. evidence** (separated). Structure the recommendations as discrete, actionable items so they can be promoted to tracked tasks at the HITL gate (the *playbook* — declared, #139; see `compass/framework/delivery-lifecycle.md`).
+**TL;DR** (3 lines — categories cited · n/a with reasons · moats verdicted + primary named) · **Files modified** (path + change type) · **Open questions unresolved** (explicit list; don't pretend closure) · **Recommendations vs. evidence** (separated). Structure the recommendations as discrete, actionable items so they can be promoted to tracked tasks at the HITL gate (the *playbook* — declared, #139).
 
 ## Logging patterns mid-task
 
@@ -86,4 +86,4 @@ Per `[fractal-retro]`: append patterns worth retroing later to **`docs/role-acti
 - **`github_write_artifact`** — output findings in chat; user saves to exact target path.
 - **`mcp_jira` / `mcp_sentry` / `mcp_analytics`** — skip those sources; mark `n/a — host lacks <tool>`.
 
-**Always tell the user explicitly what you couldn't access. Never silently degrade.** Compass-originals referenced: `[cite-or-mark-na]` · `[refuse-escalate]` · `[soft-spec-hardening]` · `[fractal-retro]` · `[user-as-load-bearing-oversight]`. Fetch full descriptions from `compass/framework/canon.md` if host has access.
+**Always tell the user explicitly what you couldn't access. Never silently degrade.** Compass-originals referenced: `[cite-or-mark-na]` · `[refuse-escalate]` · `[soft-spec-hardening]` · `[fractal-retro]` · `[user-as-load-bearing-oversight]`. Fetch full descriptions from the canon (removed — the rule is inlined here) if host has access.

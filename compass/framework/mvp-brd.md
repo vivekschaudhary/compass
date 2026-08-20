@@ -102,10 +102,13 @@ Tracker vocabulary, discovered from the client's board rather than assumed:
 | **awaiting the human** | **Awaiting HITL approval**, or In Review where the board has no gate status |
 | accepted | Done |
 
-The third is load-bearing, and `compass/framework/delivery-lifecycle.md` — the spec `config.yaml`
-points at — makes it a **first-class status rather than a workflow mechanic**, so "everything
-waiting on a person" is a column you can filter for. Where a client's board has no such status the
-vocabulary is discovered and In Review is the honest second choice.
+The third is load-bearing and is a **first-class status, not a workflow mechanic** — `config.yaml`
+declares it and `tracker.ts` prefers it — so "everything waiting on a person" is a column you can
+filter for. Where a client's board has no such status the vocabulary is discovered from the board
+and In Review is the honest second choice.
+
+The shift it encodes: doing is fast and autonomous, so the scarce resource is human judgment. The
+bottleneck moves from building to approving, and the board should show that.
 
 That column is where the tower is more informative than the board: the board says a human has the
 ball, the tower says what was produced, what it cites, and what is left.

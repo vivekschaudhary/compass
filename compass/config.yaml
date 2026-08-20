@@ -17,7 +17,7 @@ hitl_level: milestones
 # FIRST-CLASS status (not just a workflow mechanic), so the human gate is a
 # visible board column you can filter for — the action-half of
 # [actionability-before-trust] made observable. Dogfood-proven in compass-app.
-# Spec: compass/framework/delivery-lifecycle.md.
+# Spec: compass/framework/mvp-brd.md.
 delivery_lifecycle:
   statuses:     [Backlog, Ready, In Progress, Awaiting HITL approval, Done]
   gate_status:  Awaiting HITL approval   # where an AI hands off → a human decision
@@ -25,7 +25,7 @@ delivery_lifecycle:
   # agent is executing; gate_status = AI done, a human must approve; Done = accepted.
 
 # ─── Agent registry ───────────────────────────────────────────────────
-# Per [agent-agnostic-role-assignment] (compass/framework/canon.md, v0.3.8).
+# Per [agent-agnostic-role-assignment].
 # Declares each supported agent's invocation pattern + context-loading
 # convention + auth requirements. Generalizes the [agent-handoff] v0.3.5
 # pattern (reviewer-only agent-agnosticism) to every role.

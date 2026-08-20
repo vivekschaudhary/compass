@@ -1,5 +1,5 @@
 # Compass — Freshness Check workflow
-# Per [freshness-check] (compass/framework/canon.md) — pull-bridge round 2 (v0.3.7).
+# Per [freshness-check] — pull-bridge round 2 (v0.3.7).
 #
 # Runs weekly on Compass repo. Invokes `compass/scripts/check-freshness.py`:
 #   - Walks compass/ for files with `last_verified:` frontmatter

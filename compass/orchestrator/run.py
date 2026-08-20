@@ -2283,7 +2283,7 @@ def _run_workflow(
         print(
             f"Warning: no dispatch steps found in {workflow_file}.\n"
             f"  Is this workflow in dispatch-graph shape? "
-            f"See compass/framework/canon.md [workflow-as-dispatch-graph].",
+            f"See the canon (removed — the rule is inlined here) [workflow-as-dispatch-graph].",
             file=sys.stderr,
         )
         sys.exit(1)

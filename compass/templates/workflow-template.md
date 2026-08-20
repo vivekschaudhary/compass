@@ -34,7 +34,7 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
   Without grounding, gates look like arbitrary ceremony; with grounding,
   they're auditable lineage back to established practice.
 
-  Citations use short-form referring to `compass/framework/canon.md`:
+  Citations use short-form referring to the canon (removed — the rule is inlined here):
   e.g., [working-backwards] → expands to the canon entry.
 
   Sections (use as many as apply; omit a section if genuinely n/a):
@@ -107,8 +107,7 @@ version: 0.3.0-alpha             # workflow's own hardening version; bump on nex
 
   ELICITATION STEPS: when a workflow's job is to surface choices to the
   user (stack picks, configuration decisions, posture declarations), use
-  the [elicitation-with-options] Compass-original pattern (see
-  `compass/framework/canon.md`): static 3 options for an anchor decision +
+  the [elicitation-with-options] Compass-original pattern: static 3 options for an anchor decision +
   cascading 3 options for subsequent decisions biased by prior picks +
   "Other (specify)" escape valve. Each elicitation step is a normal
   triplet — Precondition (prior picks captured) / Work (present options,

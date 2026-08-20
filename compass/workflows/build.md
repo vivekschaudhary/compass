@@ -17,7 +17,7 @@ requires_approved: [docs/foundation/architecture.md, docs/epics/<epic-id>/brief.
 
 ## Framework grounding
 
-What this workflow operationalizes. Full entries in `compass/framework/canon.md`.
+What this workflow operationalizes. Full entries in the canon (removed — the rule is inlined here).
 
 - **Compass-originals operationalized:** `[agent-as-surface-independent-unit]` (v0.3.14 — agent files own task content) · `[mechanical-output-verification]` (v0.3.6 — Engineer's runtime-artifact inspection in `implement-story`; Reviewer's framework-registration check in `review-pr` Step 0) · `[freshness-check]` (v0.3.3 → v0.3.11 — Phase 5 reviewer.md freshness gate; review-time freshness on NEW load-bearing claims) · `[agent-handoff]` (v0.3.5 — Engineer → Reviewer via `agent-handoff.yml` template, automated when consuming repo installs it) · `[role-boundary]` (v0.3.4 — Engineer writes code/unit/component tests; Reviewer writes E2E; PM arbitrates disputes; no overlap) · `[refuse-escalate]` (Engineer refuses to improvise architectural decisions) · `[soft-spec-hardening]` (vague AC pushes back to PM)
 - **Verifies adherence to:** Principle #14 (soft spec → AI rationalization — `polished-but-broken` failure mode hardened via mechanical-output-verification) · Principle #16 (refuse + escalate to upstream) · Maker ≠ checker — the Engineer implements; the Reviewer is a separate agent with no implementation history (#155); host is configurable

@@ -2,7 +2,7 @@
 """
 Compass — check-freshness.py
 
-Per [freshness-check] (compass/framework/canon.md) — pull-bridge round 2 (v0.3.7).
+Per [freshness-check] — pull-bridge round 2 (v0.3.7).
 
 Walks compass/ for files with `last_verified:` frontmatter; fetches each
 external_source; compares timestamps; auto-bumps last_verified where safe;

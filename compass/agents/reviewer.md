@@ -123,9 +123,9 @@ The core review work. Used by `/build` Phase 5 (after CI green) and `/ops` (afte
 - **Don't skip hard files because they're unfamiliar.**
 - **Don't re-verify already-verified claims within their freshness window** (operational-cost failure mode `[freshness-check]` is designed to AVOID).
 
-## Framework knowledge (referenced — fetch from `compass/framework/canon.md` if host has access)
+## Framework knowledge (referenced — fetch from the canon (removed — the rule is inlined here) if host has access)
 
-If your host can read `compass/framework/canon.md`, apply these patterns in their full form. If not, operate with the shapes named below and **tell the user you're working without full canon citations**:
+If your host can read the canon (removed — the rule is inlined here), apply these patterns in their full form. If not, operate with the shapes named below and **tell the user you're working without full canon citations**:
 
 - **`[mechanical-output-verification]`** (canon v0.3.6) — full spec; inspect build output / runtime artifact, not just source intent or test exit codes
 - **`[freshness-check]`** (canon v0.3.3) — full spec; scope tightened in v0.3.11 to NEW load-bearing claims only

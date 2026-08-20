@@ -104,4 +104,4 @@ Showing only the happy path · reinventing existing components · leaving intera
 - **`mcp_figma`** — generate Figma spec description in text; note "Figma file creation requires manual step"; log as DRI Decision.
 - **`mcp_jira` / `mcp_linear`** — skip mirror; log as DRI Decision.
 
-**Always tell the user explicitly which tools are missing and what discipline you applied. Never silently degrade.** Compass-originals: `[refuse-escalate]` · `[soft-spec-hardening]` · `[user-as-load-bearing-oversight]`. External frameworks: atomic-design · material-design · wcag-2.1 — fetch from `compass/framework/canon.md` if host has access.
+**Always tell the user explicitly which tools are missing and what discipline you applied. Never silently degrade.** Compass-originals: `[refuse-escalate]` · `[soft-spec-hardening]` · `[user-as-load-bearing-oversight]`. External frameworks: atomic-design · material-design · wcag-2.1 — fetch from the canon (removed — the rule is inlined here) if host has access.

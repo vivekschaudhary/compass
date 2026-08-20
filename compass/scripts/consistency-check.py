@@ -11,8 +11,6 @@ old phrasing; this one needs nothing — it computes the truth and compares).
 Checks (all COMPUTABLE, no human input):
   1. Dispatch-graph count — AGENTS.md "N of 17 workflows" == actual count of
      workflows containing a "## Dispatch graph" section.
-  2. Catalog count — AGENTS.md "7 shapes / N patterns" == number of "### "
-     entries under canon.md "## Compass-original patterns".
   3. Version self-claims — no hardcoded "alpha-<N>" in the doc/code surfaces
      that should point to CHANGELOG.md as the single source (README, CLAUDE,
      orchestrator run.py + README). CHANGELOG / improvements / retros are
@@ -78,25 +76,6 @@ def check_dispatch_graph_count(repo_root: Path) -> list:
             f"workflow total drift: AGENTS.md claims {claimed_total} workflows, "
             f"actual is {total} (compass/workflows/*.md, excluding improvements.md). Update AGENTS.md.")
     return problems
-
-
-def check_catalog_count(repo_root: Path) -> list:
-    canon = (repo_root / "compass" / "framework" / "canon.md").read_text(encoding="utf-8")
-    section = canon.split("## Compass-original patterns", 1)
-    if len(section) < 2:
-        return ["canon.md: '## Compass-original patterns' section not found"]
-    actual = len(re.findall(r"^### ", section[1], re.MULTILINE))
-    agents = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
-    m = re.search(r"7 shapes / (\d+) patterns", agents)
-    if not m:
-        return ["AGENTS.md: could not find the '7 shapes / N patterns' catalog claim"]
-    claimed = int(m.group(1))
-    if claimed != actual:
-        return [
-            f"catalog count drift: AGENTS.md claims {claimed} patterns, canon.md has "
-            f"{actual} Compass-original entries. Update AGENTS.md (or add the canon entry)."
-        ]
-    return []
 
 
 def check_version_self_claims(repo_root: Path) -> list:
@@ -210,7 +189,6 @@ def check_config_declares_checks(repo_root: Path) -> list:
 def run_all(repo_root: Path) -> list:
     return (
         check_dispatch_graph_count(repo_root)
-        + check_catalog_count(repo_root)
         + check_version_self_claims(repo_root)
         + check_version_unified(repo_root)
         + check_host_list(repo_root)
@@ -226,7 +204,7 @@ def main(argv=None) -> int:
 
     problems = run_all(repo_root)
     if not problems:
-        print("CONSISTENT — dispatch-graph count, catalog count, version self-claims, "
+        print("CONSISTENT — dispatch-graph count, version self-claims, "
               "version unified, host list, config checks all check out.")
         return 0
     print(f"DRIFT FOUND ({len(problems)}):\n", file=sys.stderr)

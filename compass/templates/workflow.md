@@ -35,7 +35,7 @@ produces:
 | N | human.<gate> | — | <artifact>@<system> | approval@tickets | approval == approved |
 
 ## Grounding & methodology
-Canon: <[pattern] · [pattern]>  (full entries: compass/framework/canon.md)
+Canon: <[pattern] · [pattern]>  (full entries: the canon (removed — the rule is inlined here))
 The *how* lives in the agent files — never here:
 <role> → compass/agents/<role>.md#<task> · …
 

@@ -97,14 +97,6 @@ class TestDetectsDrift(unittest.TestCase):
         probs = cc.check_dispatch_graph_count(root)
         self.assertTrue(any("dispatch-graph count drift" in p for p in probs))
 
-    def test_catalog_count_drift_caught(self):
-        root = self._mirror()
-        (root / "AGENTS.md").write_text(
-            "2 of 18 workflows; catalog 7 shapes / 9 patterns.\n", encoding="utf-8"
-        )
-        probs = cc.check_catalog_count(root)
-        self.assertTrue(any("catalog count drift" in p for p in probs))
-
     def test_version_self_claim_caught(self):
         root = self._mirror()
         (root / "README.md").write_text("orchestrator v0.4-alpha-7 ships\n", encoding="utf-8")

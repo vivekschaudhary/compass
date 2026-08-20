@@ -19,7 +19,7 @@ python3 compass/scripts/sync-into-consumer.py <consumer-dir> --apply    # perfor
 
 ## `token-usage.py` — per-role token rollup
 
-Parses a Claude Code session log and a Compass workflow markdown file; attributes tokens to roles using the workflow's `COMPASS_ROLE_BOUNDARY` markers as anchors (per the `[role-boundary]` Compass-original pattern in `compass/framework/canon.md`); produces a markdown report.
+Parses a Claude Code session log and a Compass workflow markdown file; attributes tokens to roles using the workflow's `COMPASS_ROLE_BOUNDARY` markers as anchors (per the `[role-boundary]` Compass-original pattern in the canon (removed — the rule is inlined here)); produces a markdown report.
 
 ### What it produces
 
@@ -105,7 +105,7 @@ Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md
 
 Automates the Engineer → Reviewer handoff for `/build`. When CI passes on a PR, the workflow runs the reviewer agent against the diff and posts findings as a PR comment. The sending agent (Claude) reads the comment back via GitHub MCP the next session — no terminal switch, no manual prompt paste.
 
-Per the `[agent-handoff]` Compass-original pattern in `compass/framework/canon.md` (v0.3.5).
+Per the `[agent-handoff]` Compass-original pattern in the canon (removed — the rule is inlined here) (v0.3.5).
 
 ### Setup in your consuming repo
 
@@ -221,7 +221,7 @@ For semantic verification (did the Codex CLI surface ACTUALLY change?), an LLM i
 
 Walks `compass/agents/*.md`; checks each file against the OpenAI Custom GPT Instructions ~8000-char cap; reports overages; exits non-zero when any **chatgpt-targeted** agent exceeds the cap.
 
-Per the `[agent-file-compression]` Compass-original pattern in `compass/framework/canon.md` (v0.3.22). Ships with v0.3.22's codification as the mechanical defense Retro #007 named for the drift signal "Custom GPT cap compounding without structural defense."
+Per the `[agent-file-compression]` Compass-original pattern in the canon (removed — the rule is inlined here) (v0.3.22). Ships with v0.3.22's codification as the mechanical defense Retro #007 named for the drift signal "Custom GPT cap compounding without structural defense."
 
 ### What it produces
 
@@ -265,7 +265,7 @@ This matches the `[user-as-load-bearing-oversight]` aspirational refinement (can
 ### Accuracy honesty
 
 - **Character count is UTF-8 byte length.** OpenAI's actual cap is measured against the Custom GPT Instructions field's storage limit; the script approximates it as 8000 bytes. Real cap may be slightly different — adjust `--cap` if your testing shows OpenAI's threshold is different at the time of measurement.
-- **No content-aware analysis.** The script knows when a file is too big; it doesn't suggest cuts (that's LLM work). For compression strategy, see the `[agent-file-compression]` entry in `compass/framework/canon.md` + reference example at `compass/agents/delivery-manager.md` (v0.3.18 trim: 21,714 → 7,960).
+- **No content-aware analysis.** The script knows when a file is too big; it doesn't suggest cuts (that's LLM work). For compression strategy, see the `[agent-file-compression]` entry in the canon (removed — the rule is inlined here) + reference example at `compass/agents/delivery-manager.md` (v0.3.18 trim: 21,714 → 7,960).
 - **`preferred_hosts:` parsing is line-regex-based.** Multi-line YAML lists or `&anchor` references in frontmatter would parse as no hosts (treated as non-chatgpt → WARN, not FAIL). Compass-style frontmatter is single-line so this isn't a real issue today.
 
 ### Automated execution

@@ -102,7 +102,7 @@ erDiagram
 
 ## Stack picks (elicited)
 
-Captured via the **elicitation-with-options** pattern (`compass/framework/canon.md` → `[elicitation-with-options]`) in `/setup-foundation-architecture`. Each pick records: the elicited option, one-line rationale, one-line per-pillar implication. **Anchor** is static (same 3 options regardless of context); **layers** cascade (options biased by prior picks).
+Captured via the **elicitation-with-options** pattern (the canon (removed — the rule is inlined here) → `[elicitation-with-options]`) in `/setup-foundation-architecture`. Each pick records: the elicited option, one-line rationale, one-line per-pillar implication. **Anchor** is static (same 3 options regardless of context); **layers** cascade (options biased by prior picks).
 
 ### Anchor: primary language + deployment model
 

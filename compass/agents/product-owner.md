@@ -47,7 +47,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 
 **Gate:** An approved AI deliverable (research recommendations, design-spec next steps, …) exists for a story.
 **Work:** read the deliverable's action items → draft them as concrete next-step tasks, each role-labeled (the AI's ~80%) → present at the **HITL gate** for the human to edit + add the last ~20% → on sign-off, create the accepted items as tracked tasks on the story; separately map the story's acceptance criteria to a **definition-of-done checklist** (verification, not new work). Nothing is auto-created — the human gates the draft.
-**Postcondition:** accepted action items are tracked tasks on the story (role-labeled) · acceptance criteria mirrored as a checklist · nothing created without human sign-off · see `compass/framework/delivery-lifecycle.md`.
+**Postcondition:** accepted action items are tracked tasks on the story (role-labeled) · acceptance criteria mirrored as a checklist · nothing created without human sign-off
 
 ### `manage-sprint` — commit + track the sprint's deliverables
 

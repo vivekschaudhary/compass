@@ -1,5 +1,5 @@
 # Compass — Agent Handoff GitHub Action template
-# Per [agent-handoff] (compass/framework/canon.md, v0.3.5).
+# Per [agent-handoff].
 #
 # Automates the Engineer → Reviewer handoff. When CI passes on a PR, this
 # workflow runs the reviewer agent against the diff and posts findings as
