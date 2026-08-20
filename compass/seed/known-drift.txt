@@ -9,7 +9,6 @@ step-count     build
 unseeded       advance
 unseeded       create-epics
 unseeded       dashboard
-unseeded       improvements
 unseeded       measure
 unseeded       metrics
 unseeded       plan
