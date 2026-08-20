@@ -75,6 +75,14 @@ export type Plan = {
     /** Why a new version — the human-readable diff, for the confirmation screen. */
     changes: string[];
   }[];
+  /**
+   * In the database, absent from this bundle. Retired rather than deleted — see
+   * `20260101004300_role_enabled.sql` for why a delete breaks history that still resolves.
+   *
+   * Surfaced separately and never applied silently: a typo'd `code` column looks exactly like a
+   * deliberate retirement, and the difference is only visible to the person who wrote the CSV.
+   */
+  retire: { kind: "role" | "workflow"; code: string; label: string }[];
 };
 
 export type PlanResult =
@@ -302,6 +310,17 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
         row, steps: mine, criteria: mineC, changes,
       };
     }),
+    // What the database has and this bundle does not. The importer upserted and never removed, so a
+    // role dropped from the seed lived on and a role RENAMED became two live rows — `pm` beside
+    // `product-manager`, both offerable. Naming them here is what makes a rename a rename.
+    retire: [
+      ...existing.roles
+        .filter((code) => !roles.some((r) => r.code === code))
+        .map((code) => ({ kind: "role" as const, code, label: code })),
+      ...existing.workflows
+        .filter((w) => !workflows.some((r) => r.code === w.code))
+        .map((w) => ({ kind: "workflow" as const, code: w.code, label: w.code })),
+    ],
   };
 
   const n = (as: { action: string }[], a: string) => as.filter((x) => x.action === a).length;
@@ -310,6 +329,9 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     `${n(plan.roles, "create")} new role(s)`,
     `${n(plan.workflows, "create")} new workflow(s)`,
     `${n(plan.workflows, "new-version")} workflow(s) gaining a version`,
+    // Last and always stated, including at zero. A retirement is the one action here that takes
+    // something away, and it must not be the line that only appears when it is too late to notice.
+    `${plan.retire.length} to retire`,
   ].join(" · ");
 
   return { ok: true, plan, summary };

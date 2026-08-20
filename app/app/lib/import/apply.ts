@@ -37,6 +37,15 @@ export interface ConfigStore {
   createVersion(workflowId: string, version: number, notes: string, createdBy: string): Promise<string>;
   addSteps(versionId: string, steps: StepRow[]): Promise<void>;
   addCriteria(versionId: string, criteria: CriterionRow[]): Promise<void>;
+
+  /**
+   * Take a role or workflow out of service without deleting it.
+   *
+   * Disabled, not removed: `work_task.role_code` is text rather than a foreign key, so a delete
+   * breaks nothing referentially and quietly breaks the agent lookup for every historical task that
+   * named it. History has to keep resolving.
+   */
+  retire(orgId: string, engagementId: string | null, kind: "role" | "workflow", code: string): Promise<void>;
 }
 
 export type ApplyReport = {
@@ -45,6 +54,8 @@ export type ApplyReport = {
   workflowsCreated: string[];
   versionsCreated: { workflow: string; version: number; because: string[] }[];
   skipped: string[];
+  /** What was taken out of service, so the report says it rather than the roster quietly shrinking. */
+  retired: string[];
 };
 
 export async function applyPlan(plan: Plan, scope: Scope, store: ConfigStore, actor = "import"): Promise<ApplyReport> {
@@ -52,7 +63,7 @@ export async function applyPlan(plan: Plan, scope: Scope, store: ConfigStore, ac
   const eng = scope.engagementId;
 
   const report: ApplyReport = {
-    workstreams: 0, roles: 0, workflowsCreated: [], versionsCreated: [], skipped: [],
+    workstreams: 0, roles: 0, workflowsCreated: [], versionsCreated: [], skipped: [], retired: [],
   };
 
   // Order matters and is not incidental: a role names a workstream, a workflow names both. Writing
@@ -92,6 +103,14 @@ export async function applyPlan(plan: Plan, scope: Scope, store: ConfigStore, ac
     report.versionsCreated.push({ workflow: wf.row.code, version, because });
   }
 
+  // Last, and only what the plan named. Retiring after everything is written means a replacement is
+  // already in place before its predecessor goes out of service — a rename never leaves a moment
+  // where neither `pm` nor `product-manager` can be dispatched.
+  for (const r of plan.retire) {
+    await store.retire(orgId, eng, r.kind, r.code);
+    report.retired.push(`${r.kind}:${r.code}`);
+  }
+
   return report;
 }
 
@@ -103,6 +122,9 @@ export function describeReport(r: ApplyReport): string {
     r.workflowsCreated.length ? `${r.workflowsCreated.length} new workflow(s)` : "",
     r.versionsCreated.length ? `${r.versionsCreated.length} version(s) published` : "",
     r.skipped.length ? `${r.skipped.length} unchanged` : "",
+    // Named, not counted. "2 retired" is a number someone scrolls past; "retired role:pm,
+    // role:scanner" is the line that makes them check whether they meant it.
+    r.retired.length ? `retired ${r.retired.join(", ")}` : "",
   ].filter(Boolean);
   return bits.join(" · ");
 }

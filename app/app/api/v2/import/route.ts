@@ -52,6 +52,10 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
     return NextResponse.json({
       ok: true, dryRun: true, summary: planned.summary,
       workflows: planned.plan.workflows.map((w) => ({ code: w.row.code, action: w.action, changes: w.changes })),
+      // The one part of a plan that TAKES something away, so it is in the preview or the preview is
+      // not a preview. A typo'd `code` column looks exactly like a deliberate retirement, and only
+      // the person who wrote the CSV can tell the difference — from this list, before applying.
+      retire: planned.plan.retire,
     });
   }
 

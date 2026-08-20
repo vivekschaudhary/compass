@@ -61,6 +61,9 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         label: row.label, title: row.title, tier: row.tier, scope: row.scope,
         workstream_code: row.workstream || null, agent: row.agent || null,
         hosts: row.hosts, capabilities: row.capabilities, updated_at: new Date().toISOString(),
+        // Present in the seed means in service. A role that was retired and has come back is
+        // re-enabled here rather than needing anyone to notice it is still switched off.
+        enabled: true,
       };
       const base = sb.from("role").select("id").eq("org_id", orgId).eq("code", row.code);
       const found = await (engagementId === null
@@ -72,6 +75,17 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
       } else {
         fail("insert role", (await sb.from("role").insert({ org_id: orgId, engagement_id: engagementId, code: row.code, ...patch })).error);
       }
+    },
+
+    async retire(orgId, engagementId, kind, code) {
+      // `enabled: false`, never a delete — see 20260101004300_role_enabled.sql. A retired role still
+      // resolves for every historical task that named it; it just stops being offered.
+      const table = kind === "role" ? "role" : "workflow";
+      const q = sb.from(table).update({ enabled: false, updated_at: new Date().toISOString() })
+        .eq("org_id", orgId).eq("code", code);
+      fail(`retire ${kind} ${code}`, (await (engagementId === null
+        ? q.is("engagement_id", null)
+        : q.eq("engagement_id", engagementId))).error);
     },
 
     async upsertWorkflow(orgId, engagementId, row) {
@@ -170,8 +184,16 @@ export async function readExisting(
   const { data: org } = await sb.from("org").select("id").eq("code", orgCode).maybeSingle();
   if (!org) return { workstreams: [], roles: [], agents, phases: [], documents: [], workflows: [] };
 
+  // IN SERVICE only. A row already retired is not "existing" for planning purposes: listing it
+  // would have the importer retire it again on every run, and a retirement that repeats forever is
+  // noise in the one report that must be read.
+  //
+  // The cost is that a retired role returning to the seed plans as "create". The effect is right —
+  // `upsertRole` finds it by code and re-enables it rather than inserting a duplicate — but the
+  // label understates it, which is better than a plan that says "unchanged" about a row nobody can
+  // currently be assigned to.
   const list = async (table: string) => {
-    const q = sb.from(table).select("code").eq("org_id", org.id);
+    const q = sb.from(table).select("code").eq("org_id", org.id).eq("enabled", true);
     const { data } = await (engagementId === null
       ? q.is("engagement_id", null)
       : q.eq("engagement_id", engagementId));

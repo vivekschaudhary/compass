@@ -18,6 +18,7 @@ function fakeStore() {
     async createVersion(id, v) { calls.push(`version:${id}:${v}`); version = v; return `ver-${id}-${v}`; },
     async addSteps(vid, steps) { calls.push(`steps:${vid}:${steps.length}`); },
     async addCriteria(vid, cs) { calls.push(`criteria:${vid}:${cs.length}`); },
+    async retire(_o, _e, kind, code) { calls.push(`retire:${kind}:${code}`); },
   };
   return { store, calls, setVersion: (v: number) => { version = v; } };
 }
@@ -31,6 +32,52 @@ const bundle: Bundle = {
 };
 
 const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
+
+describe("retiring what the bundle no longer names", () => {
+  // The importer upserted and never removed, so a role dropped from the seed lived on and a role
+  // RENAMED became two live rows — `pm` beside `product-manager`, both offerable. That is how a
+  // fifteen-role roster read as seventeen.
+  const existingWithExtras: Existing = {
+    ...empty,
+    workstreams: ["Engineering"], roles: ["engineer", "scanner", "pm"],
+    workflows: [{ code: "build", steps: [], criteria: [] }, { code: "groundwork", steps: [], criteria: [] }],
+  };
+
+  it("names the roles and workflows the bundle dropped", () => {
+    const r = planImport(bundle, existingWithExtras);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.plan.retire.map((x) => `${x.kind}:${x.code}`).sort())
+      .toEqual(["role:pm", "role:scanner", "workflow:groundwork"]);
+  });
+
+  it("says how many even when none — the line that takes something away is always stated", () => {
+    const r = planImport(bundle, { ...empty, workstreams: ["Engineering"], roles: ["engineer"] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary).toContain("0 to retire");
+  });
+
+  it("retires LAST, so a rename never leaves a gap with neither name dispatchable", async () => {
+    const { store, calls } = fakeStore();
+    const r = planImport(bundle, existingWithExtras);
+    if (!r.ok) return;
+    await applyPlan(r.plan, { orgCode: "default", engagementId: null }, store);
+
+    const firstRetire = calls.findIndex((c) => c.startsWith("retire:"));
+    const lastWrite = calls.map((c) => c.startsWith("retire:")).lastIndexOf(false);
+    expect(firstRetire).toBeGreaterThan(lastWrite);
+  });
+
+  it("reports what it retired by name rather than by count", async () => {
+    const { store } = fakeStore();
+    const r = planImport(bundle, existingWithExtras);
+    if (!r.ok) return;
+    const report = await applyPlan(r.plan, { orgCode: "default", engagementId: null }, store);
+    expect(report.retired).toContain("role:pm");
+    expect(describeReport(report)).toContain("retired role:");
+  });
+});
 const scope = { orgCode: "acme", engagementId: null };
 
 const planOf = (b: Bundle, e: Existing) => {
