@@ -156,7 +156,7 @@ export async function getProgram(engagementId?: string): Promise<ProgramModel & 
 
     // Platform roles are appended to the switcher, not stored on the roster: they are about
     // OPERATING Compass, not delivering the engagement. Keeping them out of `member` is what stops
-    // an org-admin appearing as a staffed person with a work queue and an agent — and it is why
+    // a pmo-analyst appearing as a staffed person with a work queue and an agent — and it is why
     // they are absent from COMPASS_ROLES, which drives dispatch.
     //
     // In demo mode this picker is the whole identity story, so without them the org/engagement

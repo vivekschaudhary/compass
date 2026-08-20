@@ -42,7 +42,7 @@ Ends when sprint 1 can open.
 | 2 | Review the foundation architecture | `agent: architect.review-foundation-architecture` | architect | `01-foundation/foundational-architecture` | `04-governance/decisions` | 1 |
 | 3 | Design library | `agent: designer.build-design-library` | designer | `01-foundation/product-brief` | — | — |
 | 4 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `01-foundation/team` · `01-foundation/raci` | `01-foundation/ways-of-working` | — |
-| 5 | Sprint plan for sprints 1-3 | `agent: pm.draft-sprint-plan` | pm | `02-scope/deliverables` · `01-foundation/team` | `03-delivery/plan` | 2 |
+| 5 | Sprint plan for sprints 1-3 | `agent: product-manager.draft-sprint-plan` | product-manager | `02-scope/deliverables` · `01-foundation/team` | `03-delivery/plan` | 2 |
 | 6 | Kickoff | `agent: delivery-manager.run-kickoff` | delivery-manager | `03-delivery/plan` · `01-foundation/ways-of-working` | — | 4, 5 |
 
 **Row 2 is a review, and reviews are ordinary rows.** The reviewer's agent drafts findings against

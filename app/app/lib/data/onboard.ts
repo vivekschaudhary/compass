@@ -201,7 +201,7 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     p_org_id: org.id, p_engagement_id: id,
     p_path: "02-scope/sow", p_title: "SOW (source)",
     p_sections: sections, p_version: null,
-    p_actor: "intake", p_actor_role: "engagement-admin",
+    p_actor: "intake", p_actor_role: "pmo-analyst",
     p_owner_role: "delivery-manager", p_task_id: null,
   });
   if (sowErr) problems.push(`file the SOW: ${sowErr.message}`);
@@ -225,8 +225,8 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
       p_org_id: org.id, p_engagement_id: id,
       p_path: "01-foundation/product-brief", p_title: "Product brief (supplied)",
       p_sections: briefSections, p_version: null,
-      p_actor: "intake", p_actor_role: "engagement-admin",
-      p_owner_role: "pm", p_task_id: null,
+      p_actor: "intake", p_actor_role: "pmo-analyst",
+      p_owner_role: "product-manager", p_task_id: null,
     });
     if (error) problems.push(`file the product brief: ${error.message}`);
     else briefVersionId = v as string;
@@ -249,7 +249,7 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
   await emit({
     engagementId: id, subjectType: "engagement", subjectId: id,
     verb: "engagement.created", actorKind: "human",
-    actorRoleCode: "engagement-admin", actorUserId: dmName,
+    actorRoleCode: "pmo-analyst", actorUserId: dmName,
     payload: {
       name: input.name, client: input.client, deliveryManager: dmName,
       docsProvider: input.docsProvider ?? "confluence", jiraProject: input.jiraProject ?? null,

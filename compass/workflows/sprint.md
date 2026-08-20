@@ -35,7 +35,7 @@ Run one sprint: commit to work, do it, show it, and amend the plan for the next 
 
 | # | task | dispatch | owner | reads | produces | depends-on |
 |---|------|----------|-------|-------|----------|------------|
-| 1 | Sprint planning | `agent: pm.sprint-planning` | pm | `03-delivery/plan` · `02-scope/deliverables` | `05-cadence/sprint-plans` | — |
+| 1 | Sprint planning | `agent: product-manager.sprint-planning` | product-manager | `03-delivery/plan` · `02-scope/deliverables` | `05-cadence/sprint-plans` | — |
 | 2 | Sprint review | `agent: delivery-manager.sprint-review` | delivery-manager | `05-cadence/sprint-plans` | `05-cadence/sprint-reviews` | 1 |
 | 3 | Retro | `agent: delivery-manager.sprint-retro` | delivery-manager | `05-cadence/sprint-reviews` | `05-cadence/retros` | 2 |
 

@@ -20,7 +20,7 @@ from compass.orchestrator import run as runmod
 REPO = Path(__file__).resolve().parents[3]
 COMPASS = REPO / "compass"
 WORKFLOW = COMPASS / "workflows" / "create-product-brief.md"
-AGENT = COMPASS / "agents" / "pm.md"
+AGENT = COMPASS / "agents" / "product-manager.md"
 SPRINT0 = COMPASS / "templates" / "sprint-0.md"
 
 

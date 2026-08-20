@@ -1,7 +1,7 @@
 ---
 name: create-story
 status: active
-owner: pm
+owner: product-manager
 auto_invokes: []
 invoked_by: [manual]
 version: 0.3.59
@@ -29,7 +29,7 @@ PM decomposes an approved bet into its **full set** of shippable stories in one 
 
 ## Architectural shape (v0.3.42)
 
-Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodology lives in `compass/agents/pm.md` → Task `decompose-epic-to-story` (rewritten from a workflow-pointing stub to a self-sufficient gate/work/postcondition in v0.3.42) and `compass/templates/story.md` (story structure + the load-bearing Standard Experience Checklist). The agent task + template are the single source of truth.
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodology lives in `compass/agents/product-manager.md` → Task `decompose-epic-to-story` (rewritten from a workflow-pointing stub to a self-sufficient gate/work/postcondition in v0.3.42) and `compass/templates/story.md` (story structure + the load-bearing Standard Experience Checklist). The agent task + template are the single source of truth.
 
 ## Preconditions (workflow-level GATE)
 
@@ -39,17 +39,17 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/pm.md` — Task `decompose-epic-to-story` (enumerates the full slice set; for a UI slice drafts the design + copy + feature trio; owns the Standard Experience Checklist gate)
+- `compass/agents/product-manager.md` — Task `decompose-epic-to-story` (enumerates the full slice set; for a UI slice drafts the design + copy + feature trio; owns the Standard Experience Checklist gate)
 - `compass/agents/designer.md` — Task `draft-design-spec` (per UI slice — specs design **requirements** INTO the `design` story; human produces the Figma)
 - `compass/agents/ux-writer.md` — Task `write-copy` (per UI slice — specs the **copy-slot inventory** INTO the `copy` story; human writes the strings)
 - `compass/agents/delivery-manager.md` — Task `update-status`
 
 ## Dispatch graph
 
-### Step 1. `pm.decompose-epic-to-story` (PM agent owns)
+### Step 1. `product-manager.decompose-epic-to-story` (PM agent owns)
 
 **Dispatches:** PM agent
-**Task definition:** `compass/agents/pm.md` → Task `decompose-epic-to-story`
+**Task definition:** `compass/agents/product-manager.md` → Task `decompose-epic-to-story`
 **Input:** `docs/epics/<epic-id>/brief.md` · bet architecture (if any) · any stories already under the bet · `compass/templates/story.md`
 **What it covers:** confirm gate (brief approved; arch approved if required) → **enumerate the full set of shippable slices** (each smallest valuable · independent · sequenced by dependency/priority) → generate a story ID per slice → **for each UI slice, create the design + copy + feature trio** (design + copy = `owner: human`, `status: needs-design`/`needs-copy`; the feature story's `dependencies:` name them, `status: needs-design` until they're delivered); non-UI slice → a single feature story (`type: story`, `status: ready`) → draft each `docs/epics/<epic-id>/stories/<story-id>/story.md` per the template with the **Standard Experience Checklist** (6 categories, each AC-covered or `n/a — <reason>`) → mirror each to tracker.
 **Output:** the bet's full backlog — a feature `story.md` per slice (UI slices also get a `design` + `copy` story), each with the correct `type`/`owner`/`status`
@@ -117,5 +117,5 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 
 ### Migration (pre-v0.3.42 → v0.3.42)
 
-- **Before:** fat 10-step process workflow; `compass/agents/pm.md` → `decompose-epic-to-story` was a 2-line stub pointing BACK at this workflow (inverse of the `embedded-methodology` anti-pattern — the agent task delegated to the workflow, breaking orchestrator dispatch since the agent only gets its own file as system prompt).
-- **v0.3.42:** thin dispatch graph (6th workflow in dispatch-graph shape). Methodology moved INTO `pm.md`'s `decompose-epic-to-story` task (now a full gate/work/postcondition) + `compass/templates/story.md` (story structure + Standard Experience Checklist). To fit a self-sufficient task, `chatgpt` was dropped from pm.md's `preferred_hosts` (lifting the 8000-char cap) — resolving the pm half of `[host-preference-validation]` (consumer-signal evidence + the cap blocking orchestration = 2 independent drivers). No methodology dropped; agent task + template are the single source of truth.
+- **Before:** fat 10-step process workflow; `compass/agents/product-manager.md` → `decompose-epic-to-story` was a 2-line stub pointing BACK at this workflow (inverse of the `embedded-methodology` anti-pattern — the agent task delegated to the workflow, breaking orchestrator dispatch since the agent only gets its own file as system prompt).
+- **v0.3.42:** thin dispatch graph (6th workflow in dispatch-graph shape). Methodology moved INTO `product-manager.md`'s `decompose-epic-to-story` task (now a full gate/work/postcondition) + `compass/templates/story.md` (story structure + Standard Experience Checklist). To fit a self-sufficient task, `chatgpt` was dropped from pm.md's `preferred_hosts` (lifting the 8000-char cap) — resolving the pm half of `[host-preference-validation]` (consumer-signal evidence + the cap blocking orchestration = 2 independent drivers). No methodology dropped; agent task + template are the single source of truth.

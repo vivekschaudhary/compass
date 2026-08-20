@@ -3,7 +3,7 @@ build,Workflow: /build,Engineering,,engineer,,true
 create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,true
 create-brief,Workflow: /create-brief,Product,,researcher,,true
 create-product-brief,Workflow: /create-product-brief,Product,,researcher,,true
-create-story,Workflow: /create-story,Product,,pm,,true
+create-story,Workflow: /create-story,Product,,product-manager,,true
 fix,Workflow: /fix,Engineering,,engineer,,true
 ops,Workflow: /ops,Engineering,,enterprise-architect,,true
 setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,true

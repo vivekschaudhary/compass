@@ -41,11 +41,11 @@ Ends when the team can start. It does not design anything; that is sprint 0.
 | # | task | dispatch | owner | reads | produces | depends-on |
 |---|------|----------|-------|-------|----------|------------|
 | 1 | File the SOW | `agent: delivery-manager.file-sow` | delivery-manager | — | `02-scope/sow` | — |
-| 2 | Product brief | `agent: pm.draft-product-brief` | pm | `02-scope/sow` | `01-foundation/product-brief` | 1 |
+| 2 | Product brief | `agent: product-manager.draft-product-brief` | product-manager | `02-scope/sow` | `01-foundation/product-brief` | 1 |
 | 3 | Timeline and milestones | `agent: delivery-manager.draft-timeline` | delivery-manager | `02-scope/sow` · `01-foundation/product-brief` | `02-scope/timeline` | 2 |
 | 4 | Staffing plan and resources | `agent: delivery-manager.propose-staffing` | delivery-manager | `02-scope/sow` · `02-scope/timeline` | `01-foundation/team` | 3 |
 | 5 | Roles and responsibilities | `agent: delivery-manager.draft-raci` | delivery-manager | `01-foundation/team` | `01-foundation/raci` | 4 |
-| 6 | Epics from milestones | `agent: pm.draft-epics` | pm | `01-foundation/product-brief` · `02-scope/timeline` | `02-scope/deliverables` | 3 |
+| 6 | Epics from milestones | `agent: product-manager.draft-epics` | product-manager | `01-foundation/product-brief` · `02-scope/timeline` | `02-scope/deliverables` | 3 |
 | 7 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `01-foundation/team` · `02-scope/deliverables` | `03-delivery/plan` | 5, 6 |
 
 Every row is owned by the delivery manager or the PM, because those are the only people known before

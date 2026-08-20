@@ -132,7 +132,7 @@ class TestRealWorkflows(unittest.TestCase):
         steps = load_workflow(WORKFLOWS / "create-product-brief.md")
         agents = [(s.agent, s.task) for s in steps if not s.is_hitl]
         self.assertEqual(agents[0][0], "researcher")
-        self.assertEqual(agents[1], ("pm", "draft-product-brief"))
+        self.assertEqual(agents[1], ("product-manager", "draft-product-brief"))
         self.assertEqual(agents[2], ("designer", "spec-design-foundation"))
         self.assertEqual(agents[3], ("delivery-manager", "update-status"))
 
@@ -188,7 +188,7 @@ class TestRealWorkflows(unittest.TestCase):
         steps = load_workflow(WORKFLOWS / "create-story.md")
         self.assertEqual(len(steps), 5)
         # PM decompose first, designer + ux-writer conditional, DM status last
-        self.assertEqual((steps[0].agent, steps[0].task), ("pm", "decompose-epic-to-story"))
+        self.assertEqual((steps[0].agent, steps[0].task), ("product-manager", "decompose-epic-to-story"))
         agents = [s.agent for s in steps]
         self.assertIn("designer", agents)
         self.assertIn("ux-writer", agents)
@@ -731,7 +731,7 @@ class TestRepoReadingAgentHosts(unittest.TestCase):
     def test_no_chatgpt_for_repo_readers(self):
         from compass.orchestrator.run import _read_preferred_hosts
         agents = Path(__file__).resolve().parents[2] / "agents"
-        for agent in ("designer", "ux-writer", "pm", "researcher"):
+        for agent in ("designer", "ux-writer", "product-manager", "researcher"):
             hosts = _read_preferred_hosts(agents / f"{agent}.md")
             self.assertNotIn("chatgpt", hosts, f"{agent} includes tool-less chatgpt")
             self.assertIn(hosts[0], ("claude", "claude-code", "codex", "gemini"), agent)

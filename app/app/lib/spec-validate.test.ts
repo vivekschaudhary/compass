@@ -11,7 +11,7 @@ import { COMPASS_DIR } from "./specs";
 describe("specKind", () => {
   it("maps each whitelisted shape to its validator", () => {
     expect(specKind("workflows/build.md")).toBe("workflow");
-    expect(specKind("agents/pm.md")).toBe("agent");
+    expect(specKind("agents/product-manager.md")).toBe("agent");
     expect(specKind("templates/sprint-0.md")).toBe("table");
     expect(specKind("templates/doc-tree.md")).toBe("table");
   });
@@ -38,7 +38,7 @@ describe("validateSpec against the real parser", () => {
     if (r?.kind === "workflow") {
       expect(r.steps.length).toBeGreaterThan(0);
       expect(r.hitl_count).toBeGreaterThan(0);
-      expect(r.agents).toContain("pm");
+      expect(r.agents).toContain("product-manager");
     }
   }, 30_000);
 
@@ -48,8 +48,8 @@ describe("validateSpec against the real parser", () => {
   }, 30_000);
 
   it("agrees with the orchestrator on a shipped agent's hosts", async () => {
-    const src = readFileSync(join(COMPASS_DIR, "agents/pm.md"), "utf8");
-    const r = await validateSpec("agents/pm.md", src);
+    const src = readFileSync(join(COMPASS_DIR, "agents/product-manager.md"), "utf8");
+    const r = await validateSpec("agents/product-manager.md", src);
     expect(r?.kind).toBe("agent");
     if (r?.kind === "agent") expect(r.preferred_hosts.length).toBeGreaterThan(0);
   }, 30_000);

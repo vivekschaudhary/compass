@@ -1,7 +1,7 @@
 ---
 name: create-product-brief
 status: active
-owner: pm
+owner: product-manager
 auto_invokes: []
 invoked_by: [manual]
 version: 1.0.0
@@ -54,7 +54,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]`. Methodology lives in the
 ## Roles invoked (agents dispatched)
 
 - `compass/agents/researcher.md` — Task `cite-evidence-6-category-9-moat` (cited evidence + client-specific context; publishes the research page)
-- `compass/agents/pm.md` — Task `draft-product-brief` (elicits, drafts, publishes the brief page)
+- `compass/agents/product-manager.md` — Task `draft-product-brief` (elicits, drafts, publishes the brief page)
 - `compass/agents/delivery-manager.md` — Task `update-status`
 
 ## Dispatch graph
@@ -73,10 +73,10 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]`. Methodology lives in the
 **Artifact target:** `research@docs`
 **What it covers:** the human reviews the research page and moves the **research-review ticket to Done** to approve. The PM does not draft until this gate passes — an unvalidated evidence base must not become an approved commitment. Rejection re-dispatches the Researcher. **Per Principle #16:** agents must NOT self-approve.
 
-### Step 3. `pm.draft-product-brief` (PM agent owns)
+### Step 3. `product-manager.draft-product-brief` (PM agent owns)
 
 **Dispatches:** PM agent
-**Task definition:** `compass/agents/pm.md` → Task `draft-product-brief`
+**Task definition:** `compass/agents/product-manager.md` → Task `draft-product-brief`
 **Input:** approved research page · source material · engagement name
 **What it covers:** confirm gate (research approved) → **elicit every material unknown** with 3 concrete options + "other", capturing answers verbatim (no inference) → draft the brief: Vision · target users · problem · **Access & data posture** · scope in/out · **Objectives + Key Results** → publish the brief page under the engagement parent → open the **product-brief-approval** ticket → seed DRI ≥1 Decision → halt.
 **Output:** brief page in `@docs` + product-brief-approval ticket

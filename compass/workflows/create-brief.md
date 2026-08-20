@@ -1,7 +1,7 @@
 ---
 name: create-brief
 status: active
-owner: pm
+owner: product-manager
 auto_invokes: []
 invoked_by: [create-epics, manual]
 version: 0.3.51
@@ -35,7 +35,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 ## Roles invoked (agents dispatched)
 
 - `compass/agents/researcher.md` — cited evidence for this bet (User pain · Competitive · Moat)
-- `compass/agents/pm.md` — drafts brief; runs mode detection; seeds DRI; HITL halt
+- `compass/agents/product-manager.md` — drafts brief; runs mode detection; seeds DRI; HITL halt
 - `compass/agents/delivery-manager.md` — status update after approval
 
 ## Dispatch graph
@@ -48,10 +48,10 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24). Methodol
 **What it covers:** identify open questions for this bet → gather cited evidence (User pain · Competitive · Moat MANDATORY; Technical · Quantitative · Trends if relevant or `n/a`) → for foundational bets evaluate all 9 moat types → synthesize → output findings to `docs/epics/<epic-id>/research.md` or appended to brief stub → seed DRI ≥1 Decision AND ≥1 Risk.
 **Output:** cited research findings ready for PM to draft from
 
-### Step 2. `pm.draft-brief` (PM agent owns)
+### Step 2. `product-manager.draft-brief` (PM agent owns)
 
 **Dispatches:** PM agent
-**Task definition:** `compass/agents/pm.md` → Task `draft-brief`
+**Task definition:** `compass/agents/product-manager.md` → Task `draft-brief`
 **Input:** Researcher findings from Step 1 · source material · epic-id · mode (fresh vs promote-stub)
 **What it covers:** mode detection → gather source → draft `docs/epics/<epic-id>/brief.md` (problem · user · hypothesis · metrics · guardrails · scope · architecture-required · DRI log) → promote-stub: keep frontmatter, clear `portfolio_stub: false`, update portfolio.md → seed DRI → mirror to Jira/Confluence if MCP → HITL halt.
 **Output:** `docs/epics/<epic-id>/brief.md` with `status: proposed`

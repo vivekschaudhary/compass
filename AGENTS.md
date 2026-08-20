@@ -65,6 +65,24 @@ defect, not a design.
 
 ---
 
+## The agent files are not the task definitions
+
+`compass/agents/<agent>.md` files carry `### Task:` sections. **Those are the initial design and are
+not what runs.** The app never looks a task up by slug: `buildContext` loads the whole agent file as
+the system prompt, and takes the instruction from the ROW — its title, `reads`, `produces` and the
+criteria. A slug that is not a heading in the agent file breaks nothing.
+
+So do not treat those sections as the source of a task, do not add a task there expecting it to be
+dispatched, and do not report a row as broken because its slug is missing from an agent file. The
+task lives in `compass/seed/workflow-steps.csv`.
+
+What an agent file still owes is what a ROLE brings and a row cannot: identity, the discipline it
+carries, and the house standard for what it produces. The stale task sections are dead weight in a
+file pasted whole into every prompt for that role — they will be cleared when the agent files are
+re-authored, and until then they are to be ignored rather than followed.
+
+---
+
 ## Where truth lives, and what checks it
 
 Several places describe the same workflows. Know which one executes:

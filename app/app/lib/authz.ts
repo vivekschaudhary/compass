@@ -8,7 +8,7 @@ import { supabaseAdmin } from "./supabase";
 //   demo  (today, the default)  The actor's roles come from the role picker in the header. That
 //                               is a DROPDOWN. Anyone can change it, and the app cannot tell one
 //                               person from another. It shapes the UI and demonstrates the
-//                               org-admin / delivery-manager distinction; it is NOT a security
+//                               pmo-analyst / delivery-manager distinction; it is NOT a security
 //                               control and must never be described as one.
 //
 //   entra (deferred)            Sign-in against the organisation's Microsoft Entra directory,
@@ -21,7 +21,7 @@ import { supabaseAdmin } from "./supabase";
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 //
 // Call sites ask for a CAPABILITY, never a role. `can(actor, "edit-org-defaults")` survives the
-// mapping changing; `role === "org-admin"` in a route does not.
+// mapping changing; `role === "pmo-analyst"` in a route does not.
 
 export type AuthMode = "demo" | "entra";
 
@@ -31,14 +31,13 @@ export function authMode(): AuthMode {
 }
 
 /** Platform roles — about operating Compass. Deliberately NOT in COMPASS_ROLES, which is the
- *  DELIVERY vocabulary that drives agent dispatch and the per-role job queues: adding "org-admin"
- *  there would conjure an org-admin work queue and an org-admin agent.
+ *  DELIVERY vocabulary that drives agent dispatch and the per-role job queues: adding "pmo-analyst"
+ *  there would conjure a pmo-analyst work queue and a pmo-analyst agent.
  *
  *  In demo mode these are appended to the header's role picker, so the tiering is demonstrable:
  *  an org admin edits the firm's defaults, a delivery manager only their own engagement. */
 export const PLATFORM_ROLES = [
-  { code: "org-admin", label: "Org Admin", title: "Compass administrator" },
-  { code: "engagement-admin", label: "Engagement Admin", title: "Engagement configuration" },
+  { code: "pmo-analyst", label: "PMO Analyst", title: "Configures the org and its engagements" },
 ] as const;
 
 export type Capability =
@@ -47,10 +46,10 @@ export type Capability =
   | "manage-users";
 
 const GRANTS: Record<Capability, readonly string[]> = {
-  "edit-org-defaults": ["org-admin"],
+  "edit-org-defaults": ["pmo-analyst"],
   // A DM adapts their own engagement; an org admin can do anything an engagement admin can.
-  "edit-engagement-specs": ["org-admin", "engagement-admin", "delivery-manager"],
-  "manage-users": ["org-admin"],
+  "edit-engagement-specs": ["pmo-analyst", "delivery-manager"],
+  "manage-users": ["pmo-analyst"],
 };
 
 /** Who is acting. `roles` is what capabilities are decided from; `userId` is null in demo mode,

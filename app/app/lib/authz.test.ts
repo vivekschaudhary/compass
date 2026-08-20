@@ -31,9 +31,9 @@ describe("auth mode", () => {
 
 describe("demo mode — the role picker is the actor", () => {
   it("takes roles from the passed role, with no user id", async () => {
-    const a = await resolveActor({ role: "org-admin" });
+    const a = await resolveActor({ role: "pmo-analyst" });
     expect(a.mode).toBe("demo");
-    expect(a.roles).toEqual(["org-admin"]);
+    expect(a.roles).toEqual(["pmo-analyst"]);
     // Null on purpose: inventing an id here would write a fictional `updated_by` and produce an
     // audit trail that reads as real.
     expect(a.userId).toBeNull();
@@ -54,9 +54,10 @@ describe("demo mode — the role picker is the actor", () => {
 describe("capabilities", () => {
   const actor = (roles: string[]) => ({ userId: null, roles, mode: "demo" as const });
 
-  it("only org-admin edits org defaults", () => {
-    expect(can(actor(["org-admin"]), "edit-org-defaults")).toBe(true);
-    for (const r of ["delivery-manager", "engagement-admin", "pm", "engineer"]) {
+  it("only the PMO analyst edits org defaults", () => {
+    expect(can(actor(["pmo-analyst"]), "edit-org-defaults")).toBe(true);
+    // Everyone else, INCLUDING the delivery manager who may edit their own engagement.
+    for (const r of ["delivery-manager", "product-manager", "engineer"]) {
       expect(can(actor([r]), "edit-org-defaults"), r).toBe(false);
     }
   });
@@ -67,25 +68,25 @@ describe("capabilities", () => {
     expect(can(dm, "edit-org-defaults")).toBe(false);
   });
 
-  it("org-admin subsumes engagement editing", () => {
-    expect(can(actor(["org-admin"]), "edit-engagement-specs")).toBe(true);
+  it("the PMO analyst subsumes engagement editing", () => {
+    expect(can(actor(["pmo-analyst"]), "edit-engagement-specs")).toBe(true);
   });
 
   it("a delivery role alone grants nothing administrative", () => {
-    for (const r of ["pm", "engineer", "designer", "researcher"]) {
+    for (const r of ["product-manager", "engineer", "designer", "researcher"]) {
       expect(can(actor([r]), "edit-engagement-specs"), r).toBe(false);
       expect(can(actor([r]), "manage-users"), r).toBe(false);
     }
   });
 
   it("holding several roles takes the union — a small team wears many hats", () => {
-    const both = actor(["engineer", "org-admin"]);
+    const both = actor(["engineer", "pmo-analyst"]);
     expect(can(both, "edit-org-defaults")).toBe(true);
     expect(can(both, "manage-users")).toBe(true);
   });
 
   it("names what is missing rather than just refusing", () => {
-    expect(permissionRefusal("edit-org-defaults")).toContain("org-admin");
+    expect(permissionRefusal("edit-org-defaults")).toContain("pmo-analyst");
   });
 });
 
@@ -97,7 +98,7 @@ describe("entra mode — roles come from grants", () => {
   }
 
   it("reads the user's granted roles", async () => {
-    grants([{ role: "org-admin", engagement_id: null }]);
+    grants([{ role: "pmo-analyst", engagement_id: null }]);
     const a = await resolveActor({ actor: "user-1" });
     expect(a.mode).toBe("entra");
     expect(a.userId).toBe("user-1");
@@ -106,13 +107,13 @@ describe("entra mode — roles come from grants", () => {
 
   it("ignores the role picker entirely — a dropdown cannot grant access once auth is real", async () => {
     grants([]);
-    const a = await resolveActor({ actor: "user-1", role: "org-admin" });
+    const a = await resolveActor({ actor: "user-1", role: "pmo-analyst" });
     expect(a.roles).toEqual([]);
     expect(can(a, "edit-org-defaults")).toBe(false);
   });
 
   it("gives an unauthenticated caller nothing", async () => {
-    grants([{ role: "org-admin", engagement_id: null }]);
+    grants([{ role: "pmo-analyst", engagement_id: null }]);
     const a = await resolveActor({});
     expect(a.userId).toBeNull();
     expect(a.roles).toEqual([]);
@@ -126,8 +127,8 @@ describe("entra mode — roles come from grants", () => {
   });
 
   it("applies an org-wide grant everywhere", async () => {
-    grants([{ role: "org-admin", engagement_id: null }]);
-    expect(await rolesFor("u1", "e1")).toEqual(["org-admin"]);
-    expect(await rolesFor("u1")).toEqual(["org-admin"]);
+    grants([{ role: "pmo-analyst", engagement_id: null }]);
+    expect(await rolesFor("u1", "e1")).toEqual(["pmo-analyst"]);
+    expect(await rolesFor("u1")).toEqual(["pmo-analyst"]);
   });
 });
