@@ -28,11 +28,13 @@ sprint-0,1,done,"The foundation architecture is published",document,01-foundatio
 sprint-0,1,done,"Every epic has a named home in the architecture",,,,
 sprint-0,2,done,"The review findings are recorded",document,04-governance/decisions,status,published
 sprint-0,2,done,"The Enterprise Architect's draft was read by someone who did not write it",,,,
-sprint-0,3,done,"The design library exists and the deliverable links to it, rather than describing it",,,,
+sprint-0,3,done,"The design library is published",document,01-foundation/design-library,status,published
+sprint-0,3,done,"It links the real artifact — the Figma file or component library — rather than describing it",,,,
 sprint-0,4,done,"Ways of working is published",document,01-foundation/ways-of-working,status,published
 sprint-0,5,done,"The sprint plan is published",document,03-delivery/plan,status,published
 sprint-0,5,done,"Every story in sprints 1-3 belongs to an epic",,,,
 sprint-0,5,done,"The plan fits the roster's capacity, or says where it does not",,,,
+sprint-0,6,done,"The kickoff record is published",document,05-cadence/kickoff,status,published
 sprint-0,6,done,"Kickoff happened — the Delivery Manager confirms it, and their name is on the close",,,,
 sprint,,ready,"The sprint plan is published",document,03-delivery/plan,status,published
 sprint,1,done,"This sprint's plan is published",document,05-cadence/sprint-plans,status,published

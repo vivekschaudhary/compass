@@ -69,10 +69,10 @@ pre-sprint-0,6,agent,product-manager,draft-epics,02-scope/deliverables,"01-found
 pre-sprint-0,7,agent,delivery-manager,tailor-delivery-plan,03-delivery/plan,"01-foundation/team,02-scope/deliverables",,,Tailor the delivery plan,"draft-raci,draft-epics"
 sprint-0,1,agent,enterprise-architect,draft-foundation-architecture,01-foundation/foundational-architecture,"01-foundation/product-brief,02-scope/deliverables",,,Foundation architecture,
 sprint-0,2,agent,architect,review-foundation-architecture,04-governance/decisions,01-foundation/foundational-architecture,,,Review the foundation architecture,draft-foundation-architecture
-sprint-0,3,agent,designer,build-design-library,,01-foundation/product-brief,,,Design library,
+sprint-0,3,agent,designer,build-design-library,01-foundation/design-library,01-foundation/product-brief,,,Design library,
 sprint-0,4,agent,delivery-manager,draft-ways-of-working,01-foundation/ways-of-working,"01-foundation/team,01-foundation/raci",,,Team working agreement,
 sprint-0,5,agent,product-manager,draft-sprint-plan,03-delivery/plan,"02-scope/deliverables,01-foundation/team",,,Sprint plan for sprints 1-3,review-foundation-architecture
-sprint-0,6,agent,delivery-manager,run-kickoff,,"03-delivery/plan,01-foundation/ways-of-working",,,Kickoff,"draft-sprint-plan,draft-ways-of-working"
+sprint-0,6,agent,delivery-manager,run-kickoff,05-cadence/kickoff,"03-delivery/plan,01-foundation/ways-of-working",,,Kickoff,"draft-sprint-plan,draft-ways-of-working"
 sprint,1,agent,product-manager,sprint-planning,05-cadence/sprint-plans,"03-delivery/plan,02-scope/deliverables",,,Sprint planning,
 sprint,2,agent,delivery-manager,sprint-review,05-cadence/sprint-reviews,05-cadence/sprint-plans,,,Sprint review,sprint-planning
 sprint,3,agent,delivery-manager,sprint-retro,05-cadence/retros,05-cadence/sprint-reviews,,,Retro,sprint-review

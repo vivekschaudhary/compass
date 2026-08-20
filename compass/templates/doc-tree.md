@@ -53,6 +53,8 @@ parent always precedes its children.
 | 23 | 02-scope/timeline | Timeline & milestones | doc | 02-scope |
 | 24 | 01-foundation/raci | Roles & responsibilities | doc | 01-foundation |
 | 25 | 05-cadence/sprint-plans | Sprint plans | folder | 05-cadence |
+| 26 | 01-foundation/design-library | Design library | doc | 01-foundation |
+| 27 | 05-cadence/kickoff | Kickoff | doc | 05-cadence |
 
 ## Notes
 - **This table is the default — and load-bearing.** The intake creates whatever rows are here
