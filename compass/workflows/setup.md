@@ -1,20 +1,19 @@
-<!-- SETUP — the phase that makes an engagement workable. It configures the systems of record and
-     then PROVES them. Every row below becomes one task in that run.
+<!-- SETUP — the phase that proves an engagement can hold work. One row, and it is a probe.
 
      THIS TABLE IS THE PHASE. Add a row and the engagement gains one; change a gate and the bar
      moves. None of it is encoded in code — a practice amends its own setup without a release.
 
-     BOOTSTRAP: this is the phase that configures the tracker, so there is nowhere to put its own
-     tickets while it runs. Row 4 back-fills the epic and its stories, already Done, once the
-     tracker answers. A setup epic showing four closed stories with real timestamps is a better
-     first impression than an empty board. -->
+     BOOTSTRAP: this is the phase that proves the tracker, so there is nowhere to put its own ticket
+     while it runs. The row back-fills its epic and story, already Done, once the tracker answers. A
+     setup epic showing a closed story with a real timestamp is a better first impression than an
+     empty board. -->
 ---
 name: setup
 title: Setup engagement
 owner: delivery-manager
 scope: foundation
 trigger: delivery-manager initiates it   # intake provisions; it does not start anything
-creates: one task per row below, in dependency order
+creates: one task per row below
 status: active
 version: 1.0.0
 
@@ -23,7 +22,7 @@ version: 1.0.0
 requires: []
 
 # ── PRODUCES ──────────────────────────────────────────────────────────────
-# No documents. The deliverable is a wired, exercised connector.
+# No document. The deliverable is a wired, exercised connector.
 produces:
   - docs.wired: true
   - tickets.wired: true
@@ -31,45 +30,49 @@ produces:
 
 ## Purpose
 
-Turn a provisioned engagement into one that can hold work: a named delivery manager, a document
-store, a tracker — and proof that the last two answer.
-
-Ends when pre-sprint 0 can start.
+Prove that the engagement's systems of record answer, before anything downstream is derived from
+them. Ends when pre-sprint 0 can start.
 
 ## Dispatch graph
 
 | # | task | dispatch | owner | reads | produces | depends-on |
 |---|------|----------|-------|-------|----------|------------|
-| 1 | Name the delivery manager | `agent: delivery-manager.name-delivery-manager` | delivery-manager | — | — | — |
-| 2 | Configure document storage | `agent: delivery-manager.configure-doc-store` | delivery-manager | — | — | 1 |
-| 3 | Configure the tracker | `agent: delivery-manager.configure-tracker` | delivery-manager | — | — | 1 |
-| 4 | Validate the connections | `machine` | — | — | — | 2, 3 |
+| 1 | Validate the connections | `machine` | — | — | — | — |
 
-Row 1 comes first because every other row is owned by the person it names.
+**Configuration itself is intake's job, not a row here.** Intake takes the delivery manager's name,
+canonicalises the Confluence space and the Jira project, and stores the credentials. Provisioning is
+a form: someone types values into fields, and no agent drafts a credential.
 
-Rows 2 and 3 are not "the agent enters a credential". The agent prepares the configuration — derives
-the space and project keys, canonicalises them, checks what already exists — and the human supplies
-the secret and accepts.
+What provisioning cannot do is prove any of it works. That is this phase, and it is the whole of it.
 
 ## Gates
 
 Three states, never two: **satisfied**, **not satisfied**, **not yet measurable**. A gate that could
 not be checked must never read as one that passed.
 
-### 4. Validate the connections
+### 1. Validate the connections
 
     check: docs.wired == true
     check: tickets.wired == true
 
-This is the row that earns the phase: write a probe page, create and delete a probe issue, read the
-board's status vocabulary. **Config that was never exercised is not config.**
+Both are probes, not settings lookups — `evaluateConnector` writes a page to the space and reads the
+board's status vocabulary back. **Config that was never exercised is not config.**
 
-It is a `machine` row — no owner, no reviewer, because the probe IS the evidence. It is also the
-only row in the four phases with hand-written criteria; everywhere else what a row produces and who
-accepts it is the criterion.
+It is a `machine` row: no owner and no reviewer, because the probe IS the evidence and there is
+nothing for a person to judge. It is also the only row across the four phases carrying hand-written
+machine criteria; everywhere else what a row produces and who accepts it is the criterion.
 
 ## Notes
 
-Failing row 4 sends work back to rows 2 or 3 with the findings, and the probe runs again. A
-connector that silently stops answering should reopen this, which is why it is a row rather than a
-one-time assumption.
+**A machine row is evaluated when the phase opens.** Nothing re-checks it afterwards, so a phase
+initiated against an engagement whose credentials are not yet in place leaves this row open with no
+route to close it — the fix is to complete intake and initiate the phase again, not to wait.
+
+That is a real limit rather than a preference, and it is why this phase is one probe rather than the
+four rows it began as: rows 1–3 configured things, configuration happens during a phase, and a
+machine row whose criteria only become true later can never close.
+
+An earlier draft had `name the delivery manager`, `configure document storage` and `configure the
+tracker` as agent rows. They produce no document, and the agent runner files a document or errors —
+so they would have failed on the first click. Making the phase honest about what intake already does
+removed the problem rather than working around it.

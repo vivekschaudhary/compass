@@ -1,9 +1,6 @@
 workflow,ord,kind,text,subject_kind,subject_ref,operator,value
-setup,1,done,"A delivery manager is named against the engagement",,,,
-setup,2,done,"The document store's location and credentials are entered",,,,
-setup,3,done,"The tracker's project and credentials are entered",,,,
-setup,4,done,"The doc store answers",connector,docs,is,wired
-setup,4,done,"The tracker answers",connector,tickets,is,wired
+setup,1,done,"The doc store answers",connector,docs,is,wired
+setup,1,done,"The tracker answers",connector,tickets,is,wired
 pre-sprint-0,,ready,"The systems of record answered",connector,docs,is,wired
 pre-sprint-0,,ready,"",connector,tickets,is,wired
 pre-sprint-0,1,done,"The SOW is filed — everything downstream derives from it and cannot be invented",document,02-scope/sow,status,published

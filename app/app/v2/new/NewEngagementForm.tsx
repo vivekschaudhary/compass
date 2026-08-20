@@ -10,7 +10,7 @@ type Result = {
 
 export function NewEngagementForm() {
   const [f, setF] = useState({
-    name: "", client: "", sowText: "", briefText: "", deliveryManager: "",
+    name: "", client: "", briefText: "", deliveryManager: "",
     confluenceSpace: "", confluenceRootPageId: "", jiraProject: "",
   });
   const [publish, setPublish] = useState(true);
@@ -74,14 +74,10 @@ export function NewEngagementForm() {
         </Field>
       </div>
 
-      <Field label="The SOW" hint="Paste it in full. Every downstream document cites this, so a summary here becomes a summary everywhere.">
-        <Textarea rows={14} value={f.sowText} onChange={set("sowText")} placeholder="Project parameters, scope, milestones, commercial terms…" />
-      </Field>
-
       {/* Optional, and supplied far more often than written — in consulting the requirements
           document exists before the engagement does. Given one, `create-product-brief` starts from
           the client's own words instead of a blank page, and the epics are written from it. */}
-      <Field label="Product brief or BRD" hint="If the client already has one, paste it. Groundwork writes the epics from this — without it, Compass has to draft the brief first.">
+      <Field label="Product brief or BRD" hint="If the client already has one, paste it. Pre-sprint 0 writes the brief from this — without it, Compass drafts from the SOW alone.">
         <Textarea rows={8} value={f.briefText} onChange={set("briefText")} placeholder="Optional. Business requirements, product brief, discovery output…" />
       </Field>
 
@@ -99,11 +95,10 @@ export function NewEngagementForm() {
       </label>
 
       <div className="onboard-actions">
-        <Button variant="primary" disabled={busy || !f.name.trim() || !f.sowText.trim() || !f.deliveryManager.trim()} onClick={submit}>
+        <Button variant="primary" disabled={busy || !f.name.trim() || !f.deliveryManager.trim()} onClick={submit}>
           {busy ? "Creating…" : "Create the engagement"}
         </Button>
-        {!f.sowText.trim() && <span className="text-muted onboard-note">The SOW is required — everything derives from it.</span>}
-        {f.sowText.trim() && !f.deliveryManager.trim() && <span className="text-muted onboard-note">A delivery manager is required — an engagement with nobody on it has no queue.</span>}
+        {!f.deliveryManager.trim() && <span className="text-muted onboard-note">A delivery manager is required — an engagement with nobody on it has no queue.</span>}
         {error && <span className="start-error">{error}</span>}
       </div>
     </div>

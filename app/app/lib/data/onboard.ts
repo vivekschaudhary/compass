@@ -109,11 +109,6 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
       problems: ["No delivery manager. An engagement with nobody on it has no queue to open."] };
   }
 
-  if (!input.sowText?.trim()) {
-    return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
-      problems: ["No SOW text. Everything downstream derives from it, so intake refuses without one."] };
-  }
-
   const { data: org } = await sb.from("org").select("id").eq("code", input.orgCode ?? "default").maybeSingle();
   if (!org) return { engagementId: "", documents: 0, sowVersionId: null, sowSections: 0, openedWorkflow: null, published: 0,
     problems: [`No org '${input.orgCode ?? "default"}'. Import the seed first.`] };
@@ -195,29 +190,30 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
     if (parent) await sb.from("document").update({ parent_id: parent }).eq("id", d.id);
   }
 
-  // The SOW, in full. This is the difference from v1.
-  const sections = sectionise(input.sowText);
-  const { data: sowVersionId, error: sowErr } = await sb.rpc("file_document", {
-    p_org_id: org.id, p_engagement_id: id,
-    p_path: "02-scope/sow", p_title: "SOW (source)",
-    p_sections: sections, p_version: null,
-    p_actor: "intake", p_actor_role: "pmo-analyst",
-    p_owner_role: "delivery-manager", p_task_id: null,
-  });
-  if (sowErr) problems.push(`file the SOW: ${sowErr.message}`);
+  // THE SOW IS NOT FILED HERE. Intake used to take the text and file it, which put a deliverable
+  // into the engagement before anyone had picked the engagement up — and left `pre-sprint-0` row 1
+  // ("File the SOW") as a task with nothing to do and a gate already green. That is the shape of a
+  // phase that looks busy and is not.
+  //
+  // Filing it is the delivery manager's first act on initiating pre-sprint 0. Intake provisions the
+  // place for it and stops.
+  const sections: { heading: string; body: string }[] = [];
+  const sowVersionId: string | null = null;
 
   // Intake opens NOTHING, and that is the change.
   //
   // It used to open whichever workflow declared `project-created`, so creating a project silently
   // started work. An engagement existing is not the same as an engagement being ready to start —
   // the admin may create it days before anyone is free to run it, and the delivery manager is the
-  // one who decides. So intake provisions and stops; the DM initiates basecamp when they mean to.
+  // one who decides. So intake provisions, scaffolds and stops; the DM initiates setup when they mean to.
   //
   // The empty queue is therefore correct, not a failure, and must not be reported as one.
   const openedWorkflow: string | null = null;
 
-  // The supplied brief, filed exactly as the SOW is — same routine, same versioning, same
-  // sectioning. `01-foundation/product-brief` is already in the scaffold and sits empty otherwise.
+  // The supplied brief, for the same reason the SOW is not: it is a BASIS someone hands over, not a
+  // deliverable intake accepts on the engagement's behalf. Kept for now because `pre-sprint-0` row 2
+  // reads it and produces the real brief from it, so a supplied one is an input rather than a
+  // substitute — but it is the same shape as the SOW above and wants the same call.
   let briefVersionId: string | null = null;
   if (input.briefText?.trim()) {
     const briefSections = sectionise(input.briefText);
@@ -261,7 +257,9 @@ export async function createEngagement(input: NewEngagement): Promise<OnboardRes
   return {
     engagementId: id,
     documents: docRows.length,
-    sowVersionId: (sowVersionId as string) ?? null,
+    // Always null and zero now — kept in the shape because callers read them, and reporting "0
+    // sections filed" is true rather than a field quietly disappearing.
+    sowVersionId,
     sowSections: sections.length,
     openedWorkflow, published, problems,
   };
