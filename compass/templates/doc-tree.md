@@ -50,6 +50,9 @@ parent always precedes its children.
 | 20 | 05-cadence/standups | Standup notes | folder | 05-cadence |
 | 21 | 01-foundation/team | Engagement roster | doc | 01-foundation |
 | 22 | 03-delivery/plan | Delivery plan | doc | 03-delivery |
+| 23 | 02-scope/timeline | Timeline & milestones | doc | 02-scope |
+| 24 | 01-foundation/raci | Roles & responsibilities | doc | 01-foundation |
+| 25 | 05-cadence/sprint-plans | Sprint plans | folder | 05-cadence |
 
 ## Notes
 - **This table is the default — and load-bearing.** The intake creates whatever rows are here

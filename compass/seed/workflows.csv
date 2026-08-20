@@ -9,5 +9,7 @@ ops,Workflow: /ops,Engineering,,enterprise-architect,,true
 setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,true
 tech-design,Workflow: /tech-design,Engineering,,architect,,true
 triage,Workflow: /triage,Support,,support,,true
-basecamp,Basecamp,Delivery,Basecamp,delivery-manager,,true
-groundwork,Groundwork,Delivery,Groundwork,delivery-manager,,true
+setup,Setup engagement,Delivery,Setup,delivery-manager,,true
+pre-sprint-0,Pre-sprint 0,Delivery,Pre-sprint 0,delivery-manager,,true
+sprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true
+sprint,Sprint,Delivery,Sprint,delivery-manager,,true

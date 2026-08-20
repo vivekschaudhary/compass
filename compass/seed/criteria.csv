@@ -1,21 +1,44 @@
 workflow,ord,kind,text,subject_kind,subject_ref,operator,value
-basecamp,,ready,The engagement exists and its systems of record answered,connector,docs,is,wired
-basecamp,,ready,,connector,tickets,is,wired
-basecamp,,ready,The SOW is filed — everything downstream is derived from it and cannot be invented,document,02-scope/sow,status,published
-basecamp,1,done,The doc store answers,connector,docs,is,wired
-basecamp,1,done,The tracker answers,connector,tickets,is,wired
-basecamp,2,done,Every role Groundwork assigns work to has a named holder,roster,sprint-0-roles,unfilled,0
-basecamp,2,done,Roles left deliberately unstaffed are recorded with a reason,roster,deferred,has-reason,all
-basecamp,2,done,The Delivery Manager approved the roster,ticket,{{story}},status,Done
-groundwork,,ready,The roster is approved,document,01-foundation/team,status,published
-groundwork,1,done,The product foundation is published,document,01-foundation/product-brief,status,published
-groundwork,1,done,Every feature the SOW commits to is defined at scope level or named out of scope,,,,
-groundwork,1,done,The Product Manager approved it,,,,
-groundwork,2,done,The epic list is published,document,02-scope/deliverables,status,published
-groundwork,2,done,Every epic traces to something the brief or the SOW commits to,,,,
-groundwork,2,done,Every epic has a description and a milestone,,,,
-groundwork,2,done,What the brief leaves unclear is recorded as an open question rather than a guessed epic,,,,
-groundwork,2,done,The Product Manager approved the epics,,,,
-groundwork,3,done,The foundation architecture is published,document,01-foundation/foundational-architecture,status,published
-groundwork,3,done,Every scope-level feature has a named home in the architecture,,,,
-groundwork,3,done,The Enterprise Architect approved it,,,,
+setup,1,done,"A delivery manager is named against the engagement",,,,
+setup,2,done,"The document store's location and credentials are entered",,,,
+setup,3,done,"The tracker's project and credentials are entered",,,,
+setup,4,done,"The doc store answers",connector,docs,is,wired
+setup,4,done,"The tracker answers",connector,tickets,is,wired
+pre-sprint-0,,ready,"The systems of record answered",connector,docs,is,wired
+pre-sprint-0,,ready,"",connector,tickets,is,wired
+pre-sprint-0,1,done,"The SOW is filed — everything downstream derives from it and cannot be invented",document,02-scope/sow,status,published
+pre-sprint-0,2,done,"The product brief is published",document,01-foundation/product-brief,status,published
+pre-sprint-0,2,done,"Every feature the SOW commits to is covered or named out of scope",,,,
+pre-sprint-0,3,done,"The timeline is published",document,02-scope/timeline,status,published
+pre-sprint-0,3,done,"Every milestone has a date and something it delivers",,,,
+pre-sprint-0,4,done,"The roster is published",document,01-foundation/team,status,published
+pre-sprint-0,4,done,"Every role a later phase assigns work to has a named holder",,,,
+pre-sprint-0,4,done,"Roles left deliberately unstaffed are recorded with a reason",,,,
+pre-sprint-0,5,done,"Roles and responsibilities are published",document,01-foundation/raci,status,published
+pre-sprint-0,5,done,"Every named holder appears against at least one responsibility",,,,
+pre-sprint-0,6,done,"The epics are published",document,02-scope/deliverables,status,published
+pre-sprint-0,6,done,"Every epic traces to something the brief or the SOW commits to",,,,
+pre-sprint-0,6,done,"Every epic names the milestone it serves",,,,
+pre-sprint-0,6,done,"What the brief leaves unclear is an open question, not a guessed epic",,,,
+pre-sprint-0,7,done,"The delivery plan is published",document,03-delivery/plan,status,published
+pre-sprint-0,7,done,"Every role the plan names is staffed on the roster",,,,
+sprint-0,,ready,"The roster is published",document,01-foundation/team,status,published
+sprint-0,,ready,"The epics are published",document,02-scope/deliverables,status,published
+sprint-0,1,done,"The foundation architecture is published",document,01-foundation/foundational-architecture,status,published
+sprint-0,1,done,"Every epic has a named home in the architecture",,,,
+sprint-0,2,done,"The review findings are recorded",document,04-governance/decisions,status,published
+sprint-0,2,done,"The Enterprise Architect's draft was read by someone who did not write it",,,,
+sprint-0,3,done,"The design library exists and the deliverable links to it, rather than describing it",,,,
+sprint-0,4,done,"Ways of working is published",document,01-foundation/ways-of-working,status,published
+sprint-0,5,done,"The sprint plan is published",document,03-delivery/plan,status,published
+sprint-0,5,done,"Every story in sprints 1-3 belongs to an epic",,,,
+sprint-0,5,done,"The plan fits the roster's capacity, or says where it does not",,,,
+sprint-0,6,done,"Kickoff happened — the Delivery Manager confirms it, and their name is on the close",,,,
+sprint,,ready,"The sprint plan is published",document,03-delivery/plan,status,published
+sprint,1,done,"This sprint's plan is published",document,05-cadence/sprint-plans,status,published
+sprint,1,done,"Every committed story is on the board and assigned",,,,
+sprint,1,done,"Work taken on that was not in the plan is recorded as unplanned",,,,
+sprint,2,done,"The review is published",document,05-cadence/sprint-reviews,status,published
+sprint,2,done,"Every story that did not land says why",,,,
+sprint,3,done,"The retro is published",document,05-cadence/retros,status,published
+sprint,3,done,"Actions have a named owner, or are recorded as not taken",,,,

@@ -27,6 +27,10 @@ const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], do
 
 /* ── the seed itself must be valid, or the first load fails ──────────────── */
 
+
+/** The delivery phases the seed ships. Setup → pre-sprint 0 → sprint 0 → sprint. */
+const PHASES = ["setup", "pre-sprint-0", "sprint-0", "sprint"] as const;
+
 describe("the shipped seed", () => {
   const planned = () => {
     const result = planImport(seedBundle(), { ...empty, agents: realAgents() });
@@ -59,17 +63,18 @@ describe("the shipped seed", () => {
     expect(selfStarting.map((w) => w.row.code)).toEqual([]);
   });
 
-  it("seeds basecamp and groundwork, owned by the delivery manager", () => {
+  it("seeds the four delivery phases, owned by the delivery manager", () => {
     const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
-    expect(byCode.get("basecamp")?.ownerRole).toBe("delivery-manager");
-    expect(byCode.get("groundwork")?.ownerRole).toBe("delivery-manager");
+    for (const code of PHASES) {
+      expect(byCode.get(code)?.ownerRole, `${code} has no owner`).toBe("delivery-manager");
+    }
   });
 
-  it("gives every basecamp and groundwork row a Done gate", () => {
+  it("gives every phase row a Done gate", () => {
     // The vacuous-close bug: close_task builds its refusal with string_agg over the Done criteria,
     // and over zero rows that returns NULL — so a step with no criteria closes green with no
     // evidence at all. A phase whose rows have no gates is worse than no phase.
-    for (const code of ["basecamp", "groundwork"]) {
+    for (const code of PHASES) {
       const wf = planned().workflows.find((w) => w.row.code === code)!;
       for (const step of wf.steps) {
         const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepOrd === step.ord);
