@@ -129,6 +129,9 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         conditional: s.conditional || null,
         nests_workflow_code: s.kind === "workflow" ? s.nests : null,
         title: s.title || null,
+        // Checked at COMMIT, not per row — the backward-only rule is a deferred constraint trigger
+        // precisely because these arrive in one insert and cannot see each other before then.
+        depends_on: s.dependsOn,
       })))).error);
     },
 
@@ -186,8 +189,11 @@ export async function readExisting(
       .select("id").eq("workflow_id", wf.id).eq("status", "published").maybeSingle();
     if (!ver) { workflows.push({ code: wf.code, steps: [], criteria: [] }); continue; }
 
+    // Every column the diff key compares. A field selected on the way IN but not on the way BACK
+    // makes the comparison read `undefined` against a real value, so every row reports changed —
+    // the mirror image of the bug where a field is compared on neither side and nothing ever does.
     const { data: steps } = await sb.from("workflow_step")
-      .select("ord, kind, role_code, task, produces, reads, conditional, nests_workflow_code, title")
+      .select("ord, kind, role_code, task, produces, reads, conditional, nests_workflow_code, title, depends_on")
       .eq("workflow_version_id", ver.id).order("ord");
     const { data: crits } = await sb.from("criterion")
       .select("step_ord, kind, statement, subject_kind, subject_ref, operator, value")
@@ -199,6 +205,7 @@ export async function readExisting(
         workflow: wf.code, ord: s.ord, kind: s.kind, role: s.role_code ?? "", task: s.task,
         produces: s.produces ?? "", reads: s.reads ?? [], conditional: s.conditional ?? "",
         nests: s.nests_workflow_code ?? "", title: s.title ?? "",
+        dependsOn: s.depends_on ?? [],
       })),
       criteria: (crits ?? []).map((c): CriterionRow => ({
         workflow: wf.code, stepOrd: c.step_ord, kind: c.kind, text: c.statement ?? "",

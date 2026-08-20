@@ -11,7 +11,7 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
-import { emit } from "./events";
+import { emit, emitRefusal } from "./events";
 import { mirrorState, moveFailed } from "./tracker";
 import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
@@ -515,7 +515,20 @@ export async function approve(
   // "Nothing to move" is not a failure: an engagement with no tracker, or a task with no ticket
   // (phase 1 configures the tracker, so its own rows predate it), closes exactly as before.
   const moved = await mirrorState(actor.engagementId, taskId, "closed", actor.roleCode);
-  if (moveFailed(moved)) return { ok: false, error: moved.note ?? "The tracker refused to close this." };
+  if (moveFailed(moved)) {
+    // Distinct from a gate refusing: the work was accepted and the BOARD would not take it. Someone
+    // reading the record needs to tell "the criteria were not met" from "the board has no Done
+    // status", because they are different problems with different fixes.
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task", subjectId: taskId,
+      verb: "task.close_blocked_by_tracker",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      reason: moved.note ?? "The tracker refused to close this.",
+      payload: { ticket: moved.key ?? null, status: moved.status ?? null, kind: moved.reason ?? null },
+    });
+    return { ok: false, error: moved.note ?? "The tracker refused to close this." };
+  }
 
   const { error } = await sb.rpc("close_task", {
     p_task_id: taskId, p_actor: who, p_actor_role: actor.roleCode,
@@ -525,6 +538,14 @@ export async function approve(
     // reading Done for work Compass will not close — best effort, and the failure the caller sees
     // is the gate's, which is the one that explains what to fix.
     if (moved.ok) await mirrorState(actor.engagementId, taskId, "hitl", actor.roleCode);
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task", subjectId: taskId,
+      verb: "task.close_refused",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      reason: error.message,
+      payload: { confirmed: confirmed.length, ticketReturned: moved.ok },
+    });
     return { ok: false, error: error.message };
   }
 

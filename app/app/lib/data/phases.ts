@@ -19,7 +19,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
-import { orgIdFor } from "./events";
+import { orgIdFor, emit, emitRefusal } from "./events";
 import { sortByStep } from "./steps";
 import { measureTask, storedStatusFor, evaluate, type CriterionRow } from "./gates";
 import { mirrorPhase, type Mirrored } from "./tracker";
@@ -52,6 +52,17 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
   // starts without its gate is a false green with a queue attached.
   const blocked = await unmetEntryGate(actor, wf.id);
   if (blocked.length) {
+    // A phase that could not start is the most useful record this product keeps: it is where the
+    // process is actually stuck, and how long it stayed there. Written before returning, because
+    // returning is the only place it can be written.
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "workflow", subjectId: wf.id,
+      verb: "phase.refused",
+      actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+      reason: blocked.join(" · "),
+      payload: { workflow: workflowCode, unmet: blocked },
+    });
     return {
       ok: false,
       error: `${wf.label} is not ready:\n  ` + blocked.join("\n  "),
@@ -70,12 +81,36 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
     p_org_id: orgId, p_engagement_id: actor.engagementId, p_workflow_code: workflowCode,
     p_actor: actor.holder ?? actor.roleCode, p_actor_role: actor.roleCode,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "workflow", subjectId: wf.id,
+      verb: "phase.refused",
+      actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+      reason: error.message,
+      payload: { workflow: workflowCode, at: "open" },
+    });
+    return { ok: false, error: error.message };
+  }
 
   // Measure every task's gate immediately. A phase opens with rows whose Ready state is already
   // knowable — "Connect systems of record" is satisfied by intake and should show as done on the
   // first screen, not after someone clicks re-check on it.
   const tasks = await tasksOfRun(runId as string);
+
+  // The counterpart to phase.refused. `open_phase_run` emits `workflow.opened` for the run, which
+  // says a run exists; this says a PERSON committed an engagement to a phase and to how many rows —
+  // the decision, not its mechanism. Without both, the record shows refusals with nothing to
+  // compare them against.
+  await emit({
+    engagementId: actor.engagementId,
+    subjectType: "workflow_run", subjectId: runId as string,
+    verb: "phase.initiated",
+    actorKind: "human",
+    actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+    payload: { workflow: workflowCode, rows: tasks.length },
+  });
+
   for (const t of tasks) {
     const statuses = await measureTask(actor, t.id);
 
@@ -99,8 +134,31 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
       const started = await sb.rpc("start_task", {
         p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode,
       });
-      if (!started.error) {
-        await sb.rpc("close_task", { p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode });
+      if (started.error) {
+        // This one used to fail in silence — the `if (!started.error)` below simply skipped the
+        // close and the row sat idle with no explanation anywhere.
+        await emitRefusal({
+          engagementId: actor.engagementId,
+          subjectType: "task", subjectId: t.id,
+          verb: "task.start_refused",
+          actorRoleCode: actor.roleCode, actorUserId: who,
+          reason: started.error.message,
+          payload: { title: t.title, at: "phase-open machine row" },
+        });
+      } else {
+        const closed = await sb.rpc("close_task", {
+          p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode,
+        });
+        if (closed.error) {
+          await emitRefusal({
+            engagementId: actor.engagementId,
+            subjectType: "task", subjectId: t.id,
+            verb: "task.close_refused",
+            actorRoleCode: actor.roleCode, actorUserId: who,
+            reason: closed.error.message,
+            payload: { title: t.title, at: "phase-open machine row" },
+          });
+        }
       }
     }
   }

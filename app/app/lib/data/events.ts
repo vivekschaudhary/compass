@@ -83,3 +83,44 @@ export async function emit(e: Emit): Promise<void> {
 export async function emitAll(events: Emit[]): Promise<void> {
   for (const e of events) await emit(e);
 }
+
+/**
+ * Record that the system said NO.
+ *
+ * A gate refusing is the most informative thing that happens in this product and the least
+ * recorded. State CHANGES are evented by a trigger, so a task that starts leaves a trace and a task
+ * that could not start leaves nothing — which means the one question worth asking of the record,
+ * *where does this process actually block*, has no data behind it.
+ *
+ * MUST BE CALLED AFTER THE FAILED CALL RETURNS, never inside the transaction that refused. The
+ * refusals live in Postgres routines and `raise exception` rolls the transaction back — an event
+ * written on that path would be rolled back with it and the refusal would still be invisible. That
+ * is the whole reason this is a caller's job rather than a trigger's.
+ *
+ * `reason` is the refusal verbatim. The routines already explain themselves ("Waiting on: Staffing
+ * plan and resources"), and paraphrasing loses the part someone needs.
+ */
+export async function emitRefusal(r: {
+  engagementId: string;
+  subjectType: string;
+  subjectId: string;
+  /** Past tense and specific: `phase.refused`, `task.start_refused`, `task.close_refused`. */
+  verb: string;
+  actorRoleCode?: string | null;
+  actorUserId?: string | null;
+  reason: string;
+  payload?: Record<string, unknown>;
+}): Promise<void> {
+  await emit({
+    engagementId: r.engagementId,
+    subjectType: r.subjectType,
+    subjectId: r.subjectId,
+    verb: r.verb,
+    // The gate refused, not the person. Someone asking why their close bounced is looking for the
+    // rule, and attributing it to them sends them to the wrong question.
+    actorKind: "system",
+    actorRoleCode: r.actorRoleCode ?? null,
+    actorUserId: r.actorUserId ?? null,
+    payload: { ...(r.payload ?? {}), reason: r.reason },
+  });
+}

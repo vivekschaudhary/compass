@@ -38,6 +38,13 @@ export type StepRow = {
   nests: string;
   /** What a person calls this row. The queue showed `propose-kickoff-backlog` without it. */
   title: string;
+  /**
+   * Task slugs of rows this one derives from, in the same workflow — by SLUG, not ord, so a
+   * delivery manager reordering rows while reviewing the plan does not silently re-point every
+   * edge. The database enforces that each names a row ABOVE this one, which makes a cycle
+   * impossible to write rather than something to detect.
+   */
+  dependsOn: string[];
 };
 export type CriterionRow = {
   workflow: string; stepOrd: number | null; kind: string; text: string;
@@ -114,6 +121,7 @@ function readSteps(csv: string): StepRow[] {
     workflow: r.workflow, ord: num(r.ord), kind: r.kind || "agent", role: r.role ?? "",
     task: r.task ?? "", produces: r.produces ?? "", reads: parseList(r.reads),
     conditional: r.conditional ?? "", nests: r.nests ?? "", title: r.title ?? "",
+    dependsOn: parseList(r.depends_on),
   }));
 }
 
@@ -318,7 +326,7 @@ function describeChanges(
   // could change which workflow it nests and the importer would report "unchanged" — a diff that
   // does not compare everything is a diff that lies. Adding a column means adding it here.
   const key = (s: StepRow) =>
-    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}`;
+    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.dependsOn.join("|")}`;
   const ckey = (c: CriterionRow) =>
     `${c.stepOrd ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
 

@@ -12,6 +12,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { pinInputs } from "../agent/context";
+import { emitRefusal } from "./events";
 
 /** A card, as the Jobs screen renders it. */
 export type TaskCard = {
@@ -136,7 +137,22 @@ export async function startTask(actor: Actor, taskId: string): Promise<{ ok: tru
     p_actor: actor.holder ?? actor.roleCode,
     p_actor_role: actor.roleCode,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Two different refusals reach here — an unmet Ready criterion, and a dependency that has not
+    // closed — and they mean different things to whoever is stuck. The routine distinguishes them
+    // in its message, so the message is kept verbatim and the kind is recorded alongside it,
+    // because "how often does a phase stall waiting on its own rows" is a question worth being
+    // able to ask of the record.
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task", subjectId: taskId,
+      verb: "task.start_refused",
+      actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+      reason: error.message,
+      payload: { gate: error.message.startsWith("Waiting on") ? "depends_on" : "ready" },
+    });
+    return { ok: false, error: error.message };
+  }
 
   // Pin what this task reads, at the versions live right now. After this the task's inputs are
   // fixed: editing a source document creates a new version and does not silently change what this

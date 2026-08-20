@@ -267,7 +267,7 @@ describe("import is versioning", () => {
     workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "", title: "" }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] }],
       criteria: [{ workflow: "build", stepOrd: 1, kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
@@ -289,6 +289,35 @@ describe("import is versioning", () => {
     if (!r.ok) return;
     expect(r.plan.workflows[0].action).toBe("new-version");
     expect(r.plan.workflows[0].changes.join(" ")).toContain("step(s) added");
+  });
+
+  it("changing ONLY depends_on produces a new version", () => {
+    // The `nests`/`title` bug, in the newest column. A row that changes what it derives from has
+    // changed — if the diff key omits the field, the importer reports "unchanged" and the edit is
+    // silently discarded. Every field a step carries belongs in that key, and this is the test that
+    // says so for this one.
+    const r = planImport(
+      {
+        ...bundle,
+        steps: "workflow,ord,kind,role,task,depends_on\n"
+             + "build,1,agent,engineer,implement,\n"
+             + "build,2,agent,engineer,write-tests,implement\n",
+      },
+      {
+        ...already,
+        workflows: [{
+          ...already.workflows[0],
+          steps: [
+            already.workflows[0].steps[0],
+            { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "write-tests",
+              produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] },
+          ],
+        }],
+      },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.plan.workflows[0].action).toBe("new-version");
   });
 
   it("tightening a criterion produces a new version — the CoP improvement loop", () => {
