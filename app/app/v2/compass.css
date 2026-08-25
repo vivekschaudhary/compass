@@ -919,3 +919,37 @@ textarea.verdict-reason {
   white-space: pre-wrap; background: var(--color-surface); border-left: 2px solid var(--color-text);
 }
 
+/* The live feed while a phase opens. Reads as a log line, not a toast: it is the record, arriving
+   early. The elapsed count sits apart because it is the one number that is true even when the
+   event log has nothing to say. */
+.phases-progress {
+  display: flex; align-items: baseline; gap: var(--space-3);
+  margin: 0; font-size: 12.5px; color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  min-height: 1.4em;      /* reserve the line so the panel does not jump on the first message */
+}
+.phases-progress-line { animation: compass-rise 0.25s ease-out; }
+.phases-progress-elapsed { font-variant-numeric: tabular-nums; opacity: 0.6; margin-left: auto; }
+
+.spinner {
+  display: inline-block; width: 11px; height: 11px; margin-right: 7px;
+  vertical-align: -1px; border: 1.5px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: compass-spin 0.7s linear infinite;
+}
+@keyframes compass-spin { to { transform: rotate(360deg); } }
+
+/* Motion is decoration here; the words carry the meaning. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; opacity: 0.5; }
+  .phases-progress-line { animation: none; }
+}
+
+
+/* A job that could not be read. Deliberately plain — it is an error page, not a feature, and the
+   message it carries is the part worth reading. Shares the phases-error treatment because they are
+   the same kind of thing: the system saying exactly what stopped it. */
+.job-error { max-width: 640px; margin: var(--space-8) auto; padding: 0 var(--space-4); }
+.job-error h1 { font-size: 18px; margin: 0 0 var(--space-2); }
+.job-error-detail {
+  margin: var(--space-3) 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.6;
+  white-space: pre-wrap; background: var(--color-surface); border-left: 2px solid var(--color-text);
+}

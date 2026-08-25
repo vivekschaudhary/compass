@@ -377,8 +377,10 @@ Grounded in what the app contains as of 2026-08-19.
 
 ### R1 · Re-author the phases
 
-The largest item and mostly writing. The seed has `basecamp` (2 rows) and `groundwork` (3); §4 has
-four phases with different rows. **Until this exists a demo walks the old shape.**
+The largest item and mostly writing. The seed now carries §4's phases and nothing else — `setup`
+(1 row), `sprint-0` (13) and `sprint` (3); the pre-rename phases are gone from both the seed and
+the database. What remains is `pre-sprint-0`, which has a phase row and no steps at all, so §4.2 is
+still a section nothing can run.
 
 - the four tables in the row shape of §4
 - `hitl` rows folded into the step each was approving

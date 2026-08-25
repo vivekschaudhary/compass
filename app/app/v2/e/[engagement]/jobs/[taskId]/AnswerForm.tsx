@@ -78,7 +78,7 @@ export function AnswerForm({ engagement, role, taskId, questions }: {
         </button>
         <span className="asks-note text-muted">
           {working
-            ? "Answered — it is drafting from what you told it. This takes a few minutes."
+            ? "Answered — it is picking this up. It may come back with a little more, or draft."
             : "Blank answers stay open — the agent still needs them."}
         </span>
         {error && <span className="start-error">{error}</span>}

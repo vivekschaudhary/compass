@@ -92,7 +92,8 @@ Several places describe the same workflows. Know which one executes:
 - **the database** — a *versioned* copy of the seed. Published versions match it row for row; older
   versions accumulate, so raw counts overstate.
 - `compass/workflows/*.md` — the dispatch graphs. Two formats: the old `### Step N.` headings and
-  the newer table used by `basecamp.md` and `groundwork.md`. `graph.py` parses both.
+  the newer table used by the four phase files — `setup.md`, `pre-sprint-0.md`, `sprint-0.md` and
+  `sprint.md`. `graph.py` parses both.
 - `.claude/skills/` — slash commands, most of which map to workflows the app cannot run.
 - `compass/reference/workflow-catalog.csv` — derived from the .md, CI-checked.
 

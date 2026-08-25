@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/app/lib/supabase";
 import { encryptSecret } from "@/app/lib/crypto";
 import { ConnectorsInput, RepoRef, TeamMember } from "@/app/lib/data";
+import { canonicalProjectKey } from "@/app/lib/docstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,9 @@ export async function POST(req: Request) {
     teams_site: connectors.teams_site || null,
     graph_tenant_id: connectors.graph_tenant_id || null,
     graph_client_id: connectors.graph_client_id || null,
-    jira_project: connectors.jira_project || null,
+    // Same invariant as intake: Jira's API is case-sensitive on the project key, so a key edited
+    // here in lowercase would 404 every later call and re-introduce the bug intake now prevents.
+    jira_project: canonicalProjectKey(connectors.jira_project),
     jira_board_id: connectors.jira_board_id || null,
     updated_at: new Date().toISOString(),
   };

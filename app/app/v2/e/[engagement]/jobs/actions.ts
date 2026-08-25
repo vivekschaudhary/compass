@@ -10,7 +10,13 @@ import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
 import { startTask } from "@/app/lib/data/tasks";
 import { measureTask } from "@/app/lib/data/gates";
-import { initiatePhase, openNested, nestedWorkflowOf } from "@/app/lib/data/phases";
+import {
+  initiatePhase,
+  openNested,
+  nestedWorkflowOf,
+  remirrorPhase,
+} from "@/app/lib/data/phases";
+import { mirrorIncomplete } from "@/app/lib/data/tracker";
 
 /**
  * Check the gate, then start.
@@ -21,10 +27,13 @@ import { initiatePhase, openNested, nestedWorkflowOf } from "@/app/lib/data/phas
  * looked.
  */
 export async function startTaskAction(
-  engagement: string, role: string, taskId: string,
+  engagement: string,
+  role: string,
+  taskId: string,
 ): Promise<{ ok: boolean; error?: string; openedWorkflow?: string }> {
   const actor = await resolveActor(engagement, role);
-  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+  if (!actor)
+    return { ok: false, error: "That role does not exist on this engagement." };
 
   await measureTask(actor, taskId);
 
@@ -50,25 +59,93 @@ export async function startTaskAction(
   return { ok: true };
 }
 
-/** Start a phase — basecamp or groundwork. Every row becomes a task in one run. */
+/**
+ * Start a phase. Every row becomes a task in one run, and every task a story on the board.
+ *
+ * The board result is RETURNED. It used to be dropped here — `initiatePhase` came back carrying
+ * "could not create the epic in TEST1" and this returned `{ ok: true, tasks: 13 }`, so a phase that
+ * never reached Jira looked exactly like one that did. The work is not finished until the tracker
+ * has it, and a caller that cannot see the difference cannot say so.
+ */
 export async function initiatePhaseAction(
-  engagement: string, role: string, workflowCode: string,
-): Promise<{ ok: boolean; error?: string; tasks?: number }> {
+  engagement: string,
+  role: string,
+  workflowCode: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  tasks?: number;
+  board?: { epic: string | null; stories: number; expected: number; problems: string[]; incomplete: boolean };
+}> {
   const actor = await resolveActor(engagement, role);
-  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+  if (!actor)
+    return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await initiatePhase(actor, workflowCode);
   revalidatePath(`/v2/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, tasks: result.tasks.length };
+
+  const m = result.mirrored;
+  return {
+    ok: true,
+    tasks: result.tasks.length,
+    board: m
+      ? {
+          epic: m.epic,
+          stories: m.stories.length,
+          expected: m.expected,
+          problems: m.problems,
+          incomplete: mirrorIncomplete(m),
+        }
+      : undefined,
+  };
+}
+
+/**
+ * Try the board again for a phase that is already open.
+ *
+ * Idempotent all the way down — `mirrorPhase` reuses the keys Compass already stored, so pressing
+ * this on a fully mirrored phase creates nothing.
+ */
+export async function mirrorPhaseAction(
+  engagement: string,
+  role: string,
+  runId: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  board?: { epic: string | null; stories: number; expected: number; problems: string[]; incomplete: boolean };
+}> {
+  const actor = await resolveActor(engagement, role);
+  if (!actor)
+    return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await remirrorPhase(actor, runId);
+  revalidatePath(`/v2/e/${engagement}/jobs`);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  const m = result.mirrored;
+  return {
+    ok: true,
+    board: {
+      epic: m.epic,
+      stories: m.stories.length,
+      expected: m.expected,
+      problems: m.problems,
+      incomplete: mirrorIncomplete(m),
+    },
+  };
 }
 
 /** Re-check the gate without starting anything. */
 export async function recheckAction(
-  engagement: string, role: string, taskId: string,
+  engagement: string,
+  role: string,
+  taskId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const actor = await resolveActor(engagement, role);
-  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+  if (!actor)
+    return { ok: false, error: "That role does not exist on this engagement." };
   await measureTask(actor, taskId);
   revalidatePath(`/v2/e/${engagement}/jobs`);
   return { ok: true };

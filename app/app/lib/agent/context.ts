@@ -12,9 +12,27 @@
 
 import "server-only";
 import { resolveSpec } from "../specs";
-import { supabaseAdmin } from "../supabase";
+import { supabaseAdmin, must } from "../supabase";
 import type { Actor } from "./../data/actor";
 
+
+/**
+ * How much of an ask reaches the human at once, and how many rounds it gets.
+ *
+ * An agent told to "ask everything at once" produced thirteen questions on the first task of a real
+ * engagement. Every one was reasonable and the whole was a form to fill in — and several of the
+ * thirteen were things the answer to the first three would have settled. The conversation is
+ * already replayed on every run, so a later round is asked WITH the earlier answers in hand: the
+ * cap is what makes that machinery do something.
+ *
+ * Bounded in the other direction too. Each round is a model run of minutes plus a human waiting on
+ * it, so an unbounded interview is its own way of never producing the deliverable.
+ *
+ * Here rather than in `run.ts` because the prompt states both numbers to the agent and `run.ts`
+ * enforces them. Two copies is how a checker ends up carrying the literal it is policing.
+ */
+export const ASK_BATCH = 3;
+export const ASK_ROUNDS_MAX = 4;
 
 export type PinnedInput = {
   path: string;
@@ -244,14 +262,59 @@ async function loadRejections(taskId: string) {
   });
 }
 
+/**
+ * The agent file minus its task catalogue.
+ *
+ * `compass/agents/<role>.md` goes into the prompt whole, and it still carries `## Tasks I own` — a
+ * list of tasks the app never dispatches, because the app takes its instruction from the ROW.
+ * AGENTS.md already rules that those sections "are the initial design and are not what runs… they
+ * are to be ignored rather than followed"; nothing enforced it.
+ *
+ * On the first live run of `file-sow` the agent followed `intake-sow` from that catalogue instead of
+ * the row it was given, and asked five questions — roster, quality bar, sprint cadence, comms
+ * channel — for a row whose whole job is one document. It named `intake-sow` in its own reply.
+ *
+ * REMOVES THE SECTION, DOES NOT TRUNCATE AT IT. `## Refusal rules`, `## Anti-patterns` and
+ * `## Output summary contract` all come AFTER `## Tasks I own` in every one of the seventeen files,
+ * and they are the discipline this system runs on — the reason that same agent correctly refused to
+ * invent the SOW. Cutting the file at that heading would have deleted them: a scope fix that
+ * silently became a discipline regression.
+ *
+ * The FILE keeps its sections. It is a paste-into-any-host document per
+ * `[agent-as-surface-independent-unit]`, and re-authoring the seventeen of them is its own job. This
+ * is only about what goes into a prompt.
+ */
+export function withoutTaskCatalogue(md: string): string {
+  const lines = md.split("\n");
+  const start = lines.findIndex((l) => /^## Tasks I own\s*$/.test(l));
+  if (start === -1) return md;              // nothing to remove is not an error
+
+  // The next SIBLING heading. `^## ` cannot match `### `, so the task subsections inside are
+  // consumed rather than ending the scan at the first one.
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^## /.test(lines[i])) { end = i; break; }
+  }
+
+  return [...lines.slice(0, start), ...lines.slice(end)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");            // the seam, not a reformat of the whole file
+}
+
 /** Everything the agent needs, assembled from the record rather than from the caller. */
 export async function buildContext(actor: Actor, taskId: string): Promise<AgentContext | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
 
-  const { data: task } = await sb.from("work_task")
-    .select("id, title, subtitle, role_code, workflow_step_id")
-    .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  // `must`, not a bare destructure: null here becomes `notFound()` at the call site, so a failed
+  // read would tell someone their own running task does not exist. Only a genuinely absent row —
+  // a bad id, or another engagement's task — may return null.
+  const task = must(
+    "read task",
+    await sb.from("work_task")
+      .select("id, title, subtitle, role_code, workflow_step_id")
+      .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle(),
+  );
   if (!task) return null;
 
   const { data: role } = await sb.from("role")
@@ -269,7 +332,10 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     : null;
   // A missing agent file is reported, never substituted. Inventing a role description would
   // produce an agent that behaves plausibly and follows none of the actual discipline.
-  const agentFile: string | null = resolved?.content ?? null;
+  //
+  // Stripped HERE rather than in `resolveSpec`: the SpecEditor and every other consumer must still
+  // see the whole document. This is about what goes into a prompt.
+  const agentFile: string | null = resolved ? withoutTaskCatalogue(resolved.content) : null;
 
   let produces: string | null = null;
   let doneCriteria: string[] = [];
@@ -362,8 +428,14 @@ You have two tools and must use one of them.
 Use \`ask\` when something you need is genuinely not in what you were given and you cannot
 responsibly infer it. Deriving a plan from a contract means reading what the contract says — it
 does not mean filling in what it omits. Dates that were never agreed, people who were never named,
-and standards nobody wrote down are things to ask about, not to invent. Ask everything you need in
-one go rather than one question at a time.
+and standards nobody wrote down are things to ask about, not to invent.
+
+Ask the way a colleague would, not the way a form does. Take the few things that decide the shape of
+everything else and ask those first — the answers come back to you and you get another turn, so
+anything a later answer would settle is not for this round. Order your questions by how much each
+answer changes the rest of the work: only the first ${ASK_BATCH} reach the human, so that ordering
+is your decision about what matters, not a formality. You get at most ${ASK_ROUNDS_MAX} rounds, and
+you will be told when you are on your last.
 
 Use \`draft\` when you can produce the deliverable from what you have. Every section carries the
 document paths it was derived from. A claim you cannot trace to a source you were given does not

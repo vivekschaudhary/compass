@@ -82,9 +82,32 @@ async function credsFor(engagementId: string): Promise<JiraCreds | null> {
 export type Mirrored = {
   epic: string | null;
   stories: { taskId: string; key: string; title: string }[];
+  /** How many stories the run OWES the board — one per task. Without it "3 stories" reads as success. */
+  expected: number;
   /** Said plainly rather than thrown — the work happened whether or not the board heard about it. */
   problems: string[];
+  /**
+   * Why the board does not have everything, when it does not.
+   *
+   * The same split `MoveResult.reason` makes, for the same reason: `no-tracker` means nothing was
+   * owed and nothing is wrong, while `epic-refused` / `story-refused` mean a real board was asked
+   * and did not deliver. A caller cannot tell those apart from a `problems` string without parsing
+   * English.
+   */
+  reason?: "no-supabase" | "no-tracker" | "no-run" | "epic-refused" | "story-refused";
 };
+
+/**
+ * Does the board owe this run something it does not have?
+ *
+ * Pure, and the counterpart to `moveFailed`. An engagement with no tracker configured is NOT
+ * incomplete — it owed nothing, and reporting it as a problem would put a permanent warning on
+ * every engagement that deliberately runs without a board.
+ */
+export function mirrorIncomplete(m: Mirrored): boolean {
+  if (m.reason === "no-tracker" || m.reason === "no-supabase") return false;
+  return !m.epic || m.stories.length < m.expected;
+}
 
 /**
  * Put a phase on the board: one epic, one story per task.
@@ -94,19 +117,22 @@ export type Mirrored = {
 export async function mirrorPhase(
   engagementId: string, runId: string, actorRole: string,
 ): Promise<Mirrored> {
-  const out: Mirrored = { epic: null, stories: [], problems: [] };
+  const out: Mirrored = { epic: null, stories: [], expected: 0, problems: [] };
   const sb = supabaseAdmin();
-  if (!sb) return { ...out, problems: ["Supabase is not configured."] };
+  if (!sb) return { ...out, reason: "no-supabase", problems: ["Supabase is not configured."] };
 
   const creds = await credsFor(engagementId);
   if (!creds) {
     // Not an error. An engagement may deliberately run without a tracker, and the phase still works.
-    return { ...out, problems: ["No Jira configured for this engagement — nothing mirrored."] };
+    return {
+      ...out, reason: "no-tracker",
+      problems: ["No Jira configured for this engagement — nothing mirrored."],
+    };
   }
 
   const { data: run } = await sb.from("workflow_run")
     .select("id, ticket_key, workflow(code, label)").eq("id", runId).maybeSingle();
-  if (!run) return { ...out, problems: ["No such run."] };
+  if (!run) return { ...out, reason: "no-run", problems: ["No such run."] };
 
   const wf = Array.isArray(run.workflow) ? run.workflow[0] : run.workflow;
   const { data: eng } = await sb.from("engagement").select("name").eq("id", engagementId).maybeSingle();
@@ -122,7 +148,10 @@ export async function mirrorPhase(
       description: `Created by Compass. Every story under this epic is one row of the ${wf?.code} phase.`,
     });
     if (!created) {
-      return { ...out, problems: [`Could not create the epic in ${creds.project}. Nothing else was written.`] };
+      return {
+        ...out, reason: "epic-refused",
+        problems: [`Could not create the epic in ${creds.project}. Nothing else was written.`],
+      };
     }
     epicKey = created.key;
     await sb.from("workflow_run").update({ ticket_key: epicKey }).eq("id", runId);
@@ -137,6 +166,9 @@ export async function mirrorPhase(
     .select("id, title, role_code, state, ticket_key, workflow_step(ord)")
     .eq("workflow_run_id", runId);
   const tasks = sortByStep(rows ?? []);
+  // What the board is owed, recorded before any of it is attempted. `stories.length` alone cannot
+  // say whether eleven is all of them or two short.
+  out.expected = tasks.length;
 
   for (const t of tasks ?? []) {
     if (t.ticket_key) { out.stories.push({ taskId: t.id, key: t.ticket_key, title: t.title }); continue; }
@@ -148,7 +180,11 @@ export async function mirrorPhase(
       // convention, and the reason DELIVERY_ROLES exists.
       labels: [t.role_code],
     });
-    if (!created) { out.problems.push(`Could not create a story for "${t.title}".`); continue; }
+    if (!created) {
+      out.problems.push(`Could not create a story for "${t.title}".`);
+      out.reason = "story-refused";
+      continue;
+    }
 
     // Jira first, then the local row: a key is stored only once it exists.
     await sb.from("work_task").update({ ticket_key: created.key }).eq("id", t.id);
@@ -162,7 +198,11 @@ export async function mirrorPhase(
   await emit({
     engagementId, subjectType: "workflow_run", subjectId: runId,
     verb: "tracker.mirrored", actorKind: "system", actorRoleCode: actorRole,
-    payload: { epic: epicKey, stories: out.stories.length, project: creds.project, problems: out.problems },
+    payload: {
+      epic: epicKey, stories: out.stories.length, expected: out.expected,
+      project: creds.project, problems: out.problems,
+      incomplete: mirrorIncomplete(out), reason: out.reason ?? null,
+    },
   });
 
   return out;

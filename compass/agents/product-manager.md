@@ -49,8 +49,8 @@ Runs as Step 3 of `/create-product-brief`, AFTER the Researcher's page is human-
 
 ### `draft-epics` — the engagement's epics, from the approved brief
 
-Runs as row 2 of `groundwork`, AFTER `create-product-brief` is approved. Reads the brief and the
-SOW; produces `02-scope/deliverables`.
+Runs as row 6 of `sprint-0`, after the product brief and the timeline. Reads the brief and the
+timeline; produces `02-scope/deliverables`.
 
 **Why it is not derived from the SOW alone.** An SOW commits to outcomes, milestones and money. It
 does not say what to build. Epics written from it are invented scope that reads plausibly and

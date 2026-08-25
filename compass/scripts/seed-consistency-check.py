@@ -41,7 +41,7 @@ STEP = re.compile(r"^#{2,4}\s*Step\s+(\d+)\.\s*(.+?)\s*$", re.M)
 AGENT_TASK = re.compile(r"`([a-z0-9-]+)\.([a-z0-9-]+)`")
 
 
-# The dispatch-graph TABLE — the format basecamp.md and groundwork.md use, and the one everything
+# The dispatch-graph TABLE — the format the four phase files use, and the one everything
 # should move to. One row per step:
 #
 #   | # | task | dispatch | owner | reads | produces | depends-on |
@@ -124,6 +124,20 @@ def main() -> int:
     graphs = {p.stem: p for p in WORKFLOWS.glob("*.md")}
     steps_seed = seed_steps()
 
+    # A PARKED workflow is not drift. `enabled=false` means the app will not open a run for it, so
+    # its seed carries no steps by design and holding its dispatch graph to that emptiness reports a
+    # disagreement between a document and something that does not execute.
+    #
+    # `pre-sprint-0` is the case this exists for: its rows moved into `sprint-0`, the phase was
+    # disabled rather than deleted because the BRD still describes it, and the check then demanded
+    # its .md shrink to zero steps to match a seed nothing runs.
+    #
+    # Deliberately narrow. Parked workflows are still listed below, so this hides nothing — it
+    # stops a parked phase FAILING the build. Re-enabling one puts it straight back under the
+    # comparison, which is when the graph has to be true again.
+    parked = {code for code, r in seeded.items()
+              if (r.get("enabled") or "").strip().lower() != "true"}
+
     problems: list[str] = []
 
     for code in sorted(set(seeded) - set(graphs)):
@@ -136,7 +150,7 @@ def main() -> int:
             f"unseeded       {code}: compass/workflows/{code}.md declares it, but no seed row — "
             f"the app cannot run it")
 
-    for code in sorted(set(seeded) & set(graphs)):
+    for code in sorted((set(seeded) & set(graphs)) - parked):
         g = graph_steps(graphs[code])
         s = steps_seed.get(code, [])
         if not g:
@@ -200,6 +214,16 @@ def main() -> int:
               f"compass/seed/known-drift.txt:")
         for r in resolved:
             print(f"    {r}")
+
+    # Said out loud, every run. A skipped comparison that nothing reports is how a check quietly
+    # stops checking — the parked list is exactly where drift would hide if a phase were disabled
+    # to silence it rather than because it was parked.
+    if parked:
+        print(f"\nPARKED — {len(parked)} workflow(s) are enabled=false in seed/workflows.csv and "
+              f"were NOT compared against their dispatch graph. Re-enabling one re-enters it:")
+        for p in sorted(parked):
+            has_graph = "graph present" if p in graphs else "no graph"
+            print(f"    {p} ({len(steps_seed.get(p, []))} seed step(s), {has_graph})")
 
     if not new_drift:
         print(f"\nNo NEW drift. {len(problems)} known discrepancy(ies) remain as recorded debt.")

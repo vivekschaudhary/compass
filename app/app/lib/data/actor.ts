@@ -9,7 +9,7 @@
 // role sees by re-importing a CSV, and no query changes.
 
 import "server-only";
-import { supabaseAdmin } from "../supabase";
+import { supabaseAdmin, must } from "../supabase";
 
 export type Scope = "mine" | "workstream" | "everyone";
 
@@ -35,24 +35,42 @@ export type Actor = {
  * reads the session and looks the role up from the user's grants instead — and no call site
  * changes, because every one of them already takes an Actor.
  */
-export async function resolveActor(engagementId: string, roleCode: string, orgCode = "default"): Promise<Actor | null> {
+export async function resolveActor(
+  engagementId: string,
+  roleCode: string,
+  orgCode = "default",
+): Promise<Actor | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
 
-  const { data: org } = await sb.from("org").select("id").eq("code", orgCode).maybeSingle();
+  const org = must(
+    "read org",
+    await sb.from("org").select("id").eq("code", orgCode).maybeSingle(),
+  );
   if (!org) return null;
 
   // Engagement override first, org default second — the same precedence reads use everywhere.
-  const { data: roles } = await sb.from("role")
-    .select("code, label, tier, scope, workstream_code, agent, capabilities, engagement_id")
-    .eq("org_id", org.id).eq("code", roleCode)
-    .or(`engagement_id.eq.${engagementId},engagement_id.is.null`);
+  const roles = must(
+    "read role",
+    await sb
+      .from("role")
+      .select(
+        "code, label, tier, scope, workstream_code, agent, capabilities, engagement_id",
+      )
+      .eq("org_id", org.id)
+      .eq("code", roleCode)
+      .or(`engagement_id.eq.${engagementId},engagement_id.is.null`),
+  );
 
   const role = (roles ?? []).find((r) => r.engagement_id) ?? (roles ?? [])[0];
   if (!role) return null;
 
-  const { data: member } = await sb.from("member")
-    .select("name").eq("engagement_id", engagementId).eq("role", roleCode).maybeSingle();
+  const { data: member } = await sb
+    .from("member")
+    .select("name")
+    .eq("engagement_id", engagementId)
+    .eq("role", roleCode)
+    .maybeSingle();
 
   return {
     orgId: org.id,
@@ -69,24 +87,43 @@ export async function resolveActor(engagementId: string, roleCode: string, orgCo
 }
 
 /** Every role on this engagement that has a row — what the "Working as" switcher offers. */
-export async function rolesOnEngagement(engagementId: string, orgCode = "default") {
+export async function rolesOnEngagement(
+  engagementId: string,
+  orgCode = "default",
+) {
   const sb = supabaseAdmin();
   if (!sb) return [];
 
-  const { data: org } = await sb.from("org").select("id").eq("code", orgCode).maybeSingle();
+  const { data: org } = await sb
+    .from("org")
+    .select("id")
+    .eq("code", orgCode)
+    .maybeSingle();
   if (!org) return [];
 
-  const { data: roles } = await sb.from("role")
-    .select("code, label, tier").eq("org_id", org.id).order("code");
-  const { data: members } = await sb.from("member")
-    .select("name, role").eq("engagement_id", engagementId);
+  const { data: roles } = await sb
+    .from("role")
+    .select("code, label, tier")
+    .eq("org_id", org.id)
+    .eq("enabled", true)
+    .order("code");
+  const { data: members } = await sb
+    .from("member")
+    .select("name, role")
+    .eq("engagement_id", engagementId);
 
-  const holderOf = new Map((members ?? []).map((m) => [m.role, m.name as string | null]));
+  const holderOf = new Map(
+    (members ?? []).map((m) => [m.role, m.name as string | null]),
+  );
 
   // Ordered by tier, not alphabetically. Alphabetical put `architect` first, which meant a visit
   // with no ?role= landed on a practitioner scoped to a workstream with no work — an empty queue
   // that looked like a bug. Oversight roles see the engagement, so they are the sane landing.
-  const TIER_ORDER: Record<string, number> = { oversight: 0, practitioner: 1, platform: 2 };
+  const TIER_ORDER: Record<string, number> = {
+    oversight: 0,
+    practitioner: 1,
+    platform: 2,
+  };
 
   return (roles ?? [])
     .map((r) => ({
@@ -96,8 +133,11 @@ export async function rolesOnEngagement(engagementId: string, orgCode = "default
       holder: holderOf.get(r.code) ?? null,
       initials: initialsOf(holderOf.get(r.code) ?? r.label),
     }))
-    .sort((a, b) =>
-      (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9) || a.label.localeCompare(b.label));
+    .sort(
+      (a, b) =>
+        (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9) ||
+        a.label.localeCompare(b.label),
+    );
 }
 
 function initialsOf(name: string | null): string {

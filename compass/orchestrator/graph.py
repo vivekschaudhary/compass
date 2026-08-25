@@ -134,7 +134,7 @@ def load_workflow(workflow_file: Path) -> list:
         # Workflow may not use the heading; fall back to full text
         graph_text = text
 
-    # The TABLE form first. `basecamp.md` and `groundwork.md` express a phase as one row per unit
+    # The TABLE form first. The four phase files express a phase as one row per unit
     # of work — the format the whole catalogue is moving to — and a heading-only parser reads them
     # as "declares a graph, yielded no steps", which is how a workflow with three real steps looked
     # empty to the framework while the app ran it fine. One parser has to understand both, or the

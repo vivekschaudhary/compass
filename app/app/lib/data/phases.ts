@@ -7,9 +7,9 @@
 //
 // Two cases, and they are the whole surface:
 //
-//   initiatePhase   the delivery manager starts basecamp or groundwork. Every row becomes a task
-//                   in ONE run, up front, because a phase's rows are known when it begins and the
-//                   point of a kickoff backlog is that nothing in it is a surprise.
+//   initiatePhase   the delivery manager starts a phase — setup, sprint-0, sprint. Every row
+//                   becomes a task in ONE run, up front, because a phase's rows are known when it
+//                   begins and the point of a kickoff backlog is that nothing in it is a surprise.
 //
 //   openNested      a row whose dispatch is `workflow: <code>` opens a CHILD run when someone
 //                   starts it. The child closes its parent task when it closes (migration 034).
@@ -21,11 +21,21 @@ import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { orgIdFor, emit, emitRefusal } from "./events";
 import { sortByStep } from "./steps";
-import { measureTask, storedStatusFor, evaluate, type CriterionRow } from "./gates";
+import {
+  measureTask,
+  storedStatusFor,
+  evaluate,
+  type CriterionRow,
+} from "./gates";
 import { mirrorPhase, type Mirrored } from "./tracker";
 
 export type Initiated =
-  | { ok: true; runId: string; tasks: { id: string; title: string; role: string }[]; mirrored?: Mirrored }
+  | {
+      ok: true;
+      runId: string;
+      tasks: { id: string; title: string; role: string }[];
+      mirrored?: Mirrored;
+    }
   | { ok: false; error: string };
 
 /**
@@ -35,21 +45,34 @@ export type Initiated =
  * ready" with no reason is the thing this product exists to replace. Idempotent: a phase already
  * open on this engagement is returned rather than duplicated.
  */
-export async function initiatePhase(actor: Actor, workflowCode: string): Promise<Initiated> {
+export async function initiatePhase(
+  actor: Actor,
+  workflowCode: string,
+): Promise<Initiated> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
   const orgId = await orgIdFor(actor.engagementId);
-  const { data: wf } = await sb.from("workflow")
-    .select("id, label").eq("org_id", orgId).eq("code", workflowCode).eq("enabled", true).maybeSingle();
-  if (!wf) return { ok: false, error: `No workflow '${workflowCode}' in this organisation.` };
+  const { data: wf } = await sb
+    .from("workflow")
+    .select("id, label")
+    .eq("org_id", orgId)
+    .eq("code", workflowCode)
+    .eq("enabled", true)
+    .maybeSingle();
+  if (!wf)
+    return {
+      ok: false,
+      error: `No workflow '${workflowCode}' in this organisation.`,
+    };
 
   // The entry gate, BEFORE anything is created.
   //
-  // `requires:` in the phase file is not documentation. Groundwork demands an approved backlog and
-  // an approved roster, and the first version of this function initiated it on an engagement that
-  // had neither — five tasks materialised against foundations that did not exist. A phase that
-  // starts without its gate is a false green with a queue attached.
+  // `requires:` in the phase file is not documentation. The phase that then filled this slot
+  // demanded an approved backlog and an approved roster, and the first version of this function
+  // initiated it on an engagement that had neither — five tasks materialised against foundations
+  // that did not exist. A phase that starts without its gate is a false green with a queue
+  // attached.
   const blocked = await unmetEntryGate(actor, wf.id);
   if (blocked.length) {
     // A phase that could not start is the most useful record this product keeps: it is where the
@@ -57,9 +80,11 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
     // returning is the only place it can be written.
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "workflow", subjectId: wf.id,
+      subjectType: "workflow",
+      subjectId: wf.id,
       verb: "phase.refused",
-      actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+      actorRoleCode: actor.roleCode,
+      actorUserId: actor.holder ?? null,
       reason: blocked.join(" · "),
       payload: { workflow: workflowCode, unmet: blocked },
     });
@@ -69,24 +94,45 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
     };
   }
 
-  const { data: open } = await sb.from("workflow_run")
-    .select("id").eq("engagement_id", actor.engagementId).eq("workflow_id", wf.id)
-    .is("parent_task_id", null).maybeSingle();
+  const { data: open } = await sb
+    .from("workflow_run")
+    .select("id")
+    .eq("engagement_id", actor.engagementId)
+    .eq("workflow_id", wf.id)
+    .is("parent_task_id", null)
+    .maybeSingle();
   if (open) {
     const tasks = await tasksOfRun(open.id);
-    return { ok: true, runId: open.id, tasks };
+    // Mirror on the way out, even though the run already exists — ESPECIALLY then.
+    //
+    // `tracker.ts` promises that a phase which could not reach Jira keeps its rows locally and gets
+    // its tickets "on the next attempt". This early return was where that promise died: every
+    // subsequent initiate short-circuited here, so a phase opened during an outage could never be
+    // put on the board at all. `mirrorPhase` is idempotent — a run that already has its epic and
+    // stories re-reads their keys and writes nothing.
+    const mirrored = await mirrorPhase(
+      actor.engagementId,
+      open.id,
+      actor.roleCode,
+    );
+    return { ok: true, runId: open.id, tasks, mirrored };
   }
 
   const { data: runId, error } = await sb.rpc("open_phase_run", {
-    p_org_id: orgId, p_engagement_id: actor.engagementId, p_workflow_code: workflowCode,
-    p_actor: actor.holder ?? actor.roleCode, p_actor_role: actor.roleCode,
+    p_org_id: orgId,
+    p_engagement_id: actor.engagementId,
+    p_workflow_code: workflowCode,
+    p_actor: actor.holder ?? actor.roleCode,
+    p_actor_role: actor.roleCode,
   });
   if (error) {
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "workflow", subjectId: wf.id,
+      subjectType: "workflow",
+      subjectId: wf.id,
       verb: "phase.refused",
-      actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+      actorRoleCode: actor.roleCode,
+      actorUserId: actor.holder ?? null,
       reason: error.message,
       payload: { workflow: workflowCode, at: "open" },
     });
@@ -104,10 +150,12 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
   // compare them against.
   await emit({
     engagementId: actor.engagementId,
-    subjectType: "workflow_run", subjectId: runId as string,
+    subjectType: "workflow_run",
+    subjectId: runId as string,
     verb: "phase.initiated",
     actorKind: "human",
-    actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+    actorRoleCode: actor.roleCode,
+    actorUserId: actor.holder ?? null,
     payload: { workflow: workflowCode, rows: tasks.length },
   });
 
@@ -115,16 +163,20 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
     const statuses = await measureTask(actor, t.id);
 
     // A machine row dispatches nothing, so there is nobody to start it and nothing to approve —
-    // its evidence is the probe. basecamp.md says "Connect systems of record" closes on creation,
-    // and it did not: it sat idle offering "Start with agent", which would have handed the delivery
-    // manager agent a task slug its own file does not define.
+    // its evidence is the probe. The connector-check row — `setup.md`'s "Validate the connections"
+    // — is meant to close on creation, and it did not: it sat idle offering "Start with agent",
+    // which would have handed the delivery manager agent a task slug its own file does not define.
     //
     // close_task still enforces the gate. If a connector stops answering, the criteria are
     // unsatisfied, the close is refused, and the row stays open — which is the point of it being a
     // row rather than an assumption.
     const done = statuses.filter((s) => s.kind === "done");
     const machine = await isMachineStep(t.id);
-    if (machine && done.length > 0 && done.every((s) => s.verdict.state === "satisfied")) {
+    if (
+      machine &&
+      done.length > 0 &&
+      done.every((s) => s.verdict.state === "satisfied")
+    ) {
       const who = actor.holder ?? actor.roleCode;
       // START, then close. close_task refuses an idle task — "never started, there is nothing to
       // approve" — and a machine row is never started because nothing dispatches it, so the close
@@ -132,29 +184,37 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
       // the system did pick it up, ran the checks, and finished. Both routines still enforce their
       // gates, so a connector that stops answering leaves the row open rather than closing it.
       const started = await sb.rpc("start_task", {
-        p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode,
+        p_task_id: t.id,
+        p_actor: who,
+        p_actor_role: actor.roleCode,
       });
       if (started.error) {
         // This one used to fail in silence — the `if (!started.error)` below simply skipped the
         // close and the row sat idle with no explanation anywhere.
         await emitRefusal({
           engagementId: actor.engagementId,
-          subjectType: "task", subjectId: t.id,
+          subjectType: "task",
+          subjectId: t.id,
           verb: "task.start_refused",
-          actorRoleCode: actor.roleCode, actorUserId: who,
+          actorRoleCode: actor.roleCode,
+          actorUserId: who,
           reason: started.error.message,
           payload: { title: t.title, at: "phase-open machine row" },
         });
       } else {
         const closed = await sb.rpc("close_task", {
-          p_task_id: t.id, p_actor: who, p_actor_role: actor.roleCode,
+          p_task_id: t.id,
+          p_actor: who,
+          p_actor_role: actor.roleCode,
         });
         if (closed.error) {
           await emitRefusal({
             engagementId: actor.engagementId,
-            subjectType: "task", subjectId: t.id,
+            subjectType: "task",
+            subjectId: t.id,
             verb: "task.close_refused",
-            actorRoleCode: actor.roleCode, actorUserId: who,
+            actorRoleCode: actor.roleCode,
+            actorUserId: who,
             reason: closed.error.message,
             payload: { title: t.title, at: "phase-open machine row" },
           });
@@ -170,22 +230,62 @@ export async function initiatePhase(actor: Actor, workflowCode: string): Promise
   //
   // Machine rows above closed with no ticket yet, which is why they close locally without the
   // board: mirrorPhase creates their story and moves it to match, a few lines from here.
-  const mirrored = await mirrorPhase(actor.engagementId, runId as string, actor.roleCode);
+  const mirrored = await mirrorPhase(
+    actor.engagementId,
+    runId as string,
+    actor.roleCode,
+  );
 
   return { ok: true, runId: runId as string, tasks, mirrored };
+}
+
+/**
+ * Put an already-open phase on the board.
+ *
+ * The repair path, and the only thing that can fix a run whose tickets were never created. Separate
+ * from `initiatePhase` because the caller is someone looking at an open phase, not someone starting
+ * one — and because a button whose whole job is "try the board again" should not be able to open a
+ * phase as a side effect.
+ *
+ * The scope check is the point of this living here rather than in the action: `mirrorPhase` takes a
+ * run id and would happily mirror another engagement's run.
+ */
+export async function remirrorPhase(
+  actor: Actor,
+  runId: string,
+): Promise<{ ok: true; mirrored: Mirrored } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const { data: run } = await sb
+    .from("workflow_run")
+    .select("id")
+    .eq("id", runId)
+    .eq("engagement_id", actor.engagementId)
+    .maybeSingle();
+  if (!run)
+    return { ok: false, error: "That phase is not in your engagement." };
+
+  const mirrored = await mirrorPhase(actor.engagementId, runId, actor.roleCode);
+  return { ok: true, mirrored };
 }
 
 async function tasksOfRun(runId: string) {
   const sb = supabaseAdmin();
   if (!sb) return [];
-    // Ordered by the STEP's ord, not created_at. A phase creates every task in one transaction, so
-    // their timestamps are identical and created_at ordering is arbitrary — it put step 2 before
-    // step 1 on the first real run, which numbered the epic's stories backwards and would show a
-    // queue in the wrong dependency order.
-  const { data } = await sb.from("work_task")
+  // Ordered by the STEP's ord, not created_at. A phase creates every task in one transaction, so
+  // their timestamps are identical and created_at ordering is arbitrary — it put step 2 before
+  // step 1 on the first real run, which numbered the epic's stories backwards and would show a
+  // queue in the wrong dependency order.
+  const { data } = await sb
+    .from("work_task")
     .select("id, title, role_code, workflow_step_id, workflow_step(ord)")
     .eq("workflow_run_id", runId);
-  return sortByStep(data ?? []).map((t) => ({ id: t.id, title: t.title, role: t.role_code }));
+  return sortByStep(data ?? []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    role: t.role_code,
+  }));
 }
 
 /**
@@ -195,17 +295,25 @@ async function tasksOfRun(runId: string) {
  * half: someone starting the row.
  */
 export async function openNested(
-  actor: Actor, taskId: string,
+  actor: Actor,
+  taskId: string,
 ): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
-  const { data: task } = await sb.from("work_task")
-    .select("id, workflow_step_id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
-  if (!task) return { ok: false, error: "That task is not in your engagement." };
+  const { data: task } = await sb
+    .from("work_task")
+    .select("id, workflow_step_id")
+    .eq("id", taskId)
+    .eq("engagement_id", actor.engagementId)
+    .maybeSingle();
+  if (!task)
+    return { ok: false, error: "That task is not in your engagement." };
 
   const { data: runId, error } = await sb.rpc("open_nested_run", {
-    p_task_id: taskId, p_actor: actor.holder ?? actor.roleCode, p_actor_role: actor.roleCode,
+    p_task_id: taskId,
+    p_actor: actor.holder ?? actor.roleCode,
+    p_actor_role: actor.roleCode,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true, runId: runId as string };
@@ -215,11 +323,17 @@ export async function openNested(
 async function isMachineStep(taskId: string): Promise<boolean> {
   const sb = supabaseAdmin();
   if (!sb) return false;
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id").eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select("workflow_step_id")
+    .eq("id", taskId)
+    .maybeSingle();
   if (!task?.workflow_step_id) return false;
-  const { data: step } = await sb.from("workflow_step")
-    .select("kind").eq("id", task.workflow_step_id).maybeSingle();
+  const { data: step } = await sb
+    .from("workflow_step")
+    .select("kind")
+    .eq("id", task.workflow_step_id)
+    .maybeSingle();
   return step?.kind === "machine";
 }
 
@@ -227,11 +341,17 @@ async function isMachineStep(taskId: string): Promise<boolean> {
 export async function nestedWorkflowOf(taskId: string): Promise<string | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id").eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select("workflow_step_id")
+    .eq("id", taskId)
+    .maybeSingle();
   if (!task?.workflow_step_id) return null;
-  const { data: step } = await sb.from("workflow_step")
-    .select("nests_workflow_code").eq("id", task.workflow_step_id).maybeSingle();
+  const { data: step } = await sb
+    .from("workflow_step")
+    .select("nests_workflow_code")
+    .eq("id", task.workflow_step_id)
+    .maybeSingle();
   return step?.nests_workflow_code ?? null;
 }
 
@@ -244,31 +364,63 @@ export async function nestedWorkflowOf(taskId: string): Promise<string | null> {
  * button as ready that is not.
  */
 export async function phasesFor(actor: Actor): Promise<
-  { code: string; label: string; state: "open" | "closed" | "available"; runId: string | null }[]
+  {
+    code: string;
+    label: string;
+    state: "open" | "closed" | "available";
+    runId: string | null;
+    /**
+     * Is this phase fully on the board?
+     *
+     * Read without asking Jira: the keys Compass stores ARE the record of what was created, so a
+     * run missing its epic key, or holding a task with no story key, is a phase the board does not
+     * have. Null when the phase has not started — nothing is owed yet.
+     */
+    onBoard: boolean | null;
+  }[]
 > {
   const sb = supabaseAdmin();
   if (!sb) return [];
   const orgId = await orgIdFor(actor.engagementId);
 
-  const { data: wfs } = await sb.from("workflow")
-    .select("id, code, label").eq("org_id", orgId).in("code", ["basecamp", "groundwork"]);
-  const { data: runs } = await sb.from("workflow_run")
-    .select("id, workflow_id, state").eq("engagement_id", actor.engagementId).is("parent_task_id", null);
+  const { data: wfs } = await sb
+    .from("workflow")
+    .select("id, code, label")
+    .eq("org_id", orgId)
+    .eq("owner_role_code", actor.roleCode)
+    .eq("enabled", true);
+  const { data: runs } = await sb
+    .from("workflow_run")
+    .select("id, workflow_id, state, ticket_key")
+    .eq("engagement_id", actor.engagementId)
+    .is("parent_task_id", null);
 
   const runOf = new Map((runs ?? []).map((r) => [r.workflow_id as string, r]));
-  // Declaration order, not alphabetical: groundwork follows basecamp and showing them the other way
-  // round would misrepresent the sequence.
-  const order = ["basecamp", "groundwork"];
-  return (wfs ?? [])
-    .sort((a, b) => order.indexOf(a.code) - order.indexOf(b.code))
-    .map((w) => {
-      const run = runOf.get(w.id);
-      return {
-        code: w.code, label: w.label,
-        state: run ? (run.state === "closed" ? "closed" as const : "open" as const) : "available" as const,
-        runId: run?.id ?? null,
-      };
-    });
+
+  // One query for every run's ticketless tasks rather than one per phase.
+  const { data: unticketed } = await sb
+    .from("work_task")
+    .select("workflow_run_id")
+    .eq("engagement_id", actor.engagementId)
+    .is("ticket_key", null);
+  const missing = new Set(
+    (unticketed ?? []).map((t) => t.workflow_run_id as string),
+  );
+
+  return (wfs ?? []).map((w) => {
+    const run = runOf.get(w.id);
+    return {
+      code: w.code,
+      label: w.label,
+      state: run
+        ? run.state === "closed"
+          ? ("closed" as const)
+          : ("open" as const)
+        : ("available" as const),
+      runId: run?.id ?? null,
+      onBoard: run ? Boolean(run.ticket_key) && !missing.has(run.id) : null,
+    };
+  });
 }
 
 export { storedStatusFor };
@@ -280,31 +432,50 @@ export { storedStatusFor };
  * too — with a different sentence. "Could not check" must never open a gate, and it must never be
  * reported as though it failed either.
  */
-async function unmetEntryGate(actor: Actor, workflowId: string): Promise<string[]> {
+async function unmetEntryGate(
+  actor: Actor,
+  workflowId: string,
+): Promise<string[]> {
   const sb = supabaseAdmin();
   if (!sb) return ["Supabase is not configured."];
 
-  const { data: ver } = await sb.from("workflow_version")
-    .select("id").eq("workflow_id", workflowId).eq("status", "published").maybeSingle();
+  const { data: ver } = await sb
+    .from("workflow_version")
+    .select("id")
+    .eq("workflow_id", workflowId)
+    .eq("status", "published")
+    .maybeSingle();
   if (!ver) return ["That workflow has no published version."];
 
-  const { data: rows } = await sb.from("criterion")
-    .select("id, kind, step_ord, statement, subject_kind, subject_ref, operator, value")
-    .eq("workflow_version_id", ver.id).eq("kind", "ready").is("step_ord", null);
+  const { data: rows } = await sb
+    .from("criterion")
+    .select(
+      "id, kind, step_ord, statement, subject_kind, subject_ref, operator, value",
+    )
+    .eq("workflow_version_id", ver.id)
+    .eq("kind", "ready")
+    .is("step_ord", null);
 
   const out: string[] = [];
   for (const r of rows ?? []) {
     const c: CriterionRow = {
-      id: r.id, kind: "ready", stepOrd: null, statement: r.statement ?? "",
-      subjectKind: r.subject_kind, subjectRef: r.subject_ref,
-      operator: r.operator, value: r.value,
+      id: r.id,
+      kind: "ready",
+      stepOrd: null,
+      statement: r.statement ?? "",
+      subjectKind: r.subject_kind,
+      subjectRef: r.subject_ref,
+      operator: r.operator,
+      value: r.value,
     };
     const v = await evaluate(actor, c, null);
     if (v.state === "satisfied") continue;
     const label = c.statement || `${c.subjectKind} ${c.subjectRef}`;
-    out.push(v.state === "unmeasurable"
-      ? `${label} — could not be checked: ${"why" in v ? v.why : "no reason recorded"}`
-      : `${label} — not satisfied`);
+    out.push(
+      v.state === "unmeasurable"
+        ? `${label} — could not be checked: ${"why" in v ? v.why : "no reason recorded"}`
+        : `${label} — not satisfied`,
+    );
   }
   return out;
 }

@@ -1,7 +1,7 @@
 code,label,workstream,phase,owner_role,trigger,enabled
 build,Workflow: /build,Engineering,,engineer,,true
 create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,true
-create-brief,Workflow: /create-brief,Product,,researcher,,true
+create-brief,Workflow: /create-brief,Product,,researcher,,false
 create-product-brief,Workflow: /create-product-brief,Product,,researcher,,true
 create-story,Workflow: /create-story,Product,,product-manager,,true
 fix,Workflow: /fix,Engineering,,engineer,,true
@@ -9,7 +9,7 @@ ops,Workflow: /ops,Engineering,,enterprise-architect,,true
 setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,true
 tech-design,Workflow: /tech-design,Engineering,,architect,,true
 triage,Workflow: /triage,Support,,support,,true
-setup,Setup engagement,Delivery,Setup,delivery-manager,,true
-pre-sprint-0,Pre-sprint 0,Delivery,Pre-sprint 0,delivery-manager,,true
+setup,Setup engagement,Delivery,Setup,delivery-manager,,false
+pre-sprint-0,Pre-sprint 0,Delivery,Pre-sprint 0,delivery-manager,,false
 sprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true
 sprint,Sprint,Delivery,Sprint,delivery-manager,,true

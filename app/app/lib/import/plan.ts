@@ -33,7 +33,22 @@ export type WorkflowRow = {
 };
 export type StepRow = {
   workflow: string; ord: number; kind: string; role: string; task: string;
-  produces: string; reads: string[]; conditional: string;
+  produces: string;
+  /**
+   * What this step reads — DERIVED, not authored, for anything produced inside the same workflow.
+   *
+   * `reads` and `depends_on` were two hand-written statements of one fact, and they drifted: eight
+   * of sprint-0's thirteen rows read a document whose producer was not upstream of them, so the
+   * foundation architecture could start with no product brief and kickoff with no delivery plan.
+   * Nothing was wrong with either column on its own; keeping them in agreement was the job nobody
+   * could do reliably.
+   *
+   * So depending on a row now MEANS consuming what it produces. `deriveReads` fills this in from
+   * `dependsOn`, and the CSV's `reads` column carries only what no step in the workflow produces —
+   * a document from another workflow, or one a human supplied. Two of twenty-one reads across the
+   * whole seed are of that kind.
+   */
+  reads: string[]; conditional: string;
   /** `kind: workflow` only — the workflow this row nests. The row is done when that run closes. */
   nests: string;
   /** What a person calls this row. The queue showed `propose-kickoff-backlog` without it. */
@@ -133,6 +148,42 @@ function readSteps(csv: string): StepRow[] {
   }));
 }
 
+/**
+ * Fill in `reads` from `dependsOn`.
+ *
+ * DIRECT dependencies only, deliberately. The transitive closure would hand kickoff every document
+ * the phase ever produced, which is not what "reads" means and would bury the two inputs that
+ * matter. If a row needs the SOW as well as the brief, it declares both — and then the edge and
+ * the input are the same statement, which is the whole point.
+ *
+ * The authored `reads` survives alongside, holding only paths no step here produces. Those are
+ * real: `sprint` reads the delivery plan and the deliverables from `sprint-0`, and no dependency
+ * inside `sprint` could ever supply them.
+ *
+ * Order is dependency order, then the external ones, so a prompt's inputs read the way the graph
+ * runs rather than the way the CSV happened to be typed.
+ */
+export function deriveReads(steps: StepRow[]): StepRow[] {
+  const producerOf = new Map<string, Map<string, string>>();   // workflow → task → produces
+  for (const s of steps) {
+    if (!s.produces) continue;
+    const m = producerOf.get(s.workflow) ?? new Map();
+    m.set(s.task, s.produces);
+    producerOf.set(s.workflow, m);
+  }
+
+  return steps.map((s) => {
+    const mine = producerOf.get(s.workflow) ?? new Map<string, string>();
+    const produced = new Set(mine.values());
+    const fromDeps = s.dependsOn.map((d) => mine.get(d)).filter((p): p is string => Boolean(p));
+    // Anything the author listed that no step here produces — the genuinely external input. A
+    // listed path that IS produced here is not silently dropped; `problems` rejects it, because
+    // it means the author stated an edge in the column that no longer carries one.
+    const external = s.reads.filter((r) => !produced.has(r));
+    return { ...s, reads: [...new Set([...fromDeps, ...external])] };
+  });
+}
+
 function readCriteria(csv: string): CriterionRow[] {
   return parseRecords(csv).map((r) => ({
     workflow: r.workflow, stepOrd: r.ord === "" ? null : num(r.ord), kind: r.kind,
@@ -151,7 +202,10 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   const workstreams = readWorkstreams(bundle.workstreams ?? "");
   const roles = readRoles(bundle.roles ?? "");
   const workflows = readWorkflows(bundle.workflows ?? "");
-  const steps = readSteps(bundle.steps ?? "");
+  // Authored first, then derived. The checks below run against the AUTHORED rows — a problem must
+  // name what someone typed, not what the importer worked out from it.
+  const authored = readSteps(bundle.steps ?? "");
+  const steps = deriveReads(authored);
   const criteria = readCriteria(bundle.criteria ?? "");
 
   // Codes available after this import: what exists already, plus what the bundle declares.
@@ -248,6 +302,88 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
       add("workflow-steps.csv", null, `Workflow '${w.code}' has two steps numbered ${o}.`, "Step numbers order the graph and must be unique."));
   });
 
+  // The dependency graph, checked HERE and not only at COMMIT.
+  //
+  // `workflow_step_depends_backward` already refuses both of these, and it is the real guarantee —
+  // it fires on every write, including ones that never came through this planner. But it surfaces
+  // as a failed transaction with no file and no row, and the promise of this importer is that a
+  // refusal names the line and the one next move. Both checks are stated twice on purpose.
+  //
+  // A dangling slug is the dangerous one: `start_task` resolves dependencies by joining on them,
+  // so a slug matching no row yields no rows, `v_waiting` comes back null, and the gate opens. A
+  // dependency on a step that does not exist reads exactly like a dependency that is satisfied.
+  authored.forEach((s, i) => {
+    const siblings = authored.filter((x) => x.workflow === s.workflow);
+    const ordOf = new Map(siblings.map((x) => [x.task, x.ord]));
+    s.dependsOn.forEach((d) => {
+      const at = ordOf.get(d);
+      if (at === undefined)
+        add("workflow-steps.csv", i + 2,
+          `Step ${s.workflow}/${s.ord} depends on '${d}', which is not a row in that workflow.`,
+          "Correct the slug, or add the row. A dependency naming nothing is not refused at run time — it is silently satisfied, and the gate opens.");
+      else if (at >= s.ord)
+        add("workflow-steps.csv", i + 2,
+          `Step ${s.workflow}/${s.ord} depends on '${d}' at ord ${at}, which is not above it.`,
+          "Dependencies point backwards, which is what makes a cycle impossible to write. Renumber the rows so the producer comes first.");
+    });
+  });
+
+  // A slug that names two rows.
+  //
+  // `depends_on` addresses rows BY SLUG, so a repeated slug makes "the row this depends on" a
+  // question with two answers — and the trigger's lookup takes whichever the planner happens to
+  // return. Not policed unconditionally, because repetition is currently harmless and common:
+  // four workflows have two or three `approve` rows, none produces anything, and nothing points at
+  // them. Flagged only where it decides something — a slug someone depends on, or duplicates that
+  // produce different documents.
+  workflows.forEach((w) => {
+    const here = authored.filter((s) => s.workflow === w.code);
+    const dependedOn = new Set(here.flatMap((s) => s.dependsOn));
+    const byTask = new Map<string, StepRow[]>();
+    here.forEach((s) => byTask.set(s.task, [...(byTask.get(s.task) ?? []), s]));
+    for (const [task, group] of byTask) {
+      if (group.length < 2 || !task) continue;
+      const outputs = new Set(group.map((s) => s.produces).filter(Boolean));
+      if (!dependedOn.has(task) && outputs.size < 2) continue;
+      add("workflow-steps.csv", null,
+        `Workflow '${w.code}' has ${group.length} rows named '${task}' (ords ${group.map((s) => s.ord).join(", ")}).`,
+        "A dependency names a row by its slug, so the slug has to identify one row. Give them distinct names, e.g. approve-brief and approve-design.");
+    }
+  });
+
+  // Two rows producing one path. Ambiguous before this change and load-bearing after it: "the step
+  // that produces X" has to be a single row for a dependency to mean anything. sprint-0 had
+  // `tailor-delivery-plan` and `draft-sprint-plan` both writing `03-delivery/plan` on parallel
+  // branches, so whichever finished last silently superseded the other — and `sprint`'s entry gate
+  // names that path, which made the next phase's readiness depend on branch timing.
+  workflows.forEach((w) => {
+    const here = authored.filter((s) => s.workflow === w.code && s.produces);
+    const by = new Map<string, string[]>();
+    here.forEach((s) => by.set(s.produces, [...(by.get(s.produces) ?? []), s.task]));
+    for (const [path, tasks] of by) {
+      if (tasks.length > 1)
+        add("workflow-steps.csv", null,
+          `Workflow '${w.code}' has ${tasks.length} steps producing '${path}': ${tasks.join(", ")}.`,
+          "Give each row its own path, or merge them into one row. Two rows writing one document means the later one supersedes the earlier with nothing recording that it did.");
+    }
+  });
+
+  // `reads` is derived from `depends_on` for anything produced inside the workflow, so listing
+  // such a path in the column states an edge that the column no longer carries. Refused rather
+  // than ignored: silently dropping it would leave the author believing the input is pinned.
+  authored.forEach((s, i) => {
+    const producedHere = new Map(
+      authored.filter((x) => x.workflow === s.workflow && x.produces).map((x) => [x.produces, x.task]),
+    );
+    s.reads.forEach((r) => {
+      const by = producedHere.get(r);
+      if (by && by !== s.task)
+        add("workflow-steps.csv", i + 2,
+          `Step ${s.workflow}/${s.ord} reads '${r}', which '${by}' produces in the same workflow.`,
+          `Remove it from \`reads\` and put \`${by}\` in \`depends_on\`. A row reads what it depends on — stating both is how the two drifted apart.`);
+    });
+  });
+
   // A step can only read a document that exists, or one an earlier workflow produces. Anything
   // else is a job whose agent is pointed at nothing — and it fails at RUN time, in front of
   // whoever clicked it, rather than at import.
@@ -255,6 +391,10 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   // This check exists because the first seed read `02-scope-sow/sow-source.md` while the real
   // tree had `02-scope/sow`. Nothing caught it: the criteria that would have are not evaluated
   // yet, and a plausible-looking path is invisible by eye.
+  //
+  // Run against the DERIVED reads, which is the set an agent will actually be handed. Everything
+  // derived from a dependency is produced here by construction, so in practice this now polices
+  // exactly the external paths — the ones nothing else can vouch for.
   const produced = new Set(steps.map((s) => s.produces).filter(Boolean));
   if (existing.documents.length > 0) {
     const known = new Set([...existing.documents, ...produced]);

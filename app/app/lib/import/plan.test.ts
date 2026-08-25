@@ -56,7 +56,7 @@ describe("the shipped seed", () => {
   // be edited each time without ever catching anything.
   it("has no workflow that starts itself — a person initiates", () => {
     // This used to assert exactly one `project-created` trigger (plan-kickoff), which encoded the
-    // old design: creating a project silently opened work. Basecamp is initiated by the delivery
+    // old design: creating a project silently opened work. A phase is initiated by the delivery
     // manager instead, because an engagement existing is not the same as an engagement being ready
     // to start — the admin may create it days before anyone is available to run it.
     const selfStarting = planned().workflows.filter((w) => w.row.trigger);

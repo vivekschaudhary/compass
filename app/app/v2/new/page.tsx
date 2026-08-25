@@ -15,9 +15,7 @@ export default function NewEngagementPage() {
       <p className="jobs-blurb">
         {/* Intake opens nothing now — the delivery manager decides when work begins. The old
             sentence promised a workflow that no longer starts itself. */}
-        Paste the SOW, and the client&apos;s brief or BRD if they have one. Compass files them as the
-        engagement&apos;s first documents and scaffolds the doc tree around them. It starts no work:
-        the delivery manager initiates Basecamp when the engagement is ready to begin.
+        We need the below values to create the engagement
       </p>
       <NewEngagementForm />
     </div>

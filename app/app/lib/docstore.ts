@@ -173,6 +173,12 @@ export async function deleteProviderDoc(
  * stored is the one you typed and the correction is yours to make.
  *
  * Returns null when the key is good, or a sentence saying what to use instead.
+ *
+ * CASE IS NOT A MISMATCH. Confluence resolves a space key in any casing — `GET /space/test1`,
+ * `/Test1` and `/TEST1` all answer 200 — so refusing on case alone rejected a key that would have
+ * worked, and this check was stricter than the API it guards. Matching case-insensitively is not
+ * the rewrite described above: it returns the same identifier the person named. Substituting a
+ * space's NAME for its key is a different string and a guess about intent, so that still refuses.
  */
 export async function checkSpaceKey(eng: DocEng, given: string): Promise<string | null> {
   const a = cfAuth(eng);
@@ -182,20 +188,55 @@ export async function checkSpaceKey(eng: DocEng, given: string): Promise<string 
     if (!res.ok) return null;         // cannot check is not the same as wrong
     const spaces: { key: string; name: string }[] = (await res.json()).results ?? [];
 
-    if (spaces.some((sp) => sp.key === given)) return null;
-
     const want = given.trim().toLowerCase();
-    const near = spaces.find((sp) => sp.key?.toLowerCase() === want)
-              ?? spaces.filter((sp) => sp.name?.toLowerCase() === want)[0];
+    if (spaces.some((sp) => sp.key?.toLowerCase() === want)) return null;
+
+    // The name/key distinction is the one people actually hit: Confluence shows "Test" and the
+    // API wants "Test1", so say both.
+    const near = spaces.find((sp) => sp.name?.trim().toLowerCase() === want);
     return near
-      // The name/key distinction is the one people actually hit: Confluence shows "Test" and the
-      // API wants "Test1", so say both.
       ? `No Confluence space with key '${given}'. Use '${near.key}' — that is the key of the space named '${near.name}'.`
       : `No Confluence space with key '${given}'. Check the key in Confluence — it is not the space's display name.`;
   } catch { return null; }
 }
 
-/** Check a Jira project key the same way. Keys are uppercase; `test` is not `TEST`. */
+/**
+ * The space key as Confluence spells it, for a key that differs only by case.
+ *
+ * Returns null when it cannot be resolved — the caller then stores what it was given, because
+ * "could not check" must not silently change a value.
+ */
+export async function canonicalSpaceKey(eng: DocEng, given: string): Promise<string | null> {
+  const a = cfAuth(eng);
+  if (!a || !given) return null;
+  try {
+    const res = await fetch(`${a.base}/wiki/rest/api/space?limit=200`, { headers: a.headers });
+    if (!res.ok) return null;
+    const spaces: { key: string }[] = (await res.json()).results ?? [];
+    const want = given.trim().toLowerCase();
+    return spaces.find((sp) => sp.key?.toLowerCase() === want)?.key ?? null;
+  } catch { return null; }
+}
+
+/**
+ * The one spelling of a Jira project key that Atlassian will answer to.
+ *
+ * Uppercase is a PLATFORM INVARIANT, not a house style: Jira enforces it when the project is
+ * created, so `test1` cannot denote a different project from `TEST1`. Applying it is therefore not
+ * the silent rewrite `checkSpaceKey` refuses to do — there is no second candidate to guess between.
+ *
+ * It has to be applied at every point the key is STORED, not only where it is checked. The API is
+ * case-sensitive (`GET /project/test1/statuses` → 404 where `TEST1` → 200), so a lowercase value
+ * that passes intake fails every call afterwards: `projectStatuses` returns null, setup's `tickets`
+ * criterion reads unsatisfied, and the machine row never closes. A stored value that the code
+ * reading it cannot use is not fidelity to what someone typed, it is a delayed failure.
+ */
+export function canonicalProjectKey(given: string | null | undefined): string | null {
+  const k = given?.trim().toUpperCase();
+  return k ? k : null;
+}
+
+/** Check a Jira project key. Case is normalised first — see `canonicalProjectKey`. */
 export async function checkProjectKey(eng: DocEng & { jira_project?: string }, given: string): Promise<string | null> {
   const a = cfAuth(eng);
   if (!a || !given) return null;
@@ -204,12 +245,17 @@ export async function checkProjectKey(eng: DocEng & { jira_project?: string }, g
     if (!res.ok) return null;
     const projects: { key: string; name: string }[] = (await res.json()).values ?? [];
 
-    if (projects.some((pr) => pr.key === given)) return null;
+    const want = canonicalProjectKey(given);
+    if (projects.some((pr) => pr.key?.toUpperCase() === want)) return null;
 
-    const near = projects.find((pr) => pr.key?.toLowerCase() === given.trim().toLowerCase());
+    // No near-match branch survives normalisation: anything that differed only by case has already
+    // matched above, so a miss here is a key that genuinely is not on this site. Naming the closest
+    // project by NAME is the trap people actually hit now — the project named "Test1" has key
+    // "TEST1", the same shape as the Confluence name/key confusion.
+    const near = projects.find((pr) => pr.name?.trim().toLowerCase() === given.trim().toLowerCase());
     return near
-      ? `No Jira project with key '${given}'. Use '${near.key}' — project keys are uppercase.`
-      : `No Jira project with key '${given}'. Check the key on the board.`;
+      ? `No Jira project with key '${given}'. Use '${near.key}' — that is the key of the project named '${near.name}'.`
+      : `No Jira project with key '${given}'. Check the key on the board — it is not the project's display name.`;
   } catch { return null; }
 }
 
