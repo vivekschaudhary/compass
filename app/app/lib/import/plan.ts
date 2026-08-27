@@ -414,9 +414,41 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
         "Add the workflow to workflows.csv.");
     if (!CRITERION_KINDS.includes(c.kind))
       add("criteria.csv", row, `Criterion for '${c.workflow}' has kind '${c.kind}'.`, `Use one of: ${CRITERION_KINDS.join(", ")}.`);
-    if (c.stepOrd !== null && !steps.some((s) => s.workflow === c.workflow && s.ord === c.stepOrd))
+    const namedStep = c.stepOrd === null
+      ? null
+      : steps.find((s) => s.workflow === c.workflow && s.ord === c.stepOrd) ?? null;
+
+    if (c.stepOrd !== null && !namedStep)
       add("criteria.csv", row, `Criterion names step ${c.stepOrd} of '${c.workflow}', which has no such step.`,
         "Leave the ord column empty for a workflow-level criterion, or point at a step that exists.");
+
+    // A document check must name the document ITS OWN STEP promises.
+    //
+    // Criteria bind to a step by ORDINAL, so renumbering the steps silently slides every criterion
+    // onto a different row. Checking only that the ord EXISTS cannot see that: a permuted ord names
+    // a real step, so the import passes and the drift surfaces on a live board. Sprint-0 shipped
+    // with five of these when it absorbed pre-sprint-0 — the timeline row asked for the product
+    // brief, the staffing row asked for the timeline, and the sprint-plan row checked the delivery
+    // plan, which a DIFFERENT row publishes.
+    //
+    // Both directions of failure are bad and they do not look alike. A row pointed at a document
+    // nobody produces can never close. A row pointed at a document some OTHER row produces closes
+    // on that row's work — a false green, which is worse, because it is indistinguishable from the
+    // deliverable actually existing.
+    //
+    // Only the produces-bearing case is checked. A step that promises nothing has nothing to
+    // contradict, and a criterion may legitimately read a document from an earlier phase.
+    if (namedStep && c.subjectKind === "document" && namedStep.produces
+        && c.subjectRef !== namedStep.produces) {
+      const producer = steps.find((s) => s.workflow === c.workflow && s.produces === c.subjectRef);
+      add("criteria.csv", row,
+        `Step ${c.stepOrd} of '${c.workflow}' (${namedStep.task}) produces '${namedStep.produces}', ` +
+        `but its criterion checks '${c.subjectRef}'` +
+        (producer ? ` — which step ${producer.ord} (${producer.task}) produces.` : " — which no step here produces."),
+        producer
+          ? `Point the criterion at '${namedStep.produces}', or move it to step ${producer.ord}. As written this row closes on another row's work.`
+          : `Point the criterion at '${namedStep.produces}'. As written this row can never close.`);
+    }
 
     const parts = [c.subjectKind, c.subjectRef, c.operator, c.value];
     const filled = parts.filter(Boolean).length;

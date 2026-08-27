@@ -114,13 +114,12 @@ class TestArtifactTargetParsing(unittest.TestCase):
             p.unlink()
 
     def test_real_workflows(self):
-        # #154: /create-product-brief is docs-primary — its gates target `@docs` adapter
-        # SLOTS, not repo paths, because the artifact has no repo file at all.
-        cpb = load_workflow(WORKFLOWS / "create-product-brief.md")
-        self.assertEqual(
-            [s.artifact_target for s in cpb if s.is_hitl],
-            ["research@docs", "product-brief@docs", "design-foundation@docs"],
-        )
+        # #154: a docs-primary gate targets an `@docs` adapter SLOT, not a repo path, because the
+        # artifact has no repo file at all. Carried by setup-foundation-architecture since
+        # create-product-brief was flattened into sprint-0 rows and deleted — the PROPERTY is what
+        # this pins, and it needs some workflow that still ships to demonstrate it.
+        sfa = load_workflow(WORKFLOWS / "setup-foundation-architecture.md")
+        self.assertIn("design-library@docs", [s.artifact_target for s in sfa if s.is_hitl])
         cb = load_workflow(WORKFLOWS / "create-brief.md")
         self.assertEqual(
             next(s for s in cb if s.is_hitl).artifact_target,

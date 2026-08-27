@@ -28,8 +28,14 @@ const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], do
 /* ── the seed itself must be valid, or the first load fails ──────────────── */
 
 
-/** The delivery phases the seed ships. Setup → pre-sprint 0 → sprint 0 → sprint. */
-const PHASES = ["setup", "pre-sprint-0", "sprint-0", "sprint"] as const;
+/**
+ * The delivery phases the seed ships. Setup → sprint 0 → sprint.
+ *
+ * `pre-sprint-0` was one of these. Its rows — the SOW, the timeline, staffing, the RACI, the epics,
+ * the tailored plan — are now sprint-0 steps 1-8, and the phase is gone from the seed rather than
+ * parked, so asserting on it here would be asserting on a workflow no import produces.
+ */
+const PHASES = ["setup", "sprint-0", "sprint"] as const;
 
 describe("the shipped seed", () => {
   const planned = () => {
@@ -63,7 +69,7 @@ describe("the shipped seed", () => {
     expect(selfStarting.map((w) => w.row.code)).toEqual([]);
   });
 
-  it("seeds the four delivery phases, owned by the delivery manager", () => {
+  it("seeds every delivery phase, owned by the delivery manager", () => {
     const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
     for (const code of PHASES) {
       expect(byCode.get(code)?.ownerRole, `${code} has no owner`).toBe("delivery-manager");
@@ -353,5 +359,93 @@ describe("reporting", () => {
     if (r.ok) return;
     expect(r.problems.length).toBeGreaterThanOrEqual(4);
     expect(r.problems.every((p) => p.file && p.fix)).toBe(true);
+  });
+});
+
+/* ── a document criterion must check its own step's promise ──────────────── */
+
+// Criteria bind to a step by ORDINAL, so renumbering the steps slides every criterion onto a
+// different row without changing a single criteria.csv line. Checking only that the ord EXISTS
+// cannot see it. Sprint-0 shipped five of these when it absorbed pre-sprint-0.
+describe("a document criterion checks what its own step produces", () => {
+  const base: Bundle = {
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles: "code,label,tier,scope,workstream\ndm,DM,oversight,everyone,Delivery\n",
+    workflows: "code,label,workstream\nsprint-0,Sprint 0,Delivery\n",
+    steps:
+      "workflow,ord,kind,role,task,produces\n" +
+      "sprint-0,1,agent,dm,file-sow,02-scope/sow\n" +
+      "sprint-0,2,agent,dm,draft-timeline,02-scope/timeline\n",
+    criteria:
+      "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
+      "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+      "sprint-0,2,done,The timeline is published,document,02-scope/timeline,status,published\n",
+  };
+
+  it("accepts criteria that match their step", () => {
+    expect(planImport(base, empty).ok).toBe(true);
+  });
+
+  // The false green, and the worse of the two. Step 2's gate is satisfied the moment step 1
+  // publishes, so the row closes on another row's work — indistinguishable from the timeline
+  // actually existing.
+  it("rejects a criterion checking a document a DIFFERENT step produces", () => {
+    const r = planImport({ ...base,
+      criteria:
+        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,2,done,The timeline is published,document,02-scope/sow,status,published\n",
+    }, empty);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    const p = r.problems.find((x) => x.message.includes("draft-timeline"))!;
+    expect(p.message).toContain("produces '02-scope/timeline'");
+    expect(p.message).toContain("step 1 (file-sow) produces");
+    expect(p.fix).toContain("closes on another row's work");
+  });
+
+  // The other direction: the row can never close, because nothing will ever publish that path.
+  // This is what sprint-0 step 9 had — a review criterion left behind when the review row went.
+  it("rejects a criterion checking a document no step produces", () => {
+    const r = planImport({ ...base,
+      criteria:
+        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,2,done,Findings recorded,document,04-governance/decisions,status,published\n",
+    }, empty);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    const p = r.problems.find((x) => x.message.includes("draft-timeline"))!;
+    expect(p.message).toContain("which no step here produces");
+    expect(p.fix).toContain("can never close");
+  });
+
+  // A judgment criterion has no subject at all, and a phase-wide criterion has no step to
+  // contradict. Neither may be dragged into this.
+  it("leaves judgment and phase-wide criteria alone", () => {
+    const r = planImport({ ...base,
+      criteria:
+        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,2,done,Every milestone has a date,,,,\n" +
+        "sprint-0,,ready,The systems of record answered,connector,docs,is,wired\n",
+    }, empty);
+    expect(r.ok).toBe(true);
+  });
+
+  // A step that promises nothing has nothing to contradict — and a criterion may legitimately
+  // check a document produced in an earlier phase.
+  it("says nothing about a step with no produces", () => {
+    const r = planImport({ ...base,
+      steps:
+        "workflow,ord,kind,role,task,produces\n" +
+        "sprint-0,1,agent,dm,file-sow,02-scope/sow\n" +
+        "sprint-0,2,agent,dm,review,\n",
+      criteria:
+        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,2,done,The SOW was read,document,02-scope/sow,status,published\n",
+    }, empty);
+    expect(r.ok).toBe(true);
   });
 });

@@ -30,15 +30,19 @@ describe("validateSpec against the real parser", () => {
     expect(await validateSpec("config.yaml", "a: 1")).toBeNull();
   });
 
+  // Any shipped workflow with `### Step N.` headings will do — the subject is the PARSER, not this
+  // file. It used to read `create-product-brief.md`, which was deleted when that workflow was
+  // flattened into sprint-0 rows, and the test failed on a missing fixture rather than on anything
+  // about validateSpec. `triage.md` is picked for the same properties: real steps, real HITL rows.
   it("parses a shipped workflow", async () => {
-    const src = readFileSync(join(COMPASS_DIR, "workflows/create-product-brief.md"), "utf8");
-    const r = await validateSpec("workflows/create-product-brief.md", src);
+    const src = readFileSync(join(COMPASS_DIR, "workflows/triage.md"), "utf8");
+    const r = await validateSpec("workflows/triage.md", src);
     expect(r?.kind).toBe("workflow");
     expect(r?.ok).toBe(true);
     if (r?.kind === "workflow") {
       expect(r.steps.length).toBeGreaterThan(0);
       expect(r.hitl_count).toBeGreaterThan(0);
-      expect(r.agents).toContain("product-manager");
+      expect(r.agents).toContain("support");
     }
   }, 30_000);
 

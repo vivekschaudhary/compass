@@ -114,35 +114,19 @@ class TestStepParsing(unittest.TestCase):
 
 
 class TestRealWorkflows(unittest.TestCase):
-    """Integration: the four dispatch-graph workflows parse with their gates intact."""
+    """Integration: the shipped dispatch-graph workflows parse with their gates intact."""
 
-    def test_create_product_brief(self):
-        steps = load_workflow(WORKFLOWS / "create-product-brief.md")
-        # 7 since design got a foundation: the brief is followed by
-        # designer.spec-design-foundation and its own HITL gate.
-        self.assertEqual(len(steps), 7)
-        # two gates: research review, then brief approval
-        self.assertEqual([s.is_hitl for s in steps], [False, True, False, True, False, True, False])
+    # Three tests about `create-product-brief.md` stood here — its step count, its HITL pattern,
+    # and the #154 guard that the Researcher dispatches before the PM drafts. They went with the
+    # file: that workflow was flattened into sprint-0 rows (BRD R1) and deleted, so there is no
+    # longer a graph for them to assert against. Removed rather than repointed, because their
+    # subject was that workflow's SHAPE, and pointing them at a different file would have made
+    # them assert something nobody decided.
+    #
+    # What #154 protected is not lost — the ordering it pinned is now `depends_on` in
+    # compass/seed/workflow-steps.csv, where sprint-0's draft-product-brief depends on file-sow,
+    # and the importer refuses a forward reference outright.
 
-    def test_create_product_brief_researches_before_drafting(self):
-        """#154 regression guard. Its predecessor `/create-product-brief` dispatched the PM at
-        step 1 while the PM's own gate required the Researcher's findings — so an
-        orchestrator walking the graph in order stalled on step 1, forever. The evidence
-        step MUST precede the drafting step; pin it so the inversion cannot return."""
-        steps = load_workflow(WORKFLOWS / "create-product-brief.md")
-        agents = [(s.agent, s.task) for s in steps if not s.is_hitl]
-        self.assertEqual(agents[0][0], "researcher")
-        self.assertEqual(agents[1], ("product-manager", "draft-product-brief"))
-        self.assertEqual(agents[2], ("designer", "spec-design-foundation"))
-        self.assertEqual(agents[3], ("delivery-manager", "update-status"))
-
-    def test_create_product_brief_gates_name_their_artifacts(self):
-        steps = load_workflow(WORKFLOWS / "create-product-brief.md")
-        targets = [s.artifact_target for s in steps if s.is_hitl]
-        self.assertEqual(
-            targets,
-            ["research@docs", "product-brief@docs", "design-foundation@docs"],
-        )
 
     def test_build(self):
         steps = load_workflow(WORKFLOWS / "build.md")

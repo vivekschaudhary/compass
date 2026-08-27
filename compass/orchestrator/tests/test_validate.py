@@ -19,7 +19,14 @@ from compass.orchestrator import run as runmod
 
 REPO = Path(__file__).resolve().parents[3]
 COMPASS = REPO / "compass"
-WORKFLOW = COMPASS / "workflows" / "create-product-brief.md"
+# Any shipped dispatch-graph workflow: these tests are about the PARSER and the CLI, not about
+# this file. It was `create-product-brief.md` until that workflow was flattened into sprint-0
+# rows and deleted, at which point five tests failed on a missing fixture rather than on the
+# behaviour they exist to pin. The replacement must keep the shape those tests rely on —
+# step 1 dispatches an agent and step 2 is a HITL gate, so demoting step 2's heading merges a
+# gate into a dispatch step. `create-brief.md` does NOT have it (its step 2 is another agent
+# step) and the damaged-heading test failed for exactly that reason.
+WORKFLOW = COMPASS / "workflows" / "ops.md"
 AGENT = COMPASS / "agents" / "product-manager.md"
 SPRINT0 = COMPASS / "templates" / "sprint-0.md"
 

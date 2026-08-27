@@ -75,6 +75,54 @@ Gates + postconditions = load-bearing. Work-steps = guidance.
 **Work:** run `python compass/scripts/token-usage.py <session-log>` → read output (attributed via `COMPASS_ROLE_BOUNDARY` markers) → optionally archive to `docs/usage/<session-id>.md` → surface findings in next `/status` Health or sprint comms.
 **Postcondition:** rollup produced; numbers from script output (never fabricated).
 
+## What my tickets and deliverables carry
+
+Everything below is written for **someone who has never heard of Compass** and never will: the
+client's PM opening a Jira ticket, an engineer picking up a story, a partner reading a board on a
+Monday. They are reading about **the product being built** and the programme delivering it. They
+are not reading about tooling, workflows, phases, rows, agents, or how the work was generated.
+
+- **`[ticket-reads-as-the-product]`** — name the product, the client, the capability and the
+  business outcome. Never name the process that produced the ticket. "Worked in Compass", "this
+  ticket mirrors its state", "row 4 of sprint-0", "the agent will draft this" — all banned. If a
+  sentence would be identical on a different engagement, it is carrying no information: cut it or
+  replace it with something only true here.
+
+- **`[swap-the-client-test]`** — before you finish, substitute a different client name and a
+  different product into your draft. If it still reads as true and sensible, you have written a
+  template, not a ticket. Rewrite it. This is the single check that separates a real backlog from
+  generated filler, and it is a refusal trigger on your own output.
+
+- **`[owner-not-administrator]`** — write as the person accountable for this product shipping, not
+  as someone administering a process. State what the thing is for, who needs it, what it unblocks,
+  and what happens to the programme if it slips. A delivery ticket that says only what artifact
+  will exist has described a filing action, not a piece of delivery.
+
+- **`[specifics-are-cited-or-asked]`** — every product-specific claim traces to something you were
+  actually given: the SOW, the product brief, the epics, the architecture, a human's answer. You
+  may not invent a client's market, a system name, a regulation, an integration, a headcount or a
+  date to make a ticket sound concrete. Fabricated specificity is worse than admitted thinness,
+  because it is indistinguishable from fact on the client's board. A specific you need and do not
+  have is an `ask`, not a guess (`[agent-asks-structured-questions]`).
+
+- **`[thin-is-said-out-loud]`** — early in an engagement you will legitimately hold very little.
+  Write what the inputs support, then state plainly what is not yet known and which upstream
+  deliverable will settle it. "Milestone dates follow the timeline in D2, not yet drafted" is
+  useful. A paragraph of confident generalities covering the same gap is not.
+
+**Every ticket you write answers these, in this order, and stops:**
+
+1. **What this is** — the deliverable, in the product's own vocabulary.
+2. **Why it exists on this engagement** — the commitment, milestone or risk it serves, named.
+3. **What it is built from** — the specific documents or decisions it depends on, and what is still
+   missing.
+4. **What acceptance looks like** — the Done criteria you were given, verbatim. Do not paraphrase
+   them and do not invent additional ones.
+5. **What it is not** — the adjacent thing a reader would reasonably assume is included and is not.
+
+Short and load-bearing. Five tight paragraphs a reader finishes beats two screens they skim. Length
+is not evidence of thought, and a ticket nobody
+
 ## Refusal rules
 
 - **Don't write "on track" / "good progress" without evidence** — `[no-padded-status]`.

@@ -4,13 +4,15 @@ setup,1,done,The tracker answers,connector,tickets,is,wired
 sprint-0,,ready,The systems of record answered,connector,docs,is,wired
 sprint-0,,ready,,connector,tickets,is,wired
 sprint-0,1,done,The SOW is filed — everything downstream derives from it and cannot be invented,document,02-scope/sow,status,published
-sprint-0,4,done,The product brief is published,document,01-foundation/product-brief,status,published
-sprint-0,4,done,Every feature the SOW commits to is covered or named out of scope,,,,
-sprint-0,5,done,The timeline is published,document,02-scope/timeline,status,published
-sprint-0,5,done,Every milestone has a date and something it delivers,,,,
-sprint-0,2,done,The roster is published,document,01-foundation/team,status,published
-sprint-0,2,done,Every role a later phase assigns work to has a named holder,,,,
-sprint-0,2,done,Roles left deliberately unstaffed are recorded with a reason,,,,
+sprint-0,2,done,The product brief is published,document,01-foundation/product-brief,status,published
+sprint-0,2,done,Every feature the SOW commits to is covered or named out of scope,,,,
+sprint-0,3,done,The design library is published,document,01-foundation/design-library,status,published
+sprint-0,3,done,It links the real artifact — the Figma file or component library — rather than describing it,,,,
+sprint-0,4,done,The timeline is published,document,02-scope/timeline,status,published
+sprint-0,4,done,Every milestone has a date and something it delivers,,,,
+sprint-0,5,done,The roster is published,document,01-foundation/team,status,published
+sprint-0,5,done,Every role a later phase assigns work to has a named holder,,,,
+sprint-0,5,done,Roles left deliberately unstaffed are recorded with a reason,,,,
 sprint-0,6,done,Roles and responsibilities are published,document,01-foundation/raci,status,published
 sprint-0,6,done,Every named holder appears against at least one responsibility,,,,
 sprint-0,7,done,The epics are published,document,02-scope/deliverables,status,published
@@ -21,12 +23,8 @@ sprint-0,8,done,The delivery plan is published,document,03-delivery/plan,status,
 sprint-0,8,done,Every role the plan names is staffed on the roster,,,,
 sprint-0,9,done,The foundation architecture is published,document,01-foundation/foundational-architecture,status,published
 sprint-0,9,done,Every epic has a named home in the architecture,,,,
-sprint-0,9,done,The review findings are recorded,document,04-governance/decisions,status,published
-sprint-0,9,done,The Enterprise Architect's draft was read by someone who did not write it,,,,
-sprint-0,3,done,The design library is published,document,01-foundation/design-library,status,published
-sprint-0,3,done,It links the real artifact — the Figma file or component library — rather than describing it,,,,
 sprint-0,10,done,Ways of working is published,document,01-foundation/ways-of-working,status,published
-sprint-0,11,done,The sprint plan is published,document,03-delivery/plan,status,published
+sprint-0,11,done,The sprint plan is published,document,05-cadence/sprint-plans,status,published
 sprint-0,11,done,Every story in sprints 1-3 belongs to an epic,,,,
 sprint-0,11,done,"The plan fits the roster's capacity, or says where it does not",,,,
 sprint-0,12,done,The kickoff record is published,document,05-cadence/kickoff,status,published
