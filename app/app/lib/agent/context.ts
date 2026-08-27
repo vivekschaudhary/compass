@@ -142,8 +142,52 @@ async function ensureInputs(taskId: string, engagementId: string): Promise<Pinne
   const { count } = await sb.from("task_input")
     .select("*", { count: "exact", head: true }).eq("task_id", taskId);
   if (!count) await pinInputs(taskId, engagementId);
+  else await resolveEmptyPins(taskId, engagementId);
 
   return loadInputs(taskId, engagementId);
+}
+
+/**
+ * Fill in the pins that had nothing to pin, once something exists.
+ *
+ * A pin with a null version says the document was not there when work began. That is a fact worth
+ * recording — but it must not be permanent, because the whole point of an agent asking for a
+ * document is that the document then arrives. Without this, an agent asks for the client's BRD, the
+ * human supplies it, it is filed at the declared path, and the next run is still told the input is
+ * missing: the answer reaches the record and never reaches the agent.
+ *
+ * ONLY the null ones. A pin that already names a version is what provenance means — moving it would
+ * silently rewrite what a finished draft was derived from, which is the failure pinning exists to
+ * prevent. So this resolves absences and never re-resolves a reading.
+ */
+async function resolveEmptyPins(taskId: string, engagementId: string): Promise<number> {
+  const sb = supabaseAdmin();
+  if (!sb) return 0;
+
+  const { data: empty } = await sb.from("task_input")
+    .select("document_path").eq("task_id", taskId).is("document_version", null);
+  if (!empty?.length) return 0;
+
+  const paths = empty.map((p) => p.document_path as string);
+  const { data: docs } = await sb.from("document")
+    .select("path, current_version_id").eq("engagement_id", engagementId).in("path", paths);
+
+  const versionIds = (docs ?? []).map((d) => d.current_version_id).filter(Boolean) as string[];
+  if (!versionIds.length) return 0;
+
+  const { data: versions } = await sb.from("document_version")
+    .select("id, version").in("id", versionIds);
+  const versionOf = new Map((versions ?? []).map((v) => [v.id, v.version as string]));
+
+  let filled = 0;
+  for (const doc of docs ?? []) {
+    const version = doc.current_version_id ? versionOf.get(doc.current_version_id) : null;
+    if (!version) continue;
+    await sb.from("task_input").update({ document_version: version })
+      .eq("task_id", taskId).eq("document_path", doc.path).is("document_version", null);
+    filled++;
+  }
+  return filled;
 }
 
 /**
