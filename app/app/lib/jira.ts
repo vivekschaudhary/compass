@@ -20,9 +20,81 @@ export function resolveJira(eng: {
 function authHeader(c: JiraCreds) { return "Basic " + Buffer.from(`${c.email}:${c.token}`).toString("base64"); }
 
 // v3 wants rich text as Atlassian Document Format, not a plain string.
-function adf(text: string) {
-  const paras = (text || " ").split(/\n\n+/).map((p) => ({ type: "paragraph", content: [{ type: "text", text: p || " " }] }));
-  return { type: "doc", version: 1, content: paras };
+//
+// Headings and bullets are rendered as NODES rather than left as text. Every block used to become a
+// `paragraph`, which is fine for the one-line bodies this file used to send and unreadable for a
+// composed ticket: its "## What this is" arrived as the literal characters `## What this is`, and a
+// five-point list arrived as one run-on paragraph of hyphens. A reader on the board cannot skim
+// that, which defeats the point of composing it.
+//
+// Deliberately three block types and no more. This is not a markdown renderer — it is the small
+// subset the ticket contract actually emits, and anything else stays plain text rather than being
+// half-parsed into something that looks like a bug.
+type AdfNode = Record<string, unknown>;
+
+export function adf(text: string) {
+  const content: AdfNode[] = [];
+  let bullets: string[] = [];
+  // Whether the last block is a paragraph still taking lines. A blank line closes it — without
+  // this, "First.\n\nSecond." joins into one paragraph and every blank line in a composed body is
+  // silently discarded.
+  let openParagraph = false;
+
+  // Bullets accumulate across lines, so the list is one node rather than one node per item.
+  const flush = () => {
+    if (!bullets.length) return;
+    content.push({
+      type: "bulletList",
+      content: bullets.map((b) => ({
+        type: "listItem",
+        content: [{ type: "paragraph", content: [{ type: "text", text: b }] }],
+      })),
+    });
+    bullets = [];
+  };
+
+  for (const raw of (text || " ").split("\n")) {
+    const line = raw.trimEnd();
+
+    // `#+`, not `#{1,6}`: seven hashes is still a heading someone typed, and bounding the pattern
+    // instead of the level would drop it into a paragraph as literal hashes — the exact rendering
+    // failure this function exists to fix. The LEVEL is clamped below, where ADF's limit applies.
+    const heading = line.match(/^(#+)\s+(.*)$/);
+    if (heading && heading[2].trim()) {
+      flush();
+      openParagraph = false;
+      content.push({
+        type: "heading",
+        attrs: { level: Math.min(heading[1].length, 6) },
+        content: [{ type: "text", text: heading[2].trim() }],
+      });
+      continue;
+    }
+
+    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    if (bullet && bullet[1].trim()) {
+      openParagraph = false;
+      bullets.push(bullet[1].trim());
+      continue;
+    }
+
+    flush();
+    if (!line.trim()) { openParagraph = false; continue; }   // a blank line separates blocks
+    // Consecutive prose lines join into one paragraph, so a wrapped sentence is not three paragraphs.
+    if (openParagraph) {
+      const runs = content[content.length - 1].content as { text: string }[];
+      runs[0].text += ` ${line.trim()}`;
+      continue;
+    }
+    content.push({ type: "paragraph", content: [{ type: "text", text: line.trim() }] });
+    openParagraph = true;
+  }
+  flush();
+
+  // ADF rejects an empty doc, and a body that came in blank must still produce a valid document
+  // rather than a 400 the caller reads as "Jira refused the ticket".
+  if (!content.length) content.push({ type: "paragraph", content: [{ type: "text", text: " " }] });
+  return { type: "doc", version: 1, content };
 }
 
 async function jreq(c: JiraCreds, path: string, init?: RequestInit) {
@@ -44,6 +116,25 @@ export async function createIssue(c: JiraCreds, opts: { type: string; summary: s
   const res = await jreq(c, "/issue", { method: "POST", body: JSON.stringify({ fields }) });
   if (!res.ok) return null;
   return { key: (await res.json()).key };
+}
+
+// Rewrite an existing issue's summary and/or description.
+//
+// The counterpart `createIssue` never had: everything this file could do to an issue after creation
+// was move it, comment on it or delete it, so a ticket created with a placeholder body was stuck
+// with it. Composed bodies are written here, after the ticket exists.
+//
+// Nothing is sent when neither field is given — a PUT with empty `fields` is a wasted round trip
+// that Jira answers 400, which would read as a refusal rather than as "there was nothing to say".
+export async function updateIssue(
+  c: JiraCreds, key: string, opts: { summary?: string; description?: string },
+): Promise<boolean> {
+  const fields: Record<string, unknown> = {};
+  if (opts.summary) fields.summary = opts.summary.slice(0, 240);
+  if (opts.description) fields.description = adf(opts.description);
+  if (!Object.keys(fields).length) return false;
+  const res = await jreq(c, `/issue/${key}`, { method: "PUT", body: JSON.stringify({ fields }) });
+  return res.ok;
 }
 
 // The issue's current status NAME, or null when it can't be read. Used to remember where a ticket

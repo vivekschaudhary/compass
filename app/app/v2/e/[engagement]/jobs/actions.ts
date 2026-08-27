@@ -17,6 +17,43 @@ import {
   remirrorPhase,
 } from "@/app/lib/data/phases";
 import { mirrorIncomplete } from "@/app/lib/data/tracker";
+import { composeIncomplete } from "@/app/lib/data/ticket-body";
+import type { BoardResult } from "@/app/lib/data/phases";
+
+// NOT exported — see the header. A type export is erased at build time, but a value export here
+// would become an endpoint, and keeping both local means the rule needs no exception.
+type Board = {
+  epic: string | null;
+  stories: number;
+  expected: number;
+  problems: string[];
+  incomplete: boolean;
+  /**
+   * The editorial half, reported apart from the structural one.
+   *
+   * `stories: 11` used to be the whole answer, and it stayed 11 whether every ticket read as the
+   * product or every one of them still carried its placeholder. `written` is how many say something.
+   */
+  bodies?: { written: number; expected: number; problems: string[]; incomplete: boolean };
+};
+
+function board(m: BoardResult): Board {
+  return {
+    epic: m.epic,
+    stories: m.stories.length,
+    expected: m.expected,
+    problems: m.problems,
+    incomplete: mirrorIncomplete(m),
+    bodies: m.composed
+      ? {
+          written: m.composed.written.length,
+          expected: m.composed.expected,
+          problems: m.composed.problems,
+          incomplete: composeIncomplete(m.composed),
+        }
+      : undefined,
+  };
+}
 
 /**
  * Check the gate, then start.
@@ -75,7 +112,7 @@ export async function initiatePhaseAction(
   ok: boolean;
   error?: string;
   tasks?: number;
-  board?: { epic: string | null; stories: number; expected: number; problems: string[]; incomplete: boolean };
+  board?: Board;
 }> {
   const actor = await resolveActor(engagement, role);
   if (!actor)
@@ -86,19 +123,7 @@ export async function initiatePhaseAction(
   if (!result.ok) return { ok: false, error: result.error };
 
   const m = result.mirrored;
-  return {
-    ok: true,
-    tasks: result.tasks.length,
-    board: m
-      ? {
-          epic: m.epic,
-          stories: m.stories.length,
-          expected: m.expected,
-          problems: m.problems,
-          incomplete: mirrorIncomplete(m),
-        }
-      : undefined,
-  };
+  return { ok: true, tasks: result.tasks.length, board: m ? board(m) : undefined };
 }
 
 /**
@@ -114,7 +139,7 @@ export async function mirrorPhaseAction(
 ): Promise<{
   ok: boolean;
   error?: string;
-  board?: { epic: string | null; stories: number; expected: number; problems: string[]; incomplete: boolean };
+  board?: Board;
 }> {
   const actor = await resolveActor(engagement, role);
   if (!actor)
@@ -124,17 +149,7 @@ export async function mirrorPhaseAction(
   revalidatePath(`/v2/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
 
-  const m = result.mirrored;
-  return {
-    ok: true,
-    board: {
-      epic: m.epic,
-      stories: m.stories.length,
-      expected: m.expected,
-      problems: m.problems,
-      incomplete: mirrorIncomplete(m),
-    },
-  };
+  return { ok: true, board: board(result.mirrored) };
 }
 
 /** Re-check the gate without starting anything. */

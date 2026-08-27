@@ -145,7 +145,18 @@ export async function mirrorPhase(
     const created = await createIssue(creds, {
       type: "Epic",
       summary: `${wf?.label ?? wf?.code ?? "Phase"} — ${eng?.name ?? engagementId}`,
-      description: `Created by Compass. Every story under this epic is one row of the ${wf?.code} phase.`,
+      // A PLACEHOLDER, and it says so. The real body is composed by the role that owns this work,
+      // from its agent markdown and the engagement's documents — see `ticket-body.ts`, which runs
+      // immediately after mirroring and overwrites this.
+      //
+      // What used to stand here was `"Created by Compass. Every story under this epic is one row of
+      // the <code> phase."` — identical on every engagement, and describing the tooling to a reader
+      // who has never heard of it. That is exactly what `[ticket-reads-as-the-product]` bans, so the
+      // interim text names the work and admits it is unwritten rather than filling the space with
+      // process.
+      description:
+        `${wf?.label ?? wf?.code ?? "This phase"} for ${eng?.name ?? engagementId}.\n\n` +
+        `_The full description is being written and will replace this shortly._`,
     });
     if (!created) {
       return {
@@ -175,7 +186,8 @@ export async function mirrorPhase(
 
     const created = await createIssue(creds, {
       type: "Story", summary: t.title, parentKey: epicKey,
-      description: "Worked in Compass. This ticket mirrors its state.",
+      // Placeholder, replaced by the composed body — see the epic above.
+      description: `${t.title}.\n\n_The full description is being written and will replace this shortly._`,
       // The owning role as a label, so a board can be filtered by who holds the work — v1's
       // convention, and the reason DELIVERY_ROLES exists.
       labels: [t.role_code],
