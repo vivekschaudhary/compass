@@ -13,6 +13,7 @@
 
 import "server-only";
 import { apiHost } from "./api";
+import { cliHost } from "./cli";
 import { HostUnavailable, type Host } from "./types";
 
 /**
@@ -50,28 +51,36 @@ export function selectHost(
   if (requested === "api") return apiHost;
 
   if (requested === "cli" || requested === "claude-code") {
-    // The CLI host is not built yet. Said plainly and as a halt: reporting "cli selected" and then
-    // running on the API would be the downgrade this module exists to prevent, and it would look
-    // exactly like the feature working.
     if (!available("claude")) {
       throw new HostUnavailable(
         requested,
         "COMPASS_CLAUDE_HOST asks for the `claude` CLI, but the binary is not on PATH. " +
-          "Install it and log in, or unset COMPASS_CLAUDE_HOST to use the metered API.",
+          `Install it and log in, or set it to 0. ${WHERE}`,
       );
     }
-    throw new HostUnavailable(
-      requested,
-      "The `claude` CLI host is not implemented yet — the tool contract (`ask`/`draft`) has not " +
-        "been proven through it. Unset COMPASS_CLAUDE_HOST to use the metered API.",
-    );
+    return cliHost;
   }
 
   throw new HostUnavailable(
     requested,
-    `Unknown host '${requested}'. COMPASS_CLAUDE_HOST accepts 'cli' or 'api' (the default).`,
+    `Unknown host '${requested}'. COMPASS_CLAUDE_HOST accepts 'cli'/1 or 'api'/0 (the default). ` +
+      WHERE,
   );
 }
+
+/**
+ * Where the value came from, because that is the half a reader cannot see.
+ *
+ * A real environment variable OUTRANKS `.env.local` in Next, and this cost a live debugging session:
+ * `.env.local` said 0, the server came up `cli` anyway, and the message said only "unset
+ * COMPASS_CLAUDE_HOST" — so the obvious move was to edit the file, which could never win. The
+ * export was in `~/.zshrc`, left over from v1, which uses the SAME variable name.
+ *
+ * A halt that sends the reader to the wrong file is only half a halt.
+ */
+const WHERE =
+  "Note the value may come from your shell rather than .env.local — a real environment variable " +
+  "overrides the file, so check `echo $COMPASS_CLAUDE_HOST` and your shell profile too.";
 
 /** Is the binary on PATH? Separated so `selectHost` stays pure and testable. */
 function binaryAvailable(bin: string): boolean {

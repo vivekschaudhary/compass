@@ -28,99 +28,11 @@ import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { nestedWorkflowOf } from "../data/phases";
 import { selectHost } from "./hosts/select";
+import { TOOLS } from "./hosts/tools";
 import type { HostResult } from "./hosts/types";
 
 const MODEL = "claude-opus-5";
 
-const TOOLS: Anthropic.Tool[] = [
-  {
-    name: "ask",
-    description:
-      "Ask the human what you cannot responsibly infer from the documents you were given. " +
-      "Use this for facts that were never recorded — dates nobody agreed, people nobody named, " +
-      "standards nobody wrote down. Ask only what blocks you RIGHT NOW: the answers come back to " +
-      "you and you get another turn, so anything a later answer would settle is not for this " +
-      `round. Order the list by how much each answer changes the rest of the work — only the first ` +
-      `${ASK_BATCH} are put to the human. Do not use this for anything the documents already answer.`,
-    input_schema: {
-      type: "object",
-      properties: {
-        preamble: {
-          type: "string",
-          description:
-            "One or two sentences on what you found and why you are blocked.",
-        },
-        questions: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              prompt: {
-                type: "string",
-                description: "The question, as you would ask a colleague.",
-              },
-              type: { type: "string", enum: ["text", "choice", "number"] },
-              options: {
-                type: "array",
-                items: { type: "string" },
-                description: "For type=choice.",
-              },
-              why: {
-                type: "string",
-                description: "What this changes about the deliverable.",
-              },
-            },
-            required: ["prompt", "type", "why"],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ["preamble", "questions"],
-      additionalProperties: false,
-    },
-    // Strict: the input is validated against this schema before it reaches us. Without it the
-    // shape is a strong convention rather than a guarantee, and a `sections` that arrived as
-    // something other than an array threw away a finished two-minute run at the filing step.
-    strict: true,
-  },
-  {
-    name: "draft",
-    description:
-      "Produce the deliverable. Every section names the document paths it was derived from. " +
-      "A claim you cannot trace to a document you were given does not belong here.",
-    input_schema: {
-      type: "object",
-      properties: {
-        summary: {
-          type: "string",
-          description:
-            "What you produced and what it is based on. Note any input that was missing and what it cost.",
-        },
-        sections: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              heading: { type: "string" },
-              body: { type: "string", description: "Markdown." },
-              cites: {
-                type: "array",
-                items: { type: "string" },
-                description:
-                  "Document paths this section was derived from. Empty only if the section is genuinely your own judgment, and say so in the body.",
-              },
-            },
-            required: ["heading", "body", "cites"],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ["summary", "sections"],
-      additionalProperties: false,
-    },
-    strict: true,
-  },
-];
 
 /**
  * Normalise what came back before anything else touches it.

@@ -52,6 +52,10 @@ describe("selectHost", () => {
     expect(selectHost("api", hasNothing).name).toBe("api");
   });
 
+  it("returns the CLI host when the binary is there", () => {
+    expect(selectHost("cli", has("claude")).name).toBe("cli");
+  });
+
   // THE RULE. Asking for the CLI and getting the metered API is the failure this module exists to
   // prevent: the operator set the var to stop paying per token, a fallback bills them anyway, and
   // nothing in the run says so. It must throw, and it must never return apiHost here.
@@ -62,21 +66,26 @@ describe("selectHost", () => {
     } catch (e) {
       expect((e as Error).message).toContain("not on PATH");
       // The operator needs to know how to get back to a working state, not just that it broke.
-      expect((e as Error).message).toContain("unset COMPASS_CLAUDE_HOST");
+      expect((e as Error).message).toContain("set it to 0");
     }
   });
 
-  // Present-but-unimplemented is a DIFFERENT answer from absent, and saying "not installed" when
-  // it is installed sends someone to reinstall a binary that was never the problem.
-  it("distinguishes an installed CLI from a missing one", () => {
-    expect(() => selectHost("cli", has("claude"))).toThrow(/not implemented yet/);
-    expect(() => selectHost("cli", hasNothing)).toThrow(/not on PATH/);
+  // The message used to say only "unset COMPASS_CLAUDE_HOST", which sent a real user to edit
+  // .env.local while the value was actually exported from ~/.zshrc — and a real env var outranks
+  // the file, so the edit could never win. A halt that misdirects the reader is half a halt.
+  it("names the shell as a possible source, not just the file", () => {
+    try {
+      selectHost("cl1", hasNothing);
+    } catch (e) {
+      expect((e as Error).message).toMatch(/shell/);
+      expect((e as Error).message).toMatch(/overrides the file/);
+    }
   });
 
   it("accepts v1's host name for the same thing", () => {
-    // `claude-code` is what v1's router called it. Someone carrying a config across should get the
-    // CLI answer, not "unknown host".
-    expect(() => selectHost("claude-code", has("claude"))).toThrow(/not implemented yet/);
+    // `claude-code` is what v1's router called it, and v1 uses the SAME env var — someone carrying
+    // a config across should get the CLI, not "unknown host".
+    expect(selectHost("claude-code", has("claude")).name).toBe("cli");
   });
 
   // A typo must not silently run somewhere. Without this, COMPASS_CLAUDE_HOST=cl1 bills the API.
