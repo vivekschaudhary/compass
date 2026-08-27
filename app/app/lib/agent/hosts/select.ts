@@ -17,6 +17,15 @@ import { cliHost } from "./cli";
 import { HostUnavailable, type Host } from "./types";
 
 /**
+ * The model every host runs, in ONE place.
+ *
+ * It lived as a `const MODEL` local to `run.ts`, which was fine while the agent loop was the only
+ * thing that called a host. It is not any more — the ticket composer dispatches too — and two
+ * literals is how the second caller silently stays on an older model after the first is upgraded.
+ */
+export const MODEL = "claude-opus-5";
+
+/**
  * What the operator asked for, normalised. Absent, empty or `api` all mean the API host.
  *
  * Typed to the one key it reads rather than the whole `ProcessEnv`, so a caller — a test, most of

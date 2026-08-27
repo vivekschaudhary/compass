@@ -28,15 +28,54 @@ import {
   type CriterionRow,
 } from "./gates";
 import { mirrorPhase, type Mirrored } from "./tracker";
+import { composeTicketBodies, type Composed } from "./ticket-body";
+
+/**
+ * The board, in both halves: the tickets exist, and they say something.
+ *
+ * Two calls rather than one because they fail differently and must be reported apart. Mirroring is
+ * structural — no epic means no board at all. Composition is editorial — a ticket whose body did not
+ * compose is on the board and readable, just still carrying its placeholder. Collapsing them into
+ * one "problems" list would make a model outage look like a Jira outage.
+ */
+export type BoardResult = Mirrored & { composed?: Composed };
 
 export type Initiated =
   | {
       ok: true;
       runId: string;
       tasks: { id: string; title: string; role: string }[];
-      mirrored?: Mirrored;
+      mirrored?: BoardResult;
     }
   | { ok: false; error: string };
+
+/**
+ * Mirror, then compose.
+ *
+ * Composition runs after, never during: opening a phase must not wait on a model, and a phase whose
+ * bodies could not be written still has its board. Its failure is returned, never thrown — the work
+ * happened whether or not a ticket reads well.
+ */
+async function putOnBoard(
+  engagementId: string, runId: string, roleCode: string,
+): Promise<BoardResult> {
+  const mirrored = await mirrorPhase(engagementId, runId, roleCode);
+  // Nothing on the board is nothing to write on. Composing here would spend a model call producing
+  // text with nowhere to go.
+  if (!mirrored.epic) return mirrored;
+
+  try {
+    return { ...mirrored, composed: await composeTicketBodies(engagementId, runId, roleCode) };
+  } catch (e) {
+    return {
+      ...mirrored,
+      composed: {
+        written: [], expected: 0, reason: "no-host",
+        problems: [`Composing ticket bodies failed: ${e instanceof Error ? e.message : String(e)}`],
+      },
+    };
+  }
+}
 
 /**
  * Start a phase.
@@ -110,11 +149,7 @@ export async function initiatePhase(
     // subsequent initiate short-circuited here, so a phase opened during an outage could never be
     // put on the board at all. `mirrorPhase` is idempotent — a run that already has its epic and
     // stories re-reads their keys and writes nothing.
-    const mirrored = await mirrorPhase(
-      actor.engagementId,
-      open.id,
-      actor.roleCode,
-    );
+    const mirrored = await putOnBoard(actor.engagementId, open.id, actor.roleCode);
     return { ok: true, runId: open.id, tasks, mirrored };
   }
 
@@ -230,11 +265,7 @@ export async function initiatePhase(
   //
   // Machine rows above closed with no ticket yet, which is why they close locally without the
   // board: mirrorPhase creates their story and moves it to match, a few lines from here.
-  const mirrored = await mirrorPhase(
-    actor.engagementId,
-    runId as string,
-    actor.roleCode,
-  );
+  const mirrored = await putOnBoard(actor.engagementId, runId as string, actor.roleCode);
 
   return { ok: true, runId: runId as string, tasks, mirrored };
 }
@@ -266,7 +297,7 @@ export async function remirrorPhase(
   if (!run)
     return { ok: false, error: "That phase is not in your engagement." };
 
-  const mirrored = await mirrorPhase(actor.engagementId, runId, actor.roleCode);
+  const mirrored = await putOnBoard(actor.engagementId, runId, actor.roleCode);
   return { ok: true, mirrored };
 }
 

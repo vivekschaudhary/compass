@@ -134,6 +134,46 @@ async function ensureInputs(taskId: string, engagementId: string): Promise<Pinne
   return loadInputs(taskId, engagementId);
 }
 
+/**
+ * One document's text, at a named version or at whatever is current.
+ *
+ * Extracted from `loadInputs` so the ticket composer reads a document the same way an agent turn
+ * does — same section ordering, same `## heading` assembly, same honest empty. A second reader
+ * written beside this one would drift the moment either changed, and the drift would be invisible:
+ * both would return text.
+ *
+ * `version` omitted means the document's CURRENT version. That is right for a caller with no pin —
+ * the composer — and wrong for a task, which must read what it pinned; hence the parameter rather
+ * than a default that quietly resolves to now.
+ */
+export async function loadDocumentText(
+  engagementId: string, path: string, version?: string | null,
+): Promise<PinnedInput> {
+  const sb = supabaseAdmin();
+  const absent: PinnedInput = { path, title: null, version: null, body: null };
+  if (!sb) return absent;
+
+  const { data: doc } = await sb.from("document")
+    .select("id, title, current_version_id").eq("engagement_id", engagementId).eq("path", path).maybeSingle();
+  if (!doc) return absent;
+
+  const { data: v } = version
+    // The PINNED version, not the current one. This is the whole point of pinning.
+    ? await sb.from("document_version")
+        .select("id, version").eq("document_id", doc.id).eq("version", version).maybeSingle()
+    : doc.current_version_id
+      ? await sb.from("document_version")
+          .select("id, version").eq("id", doc.current_version_id).maybeSingle()
+      : { data: null };
+
+  const { data: sections } = v
+    ? await sb.from("document_section").select("heading, body").eq("document_version_id", v.id).order("ord")
+    : { data: [] };
+
+  const body = (sections ?? []).map((s) => `## ${s.heading}\n${s.body}`).join("\n\n");
+  return { path, title: doc.title, version: v?.version ?? null, body: body || null };
+}
+
 /** Load the pinned documents' text, at the pinned version. */
 async function loadInputs(taskId: string, engagementId: string): Promise<PinnedInput[]> {
   const sb = supabaseAdmin();
@@ -145,27 +185,16 @@ async function loadInputs(taskId: string, engagementId: string): Promise<PinnedI
 
   const out: PinnedInput[] = [];
   for (const pin of pins) {
-    const { data: doc } = await sb.from("document")
-      .select("id, title").eq("engagement_id", engagementId).eq("path", pin.document_path).maybeSingle();
-
-    if (!doc || !pin.document_version) {
+    // No pinned version means nothing was there to pin. Reported as an absence with whatever title
+    // the document has, rather than resolved forward to the current version — a task must not read
+    // text that did not exist when it started.
+    if (!pin.document_version) {
+      const { data: doc } = await sb.from("document")
+        .select("title").eq("engagement_id", engagementId).eq("path", pin.document_path).maybeSingle();
       out.push({ path: pin.document_path, title: doc?.title ?? null, version: null, body: null });
       continue;
     }
-
-    // The PINNED version, not the current one. This is the whole point of pinning.
-    const { data: v } = await sb.from("document_version")
-      .select("id").eq("document_id", doc.id).eq("version", pin.document_version).maybeSingle();
-
-    const { data: sections } = v
-      ? await sb.from("document_section").select("heading, body").eq("document_version_id", v.id).order("ord")
-      : { data: [] };
-
-    const body = (sections ?? []).map((s) => `## ${s.heading}\n${s.body}`).join("\n\n");
-    out.push({
-      path: pin.document_path, title: doc.title, version: pin.document_version,
-      body: body || null,
-    });
+    out.push(await loadDocumentText(engagementId, pin.document_path, pin.document_version));
   }
   return out;
 }
@@ -301,6 +330,64 @@ export function withoutTaskCatalogue(md: string): string {
     .replace(/\n{3,}/g, "\n\n");            // the seam, not a reformat of the whole file
 }
 
+/**
+ * A step's Done criteria, in order.
+ *
+ * The criteria are held per workflow VERSION with an optional `step_task`, so a null `step_task` is
+ * a criterion the whole workflow carries and must apply to every step. Extracted because the ticket
+ * composer needs the same list: the criteria go into a ticket verbatim, and a second query that
+ * forgot the null case would put a subtly shorter acceptance list on the board than the one the
+ * work is actually graded against.
+ */
+export async function doneCriteriaFor(stepId: string): Promise<string[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { data: step } = await sb.from("workflow_step")
+    .select("task, workflow_version_id").eq("id", stepId).maybeSingle();
+  if (!step?.workflow_version_id) return [];
+
+  const { data: cs } = await sb.from("criterion")
+    .select("statement, subject_kind, subject_ref, operator, value, step_task")
+    .eq("workflow_version_id", step.workflow_version_id).eq("kind", "done").order("ord");
+  return (cs ?? [])
+    .filter((c) => c.step_task === null || c.step_task === step.task)
+    .map((c) => c.statement || `${c.subject_kind} ${c.subject_ref} ${c.operator} ${c.value}`);
+}
+
+/**
+ * The markdown a role brings, ready to be a system prompt.
+ *
+ * Through the spec spine, not off the disk.
+ *
+ * v1 resolves every framework file in three tiers — engagement override, then org default, then
+ * what compass/ ships — and `specs.ts` says plainly that BOTH runtimes read through it. v2 was
+ * meant to be a new surface on that spine and instead read `compass/agents/<agent>.md` straight
+ * from the filesystem, which silently dropped the first two tiers: an engagement that had
+ * customised how its delivery manager works got the framework default and no error saying so.
+ *
+ * Null when the role has no `agent`, or when the file it names does not exist — `role.code = 'pm'`
+ * points at `agents/pm.md`, which is not in the repo. A missing agent file is REPORTED by every
+ * caller, never substituted. Inventing a role description would produce an agent that behaves
+ * plausibly and follows none of the actual discipline.
+ *
+ * Stripped of its task catalogue HERE rather than in `resolveSpec`: the SpecEditor and every other
+ * consumer must still see the whole document. This is about what goes into a prompt.
+ */
+export async function agentMarkdown(
+  engagementId: string, orgId: string, roleCode: string,
+): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const { data: role } = await sb.from("role")
+    .select("agent").eq("org_id", orgId).eq("code", roleCode).maybeSingle();
+  if (!role?.agent) return null;
+
+  const resolved = await resolveSpec(engagementId, `agents/${role.agent}.md`);
+  return resolved ? withoutTaskCatalogue(resolved.content) : null;
+}
+
 /** Everything the agent needs, assembled from the record rather than from the caller. */
 export async function buildContext(actor: Actor, taskId: string): Promise<AgentContext | null> {
   const sb = supabaseAdmin();
@@ -317,41 +404,15 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   );
   if (!task) return null;
 
-  const { data: role } = await sb.from("role")
-    .select("agent").eq("org_id", actor.orgId).eq("code", task.role_code).maybeSingle();
-
-  // Through the spec spine, not off the disk.
-  //
-  // v1 resolves every framework file in three tiers — engagement override, then org default, then
-  // what compass/ ships — and `specs.ts` says plainly that BOTH runtimes read through it. v2 was
-  // meant to be a new surface on that spine and instead read `compass/agents/<agent>.md` straight
-  // from the filesystem, which silently dropped the first two tiers: an engagement that had
-  // customised how its delivery manager works got the framework default and no error saying so.
-  const resolved = role?.agent
-    ? await resolveSpec(actor.engagementId, `agents/${role.agent}.md`)
-    : null;
-  // A missing agent file is reported, never substituted. Inventing a role description would
-  // produce an agent that behaves plausibly and follows none of the actual discipline.
-  //
-  // Stripped HERE rather than in `resolveSpec`: the SpecEditor and every other consumer must still
-  // see the whole document. This is about what goes into a prompt.
-  const agentFile: string | null = resolved ? withoutTaskCatalogue(resolved.content) : null;
+  const agentFile = await agentMarkdown(actor.engagementId, actor.orgId, task.role_code);
 
   let produces: string | null = null;
   let doneCriteria: string[] = [];
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
-      .select("task, produces, workflow_version_id").eq("id", task.workflow_step_id).maybeSingle();
+      .select("produces").eq("id", task.workflow_step_id).maybeSingle();
     produces = step?.produces ?? null;
-
-    if (step?.workflow_version_id) {
-      const { data: cs } = await sb.from("criterion")
-        .select("statement, subject_kind, subject_ref, operator, value, step_task")
-        .eq("workflow_version_id", step.workflow_version_id).eq("kind", "done").order("ord");
-      doneCriteria = (cs ?? [])
-        .filter((c) => c.step_task === null || c.step_task === step.task)
-        .map((c) => c.statement || `${c.subject_kind} ${c.subject_ref} ${c.operator} ${c.value}`);
-    }
+    doneCriteria = await doneCriteriaFor(task.workflow_step_id);
   }
 
   return {

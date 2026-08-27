@@ -27,11 +27,9 @@ import { publishToDocs } from "../data/publish";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { nestedWorkflowOf } from "../data/phases";
-import { selectHost } from "./hosts/select";
+import { selectHost, MODEL } from "./hosts/select";
 import { TOOLS } from "./hosts/tools";
 import type { HostResult } from "./hosts/types";
-
-const MODEL = "claude-opus-5";
 
 
 /**
