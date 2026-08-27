@@ -27,6 +27,8 @@ import { publishToDocs } from "../data/publish";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { nestedWorkflowOf } from "../data/phases";
+import { selectHost } from "./hosts/select";
+import type { HostResult } from "./hosts/types";
 
 const MODEL = "claude-opus-5";
 
@@ -345,7 +347,7 @@ async function finished(
   taskId: string,
   roleCode: string,
   outcome: string,
-  message: Anthropic.Message | null,
+  message: HostResult | null,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
   await emit({
@@ -357,9 +359,12 @@ async function finished(
     actorRoleCode: roleCode,
     payload: {
       outcome,
-      stopReason: message?.stop_reason ?? null,
-      inputTokens: message?.usage?.input_tokens ?? null,
-      outputTokens: message?.usage?.output_tokens ?? null,
+      stopReason: message?.stopReason ?? null,
+      // Null when the host has no metered usage to report, which is a real answer rather than a
+      // gap — a subscription-backed run genuinely costs no tokens, and writing 0 here would make
+      // it indistinguishable from a metered run that somehow used none.
+      inputTokens: message?.usage?.inputTokens ?? null,
+      outputTokens: message?.usage?.outputTokens ?? null,
       ...extra,
     },
   });
@@ -422,18 +427,18 @@ export async function runAgent(
 
   const revision = revisionPrompt(ctx);
 
-  const client = new Anthropic();
-  let message: Anthropic.Message;
+  let message: HostResult;
   try {
-    const stream = client.messages.stream({
+    // Which host runs this is a configuration answer, and an unavailable one HALTS here rather
+    // than quietly becoming the metered API — see `hosts/select.ts`.
+    const host = selectHost();
+    message = await host.dispatch({
       model: MODEL,
       // 64k, not 32k. A run came back with a complete 1,760-character summary and an EMPTY
       // sections array: adaptive thinking at high effort plus a long summary left no budget for
       // the document itself. max_tokens caps thinking AND output together, so a document-producing
       // task needs room for both.
-      max_tokens: 64000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "high" },
+      maxTokens: 64000,
       system: systemPrompt(ctx),
       tools: TOOLS,
       messages: [
@@ -444,7 +449,6 @@ export async function runAgent(
         ...(revision ? [{ role: "user" as const, content: revision }] : []),
       ],
     });
-    message = await stream.finalMessage();
   } catch (e) {
     await sb.from("work_task").update({ executor: null }).eq("id", taskId);
     await finished(ctx.engagementId, taskId, ctx.roleCode, "error", null, {
@@ -457,11 +461,8 @@ export async function runAgent(
   }
 
   // A refusal is a real outcome, not an exception. Record it and leave the task where it is.
-  if (message.stop_reason === "refusal") {
-    const reason =
-      message.stop_details && "explanation" in message.stop_details
-        ? String(message.stop_details.explanation ?? "no explanation given")
-        : "no explanation given";
+  if (message.stopReason === "refusal") {
+    const reason = message.refusalExplanation ?? "no explanation given";
     await recordTurn(taskId, `The model declined this request. ${reason}`, ctx);
     await sb.from("work_task").update({ executor: null }).eq("id", taskId);
     return { kind: "refused", reason };
@@ -469,14 +470,10 @@ export async function runAgent(
 
   // Running out of room is not the same as having nothing to say, and it is the difference
   // between "the agent failed" and "give it more budget". Checked before anything reads content.
-  const truncated = message.stop_reason === "max_tokens";
+  const truncated = message.stopReason === "max_tokens";
 
-  const text = message.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
-  const call = message.content.find((b) => b.type === "tool_use");
+  const text = message.text;
+  const call = message.toolCall;
 
   if (!call) {
     // It answered in prose without choosing a tool. Record what it said rather than discarding it,
