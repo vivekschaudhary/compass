@@ -64,7 +64,7 @@ const BUNDLE = (stepsCsv: string) => ({
   roles: "code,label,tier,scope,workstream,agent\ndelivery-manager,DM,practitioner,mine,Delivery,delivery-manager\n",
   workflows: "code,label,workstream,phase,owner_role,trigger,enabled\nsprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true\n",
   steps: "workflow,ord,kind,role,task,produces,reads,conditional,nests,title,depends_on\n" + stepsCsv,
-  criteria: "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n",
+  criteria: "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n",
 });
 
 const EXISTING = {

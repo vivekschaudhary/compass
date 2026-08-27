@@ -62,7 +62,13 @@ export type StepRow = {
   dependsOn: string[];
 };
 export type CriterionRow = {
-  workflow: string; stepOrd: number | null; kind: string; text: string;
+  workflow: string;
+  /**
+   * The task slug of the row this criterion belongs to — by SLUG, not ord, for the same reason
+   * `dependsOn` is. Null means the criterion belongs to the workflow as a whole.
+   */
+  stepTask: string | null;
+  kind: string; text: string;
   subjectKind: string; subjectRef: string; operator: string; value: string;
 };
 
@@ -186,7 +192,11 @@ export function deriveReads(steps: StepRow[]): StepRow[] {
 
 function readCriteria(csv: string): CriterionRow[] {
   return parseRecords(csv).map((r) => ({
-    workflow: r.workflow, stepOrd: r.ord === "" ? null : num(r.ord), kind: r.kind,
+    // `?? ""` matters: a CSV with no `task` column at all reads undefined, and undefined is not
+    // null — it would survive into the row and compare unequal to every step slug, so every
+    // criterion would be refused with the useless message "names task 'undefined'". Absent and
+    // empty both mean the same thing: this criterion belongs to the workflow, not to a row.
+    workflow: r.workflow, stepTask: (r.task ?? "") === "" ? null : r.task, kind: r.kind,
     text: r.text ?? "", subjectKind: r.subject_kind ?? "", subjectRef: r.subject_ref ?? "",
     operator: r.operator ?? "", value: r.value ?? "",
   }));
@@ -414,27 +424,22 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
         "Add the workflow to workflows.csv.");
     if (!CRITERION_KINDS.includes(c.kind))
       add("criteria.csv", row, `Criterion for '${c.workflow}' has kind '${c.kind}'.`, `Use one of: ${CRITERION_KINDS.join(", ")}.`);
-    const namedStep = c.stepOrd === null
+    const namedStep = c.stepTask === null
       ? null
-      : steps.find((s) => s.workflow === c.workflow && s.ord === c.stepOrd) ?? null;
+      : steps.find((s) => s.workflow === c.workflow && s.task === c.stepTask) ?? null;
 
-    if (c.stepOrd !== null && !namedStep)
-      add("criteria.csv", row, `Criterion names step ${c.stepOrd} of '${c.workflow}', which has no such step.`,
-        "Leave the ord column empty for a workflow-level criterion, or point at a step that exists.");
+    if (c.stepTask !== null && !namedStep)
+      add("criteria.csv", row, `Criterion names task '${c.stepTask}' of '${c.workflow}', which has no such row.`,
+        "Leave the task column empty for a workflow-level criterion, or name a row that exists.");
 
     // A document check must name the document ITS OWN STEP promises.
     //
-    // Criteria bind to a step by ORDINAL, so renumbering the steps silently slides every criterion
-    // onto a different row. Checking only that the ord EXISTS cannot see that: a permuted ord names
-    // a real step, so the import passes and the drift surfaces on a live board. Sprint-0 shipped
-    // with five of these when it absorbed pre-sprint-0 — the timeline row asked for the product
-    // brief, the staffing row asked for the timeline, and the sprint-plan row checked the delivery
-    // plan, which a DIFFERENT row publishes.
-    //
-    // Both directions of failure are bad and they do not look alike. A row pointed at a document
-    // nobody produces can never close. A row pointed at a document some OTHER row produces closes
-    // on that row's work — a false green, which is worse, because it is indistinguishable from the
-    // deliverable actually existing.
+    // Slug binding stops a criterion sliding onto another row when the steps are renumbered, which
+    // is how sprint-0 broke. It does NOT stop a criterion being pointed at the wrong document in
+    // the first place, and the two failures do not look alike. A row pointed at a document nobody
+    // produces can never close. A row pointed at a document some OTHER row produces closes on that
+    // row's work — a false green, which is worse, because it is indistinguishable from the
+    // deliverable actually existing. Sprint-0 shipped one of each.
     //
     // Only the produces-bearing case is checked. A step that promises nothing has nothing to
     // contradict, and a criterion may legitimately read a document from an earlier phase.
@@ -442,11 +447,11 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
         && c.subjectRef !== namedStep.produces) {
       const producer = steps.find((s) => s.workflow === c.workflow && s.produces === c.subjectRef);
       add("criteria.csv", row,
-        `Step ${c.stepOrd} of '${c.workflow}' (${namedStep.task}) produces '${namedStep.produces}', ` +
+        `Row '${c.stepTask}' of '${c.workflow}' produces '${namedStep.produces}', ` +
         `but its criterion checks '${c.subjectRef}'` +
-        (producer ? ` — which step ${producer.ord} (${producer.task}) produces.` : " — which no step here produces."),
+        (producer ? ` — which '${producer.task}' produces.` : " — which no row here produces."),
         producer
-          ? `Point the criterion at '${namedStep.produces}', or move it to step ${producer.ord}. As written this row closes on another row's work.`
+          ? `Point the criterion at '${namedStep.produces}', or move it to '${producer.task}'. As written this row closes on another row's work.`
           : `Point the criterion at '${namedStep.produces}'. As written this row can never close.`);
     }
 
@@ -522,7 +527,7 @@ function describeChanges(
   const key = (s: StepRow) =>
     `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.dependsOn.join("|")}`;
   const ckey = (c: CriterionRow) =>
-    `${c.stepOrd ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
+    `${c.stepTask ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
 
   const wasSteps = new Set(before.steps.map(key));
   const nowSteps = new Set(steps.map(key));

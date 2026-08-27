@@ -152,13 +152,50 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
     async addCriteria(versionId, criteria) {
       if (!criteria.length) return;
       fail("insert criteria", (await sb.from("criterion").insert(criteria.map((c, i) => ({
-        workflow_version_id: versionId, step_ord: c.stepOrd, kind: c.kind, ord: i,
+        // `ord` is a running index over file order — display order only, now that which STEP a
+        // criterion belongs to is carried by the slug rather than by a position.
+        workflow_version_id: versionId, step_task: c.stepTask, kind: c.kind, ord: i,
         statement: c.text,                                  // `statement` in the schema; `text` in the CSV
         subject_kind: c.subjectKind || null, subject_ref: c.subjectRef || null,
         operator: c.operator || null, value: c.value || null,
       })))).error);
     },
   };
+}
+
+/**
+ * Open runs executing a version that is no longer the published one.
+ *
+ * Not a failure and not something to fix here — a run pins its version deliberately. This exists
+ * because the pin was INVISIBLE: sprint-0 v5 fixed criteria that had slid onto the wrong rows, the
+ * import said "unchanged" because the seed matched the published version, and the live board went
+ * on executing v4 with a Done gate that could never close. The number is the only thing standing
+ * between that and another session spent tracing it.
+ *
+ * Counts, deliberately, rather than listing: it is a prompt to run `scripts/repoint-runs.mts`,
+ * which does the naming and the validating.
+ */
+export async function countStaleRuns(): Promise<number> {
+  const sb = supabaseAdmin();
+  if (!sb) return 0;
+
+  const { data: runs } = await sb.from("workflow_run")
+    .select("id, workflow_version_id").neq("state", "closed");
+  if (!runs?.length) return 0;
+
+  const { data: versions } = await sb.from("workflow_version").select("id, workflow_id, status");
+  const workflowOf = new Map((versions ?? []).map((v) => [v.id as string, v.workflow_id as string]));
+  const publishedFor = new Map(
+    (versions ?? []).filter((v) => v.status === "published").map((v) => [v.workflow_id as string, v.id as string]),
+  );
+
+  // A run whose workflow has NO published version is not counted. That is a different problem —
+  // the workflow was retired under it — and folding the two together would make this number mean
+  // two things, which is how a signal stops being read.
+  return runs.filter((r) => {
+    const published = publishedFor.get(workflowOf.get(r.workflow_version_id) ?? "");
+    return published !== undefined && published !== r.workflow_version_id;
+  }).length;
 }
 
 /**
@@ -222,7 +259,7 @@ export async function readExisting(
       .select("ord, kind, role_code, task, produces, reads, conditional, nests_workflow_code, title, depends_on")
       .eq("workflow_version_id", ver.id).order("ord");
     const { data: crits } = await sb.from("criterion")
-      .select("step_ord, kind, statement, subject_kind, subject_ref, operator, value")
+      .select("step_task, kind, statement, subject_kind, subject_ref, operator, value")
       .eq("workflow_version_id", ver.id).order("ord");
 
     workflows.push({
@@ -234,7 +271,7 @@ export async function readExisting(
         dependsOn: s.depends_on ?? [],
       })),
       criteria: (crits ?? []).map((c): CriterionRow => ({
-        workflow: wf.code, stepOrd: c.step_ord, kind: c.kind, text: c.statement ?? "",
+        workflow: wf.code, stepTask: c.step_task, kind: c.kind, text: c.statement ?? "",
         subjectKind: c.subject_kind ?? "", subjectRef: c.subject_ref ?? "",
         operator: c.operator ?? "", value: c.value ?? "",
       })),

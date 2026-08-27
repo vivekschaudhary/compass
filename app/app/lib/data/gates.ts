@@ -22,7 +22,8 @@ export { describeCriterion } from "@/app/v2/_ui/criterion";
 export type CriterionRow = {
   id: string;
   kind: "ready" | "done";
-  stepOrd: number | null;
+  /** The task slug of the step this criterion belongs to; null means the workflow as a whole. */
+  stepTask: string | null;
   statement: string;
   subjectKind: string | null;
   subjectRef: string | null;
@@ -258,7 +259,7 @@ export async function evaluate(actor: Actor, c: CriterionRow, taskId: string | n
 /**
  * A task's criteria: its own step's, plus the workflow-level ones.
  *
- * Workflow-level criteria (step_ord null) are about the run as a whole and are shown separately —
+ * Workflow-level criteria (step_task null) are about the run as a whole and are shown separately —
  * a task card lists what that task must satisfy, never someone else's step. But the READY gate on
  * the workflow does apply before the first task may start, which is why they are returned together
  * and labelled rather than merged.
@@ -276,20 +277,20 @@ export async function criteriaForTask(taskId: string): Promise<CriterionRow[]> {
   const versionId = Array.isArray(run) ? run[0]?.workflow_version_id : run?.workflow_version_id;
   if (!versionId) return [];
 
-  let stepOrd: number | null = null;
+  let stepTask: string | null = null;
   if (task.workflow_step_id) {
-    const { data: step } = await sb.from("workflow_step").select("ord").eq("id", task.workflow_step_id).maybeSingle();
-    stepOrd = step?.ord ?? null;
+    const { data: step } = await sb.from("workflow_step").select("task").eq("id", task.workflow_step_id).maybeSingle();
+    stepTask = step?.task ?? null;
   }
 
   const { data } = await sb.from("criterion")
-    .select("id, kind, step_ord, statement, subject_kind, subject_ref, operator, value")
+    .select("id, kind, step_task, statement, subject_kind, subject_ref, operator, value")
     .eq("workflow_version_id", versionId).order("ord");
 
   return (data ?? [])
-    .filter((c) => c.step_ord === null || c.step_ord === stepOrd)
+    .filter((c) => c.step_task === null || c.step_task === stepTask)
     .map((c) => ({
-      id: c.id, kind: c.kind, stepOrd: c.step_ord, statement: c.statement,
+      id: c.id, kind: c.kind, stepTask: c.step_task, statement: c.statement,
       subjectKind: c.subject_kind, subjectRef: c.subject_ref, operator: c.operator, value: c.value,
     }));
 }
@@ -400,8 +401,8 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
   const { data: tasks } = await sb.from("work_task")
     .select("id, workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)").in("id", taskIds);
 
-  const { data: steps } = await sb.from("workflow_step").select("id, ord");
-  const ordOf = new Map((steps ?? []).map((s) => [s.id, s.ord as number]));
+  const { data: steps } = await sb.from("workflow_step").select("id, task");
+  const taskOf = new Map((steps ?? []).map((s) => [s.id, s.task as string]));
 
   const versionIds = [...new Set((tasks ?? []).map((t) => {
     const r = t.workflow_run as unknown as { workflow_version_id: string } | { workflow_version_id: string }[] | null;
@@ -410,7 +411,7 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
 
   const { data: criteria } = versionIds.length
     ? await sb.from("criterion")
-        .select("id, workflow_version_id, kind, step_ord, statement, subject_kind, subject_ref, operator, value, ord")
+        .select("id, workflow_version_id, kind, step_task, statement, subject_kind, subject_ref, operator, value, ord")
         .in("workflow_version_id", versionIds).order("ord")
     : { data: [] };
 
@@ -422,15 +423,15 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
   for (const t of tasks ?? []) {
     const r = t.workflow_run as unknown as { workflow_version_id: string } | { workflow_version_id: string }[] | null;
     const versionId = Array.isArray(r) ? r[0]?.workflow_version_id : r?.workflow_version_id;
-    const stepOrd = t.workflow_step_id ? ordOf.get(t.workflow_step_id) ?? null : null;
+    const stepTask = t.workflow_step_id ? taskOf.get(t.workflow_step_id) ?? null : null;
 
     const mine = (criteria ?? [])
       .filter((c) => c.workflow_version_id === versionId)
-      .filter((c) => c.step_ord === null || c.step_ord === stepOrd)
+      .filter((c) => c.step_task === null || c.step_task === stepTask)
       .map((c): StoredStatus => {
         const m = measured.get(key(t.id, c.id));
         return {
-          id: c.id, kind: c.kind, stepOrd: c.step_ord, statement: c.statement,
+          id: c.id, kind: c.kind, stepTask: c.step_task, statement: c.statement,
           subjectKind: c.subject_kind, subjectRef: c.subject_ref, operator: c.operator, value: c.value,
           satisfied: m ? m.satisfied : null,
           measuredAt: m?.measured_at ?? null, source: m?.source ?? null, detail: m?.detail ?? null,
@@ -628,7 +629,7 @@ export async function reject(
  */
 export async function checkConnectors(actor: Actor): Promise<{ connector: string; verdict: Verdict }[]> {
   const shape = (ref: string): CriterionRow => ({
-    id: "", kind: "ready", stepOrd: null, statement: "",
+    id: "", kind: "ready", stepTask: null, statement: "",
     subjectKind: "connector", subjectRef: ref, operator: "is", value: "wired",
   });
   return Promise.all(

@@ -346,10 +346,10 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
 
     if (step?.workflow_version_id) {
       const { data: cs } = await sb.from("criterion")
-        .select("statement, subject_kind, subject_ref, operator, value, step_ord")
+        .select("statement, subject_kind, subject_ref, operator, value, step_task")
         .eq("workflow_version_id", step.workflow_version_id).eq("kind", "done").order("ord");
       doneCriteria = (cs ?? [])
-        .filter((c) => c.step_ord === null || c.step_ord === step.ord)
+        .filter((c) => c.step_task === null || c.step_task === step.task)
         .map((c) => c.statement || `${c.subject_kind} ${c.subject_ref} ${c.operator} ${c.value}`);
     }
   }

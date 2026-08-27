@@ -83,7 +83,7 @@ describe("the shipped seed", () => {
     for (const code of PHASES) {
       const wf = planned().workflows.find((w) => w.row.code === code)!;
       for (const step of wf.steps) {
-        const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepOrd === step.ord);
+        const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
         expect(gates.length, `${code} step ${step.ord} has no Done criteria`).toBeGreaterThan(0);
       }
     }
@@ -118,7 +118,7 @@ describe("refuses rather than invents", () => {
     roles: "code,label,tier,scope,workstream\nengineer,Engineer,practitioner,mine,Engineering\n",
     workflows: "code,label,workstream\nbuild,Build,Engineering\n",
     steps: "workflow,ord,kind,role,task\nbuild,1,agent,engineer,implement\n",
-    criteria: "workflow,ord,kind,text\nbuild,1,done,tests pass\n",
+    criteria: "workflow,task,kind,text\nbuild,implement,done,tests pass\n",
   };
 
   it("accepts the baseline", () => {
@@ -160,7 +160,7 @@ describe("reads must resolve", () => {
     workstreams: "code,label\nDelivery,Delivery\n",
     roles: "code,label,tier,scope,workstream\ndm,DM,oversight,everyone,Delivery\n",
     workflows: "code,label,workstream\nplan,Plan,Delivery\n",
-    criteria: "workflow,ord,kind,text\nplan,1,done,done\n",
+    criteria: "workflow,task,kind,text\nplan,shape,done,done\n",
   };
   const withDocs: Existing = { ...empty, documents: ["02-scope/sow", "01-foundation/ways-of-working"] };
 
@@ -183,7 +183,7 @@ describe("reads must resolve", () => {
       steps: 'workflow,ord,kind,role,task,produces,reads\n' +
              'plan,1,agent,dm,shape,01-foundation/kickoff-backlog,"02-scope/sow"\n' +
              'staff,1,agent,dm,staff,,"01-foundation/kickoff-backlog"\n',
-      criteria: "workflow,ord,kind,text\nplan,1,done,done\nstaff,1,done,done\n",
+      criteria: "workflow,task,kind,text\nplan,shape,done,done\nstaff,staff,done,done\n",
     }, withDocs);
     expect(r.ok).toBe(true);
   });
@@ -205,7 +205,7 @@ describe("guards against checks that never evaluate", () => {
   };
 
   it("rejects a half-specified criterion", () => {
-    const r = planImport({ ...base, criteria: "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\nbuild,1,done,,ticket,KAN-1,,\n" }, empty);
+    const r = planImport({ ...base, criteria: "workflow,task,kind,text,subject_kind,subject_ref,operator,value\nbuild,implement,done,,ticket,KAN-1,,\n" }, empty);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.problems[0].fix).toContain("never evaluates");
@@ -213,20 +213,23 @@ describe("guards against checks that never evaluate", () => {
 
   it("accepts a fully-specified check and a pure judgment criterion", () => {
     const r = planImport({ ...base, criteria:
-      "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
-      "build,1,done,,ticket,KAN-1,status,Done\n" +
-      "build,1,done,The acceptance criteria are actually met,,,,\n" }, empty);
+      "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+      "build,implement,done,,ticket,KAN-1,status,Done\n" +
+      "build,implement,done,The acceptance criteria are actually met,,,,\n" }, empty);
     expect(r.ok).toBe(true);
   });
 
   it("rejects a criterion with neither a check nor any text", () => {
-    const r = planImport({ ...base, criteria: "workflow,ord,kind,text\nbuild,1,done,\n" }, empty);
+    const r = planImport({ ...base, criteria: "workflow,task,kind,text\nbuild,implement,done,\n" }, empty);
     expect(r.ok).toBe(false);
   });
 
-  it("rejects a criterion pointing at a step that does not exist", () => {
-    const r = planImport({ ...base, criteria: "workflow,ord,kind,text\nbuild,9,done,something\n" }, empty);
+  it("rejects a criterion naming a task that does not exist", () => {
+    const r = planImport({ ...base, criteria: "workflow,task,kind,text\nbuild,implemnt,done,something\n" }, empty);
     expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.problems[0].message).toContain("'implemnt'");
+    expect(r.problems[0].fix).toContain("name a row that exists");
   });
 });
 
@@ -237,7 +240,7 @@ describe("machine checks are not work", () => {
     workstreams: "code,label\nEngineering,Engineering\n",
     roles: "code,label,tier,scope,workstream\nengineer,Engineer,practitioner,mine,Engineering\n",
     workflows: "code,label,workstream\nbuild,Build,Engineering\n",
-    criteria: "workflow,ord,kind,text\nbuild,,done,merged\n",
+    criteria: "workflow,task,kind,text\nbuild,,done,merged\n",
   };
 
   it("rejects a machine step that names a role", () => {
@@ -266,7 +269,7 @@ describe("import is versioning", () => {
     roles: "code,label,tier,scope,workstream\nengineer,Engineer,practitioner,mine,Engineering\n",
     workflows: "code,label,workstream\nbuild,Build,Engineering\n",
     steps: "workflow,ord,kind,role,task\nbuild,1,agent,engineer,implement\n",
-    criteria: "workflow,ord,kind,text\nbuild,1,done,tests pass\n",
+    criteria: "workflow,task,kind,text\nbuild,implement,done,tests pass\n",
   };
 
   const already: Existing = {
@@ -274,7 +277,7 @@ describe("import is versioning", () => {
     workflows: [{
       code: "build",
       steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] }],
-      criteria: [{ workflow: "build", stepOrd: 1, kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
+      criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
 
@@ -328,7 +331,7 @@ describe("import is versioning", () => {
 
   it("tightening a criterion produces a new version — the CoP improvement loop", () => {
     const r = planImport(
-      { ...bundle, criteria: "workflow,ord,kind,text\nbuild,1,done,tests pass and coverage holds\n" },
+      { ...bundle, criteria: "workflow,task,kind,text\nbuild,implement,done,tests pass and coverage holds\n" },
       already,
     );
     expect(r.ok).toBe(true);
@@ -364,9 +367,8 @@ describe("reporting", () => {
 
 /* ── a document criterion must check its own step's promise ──────────────── */
 
-// Criteria bind to a step by ORDINAL, so renumbering the steps slides every criterion onto a
-// different row without changing a single criteria.csv line. Checking only that the ord EXISTS
-// cannot see it. Sprint-0 shipped five of these when it absorbed pre-sprint-0.
+// Slug binding stops a criterion sliding when the steps are renumbered. It does NOT stop one being
+// pointed at the wrong document to begin with, which is what this describe covers.
 describe("a document criterion checks what its own step produces", () => {
   const base: Bundle = {
     workstreams: "code,label\nDelivery,Delivery\n",
@@ -377,9 +379,9 @@ describe("a document criterion checks what its own step produces", () => {
       "sprint-0,1,agent,dm,file-sow,02-scope/sow\n" +
       "sprint-0,2,agent,dm,draft-timeline,02-scope/timeline\n",
     criteria:
-      "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
-      "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
-      "sprint-0,2,done,The timeline is published,document,02-scope/timeline,status,published\n",
+      "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+      "sprint-0,file-sow,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+      "sprint-0,draft-timeline,done,The timeline is published,document,02-scope/timeline,status,published\n",
   };
 
   it("accepts criteria that match their step", () => {
@@ -392,15 +394,15 @@ describe("a document criterion checks what its own step produces", () => {
   it("rejects a criterion checking a document a DIFFERENT step produces", () => {
     const r = planImport({ ...base,
       criteria:
-        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
-        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
-        "sprint-0,2,done,The timeline is published,document,02-scope/sow,status,published\n",
+        "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,file-sow,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,draft-timeline,done,The timeline is published,document,02-scope/sow,status,published\n",
     }, empty);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     const p = r.problems.find((x) => x.message.includes("draft-timeline"))!;
     expect(p.message).toContain("produces '02-scope/timeline'");
-    expect(p.message).toContain("step 1 (file-sow) produces");
+    expect(p.message).toContain("which 'file-sow' produces");
     expect(p.fix).toContain("closes on another row's work");
   });
 
@@ -409,14 +411,14 @@ describe("a document criterion checks what its own step produces", () => {
   it("rejects a criterion checking a document no step produces", () => {
     const r = planImport({ ...base,
       criteria:
-        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
-        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
-        "sprint-0,2,done,Findings recorded,document,04-governance/decisions,status,published\n",
+        "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,file-sow,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,draft-timeline,done,Findings recorded,document,04-governance/decisions,status,published\n",
     }, empty);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     const p = r.problems.find((x) => x.message.includes("draft-timeline"))!;
-    expect(p.message).toContain("which no step here produces");
+    expect(p.message).toContain("which no row here produces");
     expect(p.fix).toContain("can never close");
   });
 
@@ -425,9 +427,9 @@ describe("a document criterion checks what its own step produces", () => {
   it("leaves judgment and phase-wide criteria alone", () => {
     const r = planImport({ ...base,
       criteria:
-        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
-        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
-        "sprint-0,2,done,Every milestone has a date,,,,\n" +
+        "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,file-sow,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,draft-timeline,done,Every milestone has a date,,,,\n" +
         "sprint-0,,ready,The systems of record answered,connector,docs,is,wired\n",
     }, empty);
     expect(r.ok).toBe(true);
@@ -442,10 +444,87 @@ describe("a document criterion checks what its own step produces", () => {
         "sprint-0,1,agent,dm,file-sow,02-scope/sow\n" +
         "sprint-0,2,agent,dm,review,\n",
       criteria:
-        "workflow,ord,kind,text,subject_kind,subject_ref,operator,value\n" +
-        "sprint-0,1,done,The SOW is filed,document,02-scope/sow,status,published\n" +
-        "sprint-0,2,done,The SOW was read,document,02-scope/sow,status,published\n",
+        "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "sprint-0,file-sow,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+        "sprint-0,review,done,The SOW was read,document,02-scope/sow,status,published\n",
     }, empty);
     expect(r.ok).toBe(true);
+  });
+});
+
+/* ── renumbering the steps must not move a single criterion ──────────────── */
+
+// The defect this binding exists to kill, reproduced.
+//
+// sprint-0 absorbed pre-sprint-0's rows and the steps were renumbered. criteria.csv was not touched
+// — not one line changed — and seven of twelve rows silently acquired a different row's gate: the
+// timeline row asked for the product brief, the staffing row asked for the timeline, the
+// sprint-plan row checked the delivery plan that step 8 publishes. Nothing failed, because a
+// permuted ordinal still names a real step.
+//
+// Under ordinal binding this test fails. Under slug binding the ords are free to move.
+describe("criteria survive their steps being renumbered", () => {
+  const criteria =
+    "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+    "sprint-0,file-sow,done,The SOW is filed,document,02-scope/sow,status,published\n" +
+    "sprint-0,draft-product-brief,done,The brief is published,document,01-foundation/product-brief,status,published\n" +
+    "sprint-0,draft-timeline,done,The timeline is published,document,02-scope/timeline,status,published\n";
+
+  const bundle = (steps: string): Bundle => ({
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles: "code,label,tier,scope,workstream\ndm,DM,oversight,everyone,Delivery\n",
+    workflows: "code,label,workstream\nsprint-0,Sprint 0,Delivery\n",
+    steps, criteria,
+  });
+
+  const ORIGINAL =
+    "workflow,ord,kind,role,task,produces\n" +
+    "sprint-0,1,agent,dm,file-sow,02-scope/sow\n" +
+    "sprint-0,2,agent,dm,draft-product-brief,01-foundation/product-brief\n" +
+    "sprint-0,3,agent,dm,draft-timeline,02-scope/timeline\n";
+
+  // The same three rows, renumbered — exactly what absorbing a phase does. The brief moves from 2
+  // to 3 and the timeline from 3 to 2.
+  const RENUMBERED =
+    "workflow,ord,kind,role,task,produces\n" +
+    "sprint-0,1,agent,dm,file-sow,02-scope/sow\n" +
+    "sprint-0,2,agent,dm,draft-timeline,02-scope/timeline\n" +
+    "sprint-0,3,agent,dm,draft-product-brief,01-foundation/product-brief\n";
+
+  const gateFor = (steps: string, task: string) => {
+    const r = planImport(bundle(steps), empty);
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("\n"));
+    return r.plan.workflows[0].criteria.filter((c) => c.stepTask === task).map((c) => c.subjectRef);
+  };
+
+  it("binds each criterion to the same row before and after", () => {
+    for (const task of ["file-sow", "draft-product-brief", "draft-timeline"]) {
+      expect(gateFor(RENUMBERED, task), `${task} changed gate when renumbered`)
+        .toEqual(gateFor(ORIGINAL, task));
+    }
+  });
+
+  it("keeps the timeline row asking for the timeline, not the brief", () => {
+    expect(gateFor(RENUMBERED, "draft-timeline")).toEqual(["02-scope/timeline"]);
+    expect(gateFor(RENUMBERED, "draft-product-brief")).toEqual(["01-foundation/product-brief"]);
+  });
+
+  // The diff key must see the move too. A key that omits the binding reports "unchanged" when a
+  // criterion changes rows — the same class of defect as the one being fixed, one layer up.
+  it("reports a criterion moved to a different row as a change", () => {
+    const before = planImport(bundle(ORIGINAL), empty);
+    if (!before.ok) throw new Error("fixture does not plan");
+    const w = before.plan.workflows[0];
+
+    const moved = criteria.replace("sprint-0,draft-timeline,done,The timeline is published",
+                                   "sprint-0,file-sow,done,The timeline is published");
+    const r = planImport(
+      { ...bundle(ORIGINAL), criteria: moved },
+      { ...empty, workstreams: ["Delivery"], roles: ["dm"],
+        workflows: [{ code: "sprint-0", steps: w.steps, criteria: w.criteria }] },
+    );
+    // It refuses outright — file-sow produces the SOW, so the moved criterion now checks another
+    // row's document. Refusing is a stronger answer than reporting it as a change.
+    expect(r.ok).toBe(false);
   });
 });

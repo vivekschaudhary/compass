@@ -28,7 +28,7 @@ const bundle: Bundle = {
   roles: "code,label,tier,scope,workstream\nengineer,Engineer,practitioner,mine,Engineering\n",
   workflows: "code,label,workstream\nbuild,Build,Engineering\n",
   steps: "workflow,ord,kind,role,task\nbuild,1,agent,engineer,implement\nbuild,2,agent,engineer,test\n",
-  criteria: "workflow,ord,kind,text\nbuild,1,done,tests pass\n",
+  criteria: "workflow,task,kind,text\nbuild,implement,done,tests pass\n",
 };
 
 const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
@@ -136,7 +136,7 @@ describe("re-running", () => {
         { workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] },
         { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "test", produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] },
       ],
-      criteria: [{ workflow: "build", stepOrd: 1, kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
+      criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
 

@@ -14,7 +14,7 @@ import { join } from "path";
 import { COMPASS_DIR } from "@/app/lib/specs";
 import { planImport, type Bundle } from "@/app/lib/import/plan";
 import { applyPlan, describeReport } from "@/app/lib/import/apply";
-import { configStore, readExistingFor } from "@/app/lib/import/store";
+import { configStore, readExistingFor, countStaleRuns } from "@/app/lib/import/store";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +48,15 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
     return NextResponse.json({ ok: false, problems: planned.problems }, { status: 422 });
   }
 
+  // Runs already in flight are pinned to the version they started on and do NOT move when a new
+  // one publishes — correctly, since a gate someone approved must not silently become a different
+  // gate. But that made a fix look applied when it was not: sprint-0 v5 corrected criteria that had
+  // slid onto the wrong rows, the import reported "unchanged" (it compares the seed to the
+  // PUBLISHED version, and those matched), and the live board kept executing v4 with a Done gate
+  // that could never close. Nothing said so.
+  //
+  // So the count is in the response whether or not anything changed. It does not act — moving a run
+  // is `scripts/repoint-runs.mts`, and a real migration when runs stop being disposable.
   if (dry) {
     return NextResponse.json({
       ok: true, dryRun: true, summary: planned.summary,
@@ -56,6 +65,7 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
       // not a preview. A typo'd `code` column looks exactly like a deliberate retirement, and only
       // the person who wrote the CSV can tell the difference — from this list, before applying.
       retire: planned.plan.retire,
+      openRunsOnSupersededVersions: await countStaleRuns(),
     });
   }
 
@@ -63,7 +73,12 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
   if (!store) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 503 });
 
   const report = await applyPlan(planned.plan, { orgCode, engagementId }, store);
-  return NextResponse.json({ ok: true, summary: describeReport(report), report });
+  // Counted AFTER applying: publishing a new version is exactly what strands open runs, so the
+  // number that matters is the one this import just created.
+  return NextResponse.json({
+    ok: true, summary: describeReport(report), report,
+    openRunsOnSupersededVersions: await countStaleRuns(),
+  });
 }
 
 export async function GET(req: Request) {

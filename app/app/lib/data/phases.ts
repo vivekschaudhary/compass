@@ -450,18 +450,18 @@ async function unmetEntryGate(
   const { data: rows } = await sb
     .from("criterion")
     .select(
-      "id, kind, step_ord, statement, subject_kind, subject_ref, operator, value",
+      "id, kind, step_task, statement, subject_kind, subject_ref, operator, value",
     )
     .eq("workflow_version_id", ver.id)
     .eq("kind", "ready")
-    .is("step_ord", null);
+    .is("step_task", null);
 
   const out: string[] = [];
   for (const r of rows ?? []) {
     const c: CriterionRow = {
       id: r.id,
       kind: "ready",
-      stepOrd: null,
+      stepTask: null,
       statement: r.statement ?? "",
       subjectKind: r.subject_kind,
       subjectRef: r.subject_ref,
