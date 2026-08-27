@@ -341,7 +341,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   let doneCriteria: string[] = [];
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
-      .select("ord, produces, workflow_version_id").eq("id", task.workflow_step_id).maybeSingle();
+      .select("task, produces, workflow_version_id").eq("id", task.workflow_step_id).maybeSingle();
     produces = step?.produces ?? null;
 
     if (step?.workflow_version_id) {
