@@ -102,17 +102,51 @@ export async function recordAnswers(
   if (!task) return { ok: false, error: "That task is not in your engagement." };
 
   const { data: open } = await sb.from("question")
-    .select("id, prompt").eq("task_id", taskId).eq("state", "open");
+    .select("id, prompt, optional, files_to").eq("task_id", taskId).eq("state", "open");
 
   const given = Object.entries(answers).filter(([, v]) => v.trim().length > 0);
-  if (!given.length) return { ok: false, error: "Nothing to record." };
+  // An OPTIONAL question the human left blank is a decision, not an omission.
+  //
+  // "Do you have business requirements?" must be answerable with silence, and silence must settle
+  // it — otherwise the task sits in `awaiting` for ever on a question nobody intends to answer, and
+  // that is indistinguishable from waiting on one that matters. Declined, not answered: the record
+  // has to keep saying nobody supplied anything.
+  const declined = (open ?? []).filter(
+    (q) => q.optional && !(answers[q.id] ?? "").trim(),
+  );
+  if (!given.length && !declined.length) return { ok: false, error: "Nothing to record." };
 
   const who = actor.holder ?? actor.roleCode;
   const promptOf = new Map((open ?? []).map((q) => [q.id, q.prompt as string]));
+  const filesToOf = new Map((open ?? []).map((q) => [q.id, (q.files_to as string | null) ?? null]));
+
+  for (const q of declined) {
+    await sb.from("question").update({
+      state: "superseded", superseded_at: new Date().toISOString(),
+      superseded_reason: `${who} had nothing to supply for this.`,
+    }).eq("id", q.id).eq("task_id", taskId);
+
+    await emit({
+      engagementId: actor.engagementId, subjectType: "question", subjectId: q.id,
+      verb: "question.declined", actorKind: "human",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      payload: { taskId, prompt: q.prompt, optional: true },
+    });
+  }
+
   for (const [id, answer] of given) {
     await sb.from("question").update({
       answer, answered_by: who, answered_at: new Date().toISOString(), state: "answered",
     }).eq("id", id).eq("task_id", taskId);
+
+    // An answer that IS a document is filed, unmodified.
+    //
+    // The alternative is the agent reading it out of a conversation turn and drafting it into the
+    // document itself — which paraphrases. A summarised contract or requirement is the worst thing
+    // this system could hold, because everything downstream cites it and none of them can tell they
+    // are citing a summary.
+    const path = filesToOf.get(id);
+    if (path) await fileAnswer(actor, taskId, path, promptOf.get(id) ?? "Supplied material", answer, who);
 
     await emit({
       engagementId: actor.engagementId, subjectType: "question", subjectId: id,
@@ -122,9 +156,10 @@ export async function recordAnswers(
     });
   }
 
-  const body = given
-    .map(([id, a]) => `**${(promptOf.get(id) ?? "question").split("\n")[0]}**\n${a}`)
-    .join("\n\n");
+  const body = [
+    ...given.map(([id, a]) => `**${(promptOf.get(id) ?? "question").split("\n")[0]}**\n${a}`),
+    ...declined.map((q) => `**${String(q.prompt).split("\n")[0]}**\n_Nothing to supply._`),
+  ].join("\n\n");
 
   const { data: last } = await sb.from("turn").select("ord").eq("task_id", taskId)
     .order("ord", { ascending: false }).limit(1);
@@ -133,7 +168,7 @@ export async function recordAnswers(
     author_kind: "human", author_role_code: actor.roleCode, author_user_id: who, body,
   });
 
-  const remaining = Math.max(0, (open ?? []).length - given.length);
+  const remaining = Math.max(0, (open ?? []).length - given.length - declined.length);
   if (remaining === 0) await sb.from("work_task").update({ state: "running" }).eq("id", taskId);
   return { ok: true, remaining };
 }
@@ -204,4 +239,54 @@ export async function addNote(
     payload: { body: text },
   });
   return { ok: true };
+}
+
+/**
+ * File a supplied answer as a document, verbatim.
+ *
+ * Through the same `file_document` routine an agent's own draft uses, so the text becomes a real
+ * versioned document with a path — citable, readable by the next step's `reads`, and visible in the
+ * content tree. What it does NOT go through is a model: the whole point is that a BRD, a contract or
+ * an existing backlog lands as the person sent it.
+ *
+ * One section, because the supplier's own structure is inside the text and re-sectioning it here
+ * would be an edit. `owner_role` is the HUMAN's role — they supplied it, and attributing it to the
+ * agent that asked would put an author's name on someone else's document.
+ *
+ * Failure is recorded as a note on the task rather than thrown: the answer is already saved on the
+ * question, so nothing is lost, and refusing to record an answer because filing failed would be a
+ * worse outcome than a missing document.
+ */
+async function fileAnswer(
+  actor: Actor, taskId: string, path: string, prompt: string, text: string, who: string,
+): Promise<void> {
+  const sb = supabaseAdmin();
+  if (!sb) return;
+
+  const { data: eng } = await sb.from("engagement").select("org_id").eq("id", actor.engagementId).maybeSingle();
+
+  const { data: versionId, error } = await sb.rpc("file_document", {
+    p_org_id: eng?.org_id ?? actor.orgId,
+    p_engagement_id: actor.engagementId,
+    p_path: path,
+    p_title: prompt.split("\n")[0].slice(0, 200),
+    p_sections: [{ heading: "As supplied", body: text }],
+    p_version: null,
+    p_actor: who,
+    p_actor_role: actor.roleCode,
+    p_owner_role: actor.roleCode,
+    p_task_id: taskId,
+  });
+
+  if (error) {
+    await addNote(actor, taskId, `Your answer was recorded, but filing it at \`${path}\` failed: ${error.message}`);
+    return;
+  }
+
+  await emit({
+    engagementId: actor.engagementId, subjectType: "document", subjectId: String(versionId),
+    verb: "document.filed", actorKind: "human",
+    actorRoleCode: actor.roleCode, actorUserId: who,
+    payload: { taskId, path, source: "answer", chars: text.length },
+  });
 }

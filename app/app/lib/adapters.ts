@@ -168,3 +168,35 @@ export function secretColumns(): string[] {
   for (const s of ADAPTER_SLOTS) for (const o of s.options) for (const f of o.fields) if (f.secret) cols.push(f.key);
   return [...new Set(cols)];
 }
+
+/**
+ * Where a step's `produces` actually lands.
+ *
+ * The framework has written `brief@docs` and `epic@tickets` in its templates since the slot
+ * vocabulary was introduced — a deliverable names the CAPABILITY it goes to, never the vendor. The
+ * v2 seed carried bare paths and nothing parsed a suffix, so every deliverable went to the doc
+ * store: the epics were published as a Confluence page and no Jira issue was ever created from them.
+ *
+ * This is the one place that parse lives. `02-scope/deliverables@tickets` goes to the tracker;
+ * a bare path goes to the doc store, because that is what every existing row means and a default
+ * that changed their behaviour would be a silent rewrite of eleven steps.
+ *
+ * An UNKNOWN slot is not treated as docs. `@scm` and anything mistyped resolve to null, so a caller
+ * halts on it rather than quietly publishing a deliverable to the wrong surface — the failure would
+ * otherwise look exactly like success.
+ */
+export type Destination = { path: string; slot: "docs" | "tickets" | null };
+
+export function destinationOf(produces: string | null | undefined): Destination | null {
+  const raw = (produces ?? "").trim();
+  if (!raw) return null;
+
+  const at = raw.lastIndexOf("@");
+  if (at < 0) return { path: raw, slot: "docs" };
+
+  const path = raw.slice(0, at).trim();
+  const slot = raw.slice(at + 1).trim().toLowerCase();
+  if (!path) return null;                       // "@tickets" names no deliverable
+  if (slot === "docs" || slot === "tickets") return { path, slot };
+  return { path, slot: null };
+}

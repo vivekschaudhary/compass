@@ -12,6 +12,7 @@
 
 import "server-only";
 import { resolveSpec } from "../specs";
+import { destinationOf } from "../adapters";
 import { supabaseAdmin, must } from "../supabase";
 import type { Actor } from "./../data/actor";
 
@@ -49,7 +50,18 @@ export type AgentContext = {
   taskSubtitle: string;
   roleCode: string;
   agentFile: string | null;
+  /**
+   * The document path this step produces — the PATH, never the decorated `produces` string.
+   *
+   * A step may name where its deliverable goes (`02-scope/deliverables@tickets`). That suffix is
+   * routing, and it must not travel: `loadPriorDraft` looks a document up by path, the prompt tells
+   * the agent what it is producing, and a criterion's `subject_ref` names the same bare path. Left
+   * decorated, the prior draft would silently never be found — the agent would rewrite from scratch
+   * every run and nothing would say why.
+   */
   produces: string | null;
+  /** Where it goes. `docs` publishes a page; `tickets` creates issues on the board. */
+  destination: "docs" | "tickets" | null;
   inputs: PinnedInput[];
   doneCriteria: string[];
   /** What workflows this engagement can actually run. Without it the agent guesses. */
@@ -407,11 +419,14 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   const agentFile = await agentMarkdown(actor.engagementId, actor.orgId, task.role_code);
 
   let produces: string | null = null;
+  let destination: AgentContext["destination"] = null;
   let doneCriteria: string[] = [];
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
       .select("produces").eq("id", task.workflow_step_id).maybeSingle();
-    produces = step?.produces ?? null;
+    const dest = destinationOf(step?.produces);
+    produces = dest?.path ?? null;
+    destination = dest?.slot ?? null;
     doneCriteria = await doneCriteriaFor(task.workflow_step_id);
   }
 
@@ -423,6 +438,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     roleCode: task.role_code,
     agentFile,
     produces,
+    destination,
     inputs: await ensureInputs(taskId, actor.engagementId),
     doneCriteria,
     inventory: await loadInventory(actor.orgId),

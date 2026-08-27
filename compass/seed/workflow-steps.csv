@@ -56,7 +56,7 @@ sprint-0,3,agent,designer,build-design-library,01-foundation/design-library,,,,D
 sprint-0,4,agent,delivery-manager,draft-timeline,02-scope/timeline,,,,Timeline and milestones,"file-sow"
 sprint-0,5,agent,delivery-manager,propose-staffing,01-foundation/team,,,,Staffing plan and resources,"draft-timeline,file-sow"
 sprint-0,6,agent,delivery-manager,draft-raci,01-foundation/raci,,,,Roles and responsibilities,propose-staffing
-sprint-0,7,agent,product-manager,draft-epics,02-scope/deliverables,,,,Epics from milestones,"draft-timeline,draft-product-brief"
+sprint-0,7,agent,product-manager,draft-epics,02-scope/deliverables@tickets,02-scope/business-requirements,,,Epics from milestones,"draft-timeline,draft-product-brief"
 sprint-0,8,agent,delivery-manager,tailor-delivery-plan,03-delivery/plan,,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing"
 sprint-0,9,agent,enterprise-architect,draft-foundation-architecture,01-foundation/foundational-architecture,,,,Foundation architecture,"draft-product-brief,draft-epics"
 sprint-0,10,agent,delivery-manager,draft-ways-of-working,01-foundation/ways-of-working,,,,Team working agreement,"propose-staffing,draft-raci"

@@ -28,6 +28,7 @@ import { supabaseAdmin } from "../supabase";
 import { resolveJira, createIssue, transitionIssue, projectStatuses, type JiraCreds } from "../jira";
 import { emit } from "./events";
 import { sortByStep } from "./steps";
+import { backlogOf } from "./backlog";
 
 /**
  * What Compass's task states mean on a board.
@@ -281,4 +282,109 @@ export async function mirrorState(
   return moved
     ? { ok: true, key: task.ticket_key, status }
     : { ok: false, reason: "refused", key: task.ticket_key, status, note: `Jira refused the move to '${status}'.` };
+}
+
+/**
+ * Put an approved backlog on the board: an Epic per epic, a Story under it per story.
+ *
+ * The second thing that creates issues, and it lives here for the reason this file's header already
+ * gives — `createIssue` scattered across features is how each one ends up with its own idea of what
+ * an epic is called and what to do when the board refuses.
+ *
+ * Called from the materialiser, which runs on APPROVAL. That is deliberate and not a detail: these
+ * are real issues on a client's board, and creating them from a draft would let an agent fill a
+ * backlog by proposing one.
+ *
+ * The three rules from `mirrorPhase` hold unchanged: Jira first then the local row, idempotent on
+ * `ticket_key`, and every failure named rather than swallowed. One is added — a story whose parent
+ * epic did not make it is NOT created as an orphan, because a story with no epic on a board is
+ * worse than a story that is visibly missing.
+ */
+export type MirroredBacklog = {
+  epics: { ref: string; key: string; title: string }[];
+  stories: { ref: string; key: string; title: string }[];
+  /** How many items the board was owed. `epics.length` alone cannot say whether four is all of them. */
+  expected: number;
+  problems: string[];
+  reason?: "no-supabase" | "no-tracker" | "nothing-to-mirror" | "epic-refused" | "story-refused";
+};
+
+export async function mirrorBacklog(
+  engagementId: string, taskId: string, actorRole: string,
+): Promise<MirroredBacklog> {
+  const out: MirroredBacklog = { epics: [], stories: [], expected: 0, problems: [] };
+  const sb = supabaseAdmin();
+  if (!sb) return { ...out, reason: "no-supabase", problems: ["Supabase is not configured."] };
+
+  const rows = await backlogOf(taskId);
+  const pending = rows.filter((r) => !r.ticketKey);
+  out.expected = pending.length;
+  // Nothing pending is the ordinary re-approval: every item already has its issue.
+  if (!pending.length) return { ...out, reason: "nothing-to-mirror" };
+
+  const creds = await credsFor(engagementId);
+  if (!creds) {
+    return {
+      ...out, reason: "no-tracker",
+      problems: ["No Jira configured for this engagement — the backlog stayed in Compass."],
+    };
+  }
+
+  // Keys already stored count as parents too, so a re-run after a partial failure hangs the
+  // remaining stories under the epic that DID get created rather than skipping them.
+  const keyOf = new Map(rows.filter((r) => r.ticketKey).map((r) => [r.ref, r.ticketKey as string]));
+
+  // Epics first, in one pass, so every story has a parent to point at by the time it is created.
+  for (const item of pending.filter((r) => r.kind === "epic")) {
+    const created = await createIssue(creds, {
+      type: "Epic", summary: item.title, description: item.body ?? undefined, labels: [actorRole],
+    });
+    if (!created) {
+      out.problems.push(`Could not create the epic "${item.title}" — its stories were not created either.`);
+      out.reason = "epic-refused";
+      continue;
+    }
+    await sb.from("backlog_item").update({ ticket_key: created.key }).eq("id", item.id);
+    keyOf.set(item.ref, created.key);
+    out.epics.push({ ref: item.ref, key: created.key, title: item.title });
+  }
+
+  for (const item of pending.filter((r) => r.kind === "story")) {
+    const parentKey = item.parentRef ? keyOf.get(item.parentRef) : undefined;
+    if (item.parentRef && !parentKey) {
+      // Named rather than silently skipped: "eleven of thirteen" with no list is a number nobody
+      // can act on, and the fix (retry once the epic exists) depends on knowing which.
+      out.problems.push(`"${item.title}" was not created — its epic \`${item.parentRef}\` is not on the board.`);
+      continue;
+    }
+
+    const created = await createIssue(creds, {
+      type: "Story", summary: item.title, description: item.body ?? undefined,
+      parentKey, labels: [actorRole],
+    });
+    if (!created) {
+      out.problems.push(`Could not create the story "${item.title}".`);
+      out.reason = "story-refused";
+      continue;
+    }
+    await sb.from("backlog_item").update({ ticket_key: created.key }).eq("id", item.id);
+    out.stories.push({ ref: item.ref, key: created.key, title: item.title });
+  }
+
+  await emit({
+    engagementId, subjectType: "task", subjectId: taskId,
+    verb: "tracker.backlog_mirrored", actorKind: "system", actorRoleCode: actorRole,
+    payload: {
+      epics: out.epics.length, stories: out.stories.length,
+      expected: out.expected, problems: out.problems, reason: out.reason ?? null,
+    },
+  });
+
+  return out;
+}
+
+/** Did the board end up short of the backlog it was owed? Pure, like `mirrorIncomplete`. */
+export function backlogIncomplete(m: MirroredBacklog): boolean {
+  if (m.reason === "no-tracker" || m.reason === "no-supabase" || m.reason === "nothing-to-mirror") return false;
+  return m.epics.length + m.stories.length < m.expected;
 }
