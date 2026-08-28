@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("./api", () => ({ apiHost: { name: "api", dispatch: async () => ({}) } }));
 
-const { selectHost, requestedHost } = await import("./select");
+const { selectHost, requestedHost, resolveModel, DEFAULT_MODEL } = await import("./select");
 const { HostUnavailable } = await import("./types");
 
 /** A machine where the named binaries exist. */
@@ -100,5 +100,43 @@ describe("selectHost", () => {
     } catch (e) {
       expect((e as InstanceType<typeof HostUnavailable>).host).toBe("cl1");
     }
+  });
+});
+
+describe("resolveModel", () => {
+  it("falls back to the default when ANTHROPIC_MODEL is unset", () => {
+    expect(resolveModel({})).toBe(DEFAULT_MODEL);
+  });
+
+  // An env var set to "" is how a shell exports an unset value. Reading it as a model name sends
+  // the API a missing-model 404 and the CLI `--model ''` — two different confusing errors for one
+  // blank line.
+  it("treats empty and whitespace as unset", () => {
+    expect(resolveModel({ ANTHROPIC_MODEL: "" })).toBe(DEFAULT_MODEL);
+    expect(resolveModel({ ANTHROPIC_MODEL: "   " })).toBe(DEFAULT_MODEL);
+  });
+
+  it("uses what the operator set", () => {
+    expect(resolveModel({ ANTHROPIC_MODEL: "claude-sonnet-5" })).toBe("claude-sonnet-5");
+  });
+
+  it("trims padding, which a copied .env line carries", () => {
+    expect(resolveModel({ ANTHROPIC_MODEL: "  claude-haiku-4-5  " })).toBe("claude-haiku-4-5");
+  });
+
+  // No allow-list. It would be stale within a release, and a stale list refusing a model that
+  // exists is worse than the API error, which names the problem exactly.
+  it("passes an unrecognised value through rather than second-guessing it", () => {
+    expect(resolveModel({ ANTHROPIC_MODEL: "claude-not-a-model" })).toBe("claude-not-a-model");
+  });
+
+  // Case is NOT normalised: model IDs are lowercase and an uppercased one is a typo, not a
+  // spelling. Silently lowercasing would hide it until someone read the bill.
+  it("does not rewrite case", () => {
+    expect(resolveModel({ ANTHROPIC_MODEL: "Claude-Opus-5" })).toBe("Claude-Opus-5");
+  });
+
+  it("defaults to Opus, not the cheaper tier — paying less is the operator's decision", () => {
+    expect(DEFAULT_MODEL).toBe("claude-opus-5");
   });
 });
