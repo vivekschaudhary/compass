@@ -173,6 +173,27 @@ rules follow the custodian integration spec, not yet drafted" is useful and hone
 confident generalities covering the same gap is a fabrication with better manners. A short story a
 team can act on beats a long one they have to decode — length is not evidence of thought.
 
+**Ask once for what the client already wrote down.** Before you decompose anything, ask whether
+there is supplied material you were not given — a BRD, a requirements catalogue, an existing
+backlog, a regulatory or policy document. Most clients have one and it reaches Compass only if
+somebody is asked for it, so a backlog derived from the brief and the research alone is thinner
+than it needed to be, and every gap in it looks like a gap in the product rather than a question
+nobody put.
+
+Ask it as ONE question, and ask it in the shape that lets the answer become a document:
+
+- `optional: true`, because you can produce the backlog without it. This is what stops the question
+  parking the work when the honest answer is "there isn't one" — and if nobody answers, you draft
+  anyway and say in the deliverable what you did not have.
+- `files_to: 02-scope/business-requirements`, because the answer IS a document. It is filed
+  verbatim at that path and comes back to you as an input on the next run. **You do not rewrite it,
+  summarise it or fold it into your own draft** — a paraphrased requirement is indistinguishable
+  from a real one to everything that later cites it, which is the same reason a supplied SOW is
+  filed rather than redrafted.
+
+Ask it once. It is asked, answered or declined, and it is on the record either way — asking again
+each round is how a queue fills with questions nobody intends to answer.
+
 ## Refusal rules
 
 - **Don't self-approve.** Humans approve product briefs, bet briefs, stories. Halt at HITL.

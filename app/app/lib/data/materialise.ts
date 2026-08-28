@@ -24,6 +24,9 @@ import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { emit } from "./events";
 import { parseRoster } from "./roster-rows";
+import { backlogOf } from "./backlog";
+import { mirrorBacklog } from "./tracker";
+import { destinationOf } from "../adapters";
 
 export type Materialised = { path: string; created: number; updated: number; problems: string[] };
 
@@ -86,9 +89,45 @@ async function materialiseRoster(actor: Actor, markdown: string): Promise<Materi
   return out;
 }
 
+/**
+ * `02-scope/deliverables` → Epics and Stories on the client's board.
+ *
+ * Reads the ROWS the `backlog` tool produced, not the markdown. The document says the same thing in
+ * prose, and re-reading it here would mean parsing headings back into a hierarchy — the failure
+ * `backlog.ts` exists to avoid.
+ *
+ * `markdown` is therefore ignored, and that is worth saying out loud rather than hiding behind an
+ * unused parameter: a backlog that arrived as prose (an older draft, filed before the tool existed)
+ * has no rows, and the honest outcome is to say so and create nothing.
+ */
+async function materialiseBacklog(actor: Actor, _markdown: string, taskId: string): Promise<Materialised> {
+  const out: Materialised = { path: "02-scope/deliverables", created: 0, updated: 0, problems: [] };
+
+  const rows = await backlogOf(taskId);
+  if (!rows.length) {
+    return {
+      ...out,
+      problems: [
+        "This deliverable has no backlog rows, so nothing was created on the board. It was drafted " +
+        "as a document rather than through the backlog tool — re-run the task to produce it as epics.",
+      ],
+    };
+  }
+
+  const mirrored = await mirrorBacklog(actor.engagementId, taskId, actor.roleCode);
+  return {
+    ...out,
+    created: mirrored.epics.length + mirrored.stories.length,
+    problems: mirrored.problems,
+  };
+}
+
 /** What each producing path turns into. Register here; do not branch in the caller. */
-const REGISTRY: Record<string, (actor: Actor, markdown: string) => Promise<Materialised>> = {
+const REGISTRY: Record<
+  string, (actor: Actor, markdown: string, taskId: string) => Promise<Materialised>
+> = {
   "01-foundation/team": materialiseRoster,
+  "02-scope/deliverables": materialiseBacklog,
 };
 
 /**
@@ -107,7 +146,10 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
 
   const { data: step } = await sb.from("workflow_step")
     .select("produces").eq("id", task.workflow_step_id).maybeSingle();
-  const path = step?.produces;
+  // The PATH, not the raw `produces` — a step may name its destination (`…@tickets`), and matching
+  // the registry against the decorated string would silently stop materialising the moment a
+  // deliverable was routed somewhere new.
+  const path = destinationOf(step?.produces)?.path;
   if (!path || !REGISTRY[path]) return null;
 
   const { data: doc } = await sb.from("document")
@@ -118,7 +160,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
     .select("heading, body").eq("document_version_id", doc.current_version_id).order("ord");
   const markdown = (sections ?? []).map((s) => `## ${s.heading}\n${s.body}`).join("\n\n");
 
-  const result = await REGISTRY[path](actor, markdown);
+  const result = await REGISTRY[path](actor, markdown, taskId);
 
   await emit({
     engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,

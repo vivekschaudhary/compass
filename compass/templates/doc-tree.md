@@ -55,6 +55,7 @@ parent always precedes its children.
 | 25 | 05-cadence/sprint-plans | Sprint plans | folder | 05-cadence |
 | 26 | 01-foundation/design-library | Design library | doc | 01-foundation |
 | 27 | 05-cadence/kickoff | Kickoff | doc | 05-cadence |
+| 28 | 02-scope/business-requirements | Business requirements (as supplied) | doc | 02-scope |
 
 ## Notes
 - **This table is the default — and load-bearing.** The intake creates whatever rows are here

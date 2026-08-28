@@ -9,6 +9,7 @@
 // find. Same instinct the framework already has — refuse, and name the one next move.
 
 import { parseRecords, parseList, parseBool } from "./csv";
+import { destinationOf } from "../adapters";
 
 /* ── what a bundle contains ──────────────────────────────────────────────── */
 
@@ -170,11 +171,16 @@ function readSteps(csv: string): StepRow[] {
  * runs rather than the way the CSV happened to be typed.
  */
 export function deriveReads(steps: StepRow[]): StepRow[] {
-  const producerOf = new Map<string, Map<string, string>>();   // workflow → task → produces
+  // The PATH a step produces, never the decorated `produces` string. A step may name where its
+  // deliverable goes (`02-scope/deliverables@tickets`) and that suffix is routing — it belongs to
+  // the producer alone. Copied into a dependent's `reads` it would become a path no document ever
+  // has, and the agent downstream would be told it reads something that does not exist.
+  const producerOf = new Map<string, Map<string, string>>();   // workflow → task → path
   for (const s of steps) {
-    if (!s.produces) continue;
+    const path = destinationOf(s.produces)?.path;
+    if (!path) continue;
     const m = producerOf.get(s.workflow) ?? new Map();
-    m.set(s.task, s.produces);
+    m.set(s.task, path);
     producerOf.set(s.workflow, m);
   }
 
@@ -405,7 +411,9 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   // Run against the DERIVED reads, which is the set an agent will actually be handed. Everything
   // derived from a dependency is produced here by construction, so in practice this now polices
   // exactly the external paths — the ones nothing else can vouch for.
-  const produced = new Set(steps.map((s) => s.produces).filter(Boolean));
+  const produced = new Set(
+    steps.map((s) => destinationOf(s.produces)?.path).filter(Boolean) as string[],
+  );
   if (existing.documents.length > 0) {
     const known = new Set([...existing.documents, ...produced]);
     steps.forEach((s, i) => {
@@ -443,11 +451,17 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     //
     // Only the produces-bearing case is checked. A step that promises nothing has nothing to
     // contradict, and a criterion may legitimately read a document from an earlier phase.
-    if (namedStep && c.subjectKind === "document" && namedStep.produces
-        && c.subjectRef !== namedStep.produces) {
-      const producer = steps.find((s) => s.workflow === c.workflow && s.produces === c.subjectRef);
+    // Compared as PATHS. A criterion names a document; `produces` may also name where that document
+    // goes (`…@tickets`), and comparing the decorated string would refuse every routed step for
+    // disagreeing with itself.
+    const producesPath = destinationOf(namedStep?.produces)?.path;
+    if (namedStep && c.subjectKind === "document" && producesPath
+        && c.subjectRef !== producesPath) {
+      const producer = steps.find(
+        (s) => s.workflow === c.workflow && destinationOf(s.produces)?.path === c.subjectRef,
+      );
       add("criteria.csv", row,
-        `Row '${c.stepTask}' of '${c.workflow}' produces '${namedStep.produces}', ` +
+        `Row '${c.stepTask}' of '${c.workflow}' produces '${producesPath}', ` +
         `but its criterion checks '${c.subjectRef}'` +
         (producer ? ` — which '${producer.task}' produces.` : " — which no row here produces."),
         producer

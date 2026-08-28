@@ -50,6 +50,25 @@ export const TOOLS: Anthropic.Tool[] = [
                 type: "string",
                 description: "What this changes about the deliverable.",
               },
+              // Optional and `files_to` are what let an agent ask for SUPPORTING MATERIAL rather
+              // than only for blocking facts. Without them the only question an agent could ask was
+              // one that parks the task until someone answers, so it never asked "do you have a BRD?"
+              // — and the backlog was written from the brief alone, which is thinner than it needs
+              // to be when the client has requirements written down.
+              optional: {
+                type: "boolean",
+                description:
+                  "True when you can produce the deliverable without this answer. An optional " +
+                  "question does not block: if nobody answers it, you draft anyway and say what " +
+                  "you did not have. Use it for supporting material, never for a fact you need.",
+              },
+              files_to: {
+                type: "string",
+                description:
+                  "A document path when the ANSWER IS ITSELF A DOCUMENT — a BRD, a policy, a " +
+                  "client's existing backlog. The text is filed verbatim at that path and you read " +
+                  "it as an input; it is not yours to rewrite. Omit for an ordinary question.",
+              },
             },
             required: ["prompt", "type", "why"],
             additionalProperties: false,
@@ -97,6 +116,68 @@ export const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["summary", "sections"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    name: "backlog",
+    description:
+      "Produce the backlog: the epics, and the stories under each one. Use this instead of `draft` " +
+      "when the deliverable IS a backlog — the epics become real issues on the client's board, not " +
+      "headings on a page, so they have to come back as structure rather than as prose someone " +
+      "would have to re-read. Same evidence rule as `draft`: every epic and story traces to a " +
+      "document you were given, and what you do not have you say rather than invent.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "What you produced and what it is based on. Note any input that was missing and what it cost.",
+        },
+        epics: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              // The agent's own handle, and the ONLY thing tying a story to its parent before
+              // anything has an id. Echoed into `parent_ref` below.
+              ref: {
+                type: "string",
+                description: "A short handle for this epic, unique in this backlog — e.g. `E1`.",
+              },
+              title: { type: "string", description: "The epic's title, in the product's vocabulary." },
+              body: { type: "string", description: "Markdown. What the slice delivers and what it unblocks." },
+              cites: {
+                type: "array",
+                items: { type: "string" },
+                description: "Document paths this epic was derived from.",
+              },
+              stories: {
+                type: "array",
+                description:
+                  "The stories under this epic. Each is one shippable, user-observable deliverable — " +
+                  "never a technical task, and never a restatement of the epic.",
+                items: {
+                  type: "object",
+                  properties: {
+                    ref: { type: "string", description: "A handle unique in this backlog — e.g. `E1-S1`." },
+                    title: { type: "string" },
+                    body: { type: "string", description: "Markdown." },
+                    cites: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["ref", "title", "body", "cites"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["ref", "title", "body", "cites", "stories"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["summary", "epics"],
       additionalProperties: false,
     },
     strict: true,

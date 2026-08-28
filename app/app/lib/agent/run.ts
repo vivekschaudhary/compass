@@ -24,6 +24,7 @@ import {
 } from "./context";
 import { conversation, openQuestions } from "../data/job";
 import { publishToDocs } from "../data/publish";
+import { normaliseBacklog, sectionsOf, recordBacklog } from "../data/backlog";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { nestedWorkflowOf } from "../data/phases";
@@ -195,6 +196,26 @@ export function emptyAskDiagnosis(preamble: string): {
   const leaked = /<\/preamble>|<parameter name="questions">/.test(preamble);
   const buried = (preamble.match(/"prompt":\s*"/g) ?? []).length;
   return { leaked, buried };
+}
+
+/**
+ * The document path an answer may be filed at, or null.
+ *
+ * An agent asks for the client's BRD and the human pastes it; the app files that text verbatim,
+ * because an agent that re-drafts a supplied document paraphrases it, and a summarised requirement
+ * is indistinguishable from a real one to everything downstream that cites it.
+ *
+ * The path is model output, so it is checked HERE, on the way in. `04-` and `05-` are absent from
+ * the allowed prefixes on purpose: delivery and cadence documents are produced BY workflow steps,
+ * and letting an answer land at one would let a pasted message overwrite a deliverable an agent is
+ * responsible for. Anything else is dropped and the question is asked as an ordinary one — the
+ * answer is still recorded, it just does not become a document.
+ */
+const FILEABLE = /^(0[0-3])-[a-z0-9-]+\/[a-z0-9-]+$/;
+
+export function filesTo(path: string | null | undefined): string | null {
+  const p = (path ?? "").trim().toLowerCase();
+  return p && FILEABLE.test(p) ? p : null;
 }
 
 /**
@@ -406,6 +427,8 @@ export async function runAgent(
         type: string;
         options?: string[];
         why: string;
+        optional?: boolean;
+        files_to?: string;
       }[];
     };
 
@@ -471,6 +494,11 @@ export async function runAgent(
               ? q.type
               : "text",
             options: q.options ?? null,
+            optional: q.optional === true,
+            // Only a path the app is allowed to write. An agent naming `agents/pm.md` here would
+            // otherwise turn a human's pasted answer into a framework file, and the check belongs
+            // where the value ENTERS rather than where it is later used.
+            files_to: filesTo(q.files_to),
           })),
         )
         .select("id, prompt");
@@ -502,9 +530,24 @@ export async function runAgent(
     return { kind: "asked", preamble: input.preamble, questions: put };
   }
 
-  if (call.name === "draft") {
-    const input = call.input as { summary?: string; sections?: unknown };
-    const sections = asSections(input.sections);
+  // `draft` and `backlog` are one path deliberately.
+  //
+  // Both produce the same deliverable — a filed, versioned, cited document that a human approves —
+  // and they differ only in what the model returned and what happens to it afterwards. Giving the
+  // backlog its own branch would mean a second copy of filing, citations, the empty-output
+  // diagnosis, the superseded-questions sweep and the HITL transition, and the second copy is where
+  // the two would drift.
+  if (call.name === "draft" || call.name === "backlog") {
+    const isBacklog = call.name === "backlog";
+    const input = call.input as { summary?: string; sections?: unknown; epics?: unknown };
+
+    // The backlog arrives as structure and is turned into sections HERE, so everything downstream —
+    // the filed document, its citations, a redraft's `priorDraft` — is unchanged. The structure is
+    // ALSO kept, below, because that is what becomes issues on the board.
+    const { epics, problems: backlogProblems } = isBacklog
+      ? normaliseBacklog(input.epics)
+      : { epics: [], problems: [] as string[] };
+    const sections = isBacklog ? sectionsOf(epics) : asSections(input.sections);
 
     // The conversation gets the SUMMARY, not the document. Writing the whole draft into the turn
     // made it render twice — once in the chat and again in the document pane — and turned a
@@ -515,7 +558,12 @@ export async function runAgent(
     // as a recovery turn below, which is the only case where the conversation is the last copy.
     await recordTurn(
       taskId,
-      [text, input.summary].filter(Boolean).join("\n\n"),
+      // What the normaliser dropped or renamed goes to the human, not just to a log. A backlog is
+      // approved on the strength of being complete, and "one of your epics had no title so it is
+      // not here" is precisely what the approver needs to know before they say yes.
+      [text, input.summary, backlogProblems.length
+        ? `_Reading the backlog:_\n${backlogProblems.map((p) => `- ${p}`).join("\n")}`
+        : ""].filter(Boolean).join("\n\n"),
       ctx,
     );
 
@@ -523,19 +571,21 @@ export async function runAgent(
       // An EMPTY array is not unreadable output — it parsed perfectly and contained nothing. Saying
       // "could not be read" sends someone to debug a parser when the actual cause is usually that
       // the model ran out of room after writing its summary. Name which one it was.
+      const returned = isBacklog ? input.epics : input.sections;
+      const noun = isBacklog ? "epics" : "sections";
       const why = truncated
         ? "It hit the token limit after writing its summary, so the document itself never came. Run it again — the budget is larger now."
-        : Array.isArray(input.sections)
-          ? "It returned an empty list of sections, having written a summary. Running again usually resolves it."
-          : "Its sections came back in a shape that could not be read; the raw output is below.";
+        : Array.isArray(returned)
+          ? `It returned an empty list of ${noun}, having written a summary. Running again usually resolves it.`
+          : `Its ${noun} came back in a shape that could not be read; the raw output is below.`;
 
       await recordTurn(
         taskId,
         `**No document was produced.** ${why}` +
-          (Array.isArray(input.sections) && !input.sections.length
+          (Array.isArray(returned) && !returned.length
             ? ""
             : "\n\n```json\n" +
-              JSON.stringify(input.sections ?? call.input, null, 2).slice(
+              JSON.stringify(returned ?? call.input, null, 2).slice(
                 0,
                 40000,
               ) +
@@ -555,6 +605,23 @@ export async function runAgent(
         kind: "error",
         message:
           "The agent drafted, but this step declares no document to produce.",
+      };
+    }
+
+    // Where this deliverable goes — parsed in `buildContext`, so `ctx.produces` is already the bare
+    // path everywhere it is used. `02-scope/deliverables@tickets` files the document in Compass and
+    // creates the issues on the board instead of publishing a page; a bare path is the doc store, as
+    // every existing step means.
+    //
+    // An UNKNOWN slot halts rather than defaulting. `@scm` or a typo would otherwise publish to the
+    // doc store and look exactly like it worked, which is the failure that is impossible to notice.
+    if (ctx.destination === null) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      return {
+        kind: "error",
+        message:
+          `This step's destination for \`${ctx.produces}\` is not one this app knows. ` +
+          `It must be \`@docs\` or \`@tickets\`, or absent for the doc store.`,
       };
     }
 
@@ -607,13 +674,34 @@ export async function runAgent(
 
     await recordCitations(versionId as string, sections, ctx);
 
-    // Publish to the engagement's doc store. Filing already succeeded, so a provider failure does
-    // not lose the draft — it is recorded on the version and the task carries on. Per
-    // `[docs-primary]` (#154), the page is the record for everyone who does not open Compass.
-    const published = await publishToDocs(
-      actor.engagementId,
-      versionId as string,
-    );
+    // The backlog's STRUCTURE, kept beside the document it was just filed as.
+    //
+    // Written now, at draft time, with no ticket keys — so the human approving the gate is looking
+    // at the rows that will become issues, not at a page somebody must read and trust. The issues
+    // themselves are created on approval, by the materialiser.
+    if (isBacklog) {
+      const recorded = await recordBacklog(
+        org?.org_id ?? actor.orgId, actor.engagementId, taskId, epics,
+      );
+      if (recorded.problems.length) {
+        await recordTurn(
+          taskId,
+          `Filed the backlog, with a note:\n` +
+            recorded.problems.map((p) => `- ${p}`).join("\n"),
+          ctx,
+        );
+      }
+    }
+
+    // Publish to the engagement's doc store — unless this deliverable's destination is the tracker.
+    //
+    // Per `[docs-primary]` (#154) the page is the record for everyone who does not open Compass, and
+    // for a backlog that audience reads the BOARD. Publishing a page of epics beside the epics
+    // themselves would make two records of the same thing, and the page would be the one that goes
+    // stale the first time somebody edits an issue.
+    const published = ctx.destination === "tickets"
+      ? { ok: true as const, url: null, id: null }
+      : await publishToDocs(actor.engagementId, versionId as string);
     if (!published.ok) {
       await recordTurn(
         taskId,

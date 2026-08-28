@@ -10,6 +10,7 @@ import { readdirSync, existsSync } from "fs";
 import { join } from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../supabase";
+import { readShippedDocTree } from "../doctree";
 import { COMPASS_DIR } from "../specs";
 import type { ConfigStore } from "./apply";
 import type { Existing, StepRow, CriterionRow, WorkstreamRow, RoleRow, WorkflowRow } from "./plan";
@@ -289,11 +290,22 @@ export async function readExisting(
     ? await docQuery
     : await docQuery.eq("engagement_id", engagementId);
 
+  // The DECLARED tree counts as well as the scaffolded rows.
+  //
+  // The check this feeds exists to catch a typo — the first seed read `02-scope-sow/sow-source.md`
+  // against a tree that had `02-scope/sow`. A path that IS in the doc tree is not that: it is a
+  // document the engagement is declared to have, and whether a row has been scaffolded for it yet
+  // is a question about intake, not about whether the seed is correct.
+  //
+  // Without this, declaring a NEW document and the step that reads it can never be one commit: the
+  // import refuses until the row exists, and the row is created by the import.
+  const declared = readShippedDocTree().filter((n) => n.kind !== "folder").map((n) => n.path);
+
   return {
     workstreams: await list("workstream"),
     roles: await list("role"),
     agents, phases: await list("phase"),
-    documents: [...new Set((docs ?? []).map((d: { path: string }) => d.path))],
+    documents: [...new Set([...(docs ?? []).map((d: { path: string }) => d.path), ...declared])],
     workflows,
   };
 }
