@@ -17,13 +17,44 @@ import { cliHost } from "./cli";
 import { HostUnavailable, type Host } from "./types";
 
 /**
+ * What runs when `ANTHROPIC_MODEL` says nothing.
+ *
+ * Opus 5, not the cheaper tier. Which model to pay for is the operator's call, and a default that
+ * quietly picks the cheaper one makes that decision on their behalf without saying so.
+ */
+export const DEFAULT_MODEL = "claude-opus-5";
+
+/**
+ * The model, from the environment, normalised.
+ *
+ * Pure and env-injected so a test can pin a value without mutating `process.env` — the same reason
+ * `requestedHost` takes its env.
+ *
+ * Absent or whitespace means "not set", NOT a model named the empty string. Passing `""` through
+ * would reach the API as a missing-model 404 and the CLI as `--model ''`, two different confusing
+ * errors for one blank line in `.env.local`.
+ *
+ * An unrecognised value passes through rather than being checked against a list. The list would be
+ * wrong within a release — model IDs are added faster than this file changes — and a stale
+ * allow-list refusing a model that exists is worse than the API's own error, which names the
+ * problem exactly.
+ */
+export function resolveModel(env: Record<string, string | undefined> = process.env): string {
+  return (env.ANTHROPIC_MODEL ?? "").trim() || DEFAULT_MODEL;
+}
+
+/**
  * The model every host runs, in ONE place.
  *
  * It lived as a `const MODEL` local to `run.ts`, which was fine while the agent loop was the only
  * thing that called a host. It is not any more — the ticket composer dispatches too — and two
  * literals is how the second caller silently stays on an older model after the first is upgraded.
+ *
+ * Resolved once at module load rather than per call. The environment does not change under a
+ * running server, and a value that could differ between two dispatches in one request is a worse
+ * property than the one it would buy.
  */
-export const MODEL = "claude-opus-5";
+export const MODEL = resolveModel();
 
 /**
  * What the operator asked for, normalised. Absent, empty or `api` all mean the API host.
