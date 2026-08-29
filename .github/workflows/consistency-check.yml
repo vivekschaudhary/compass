@@ -61,6 +61,17 @@ jobs:
       - name: Install
         run: npm ci
 
+      # `npm run typecheck` generates Next's route types before running tsc, and it must.
+      #
+      # `PageProps` and `LayoutProps` are GENERATED into `app/.next/types` — not declared anywhere
+      # in the repo — and `tsconfig.json` includes that directory. A developer's machine has them
+      # because `next dev` has run; a fresh CI checkout does not, so a bare `tsc --noEmit` failed on
+      # five files it had no quarrel with. This job was red on every branch for months, which is
+      # worse than having no job: it fails identically whether a PR is sound or broken, so it gated
+      # nothing while making every merge look unsafe.
+      #
+      # The generation lives in the SCRIPT rather than in a step here, so running `npm run
+      # typecheck` on a clean clone gives the same answer CI does. That divergence was the bug.
       - name: Typecheck
         run: npm run typecheck
 
