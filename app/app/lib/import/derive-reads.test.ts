@@ -117,3 +117,37 @@ describe("the dependency graph is checked before the database sees it", () => {
     if (r.ok) expect(r.plan.workflows[0].steps[1].reads).toEqual(["doc/a"]);
   });
 });
+
+describe("the sprint plan's inputs", () => {
+  // The two sprint-planning rows are deliberately the same step written twice, and "same inputs" is
+  // half of what that means. sprint-0's row gets all three from its dependencies; `sprint`'s row
+  // has to author them, because no step inside `sprint` produces any of them.
+  it("gives sprint-0's sprint plan the epics, the roster AND the delivery plan", () => {
+    const out = deriveReads([
+      step({ ord: 5, task: "propose-staffing", produces: "01-foundation/team" }),
+      step({ ord: 7, task: "draft-epics", produces: "02-scope/deliverables@tickets" }),
+      step({ ord: 8, task: "tailor-delivery-plan", produces: "03-delivery/plan" }),
+      step({
+        ord: 11, task: "draft-sprint-plan", produces: "05-cadence/sprint-plans",
+        dependsOn: ["draft-epics", "propose-staffing", "tailor-delivery-plan"],
+      }),
+    ]);
+    // `@tickets` is routing and belongs to the producer alone — copied into a dependent's `reads`
+    // it becomes a path no document ever has.
+    expect(out[3].reads).toEqual([
+      "02-scope/deliverables", "01-foundation/team", "03-delivery/plan",
+    ]);
+  });
+
+  it("keeps the same three on the `sprint` row, which has no dependencies to derive from", () => {
+    const out = deriveReads([
+      step({
+        workflow: "sprint", ord: 1, task: "sprint-planning", produces: "05-cadence/sprint-plans",
+        reads: ["03-delivery/plan", "02-scope/deliverables", "01-foundation/team"],
+      }),
+    ]);
+    expect(new Set(out[0].reads)).toEqual(
+      new Set(["03-delivery/plan", "02-scope/deliverables", "01-foundation/team"]),
+    );
+  });
+});

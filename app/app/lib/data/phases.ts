@@ -133,12 +133,26 @@ export async function initiatePhase(
     };
   }
 
+  // OPEN runs only, and the newest of them.
+  //
+  // This used to match ANY run of the workflow regardless of state, which made a repeating phase
+  // impossible: once sprint 1 closed, every attempt to start sprint 2 short-circuited and returned
+  // sprint 1's finished run, and the queue looked like the sprint had simply stopped. Worse, the
+  // moment two runs existed `.maybeSingle()` errored, so the failure would have changed shape
+  // rather than becoming visible.
+  //
+  // `state = 'open'` is what makes "one sprint at a time" true: a sprint in flight blocks another,
+  // a closed one does not. `order` + `limit(1)` keeps `.maybeSingle()` safe against the history
+  // that now accumulates.
   const { data: open } = await sb
     .from("workflow_run")
     .select("id")
     .eq("engagement_id", actor.engagementId)
     .eq("workflow_id", wf.id)
+    .eq("state", "open")
     .is("parent_task_id", null)
+    .order("opened_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (open) {
     const tasks = await tasksOfRun(open.id);
@@ -416,17 +430,25 @@ export async function phasesFor(actor: Actor): Promise<
 
   const { data: wfs } = await sb
     .from("workflow")
-    .select("id, code, label")
+    .select("id, code, label, repeatable")
     .eq("org_id", orgId)
     .eq("owner_role_code", actor.roleCode)
     .eq("enabled", true);
   const { data: runs } = await sb
     .from("workflow_run")
-    .select("id, workflow_id, state, ticket_key")
+    .select("id, workflow_id, state, ticket_key, opened_at")
     .eq("engagement_id", actor.engagementId)
-    .is("parent_task_id", null);
+    .is("parent_task_id", null)
+    .order("opened_at", { ascending: false });
 
-  const runOf = new Map((runs ?? []).map((r) => [r.workflow_id as string, r]));
+  // The LATEST run per workflow. A repeating phase has many, and a Map built from an unordered list
+  // would show whichever the database happened to return — "closed" over a sprint that is actually
+  // in flight, or the reverse. Ordered newest-first above, so the first write wins.
+  type Run = NonNullable<typeof runs>[number];
+  const runOf = new Map<string, Run>();
+  for (const r of runs ?? []) {
+    if (!runOf.has(r.workflow_id as string)) runOf.set(r.workflow_id as string, r);
+  }
 
   // One query for every run's ticketless tasks rather than one per phase.
   const { data: unticketed } = await sb
@@ -443,9 +465,13 @@ export async function phasesFor(actor: Actor): Promise<
     return {
       code: w.code,
       label: w.label,
+      // A REPEATABLE phase whose latest run has closed is available again — that is what makes
+      // "one sprint at a time" a cycle rather than a single pass. Read from the workflow's own
+      // column rather than tested against `code === "sprint"`: a checker that carries the literal
+      // it is policing is a mistake this repo has already made once.
       state: run
         ? run.state === "closed"
-          ? ("closed" as const)
+          ? (w.repeatable ? ("available" as const) : ("closed" as const))
           : ("open" as const)
         : ("available" as const),
       runId: run?.id ?? null,

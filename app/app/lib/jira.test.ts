@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("./supabase", () => ({ supabaseAdmin: () => null }));
 vi.mock("./crypto", () => ({ decryptSecret: (s?: string) => s ?? "" }));
 
-const { adf, updateIssue } = await import("./jira");
+const { adf, updateIssue, findUser, searchIssues } = await import("./jira");
 
 type Node = { type: string; attrs?: { level?: number }; content?: Node[]; text?: string };
 const blocks = (text: string) => adf(text).content as Node[];
@@ -124,5 +124,118 @@ describe("updateIssue", () => {
     await updateIssue(creds, "CT-16", { summary: "x".repeat(500) });
     const { fields } = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
     expect(fields.summary).toHaveLength(240);
+  });
+});
+
+const creds = { baseUrl: "https://x.atlassian.net", email: "e@x", token: "t", project: "CT" };
+const body = (m: ReturnType<typeof vi.fn>, i = 0) =>
+  JSON.parse(String((m.mock.calls[i][1] as RequestInit).body));
+const url = (m: ReturnType<typeof vi.fn>, i = 0) => String(m.mock.calls[i][0]);
+
+describe("updateIssue — labels and assignee", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  // The whole reason labels go through `update` rather than `fields`: `fields.labels` REPLACES the
+  // list, so writing `sprint-3` that way silently deletes every label the client's team put on the
+  // ticket — and the call still returns 204, so nothing would ever report it.
+  it("ADDS labels rather than replacing them", async () => {
+    await updateIssue(creds, "CT-16", { labels: ["sprint-3", "designer"] });
+    const sent = body(fetchMock);
+    expect(sent.update.labels).toEqual([{ add: "sprint-3" }, { add: "designer" }]);
+    expect(sent.fields?.labels).toBeUndefined();
+  });
+
+  it("sets the assignee by accountId", async () => {
+    await updateIssue(creds, "CT-16", { assignee: { accountId: "5f2a" } });
+    expect(body(fetchMock).fields.assignee).toEqual({ accountId: "5f2a" });
+  });
+
+  // undefined must leave an existing assignee alone. Clearing one because OUR lookup failed would
+  // take a ticket away from whoever the team had already put on it.
+  it("leaves the assignee alone when none is given", async () => {
+    await updateIssue(creds, "CT-16", { labels: ["sprint-3"] });
+    expect(body(fetchMock).fields).toBeUndefined();
+  });
+
+  it("clears the assignee only when explicitly told to", async () => {
+    await updateIssue(creds, "CT-16", { assignee: null });
+    expect(body(fetchMock).fields.assignee).toBeNull();
+  });
+
+  it("still writes nothing when given nothing", async () => {
+    expect(await updateIssue(creds, "CT-16", { labels: [] })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("findUser", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  const reply = (users: unknown[]) =>
+    vi.fn(async () => new Response(JSON.stringify(users), { status: 200 }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("returns the one match", async () => {
+    fetchMock = reply([{ accountId: "5f2a", displayName: "Priya S" }]);
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await findUser(creds, "Priya S")).toEqual({ accountId: "5f2a", displayName: "Priya S" });
+  });
+
+  // Picking the first of two assigns a real ticket on a real board to the wrong human. An
+  // unassigned ticket gets noticed; a wrongly-assigned one does not.
+  it("refuses to choose between two matches", async () => {
+    vi.stubGlobal("fetch", reply([
+      { accountId: "1", displayName: "A. Sharma" },
+      { accountId: "2", displayName: "A. Sharma" },
+    ]));
+    expect(await findUser(creds, "A. Sharma")).toBeNull();
+  });
+
+  it("returns null when nobody matches", async () => {
+    vi.stubGlobal("fetch", reply([]));
+    expect(await findUser(creds, "Nobody")).toBeNull();
+  });
+
+  it("does not call Jira for an empty name", async () => {
+    fetchMock = reply([]);
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await findUser(creds, "   ")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("searchIssues", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // THE DISTINCTION THE GATES DEPEND ON. `[]` is "asked, matched nothing"; `null` is "could not
+  // ask". Collapsing them makes a Jira outage read as "no unassigned stories", and the gate passes
+  // on a sprint nobody could see.
+  it("returns [] when the query matched nothing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ issues: [] }), { status: 200 })));
+    expect(await searchIssues(creds, "project = CT", ["assignee"])).toEqual([]);
+  });
+
+  it("returns null when the query could not be run", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    expect(await searchIssues(creds, "project = CT", ["assignee"])).toBeNull();
+  });
+
+  // A first page that happens to be clean says nothing about the second.
+  it("follows the cursor to the end", async () => {
+    const pages = [
+      { issues: [{ key: "CT-1", fields: {} }], nextPageToken: "p2" },
+      { issues: [{ key: "CT-2", fields: {} }] },
+    ];
+    let n = 0;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(pages[n++]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await searchIssues(creds, "project = CT", ["assignee"]))?.map((i) => i.key))
+      .toEqual(["CT-1", "CT-2"]);
+    expect(url(fetchMock, 1)).toContain("nextPageToken=p2");
   });
 });

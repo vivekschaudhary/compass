@@ -66,7 +66,7 @@ Depending on a row means consuming what it produces.
 | 8 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `01-foundation/raci` · `02-scope/deliverables` · `01-foundation/team` | `03-delivery/plan` | 6, 7, 5 |
 | 9 | Foundation architecture | `agent: enterprise-architect.draft-foundation-architecture` | enterprise-architect | `01-foundation/product-brief` · `02-scope/deliverables` | `01-foundation/foundational-architecture` | 2, 7 |
 | 10 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `01-foundation/team` · `01-foundation/raci` | `01-foundation/ways-of-working` | 5, 6 |
-| 11 | Sprint plan for sprints 1-3 | `agent: product-manager.draft-sprint-plan` | product-manager | `02-scope/deliverables` · `01-foundation/team` | `05-cadence/sprint-plans` | 7, 5 |
+| 11 | Sprint plan for sprint 1 | `agent: product-manager.draft-sprint-plan` | product-manager | `02-scope/deliverables` · `01-foundation/team` · `03-delivery/plan` | `05-cadence/sprint-plans` | 7, 5, 8 |
 | 12 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `05-cadence/sprint-plans` · `01-foundation/ways-of-working` · `03-delivery/plan` | `05-cadence/kickoff` | 11, 10, 8 |
 
 **Row 1 files the SOW; it does not write one.** The contract arrives from the delivery manager, in
@@ -106,11 +106,19 @@ shows the shape of what is coming rather than pages appearing when an agent firs
 Refused at publish, never resolved at run time. A plan that routes a deliverable to an empty role is
 a plan that stops the first time someone tries to accept something.
 
-### 11. Sprint plan for sprints 1-3
+### 11. Sprint plan for sprint 1
 
-    check:    the sprint plan is published
-    judgment: every story in sprints 1-3 belongs to an epic
+    check:    this sprint's plan is published
+    check:    every committed story belongs to an epic
+    check:    every committed story is on the board with an owner
     judgment: the plan fits the roster's capacity, or says where it does not
+    judgment: work taken on that was not in the plan is recorded as unplanned
+
+**This is the same row as `sprint` row 1, and deliberately so.** Sprint 0 has to end with sprint 1
+planned, but planning three sprints ahead here and one sprint at a time later was two answers to one
+question. Both rows now produce `05-cadence/sprint-plans`, and everything that acts on that path —
+the tool the agent may call, what approval turns into, the criteria above — is keyed on the path
+rather than on the row. Change one and you have changed both.
 
 A plan that does not fit and says so is useful. A plan that does not fit and does not say so is how
 a fixed-price engagement bleeds.
@@ -119,8 +127,9 @@ a fixed-price engagement bleeds.
 
 The phase is a chain at the top and a fan at the bottom. Rows 1 and 2 are strictly sequential —
 nothing here can be written before the contract and the brief exist. From row 4 the graph widens:
-the timeline feeds staffing and the epics, and rows 9, 10 and 11 run in parallel once staffing and
-the epics are published. Row 12 waits on all three closing arms.
+the timeline feeds staffing and the epics, and rows 9 and 10 run in parallel once staffing and the
+epics are published. Row 11 also waits on row 8, because a sprint plan drawn without the delivery
+plan is drawn against a cadence nobody has agreed. Row 12 waits on all the closing arms.
 
 Row 9 depends on the epics rather than the brief alone — an architecture drawn against a scope
 nobody has decomposed is drawn against a guess.

@@ -15,7 +15,8 @@ import { emit, emitRefusal } from "./events";
 import { mirrorState, moveFailed } from "./tracker";
 import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
-import { resolveJira, projectStatuses } from "../jira";
+import { resolveJira, projectStatuses, searchIssues } from "../jira";
+import { sprintJql, sprintNoOf } from "./sprint";
 import type { Actor } from "./actor";
 export { describeCriterion } from "@/app/v2/_ui/criterion";
 
@@ -247,7 +248,7 @@ export async function evaluate(actor: Actor, c: CriterionRow, taskId: string | n
   switch (c.subjectKind) {
     case "document": return evaluateDocument(actor, c);
     case "connector": return evaluateConnector(actor, c);
-    case "ticket": return { state: "unmeasurable", why: "the tracker mirror is not wired yet" };
+    case "ticket": return evaluateTicket(actor, c, taskId);
     case "backlog": return evaluateBacklog(actor, c, taskId);
     case "roster": return { state: "unmeasurable", why: "no roster evaluator yet" };
     default: return { state: "unmeasurable", why: `no evaluator for '${c.subjectKind}'` };
@@ -635,4 +636,85 @@ export async function checkConnectors(actor: Actor): Promise<{ connector: string
   return Promise.all(
     ["docs", "tickets"].map(async (connector) => ({ connector, verdict: await evaluate(actor, shape(connector)) })),
   );
+}
+
+/**
+ * The sprint's criteria, answered by asking the tracker.
+ *
+ * NOT by reading what Compass believes it wrote. A gate that grades its own homework passes on a
+ * sprint whose tickets never reached the board, and that is the whole reason this feature keeps no
+ * sprint table: the board is the record, so the board is what gets asked.
+ *
+ * Three ways this could pass while checking nothing, all closed here:
+ *
+ *   an EMPTY result — the query ran and matched nothing. Every issue in an empty set satisfies
+ *   every condition, so `every()` returns true and a sprint containing nothing would be reported
+ *   complete. Unmeasurable.
+ *
+ *   a FAILED query — `searchIssues` returns null for "could not ask", which is why it does not
+ *   return `[]` for it. Unmeasurable, with the reason.
+ *
+ *   NO SPRINT NUMBER — the task never claimed one, so nothing was ever labelled. That is
+ *   unsatisfied rather than unmeasurable: "nothing reached the board" is a real, checkable answer,
+ *   and calling it unmeasurable would let it read as a tooling gap rather than as work not done.
+ */
+async function evaluateTicket(actor: Actor, c: CriterionRow, taskId: string | null): Promise<Verdict> {
+  const sb = supabaseAdmin();
+  if (!sb || !taskId) return { state: "unmeasurable", why: "no task to read a sprint from" };
+
+  const n = await sprintNoOf(taskId);
+  if (!n) {
+    return {
+      state: "unsatisfied", source: "compass",
+      detail: "This plan has no sprint number, so no story was ever labelled or assigned. " +
+              "Nothing reached the board.",
+    };
+  }
+
+  const { data: eng } = await sb.from("engagement")
+    .select("jira_project, atlassian_base_url, atlassian_email, atlassian_api_token")
+    .eq("id", actor.engagementId).maybeSingle();
+  const creds = eng ? resolveJira(eng) : null;
+  if (!creds) return { state: "unmeasurable", why: "no Jira is configured for this engagement" };
+
+  const issues = await searchIssues(creds, sprintJql(creds.project, n), ["assignee", "labels", "parent"]);
+  if (issues === null) {
+    return { state: "unmeasurable", why: `the board could not be read for sprint ${n}` };
+  }
+  if (!issues.length) {
+    // The zero-row trap, said out loud. `every()` over nothing is true.
+    return { state: "unmeasurable", why: `no issue on the board carries sprint ${n} — there is nothing to check` };
+  }
+
+  const { data: roleRows } = await sb.from("role").select("code").eq("org_id", actor.orgId);
+  const knownRoles = new Set((roleRows ?? []).map((r) => r.code as string));
+
+  if (c.subjectRef === "committed-have-epic") {
+    const orphans = issues.filter((i) => !i.fields.parent);
+    return orphans.length === 0
+      ? { state: "satisfied", source: "tracker",
+          detail: `All ${issues.length} stories in sprint ${n} sit under an epic.` }
+      : { state: "unsatisfied", source: "tracker",
+          detail: `${orphans.length} of ${issues.length} have no epic: ${orphans.map((o) => o.key).join(", ")}.` };
+  }
+
+  if (c.subjectRef === "on-board") {
+    const unassigned = issues.filter((i) => !i.fields.assignee);
+    const unowned = issues.filter((i) => {
+      const labels = Array.isArray(i.fields.labels) ? (i.fields.labels as string[]) : [];
+      return !labels.some((l) => knownRoles.has(l));
+    });
+    if (!unassigned.length && !unowned.length) {
+      return { state: "satisfied", source: "tracker",
+               detail: `All ${issues.length} stories in sprint ${n} have an owning role and an assignee.` };
+    }
+    // Named, not counted. "KAN-14, KAN-19" sends someone somewhere; "2 of 11" sends them hunting.
+    const parts: string[] = [];
+    if (unassigned.length) parts.push(`unassigned: ${unassigned.map((i) => i.key).join(", ")}`);
+    if (unowned.length) parts.push(`no owning role: ${unowned.map((i) => i.key).join(", ")}`);
+    return { state: "unsatisfied", source: "tracker",
+             detail: `Of ${issues.length} stories in sprint ${n} — ${parts.join("; ")}.` };
+  }
+
+  return { state: "unmeasurable", why: `judgment — a person decides '${c.subjectRef}'` };
 }

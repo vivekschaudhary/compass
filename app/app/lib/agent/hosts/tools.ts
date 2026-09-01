@@ -182,7 +182,124 @@ export const TOOLS: Anthropic.Tool[] = [
     },
     strict: true,
   },
+  {
+    name: "sprint",
+    description:
+      "Plan ONE sprint: commit to a set of stories that already exist on the board, and say which " +
+      "role owns each one. Use this instead of `draft` when the deliverable IS a sprint plan. You " +
+      "are not writing new stories — you are choosing from the ones you were given and committing " +
+      "to what the roster can actually finish in one sprint. The plan you write is the readable " +
+      "record; the commitments are what reaches the board, so they have to come back as structure. " +
+      "Same evidence rule as `draft`: commit only to stories you were shown, and where the roster " +
+      "cannot cover the work, say so in the plan rather than quietly committing to it anyway.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "What you committed to and why. Note any input that was missing and what it cost.",
+        },
+        goal: {
+          type: "string",
+          description: "The one outcome this sprint is for, in the product's vocabulary.",
+        },
+        starts: { type: "string", description: "First day of the sprint, ISO `YYYY-MM-DD`." },
+        ends: { type: "string", description: "Last day of the sprint, ISO `YYYY-MM-DD`." },
+        commitments: {
+          type: "array",
+          description:
+            "The stories this sprint commits to. Choose only from the committable stories you were " +
+            "given, and size the set against the roster you were given — a plan that does not fit " +
+            "and says so is useful; one that does not fit and does not say so is not.",
+          items: {
+            type: "object",
+            properties: {
+              ref: {
+                type: "string",
+                description:
+                  "The story's ref as you were given it — e.g. `E1-S3`. Not a Jira key.",
+              },
+              role: {
+                type: "string",
+                enum: ["designer", "ux-writer", "engineer", "automation", "sre", "architect"],
+                description:
+                  "Who owns this story. `designer` when it needs new screens or flows; " +
+                  "`ux-writer` when the work is the words on a screen; `automation` when SRE, " +
+                  "DevOps, pipeline or QA owns the outcome; `architect` when the deliverable is a " +
+                  "technical design rather than shipped behaviour; `engineer` otherwise. Judge the " +
+                  "story, not the epic it sits under.",
+              },
+              why: {
+                type: "string",
+                description: "One line: why that role owns it. A person checks this routing.",
+              },
+            },
+            required: ["ref", "role", "why"],
+            additionalProperties: false,
+          },
+        },
+        sections: {
+          type: "array",
+          description:
+            "The readable plan — the goal, the shape of the sprint, capacity, risks, and anything " +
+            "the roster cannot cover. The commitments table is appended for you; do not write it.",
+          items: {
+            type: "object",
+            properties: {
+              heading: { type: "string" },
+              body: { type: "string", description: "Markdown." },
+              cites: {
+                type: "array",
+                items: { type: "string" },
+                description: "Document paths this section was derived from.",
+              },
+            },
+            required: ["heading", "body", "cites"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["summary", "goal", "starts", "ends", "commitments", "sections"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
 ];
+
+/**
+ * Which producing path unlocks which specialised tool.
+ *
+ * THE ANTI-DRIFT SEAM. `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` are the same step
+ * written twice — sprint 0 has to end with sprint 1 planned, and every sprint after plans itself.
+ * Keying the tool on the produced PATH rather than on either row's slug is what makes them the same
+ * behaviour by construction: `materialise.ts`'s REGISTRY is keyed the same way, and the criteria are
+ * held identical by `seed-consistency-check.py`.
+ *
+ * It is also a guard. A step that does not produce a backlog cannot call `backlog`, so a model
+ * cannot decide to return epics from a step whose approval has nothing to do with them.
+ */
+export const PRODUCES_TOOL: Record<string, string> = {
+  "02-scope/deliverables": "backlog",
+  "05-cadence/sprint-plans": "sprint",
+};
+
+/** Every tool that is not gated behind a produced path. */
+const GENERAL = new Set(["ask", "draft"]);
+
+/**
+ * The tools a step may call, given what it produces.
+ *
+ * A specialised tool replaces `draft` rather than joining it: a step that produces a sprint plan
+ * has one way to produce it, and offering both invites a model to file a plan whose commitments
+ * never reach the board — a document that looks complete and does nothing.
+ */
+export function toolsFor(produces: string | null | undefined): Anthropic.Tool[] {
+  const special = produces ? PRODUCES_TOOL[produces] : undefined;
+  return TOOLS.filter((t) =>
+    special ? t.name === "ask" || t.name === special : GENERAL.has(t.name),
+  );
+}
 
 /**
  * The tools as ONE structured-output schema, for a host that cannot take tool definitions.

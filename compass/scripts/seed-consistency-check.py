@@ -117,6 +117,58 @@ def seed_steps() -> dict[str, list[dict]]:
     return by
 
 
+def shared_produces_drift() -> list[str]:
+    """Two steps that produce the same document must be gated the same way.
+
+    `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` are deliberately the same step written
+    twice — sprint 0 has to end with sprint 1 planned, and every sprint after plans itself. Every
+    other seam that acts on a sprint plan is keyed on the produced PATH (the tool the agent may
+    call, the materialiser, the reads), so those cannot drift. The criteria can: `criterion` rows
+    are keyed on (workflow, task), so there is no choice but to write them twice.
+
+    This is the check that makes the second copy safe. Comparing the `done` statements by SET, not
+    by order — the CSV's row order is not a promise, and reporting a reordering as drift would
+    train people to ignore the one thing this exists to catch.
+    """
+    produces: dict[str, list[tuple[str, str]]] = {}
+    for r in csv.DictReader((SEED / "workflow-steps.csv").open()):
+        # The bare path. A step may name where its deliverable goes (`…@tickets`) and that suffix
+        # is routing, not identity — two steps producing the same document by different routes are
+        # still producing the same document.
+        path = (r.get("produces") or "").split("@")[0].strip()
+        if not path:
+            continue
+        produces.setdefault(path, []).append((r["workflow"], r["task"]))
+
+    done: dict[tuple[str, str], set[str]] = {}
+    for c in csv.DictReader((SEED / "criteria.csv").open()):
+        if (c.get("kind") or "").strip() != "done":
+            continue
+        done.setdefault((c["workflow"], (c.get("task") or "").strip()), set()).add(
+            (c.get("text") or "").strip())
+
+    out: list[str] = []
+    for path, owners in sorted(produces.items()):
+        if len(owners) < 2:
+            continue
+        first, *rest = owners
+        for other in rest:
+            a, b = done.get(first, set()), done.get(other, set())
+            if a == b:
+                continue
+            only_a = sorted(a - b)
+            only_b = sorted(b - a)
+            detail = []
+            if only_a:
+                detail.append(f"only {first[0]}.{first[1]}: " + "; ".join(only_a))
+            if only_b:
+                detail.append(f"only {other[0]}.{other[1]}: " + "; ".join(only_b))
+            out.append(
+                f"shared-produces {first[0]}.{first[1]} vs {other[0]}.{other[1]}: both produce "
+                f"`{path}` but their done criteria differ — {' | '.join(detail)}")
+    return out
+
+
 def main() -> int:
     check = "--check" in sys.argv
 
@@ -174,6 +226,8 @@ def main() -> int:
                     problems.append(
                         f"step-shape     {code} step {a['ord']}: {field} is "
                         f"'{av}' in the graph, '{bv}' in the seed")
+
+    problems.extend(shared_produces_drift())
 
     # The known-drift baseline. Thirteen discrepancies existed the day this check was written, and
     # a check that fails on every commit from birth is a check everyone learns to skip. So it fails

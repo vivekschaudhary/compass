@@ -1,13 +1,13 @@
-code,label,workstream,phase,owner_role,trigger,enabled
-build,Workflow: /build,Engineering,,engineer,,false
-create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,false
-create-brief,Workflow: /create-brief,Product,,researcher,,false
-create-story,Workflow: /create-story,Product,,product-manager,,false
-fix,Workflow: /fix,Engineering,,engineer,,false
-ops,Workflow: /ops,Engineering,,enterprise-architect,,false
-setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,false
-tech-design,Workflow: /tech-design,Engineering,,architect,,false
-triage,Workflow: /triage,Support,,support,,false
-setup,Setup engagement,Delivery,Setup,delivery-manager,,false
-sprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true
-sprint,Sprint,Delivery,Sprint,delivery-manager,,true
+code,label,workstream,phase,owner_role,trigger,enabled,repeatable
+build,Workflow: /build,Engineering,,engineer,,false,false
+create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,false,false
+create-brief,Workflow: /create-brief,Product,,researcher,,false,false
+create-story,Workflow: /create-story,Product,,product-manager,,false,false
+fix,Workflow: /fix,Engineering,,engineer,,false,false
+ops,Workflow: /ops,Engineering,,enterprise-architect,,false,false
+setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,false,false
+tech-design,Workflow: /tech-design,Engineering,,architect,,false,false
+triage,Workflow: /triage,Support,,support,,false,false
+setup,Setup engagement,Delivery,Setup,delivery-manager,,false,false
+sprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true,false
+sprint,Sprint,Delivery,Sprint,delivery-manager,,true,true

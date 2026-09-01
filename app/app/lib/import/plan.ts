@@ -30,7 +30,7 @@ export type RoleRow = {
 };
 export type WorkflowRow = {
   code: string; label: string; workstream: string; phase: string;
-  ownerRole: string; trigger: string; enabled: boolean;
+  ownerRole: string; trigger: string; enabled: boolean; repeatable: boolean;
 };
 export type StepRow = {
   workflow: string; ord: number; kind: string; role: string; task: string;
@@ -143,6 +143,10 @@ function readWorkflows(csv: string): WorkflowRow[] {
     code: r.code, label: r.label || r.code, workstream: r.workstream ?? "",
     phase: r.phase ?? "", ownerRole: r.owner_role ?? "", trigger: r.trigger ?? "",
     enabled: parseBool(r.enabled),
+    // Absent reads false: a workflow that does not say it repeats does not repeat. The default has
+    // to be the safe direction — a phase wrongly marked repeatable offers to start a second run of
+    // work that is already done.
+    repeatable: parseBool(r.repeatable),
   }));
 }
 

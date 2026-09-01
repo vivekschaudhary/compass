@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 const { buildArgv, subscriptionEnv, flattenMessages, toHostResult, makeCliHost } =
   await import("./cli");
-const { TOOLS, unionSchema } = await import("./tools");
+const { TOOLS, unionSchema, toolsFor } = await import("./tools");
 
 const req = (over: Record<string, unknown> = {}) => ({
   model: "claude-opus-5",
@@ -211,5 +211,47 @@ describe("dispatch", () => {
     // long-but-healthy run gets killed — the #152 defect.
     expect(opts.idleMs).toBeLessThan(opts.hardMs);
     expect(opts.idleMs).toBeGreaterThanOrEqual(120_000);
+  });
+});
+
+// Which tool a step may call is keyed on WHAT IT PRODUCES, not on its slug. That is what makes
+// `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` the same step written twice without
+// being able to drift — and it is also a guard, because a model that can reach for `backlog` from
+// any step can return epics from one whose approval has nothing to do with them.
+describe("toolsFor", () => {
+  const names = (produces: string | null) => toolsFor(produces).map((t) => t.name).sort();
+
+  it("gives an ordinary step ask and draft", () => {
+    expect(names("01-foundation/team")).toEqual(["ask", "draft"]);
+    expect(names(null)).toEqual(["ask", "draft"]);
+  });
+
+  it("gives both sprint-planning rows the same tool, because both produce the same path", () => {
+    expect(names("05-cadence/sprint-plans")).toEqual(["ask", "sprint"]);
+  });
+
+  it("gives the epics step the backlog tool", () => {
+    expect(names("02-scope/deliverables")).toEqual(["ask", "backlog"]);
+  });
+
+  // A specialised tool REPLACES draft rather than joining it. Offering both would let a model file
+  // a sprint plan as prose whose commitments never reach the board — a document that looks
+  // complete and does nothing.
+  it("does not leave draft available beside a specialised tool", () => {
+    expect(names("05-cadence/sprint-plans")).not.toContain("draft");
+    expect(names("02-scope/deliverables")).not.toContain("draft");
+  });
+
+  it("never withholds ask — every step can still say what it does not know", () => {
+    for (const p of [null, "01-foundation/team", "02-scope/deliverables", "05-cadence/sprint-plans"]) {
+      expect(names(p)).toContain("ask");
+    }
+  });
+
+  // The CLI host builds its schema from the tools it is HANDED, so the filtering reaches it too.
+  it("narrows the CLI host's schema as well", () => {
+    const schema = unionSchema(toolsFor("05-cadence/sprint-plans")) as
+      { properties: { tool: { enum: string[] } } };
+    expect(schema.properties.tool.enum).toEqual(["ask", "sprint"]);
   });
 });
