@@ -25,11 +25,13 @@ import {
 import { conversation, openQuestions } from "../data/job";
 import { publishToDocs } from "../data/publish";
 import { normaliseBacklog, sectionsOf, recordBacklog } from "../data/backlog";
+import { commitmentsSection, overviewSection } from "../data/sprint-rows";
+import { resolveCommitments } from "../data/sprint";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { nestedWorkflowOf } from "../data/phases";
 import { selectHost, MODEL } from "./hosts/select";
-import { TOOLS } from "./hosts/tools";
+import { toolsFor } from "./hosts/tools";
 import type { HostResult } from "./hosts/types";
 
 
@@ -371,7 +373,7 @@ export async function runAgent(
       // task needs room for both.
       maxTokens: 64000,
       system: systemPrompt(ctx),
-      tools: TOOLS,
+      tools: toolsFor(ctx.produces),
       messages: [
         { role: "user", content: inputPrompt(ctx) },
         ...(await priorMessages(taskId)),
@@ -530,16 +532,20 @@ export async function runAgent(
     return { kind: "asked", preamble: input.preamble, questions: put };
   }
 
-  // `draft` and `backlog` are one path deliberately.
+  // `draft`, `backlog` and `sprint` are one path deliberately.
   //
-  // Both produce the same deliverable — a filed, versioned, cited document that a human approves —
-  // and they differ only in what the model returned and what happens to it afterwards. Giving the
-  // backlog its own branch would mean a second copy of filing, citations, the empty-output
-  // diagnosis, the superseded-questions sweep and the HITL transition, and the second copy is where
-  // the two would drift.
-  if (call.name === "draft" || call.name === "backlog") {
+  // All three produce the same deliverable — a filed, versioned, cited document that a human
+  // approves — and they differ only in what the model returned and what happens to it afterwards.
+  // Giving each its own branch would mean a third copy of filing, citations, the empty-output
+  // diagnosis, the superseded-questions sweep and the HITL transition, and the copies are where
+  // they would drift.
+  if (call.name === "draft" || call.name === "backlog" || call.name === "sprint") {
     const isBacklog = call.name === "backlog";
-    const input = call.input as { summary?: string; sections?: unknown; epics?: unknown };
+    const isSprint = call.name === "sprint";
+    const input = call.input as {
+      summary?: string; sections?: unknown; epics?: unknown;
+      goal?: string; starts?: string; ends?: string; commitments?: unknown;
+    };
 
     // The backlog arrives as structure and is turned into sections HERE, so everything downstream —
     // the filed document, its citations, a redraft's `priorDraft` — is unchanged. The structure is
@@ -547,7 +553,39 @@ export async function runAgent(
     const { epics, problems: backlogProblems } = isBacklog
       ? normaliseBacklog(input.epics)
       : { epics: [], problems: [] as string[] };
-    const sections = isBacklog ? sectionsOf(epics) : asSections(input.sections);
+
+    // A sprint plan is a readable page AND a set of commitments. The page is what the agent wrote;
+    // the commitments are rendered from the tool's structure into one section, never written
+    // freehand, so that approval can read them back mechanically. See `sprint-rows.ts` for why the
+    // document carries them rather than a table.
+    const { commitments, problems: sprintProblems } = isSprint
+      ? await resolveCommitments(actor.engagementId, input.commitments)
+      : { commitments: [], problems: [] as string[] };
+
+    // The commitments table is APPENDED to what the agent wrote, so the plan reads as a page and
+    // still carries the structure approval needs. Guarded on `commitments.length`: appending
+    // unconditionally would mean a sprint that committed to nothing still produced a section, and
+    // the "no document was produced" check below — which counts sections — would never fire on the
+    // one outcome that most needs to halt. An empty sprint is not a plan.
+    const sections = isBacklog
+      ? sectionsOf(epics)
+      : isSprint
+        ? (commitments.length
+            ? [
+                // The number is OURS, not the model's. `ctx.sprint` allocated it and the labels
+                // will use it; letting the prose name a different one is how the page and the
+                // board end up describing two different sprints.
+                overviewSection({
+                  number: ctx.sprint?.number ?? 0,
+                  goal: input.goal ?? "",
+                  starts: input.starts ?? "",
+                  ends: input.ends ?? "",
+                }),
+                ...asSections(input.sections),
+                commitmentsSection(commitments),
+              ]
+            : [])
+        : asSections(input.sections);
 
     // The conversation gets the SUMMARY, not the document. Writing the whole draft into the turn
     // made it render twice — once in the chat and again in the document pane — and turned a
@@ -563,6 +601,8 @@ export async function runAgent(
       // not here" is precisely what the approver needs to know before they say yes.
       [text, input.summary, backlogProblems.length
         ? `_Reading the backlog:_\n${backlogProblems.map((p) => `- ${p}`).join("\n")}`
+        : "", sprintProblems.length
+        ? `_Committing to the sprint:_\n${sprintProblems.map((p) => `- ${p}`).join("\n")}`
         : ""].filter(Boolean).join("\n\n"),
       ctx,
     );
@@ -571,8 +611,8 @@ export async function runAgent(
       // An EMPTY array is not unreadable output — it parsed perfectly and contained nothing. Saying
       // "could not be read" sends someone to debug a parser when the actual cause is usually that
       // the model ran out of room after writing its summary. Name which one it was.
-      const returned = isBacklog ? input.epics : input.sections;
-      const noun = isBacklog ? "epics" : "sections";
+      const returned = isBacklog ? input.epics : isSprint ? input.commitments : input.sections;
+      const noun = isBacklog ? "epics" : isSprint ? "commitments" : "sections";
       const why = truncated
         ? "It hit the token limit after writing its summary, so the document itself never came. Run it again — the budget is larger now."
         : Array.isArray(returned)

@@ -14,6 +14,8 @@ import "server-only";
 import { resolveSpec } from "../specs";
 import { destinationOf } from "../adapters";
 import { supabaseAdmin, must } from "../supabase";
+import { resolveJira, searchIssues } from "../jira";
+import { nextSprintNumber, committedJql } from "../data/sprint";
 import type { Actor } from "./../data/actor";
 
 
@@ -69,6 +71,30 @@ export type AgentContext = {
   /** What it produced last time, and what a reviewer said about it. Null on the first run. */
   priorDraft: { version: string; sections: { heading: string; body: string }[] } | null;
   rejections: { criterion: string; reason: string; by: string }[];
+  /** Set only on a step that plans a sprint. Null everywhere else. */
+  sprint: SprintContext | null;
+};
+
+/**
+ * What a sprint plan needs that no pinned document can supply.
+ *
+ * `committable` is asked of the TRACKER, not of Compass. Which stories are already in a sprint is
+ * a fact about the board, and a story somebody moved by hand there must not be offered again — the
+ * whole reason this feature keeps no sprint table of its own.
+ *
+ * `reachedTracker` is the honest empty, and it is why `committable` being `[]` is not enough on its
+ * own. An agent told "nothing is committed" when the truth is "nobody could look" will happily
+ * re-commit a sprint's worth of work that is already in flight.
+ */
+export type SprintContext = {
+  /** Which sprint this is. */
+  number: number;
+  /** Stories on the board that are not in any earlier sprint. */
+  committable: { ref: string; ticketKey: string | null; title: string; epic: string | null }[];
+  /** Who is on this engagement, by role — what capacity actually means here. */
+  roster: { role: string; holders: string[] }[];
+  /** False when the tracker could not be reached, so `committable` is unknown rather than empty. */
+  reachedTracker: boolean;
 };
 
 export type WorkflowSummary = {
@@ -488,6 +514,81 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     inventory: await loadInventory(actor.orgId),
     priorDraft: await loadPriorDraft(actor.engagementId, produces),
     rejections: await loadRejections(taskId),
+    sprint: produces === SPRINT_PLAN_PATH
+      ? await loadSprintContext(actor.engagementId, taskId)
+      : null,
+  };
+}
+
+/** The one path that makes a step a sprint plan. Keyed on the path, never on either row's slug. */
+const SPRINT_PLAN_PATH = "05-cadence/sprint-plans";
+
+/**
+ * What this sprint is, and what is left to commit.
+ *
+ * The number comes first and is allocated, not guessed — the agent's prose must name the same
+ * sprint the labels will, or the published page and the board disagree from the first draft.
+ *
+ * Everything else is a question for the tracker. `committedJql` asks which stories are already in
+ * sprints 1..N-1 and those are subtracted; a tracker that cannot be reached leaves
+ * `reachedTracker: false` and the prompt says so rather than presenting an empty answer as a
+ * complete one.
+ */
+async function loadSprintContext(
+  engagementId: string, taskId: string,
+): Promise<SprintContext | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const number = await nextSprintNumber(engagementId, taskId);
+
+  const { data: stories } = await sb
+    .from("backlog_item")
+    .select("ref, title, ticket_key, parent_ref")
+    .eq("engagement_id", engagementId).eq("kind", "story").order("ord");
+
+  const { data: eng } = await sb
+    .from("engagement")
+    .select("jira_project, atlassian_base_url, atlassian_email, atlassian_api_token")
+    .eq("id", engagementId).maybeSingle();
+  const creds = eng ? resolveJira(eng) : null;
+
+  // Already-committed keys, straight from the board.
+  let taken = new Set<string>();
+  let reachedTracker = false;
+  if (creds && number > 1) {
+    const found = await searchIssues(creds, committedJql(creds.project, number - 1), ["summary"]);
+    // null is "could not ask" and [] is "asked, nothing is committed" — collapsing them here is
+    // exactly how an agent would be told the backlog is wide open during a Jira outage.
+    if (found !== null) {
+      reachedTracker = true;
+      taken = new Set(found.map((i) => i.key));
+    }
+  } else if (creds) {
+    // Sprint 1: nothing can be committed yet, so there is nothing to ask and no outage to hide.
+    reachedTracker = true;
+  }
+
+  const { data: members } = await sb
+    .from("member").select("role, name").eq("engagement_id", engagementId).order("ord");
+  const byRole = new Map<string, string[]>();
+  for (const m of members ?? []) {
+    if (!m.role || !m.name) continue;
+    byRole.set(m.role, [...(byRole.get(m.role) ?? []), m.name as string]);
+  }
+
+  return {
+    number,
+    committable: (stories ?? [])
+      .filter((s) => !s.ticket_key || !taken.has(s.ticket_key as string))
+      .map((s) => ({
+        ref: s.ref as string,
+        ticketKey: (s.ticket_key as string | null) ?? null,
+        title: s.title as string,
+        epic: (s.parent_ref as string | null) ?? null,
+      })),
+    roster: [...byRole].map(([role, holders]) => ({ role, holders })),
+    reachedTracker,
   };
 }
 
@@ -622,5 +723,50 @@ export function inputPrompt(ctx: AgentContext): string {
       `\n\nThey are empty, not withheld. Take this into account and say what it costs.\n</missing>`);
   }
 
+  if (ctx.sprint) parts.push(sprintPrompt(ctx.sprint));
+
   return parts.join("\n\n");
+}
+
+/**
+ * What a sprint plan is given beyond its documents.
+ *
+ * The number is STATED rather than left to the model. A model that picks its own sprint number
+ * picks one that already exists, and the page then names a different sprint from the labels — two
+ * records of one sprint, which is the failure this whole design avoids by keeping only one.
+ *
+ * The tracker's silence is stated too. "No stories are committed yet" and "the board could not be
+ * read" produce the same empty list and mean opposite things; an agent that cannot tell them apart
+ * will re-commit work already in flight, and every story would look correctly planned.
+ */
+function sprintPrompt(s: SprintContext): string {
+  const roster = s.roster.length
+    ? s.roster.map((r) => `- ${r.role}: ${r.holders.join(", ")}`).join("\n")
+    : "- Nobody is on the roster. Say what that costs rather than committing against nobody.";
+
+  const stories = s.committable.length
+    ? s.committable.map((c) =>
+        `- \`${c.ref}\`${c.epic ? ` (epic \`${c.epic}\`)` : ""} — ${c.title}` +
+        (c.ticketKey ? ` [${c.ticketKey}]` : " — NOT ON THE BOARD"),
+      ).join("\n")
+    : "- Nothing. Do not invent stories; say the backlog is empty.";
+
+  const caveat = s.reachedTracker
+    ? ""
+    : `\n\nTHE TRACKER COULD NOT BE READ. The list above has NOT had already-committed stories ` +
+      `removed, so some of it may already be in an earlier sprint. Say this in the plan rather ` +
+      `than committing as though the list were clean.`;
+
+  return [
+    `<sprint number="${s.number}">`,
+    `You are planning sprint ${s.number}. Use that number wherever the plan names the sprint.`,
+    ``,
+    `Commit ONLY from these stories:`,
+    stories,
+    ``,
+    `The roster you are committing against:`,
+    roster,
+    caveat,
+    `</sprint>`,
+  ].join("\n");
 }

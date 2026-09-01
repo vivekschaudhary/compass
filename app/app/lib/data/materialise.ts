@@ -24,8 +24,9 @@ import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { emit } from "./events";
 import { parseRoster } from "./roster-rows";
+import { parseCommitments } from "./sprint-rows";
 import { backlogOf } from "./backlog";
-import { mirrorBacklog } from "./tracker";
+import { mirrorBacklog, mirrorSprint } from "./tracker";
 import { destinationOf } from "../adapters";
 
 export type Materialised = { path: string; created: number; updated: number; problems: string[] };
@@ -122,12 +123,55 @@ async function materialiseBacklog(actor: Actor, _markdown: string, taskId: strin
   };
 }
 
-/** What each producing path turns into. Register here; do not branch in the caller. */
+/**
+ * Put the sprint on the board: the committed stories labelled `sprint-N` and assigned.
+ *
+ * Reads the MARKDOWN, unlike `materialiseBacklog`, and the difference is the point. A backlog's
+ * epics do not exist yet when the agent drafts them, so they are held as rows until Jira accepts
+ * them. A sprint's stories already exist with keys — committing one is a change TO an issue — so
+ * there is nothing to hold, and the only gap to cross is between the draft and the approval. The
+ * document crosses it, exactly as it does for the roster.
+ *
+ * `commitmentsSection` rendered that table from the tool's structured input, so this parse is the
+ * inverse of a deterministic render rather than an attempt to read whatever prose a model wrote.
+ */
+async function materialiseSprint(actor: Actor, markdown: string, taskId: string): Promise<Materialised> {
+  const out: Materialised = { path: "05-cadence/sprint-plans", created: 0, updated: 0, problems: [] };
+
+  const { commitments, problems } = parseCommitments(markdown);
+  if (!commitments.length) {
+    return {
+      ...out,
+      problems: [
+        ...problems,
+        "This plan commits to no stories that could be read, so nothing reached the board. It was " +
+        "drafted as a document rather than through the sprint tool — re-run the task.",
+      ],
+    };
+  }
+
+  const mirrored = await mirrorSprint(actor.engagementId, taskId, actor.roleCode, commitments);
+  return {
+    ...out,
+    updated: mirrored.placed.length,
+    problems: [...problems, ...mirrored.problems],
+  };
+}
+
+/**
+ * What each producing path turns into. Register here; do not branch in the caller.
+ *
+ * KEYED ON THE PATH, which is what lets `sprint-0.draft-sprint-plan` and `sprint.sprint-planning`
+ * be the same step written twice without being able to drift: both produce `05-cadence/sprint-plans`
+ * and therefore both get this, with no second registration to keep in step. `tools.ts`'s
+ * PRODUCES_TOOL is keyed the same way, and `seed-consistency-check.py` holds their criteria equal.
+ */
 const REGISTRY: Record<
   string, (actor: Actor, markdown: string, taskId: string) => Promise<Materialised>
 > = {
   "01-foundation/team": materialiseRoster,
   "02-scope/deliverables": materialiseBacklog,
+  "05-cadence/sprint-plans": materialiseSprint,
 };
 
 /**

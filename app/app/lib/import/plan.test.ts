@@ -69,6 +69,42 @@ describe("the shipped seed", () => {
     expect(selfStarting.map((w) => w.row.code)).toEqual([]);
   });
 
+  // The two sprint-planning rows are deliberately the same step written twice — sprint 0 has to
+  // end with sprint 1 planned, and every sprint after plans itself. Asserted against the REAL seed
+  // rather than a fixture, because the thing that can break is the CSV, not `deriveReads`.
+  it("gives both sprint-planning rows the same three inputs", () => {
+    const stepsOf = (code: string) =>
+      planned().workflows.find((w) => w.row.code === code)?.steps ?? [];
+    const s0 = stepsOf("sprint-0").find((x) => x.task === "draft-sprint-plan");
+    const sn = stepsOf("sprint").find((x) => x.task === "sprint-planning");
+
+    expect(s0, "sprint-0 has no draft-sprint-plan row").toBeDefined();
+    expect(sn, "sprint has no sprint-planning row").toBeDefined();
+
+    const want = ["01-foundation/team", "02-scope/deliverables", "03-delivery/plan"];
+    expect([...s0!.reads].sort()).toEqual(want);
+    expect([...sn!.reads].sort()).toEqual(want);
+  });
+
+  it("has both sprint-planning rows produce the one path everything else is keyed on", () => {
+    // `materialise.ts`'s REGISTRY and `tools.ts`'s PRODUCES_TOOL are both keyed on this path. If
+    // either row stopped producing it, that row would silently lose its tool and its materialiser
+    // and still look like a working step.
+    const plan = planned();
+    for (const [workflow, task] of [["sprint-0", "draft-sprint-plan"], ["sprint", "sprint-planning"]]) {
+      const steps = plan.workflows.find((w) => w.row.code === workflow)?.steps ?? [];
+      const row = steps.find((x) => x.task === task);
+      expect(row?.produces, `${workflow}.${task}`).toBe("05-cadence/sprint-plans");
+    }
+  });
+
+  it("marks `sprint` as the one phase that repeats", () => {
+    const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
+    expect(byCode.get("sprint")?.repeatable).toBe(true);
+    expect(byCode.get("sprint-0")?.repeatable).toBe(false);
+    expect(byCode.get("setup")?.repeatable).toBe(false);
+  });
+
   it("seeds every delivery phase, owned by the delivery manager", () => {
     const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
     for (const code of PHASES) {

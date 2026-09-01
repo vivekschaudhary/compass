@@ -126,15 +126,93 @@ export async function createIssue(c: JiraCreds, opts: { type: string; summary: s
 //
 // Nothing is sent when neither field is given — a PUT with empty `fields` is a wasted round trip
 // that Jira answers 400, which would read as a refusal rather than as "there was nothing to say".
+// `labels` and `assignee` are how a story joins a sprint and gets an owner. Labels go through the
+// `update` verb rather than `fields`, and that is not a style choice: `fields.labels` REPLACES the
+// whole list, so writing `sprint-3` that way would silently delete every label the client's own
+// team put on the ticket. `update.labels[].add` is additive and a duplicate add is a no-op — which
+// is what lets the sprint mirror re-run safely with no local bookkeeping to say what it did last
+// time.
 export async function updateIssue(
-  c: JiraCreds, key: string, opts: { summary?: string; description?: string },
+  c: JiraCreds, key: string,
+  opts: {
+    summary?: string; description?: string;
+    labels?: string[];
+    /** Null clears the assignee; undefined leaves it alone. */
+    assignee?: { accountId: string } | null;
+  },
 ): Promise<boolean> {
   const fields: Record<string, unknown> = {};
   if (opts.summary) fields.summary = opts.summary.slice(0, 240);
   if (opts.description) fields.description = adf(opts.description);
-  if (!Object.keys(fields).length) return false;
-  const res = await jreq(c, `/issue/${key}`, { method: "PUT", body: JSON.stringify({ fields }) });
+  if (opts.assignee !== undefined) fields.assignee = opts.assignee;
+
+  const update: Record<string, unknown> = {};
+  const labels = (opts.labels ?? []).map((l) => l.trim().replace(/\s+/g, "-")).filter(Boolean);
+  if (labels.length) update.labels = labels.map((l) => ({ add: l }));
+
+  const body: Record<string, unknown> = {};
+  if (Object.keys(fields).length) body.fields = fields;
+  if (Object.keys(update).length) body.update = update;
+  if (!Object.keys(body).length) return false;
+
+  const res = await jreq(c, `/issue/${key}`, { method: "PUT", body: JSON.stringify(body) });
   return res.ok;
+}
+
+// The one Jira user matching a name, or null.
+//
+// AMBIGUITY RETURNS NULL, and that is the point of `maxResults=2`. Two people called "A. Sharma"
+// means picking the first assigns a real ticket on a real board to the wrong human — worse than
+// leaving it unassigned with the problem written down, because an unassigned ticket gets noticed
+// and a wrongly-assigned one does not.
+//
+// The roster holds display names, not emails (`member.name`), so the query is a name. Jira matches
+// `query` against display name and email both, so an engagement that later populates emails works
+// through the same call with no change here.
+export async function findUser(
+  c: JiraCreds, query: string,
+): Promise<{ accountId: string; displayName: string } | null> {
+  const q = query.trim();
+  if (!q) return null;
+  const res = await jreq(c, `/user/search?query=${encodeURIComponent(q)}&maxResults=2`);
+  if (!res.ok) return null;
+  const found = (await res.json()) as { accountId?: string; displayName?: string }[];
+  if (!Array.isArray(found) || found.length !== 1 || !found[0]?.accountId) return null;
+  return { accountId: found[0].accountId, displayName: found[0].displayName ?? q };
+}
+
+/**
+ * Issues matching a JQL query.
+ *
+ * NULL AND [] ARE DIFFERENT ANSWERS, and every caller depends on it: `null` means the question
+ * could not be asked, `[]` means it was asked and matched nothing. A gate that collapses them
+ * reports "no unassigned stories" when the truth is "nobody could look" — the exact false green
+ * this repo keeps re-learning, where an aggregate over zero rows passes because there was nothing
+ * to check.
+ *
+ * Paged to exhaustion. A first page that happens to be clean says nothing about the second.
+ */
+export async function searchIssues(
+  c: JiraCreds, jql: string, fields: string[],
+): Promise<{ key: string; fields: Record<string, unknown> }[] | null> {
+  const out: { key: string; fields: Record<string, unknown> }[] = [];
+  let token: string | undefined;
+
+  // Bounded: a runaway cursor must not spin forever against a client's Jira.
+  for (let page = 0; page < 20; page++) {
+    const qs = new URLSearchParams({ jql, fields: fields.join(","), maxResults: "100" });
+    if (token) qs.set("nextPageToken", token);
+    const res = await jreq(c, `/search/jql?${qs.toString()}`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      issues?: { key: string; fields?: Record<string, unknown> }[];
+      nextPageToken?: string;
+    };
+    for (const i of body.issues ?? []) out.push({ key: i.key, fields: i.fields ?? {} });
+    if (!body.nextPageToken) return out;
+    token = body.nextPageToken;
+  }
+  return out;
 }
 
 // The issue's current status NAME, or null when it can't be read. Used to remember where a ticket

@@ -93,7 +93,8 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
       const patch = {
         label: row.label, workstream_code: row.workstream, phase_code: row.phase || null,
         owner_role_code: row.ownerRole || null, trigger: row.trigger || null,
-        enabled: row.enabled, updated_at: new Date().toISOString(),
+        enabled: row.enabled, repeatable: row.repeatable,
+        updated_at: new Date().toISOString(),
       };
       const base = sb.from("workflow").select("id").eq("org_id", orgId).eq("code", row.code);
       const found = await (engagementId === null

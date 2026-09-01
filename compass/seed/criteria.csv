@@ -24,14 +24,18 @@ sprint-0,tailor-delivery-plan,done,Every role the plan names is staffed on the r
 sprint-0,draft-foundation-architecture,done,The foundation architecture is published,document,01-foundation/foundational-architecture,status,published
 sprint-0,draft-foundation-architecture,done,Every epic has a named home in the architecture,,,,
 sprint-0,draft-ways-of-working,done,Ways of working is published,document,01-foundation/ways-of-working,status,published
-sprint-0,draft-sprint-plan,done,The sprint plan is published,document,05-cadence/sprint-plans,status,published
-sprint-0,draft-sprint-plan,done,Every story in sprints 1-3 belongs to an epic,,,,
+sprint-0,draft-sprint-plan,done,This sprint's plan is published,document,05-cadence/sprint-plans,status,published
+sprint-0,draft-sprint-plan,done,Every committed story belongs to an epic,ticket,committed-have-epic,is,true
+sprint-0,draft-sprint-plan,done,Every committed story is on the board with an owner,ticket,on-board,is,true
 sprint-0,draft-sprint-plan,done,"The plan fits the roster's capacity, or says where it does not",,,,
+sprint-0,draft-sprint-plan,done,Work taken on that was not in the plan is recorded as unplanned,,,,
 sprint-0,kickoff,done,The kickoff record is published,document,05-cadence/kickoff,status,published
 sprint-0,kickoff,done,"Kickoff happened — the Delivery Manager confirms it, and their name is on the close",,,,
-sprint,,ready,The sprint plan is published,document,03-delivery/plan,status,published
+sprint,,ready,The delivery plan is published,document,03-delivery/plan,status,published
 sprint,sprint-planning,done,This sprint's plan is published,document,05-cadence/sprint-plans,status,published
-sprint,sprint-planning,done,Every committed story is on the board and assigned,,,,
+sprint,sprint-planning,done,Every committed story belongs to an epic,ticket,committed-have-epic,is,true
+sprint,sprint-planning,done,Every committed story is on the board with an owner,ticket,on-board,is,true
+sprint,sprint-planning,done,"The plan fits the roster's capacity, or says where it does not",,,,
 sprint,sprint-planning,done,Work taken on that was not in the plan is recorded as unplanned,,,,
 sprint,sprint-review,done,The review is published,document,05-cadence/sprint-reviews,status,published
 sprint,sprint-review,done,Every story that did not land says why,,,,

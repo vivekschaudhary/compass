@@ -25,10 +25,12 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
-import { resolveJira, createIssue, transitionIssue, projectStatuses, type JiraCreds } from "../jira";
+import { resolveJira, createIssue, updateIssue, transitionIssue, projectStatuses, findUser, searchIssues, type JiraCreds } from "../jira";
 import { emit } from "./events";
 import { sortByStep } from "./steps";
 import { backlogOf } from "./backlog";
+import { nextSprintNumber, claimSprintNumber, sprintLabel, sprintJql } from "./sprint";
+import type { Commitment } from "./sprint-rows";
 
 /**
  * What Compass's task states mean on a board.
@@ -387,4 +389,144 @@ export async function mirrorBacklog(
 export function backlogIncomplete(m: MirroredBacklog): boolean {
   if (m.reason === "no-tracker" || m.reason === "no-supabase" || m.reason === "nothing-to-mirror") return false;
   return m.epics.length + m.stories.length < m.expected;
+}
+
+/**
+ * Put a sprint on the board: every committed story labelled and assigned.
+ *
+ * NOTHING IS STORED HERE. The sprint is the labels on the issues, and every later question — which
+ * stories are in it, who owns them, who they are assigned to — is asked of Jira. The one exception
+ * is the sprint NUMBER, claimed on `work_task.sprint_no` before any write, because JQL cannot
+ * enumerate labels and because a re-approval that renumbered would split one sprint across two
+ * labels with nothing reporting it.
+ *
+ * Idempotent through Jira rather than through a local hinge: `updateIssue` adds labels through the
+ * `update` verb, so a duplicate add is a no-op and setting the same assignee twice changes nothing.
+ * That is what makes re-running safe with no bookkeeping.
+ */
+export type MirroredSprint = {
+  number: number | null;
+  /** Issues that now carry the sprint label and an owner. */
+  placed: { key: string; role: string; assignee: string | null }[];
+  /** How many the board was owed. `placed.length` alone cannot say whether nine is all of them. */
+  expected: number;
+  /** What the board reports back after the writes — not what we believe we wrote. */
+  verified: number | null;
+  problems: string[];
+  reason?: "no-supabase" | "no-tracker" | "nothing-to-mirror" | "number-refused";
+};
+
+export async function mirrorSprint(
+  engagementId: string, taskId: string, actorRole: string, commitments: Commitment[],
+): Promise<MirroredSprint> {
+  const out: MirroredSprint = {
+    number: null, placed: [], expected: commitments.length, verified: null, problems: [],
+  };
+  const sb = supabaseAdmin();
+  if (!sb) return { ...out, reason: "no-supabase", problems: ["Supabase is not configured."] };
+  if (!commitments.length) return { ...out, reason: "nothing-to-mirror" };
+
+  const creds = await credsFor(engagementId);
+  if (!creds) {
+    return {
+      ...out, reason: "no-tracker",
+      problems: ["No Jira configured for this engagement — the plan is published, the sprint is not on the board."],
+    };
+  }
+
+  // THE NUMBER FIRST, before a single issue is touched. Labelling ten stories `sprint-3` and then
+  // failing to record which sprint they are in leaves a sprint that exists on the board and not in
+  // the process — and the next plan allocates 3 again and quietly merges two sprints. The number is
+  // cheap to write and impossible to repair afterwards.
+  let n: number;
+  try {
+    n = await nextSprintNumber(engagementId, taskId);
+    await claimSprintNumber(taskId, n);
+  } catch (e) {
+    return {
+      ...out, reason: "number-refused",
+      problems: [`Could not allocate a sprint number, so nothing was labelled: ${e instanceof Error ? e.message : String(e)}`],
+    };
+  }
+  out.number = n;
+
+  // ONE user lookup per role, not per story. A sprint of thirty stories across four roles is four
+  // searches, and the cache also guarantees every story owned by a role gets the SAME person —
+  // resolving per story could pick differently on an ambiguous name partway down the list.
+  const assigneeOf = new Map<string, { accountId: string; displayName: string } | null>();
+  const resolve = async (role: string) => {
+    if (assigneeOf.has(role)) return assigneeOf.get(role) ?? null;
+
+    // Deliberately NOT `resolveActor`: its `.maybeSingle()` on `member` errors the moment a role
+    // has two holders, which is ordinary on a real engagement.
+    const { data: members } = await sb.from("member")
+      .select("name").eq("engagement_id", engagementId).eq("role", role)
+      .order("ord").limit(1);
+    const name = (members ?? [])[0]?.name as string | undefined;
+    if (!name) {
+      out.problems.push(`No one is on the roster as \`${role}\`, so its stories are unassigned.`);
+      assigneeOf.set(role, null);
+      return null;
+    }
+    const user = await findUser(creds, name);
+    if (!user) {
+      out.problems.push(
+        `No single Jira user matches "${name}" (\`${role}\`), so its stories are labelled and left ` +
+        `unassigned. Either the name differs from their Jira account or more than one matched.`,
+      );
+    }
+    assigneeOf.set(role, user);
+    return user;
+  };
+
+  for (const c of commitments) {
+    if (!c.ticketKey) {
+      // Named, never skipped in silence: "nine of eleven" with no list is a number nobody can act
+      // on, and the fix — mirror the backlog first — depends on knowing which.
+      out.problems.push(`\`${c.ref}\` ("${c.title}") has no issue on the board, so it is not in the sprint.`);
+      continue;
+    }
+    const user = await resolve(c.ownerRole);
+    const ok = await updateIssue(creds, c.ticketKey, {
+      labels: [sprintLabel(n), c.ownerRole],
+      // undefined leaves any existing assignee alone. Clearing one because OUR lookup failed would
+      // take a ticket away from whoever the team had already put on it.
+      assignee: user ? { accountId: user.accountId } : undefined,
+    });
+    if (!ok) {
+      out.problems.push(`Jira refused the update to ${c.ticketKey} (\`${c.ref}\`).`);
+      continue;
+    }
+    out.placed.push({ key: c.ticketKey, role: c.ownerRole, assignee: user?.displayName ?? null });
+  }
+
+  // INSPECT THE OUTPUT, NOT THE EXIT CODE. Every call above can return ok and still leave the board
+  // short — a permission that silently drops a field, an issue moved between the read and the
+  // write. So the sprint is read back and counted, and both numbers are reported.
+  const seen = await searchIssues(creds, sprintJql(creds.project, n), ["assignee"]);
+  out.verified = seen === null ? null : seen.length;
+  if (seen !== null && seen.length < out.placed.length) {
+    out.problems.push(
+      `Wrote ${out.placed.length} stories into sprint ${n}, but the board reports ${seen.length}.`,
+    );
+  }
+
+  await emit({
+    engagementId, subjectType: "task", subjectId: taskId,
+    verb: "tracker.sprint_mirrored", actorKind: "system", actorRoleCode: actorRole,
+    payload: {
+      sprint: n, placed: out.placed.length, expected: out.expected,
+      verified: out.verified, problems: out.problems, reason: out.reason ?? null,
+    },
+  });
+
+  return out;
+}
+
+/** Did the sprint end up short of what was committed? Pure, like `backlogIncomplete`. */
+export function sprintIncomplete(m: MirroredSprint): boolean {
+  if (m.reason === "no-tracker" || m.reason === "no-supabase" || m.reason === "nothing-to-mirror") return false;
+  // A verification that could not run is not proof of completeness.
+  if (m.verified === null) return true;
+  return m.placed.length < m.expected || m.verified < m.expected;
 }
