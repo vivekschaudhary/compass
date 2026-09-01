@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { planRepoint, type RepointStep } from "./repoint";
 
-const step = (id: string, ord: number, task: string): RepointStep => ({ id, ord, task });
+const step = (id: string, ord: number, task: string, title?: string): RepointStep =>
+  ({ id, ord, task, title: title ?? null });
 
 /* The real case: sprint-0 v4 → v5. Same twelve rows, criteria corrected, nothing else moved. */
 describe("moving a run to the published version", () => {
@@ -12,9 +13,9 @@ describe("moving a run to the published version", () => {
     const p = planRepoint(v4, v5);
     expect(p.ok).toBe(true);
     if (!p.ok) return;
-    expect(p.moves.get("a4")).toBe("a5");
-    expect(p.moves.get("b4")).toBe("b5");
-    expect(p.moves.get("c4")).toBe("c5");
+    expect(p.moves.get("a4")?.id).toBe("a5");
+    expect(p.moves.get("b4")?.id).toBe("b5");
+    expect(p.moves.get("c4")?.id).toBe("c5");
     expect(p.renumbered).toEqual([]);
   });
 
@@ -24,8 +25,8 @@ describe("moving a run to the published version", () => {
     const p = planRepoint(v4, reordered);
     expect(p.ok).toBe(true);
     if (!p.ok) return;
-    expect(p.moves.get("b4")).toBe("b5");            // the brief, now at ord 3
-    expect(p.moves.get("c4")).toBe("c5");            // the timeline, now at ord 2
+    expect(p.moves.get("b4")?.id).toBe("b5");            // the brief, now at ord 3
+    expect(p.moves.get("c4")?.id).toBe("c5");            // the timeline, now at ord 2
     expect(p.renumbered).toEqual([
       { task: "draft-product-brief", from: 2, to: 3 },
       { task: "draft-timeline", from: 3, to: 2 },
@@ -88,5 +89,52 @@ describe("refuses a move it cannot complete", () => {
     expect(p.ok).toBe(false);
     if (p.ok) return;
     expect(p.orphans).toHaveLength(3);
+  });
+});
+
+/* The title travels with the step.
+ *
+ * `work_task.title` is a snapshot taken when the task was created, so a run that moves to a new
+ * version keeps whatever the old one said unless something carries the new title across. It did
+ * not, and the failure was the quiet kind: the sprint-planning row was retitled, the repoint
+ * reported the run moved, and the board went on displaying the old title while executing the new
+ * definition. */
+describe("a row that was retitled", () => {
+  const before = [step("s4", 11, "draft-sprint-plan", "Sprint plan for sprints 1-3")];
+  const after = [step("s5", 11, "draft-sprint-plan", "Sprint plan for sprint 1")];
+
+  it("carries the new title to the task, not just the new step id", () => {
+    const p = planRepoint(before, after);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.moves.get("s4")).toEqual({ id: "s5", title: "Sprint plan for sprint 1" });
+  });
+
+  it("reports the change, because it is the part someone can see", () => {
+    const p = planRepoint(before, after);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.retitled).toEqual([{
+      task: "draft-sprint-plan",
+      from: "Sprint plan for sprints 1-3",
+      to: "Sprint plan for sprint 1",
+    }]);
+  });
+
+  it("says nothing when a title did not change", () => {
+    const p = planRepoint(before, [step("s5", 11, "draft-sprint-plan", "Sprint plan for sprints 1-3")]);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.retitled).toEqual([]);
+  });
+
+  // A step with no title falls back to the slug at creation. Nothing to carry, and nothing to
+  // report — reporting "(none) → (none)" on every untitled row would bury the real ones.
+  it("does not report a row that never had a title", () => {
+    const p = planRepoint([step("a4", 1, "file-sow")], [step("a5", 1, "file-sow")]);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.retitled).toEqual([]);
+    expect(p.moves.get("a4")).toEqual({ id: "a5", title: null });
   });
 });

@@ -56,9 +56,9 @@ for (const run of runs) {
   if (to.id === run.workflow_version_id) { console.log(`  · ${label}: already on v${to.version}`); already++; continue; }
 
   const { data: oldSteps } = await sb.from("workflow_step")
-    .select("id, ord, task").eq("workflow_version_id", from.id).order("ord");
+    .select("id, ord, task, title").eq("workflow_version_id", from.id).order("ord");
   const { data: newSteps } = await sb.from("workflow_step")
-    .select("id, ord, task").eq("workflow_version_id", to.id).order("ord");
+    .select("id, ord, task, title").eq("workflow_version_id", to.id).order("ord");
 
   const plan = planRepoint(oldSteps ?? [], newSteps ?? []);
 
@@ -72,6 +72,11 @@ for (const run of runs) {
   const renumbered = plan.renumbered.map((r) => `${r.task} ${r.from}→${r.to}`);
   console.log(`  → ${label}: v${from.version} → v${to.version}` +
     (renumbered.length ? `  (renumbered: ${renumbered.join(", ")})` : ""));
+  // Said out loud, because this is the part someone can SEE change on the board — and the part
+  // that silently did not happen before.
+  for (const r of plan.retitled) {
+    console.log(`      "${r.from ?? "(none)"}" → "${r.to ?? "(none)"}"`);
+  }
 
   // Counted whether or not it is written. A report that says "0 moved" about two runs it just
   // listed as moving is the report arguing with itself.
@@ -81,9 +86,13 @@ for (const run of runs) {
   // Tasks first, then the run. A task pointing at a step from a version its run no longer names is
   // recoverable by re-running this; a run moved while its tasks still point at the old version's
   // steps reads as coherent and is not.
-  for (const [oldId, newId] of plan.moves) {
+  // THE TITLE MOVES WITH THE STEP. `work_task.title` is a snapshot taken at creation, so pointing
+  // a task at a new step and leaving its title behind produces a queue that displays the old
+  // definition while executing the new one — a move that reports success and changes nothing
+  // anyone can see. The title is what the row says it is now.
+  for (const [oldId, target] of plan.moves) {
     const { error } = await sb.from("work_task")
-      .update({ workflow_step_id: newId })
+      .update({ workflow_step_id: target.id, ...(target.title ? { title: target.title } : {}) })
       .eq("workflow_run_id", run.id).eq("workflow_step_id", oldId);
     if (error) { console.error(`      ✗ ${error.message} — aborting, run NOT moved`); process.exit(1); }
   }
