@@ -65,3 +65,6 @@ sprint-0,12,agent,delivery-manager,kickoff,05-cadence/kickoff,,,,Kickoff,"draft-
 sprint,1,agent,product-manager,sprint-planning,05-cadence/sprint-plans,"03-delivery/plan,02-scope/deliverables,01-foundation/team",,,Sprint planning,
 sprint,2,agent,delivery-manager,sprint-review,05-cadence/sprint-reviews,,,,Sprint review,sprint-planning
 sprint,3,agent,delivery-manager,sprint-retro,05-cadence/retros,,,,Retro,sprint-review
+feature-loop,1,machine,,ship-feature,02-scope/features/{feature}/build@docs,,,,Ship the feature,
+feature-loop,2,agent,researcher,measure-feature,02-scope/features/{feature}/measurement@docs,,,,Measure the bet,ship-feature
+feature-loop,3,agent,product-manager,learn-from-feature,02-scope/features/{feature}/decision@docs,,,,Persevere / pivot / kill,measure-feature

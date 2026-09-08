@@ -41,3 +41,11 @@ sprint,sprint-review,done,The review is published,document,05-cadence/sprint-rev
 sprint,sprint-review,done,Every story that did not land says why,,,,
 sprint,sprint-retro,done,The retro is published,document,05-cadence/retros,status,published
 sprint,sprint-retro,done,"Actions have a named owner, or are recorded as not taken",,,,
+feature-loop,,ready,The feature is framed and published,document,02-scope/features/{feature},status,published
+feature-loop,ship-feature,done,Every epic under this feature is closed on the board,ticket,feature-epics-closed,is,true
+feature-loop,measure-feature,done,The measurement is published,document,02-scope/features/{feature}/measurement,status,published
+feature-loop,measure-feature,done,Every target has at least one reading,,,,
+feature-loop,measure-feature,done,"A metric that could not be measured says so, rather than being left out",,,,
+feature-loop,learn-from-feature,done,The decision is published,document,02-scope/features/{feature}/decision,status,published
+feature-loop,learn-from-feature,done,The verdict names the readings it rests on,,,,
+feature-loop,learn-from-feature,done,"An inconclusive measurement is recorded as inconclusive, not as persevere",,,,

@@ -11,3 +11,4 @@ triage,Workflow: /triage,Support,,support,,false,false
 setup,Setup engagement,Delivery,Setup,delivery-manager,,false,false
 sprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true,false
 sprint,Sprint,Delivery,Sprint,delivery-manager,,true,true
+feature-loop,Feature loop,Product,,product-manager,,false,true

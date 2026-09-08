@@ -125,6 +125,33 @@ describe("the shipped seed", () => {
     }
   });
 
+  /**
+   * The feature loop is held to the same gate rule, and is NOT in `PHASES`.
+   *
+   * It is not a delivery phase: it is scoped to one bet, its owner is the product manager rather
+   * than the delivery manager, and it ships parked (`enabled=false`) until the engine can give a
+   * run a feature. None of that makes the vacuous-close bug any less real — a step with no Done
+   * criteria closes green over `string_agg` of nothing — so the rule is asserted here rather than
+   * left to the day somebody flips `enabled` and finds out.
+   */
+  it("gives every feature-loop row a Done gate, though it is not a delivery phase", () => {
+    const wf = planned().workflows.find((w) => w.row.code === "feature-loop");
+    expect(wf, "feature-loop is not in the seed").toBeTruthy();
+    expect(wf!.steps.length).toBe(3);
+    for (const step of wf!.steps) {
+      const gates = wf!.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
+      expect(gates.length, `feature-loop step ${step.ord} has no Done criteria`).toBeGreaterThan(0);
+    }
+  });
+
+  it("ships the feature loop parked, so nothing can open it yet", () => {
+    // `enabled` is what `phasesFor` and `initiatePhase` filter on. Until `open_phase_run` can carry
+    // a feature, a true here would offer a phase that cannot do what its rows say.
+    const wf = planned().workflows.find((w) => w.row.code === "feature-loop")!;
+    expect(wf.row.enabled).toBe(false);
+    expect(wf.row.repeatable).toBe(true);
+  });
+
   it("only a `workflow` step nests, and it nests something that exists", () => {
     const codes = new Set(planned().workflows.map((w) => w.row.code));
     for (const wf of planned().workflows) {
