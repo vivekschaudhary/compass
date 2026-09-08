@@ -20,14 +20,24 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * The org an engagement belongs to.
  *
- * NOT a column on `engagement` — that was the assumption behind four events written with a null
- * org, which the trigger-written ones beside them carried correctly. Tasks carry it, and every
- * engagement that has done anything has tasks; the single-org fallback covers the gap before the
- * first one exists.
+ * IT IS A COLUMN ON `engagement` NOW. It was not when this was written — that assumption is what
+ * produced four events with a null org while the trigger-written ones beside them carried it — so
+ * this asked the children instead, and fell back to the org coded `default` when an engagement was
+ * too new to have any.
+ *
+ * 055 made the parent name its own tenant, so the answer is one read and it is authoritative. The
+ * child reads stay as a fallback for rows written before that migration; the `default` guess does
+ * NOT. With one org it was harmless and with several it silently files an event under the wrong
+ * tenant, which is worse than an event nobody wrote — `emit` can report a null, and a wrong
+ * attribution looks exactly like a right one.
  */
 export async function orgIdFor(engagementId: string): Promise<string | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
+
+  const { data: eng } = await sb.from("engagement")
+    .select("org_id").eq("id", engagementId).maybeSingle();
+  if (eng?.org_id) return eng.org_id as string;
 
   const { data: task } = await sb.from("work_task")
     .select("org_id").eq("engagement_id", engagementId).limit(1).maybeSingle();
@@ -35,14 +45,18 @@ export async function orgIdFor(engagementId: string): Promise<string | null> {
 
   const { data: doc } = await sb.from("document")
     .select("org_id").eq("engagement_id", engagementId).limit(1).maybeSingle();
-  if (doc?.org_id) return doc.org_id as string;
-
-  const { data: org } = await sb.from("org").select("id").eq("code", "default").maybeSingle();
-  return (org?.id as string) ?? null;
+  return (doc?.org_id as string) ?? null;
 }
 
 export type Emit = {
-  engagementId: string;
+  /**
+   * Null for something that happened to the ORGANISATION rather than inside an engagement —
+   * onboarding one, for instance. `orgId` is then required, because there is no engagement to
+   * derive the tenant from and `event.org_id` is NOT NULL.
+   */
+  engagementId: string | null;
+  /** Only needed when `engagementId` is null; otherwise derived from the engagement. */
+  orgId?: string;
   /** What the event is about — `criterion`, `question`, `task`, `document`, `agent_run`. */
   subjectType: string;
   subjectId: string;
@@ -60,7 +74,10 @@ export async function emit(e: Emit): Promise<void> {
   if (!sb) return;
 
   const { error } = await sb.from("event").insert({
-    org_id: await orgIdFor(e.engagementId),
+    // An explicit org wins; otherwise derive it. `event.org_id` is NOT NULL, so an org-level event
+    // with neither is a write that cannot succeed — and emitting is fire-and-forget, so it would
+    // vanish with a console line. Better to be unable to express it than to lose it quietly.
+    org_id: e.orgId ?? (e.engagementId ? await orgIdFor(e.engagementId) : null),
     engagement_id: e.engagementId,
     subject_type: e.subjectType,
     // `subject_id` is a uuid column, and not every subject has a uuid — an engagement's id is text

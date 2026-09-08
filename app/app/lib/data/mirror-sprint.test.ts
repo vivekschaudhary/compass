@@ -31,22 +31,43 @@ vi.mock("../supabase", () => ({
       if (table === "event") {
         return { insert: async (row: Row) => { state.events.push(row); return { error: null }; } };
       }
+      // `holdersOn` reads the roster org-wide and resolves precedence per role, so the mock has to
+      // model the query it actually issues: filtered by `org_id`, with an `.or()` admitting both
+      // this engagement's rows and the org's defaults (`engagement_id is null`), terminating on
+      // `.order()`. Modelling only the old shape would leave these tests passing against a query
+      // nothing runs.
       if (table === "member") {
         const f: Row = {};
+        let orEngagement: string | null = null;
+        const result = () => ({
+          data: state.members.filter((m) => {
+            if (f.org_id !== undefined && m.org_id !== f.org_id) return false;
+            if (f.engagement_id !== undefined && m.engagement_id !== f.engagement_id) return false;
+            if (f.role !== undefined && m.role !== f.role) return false;
+            if (orEngagement !== null
+                && !(m.engagement_id === orEngagement || m.engagement_id == null)) return false;
+            return true;
+          }),
+        });
         const chain: Record<string, unknown> = {
           select: () => chain,
           eq: (c: string, v: unknown) => { f[c] = v; return chain; },
-          order: () => chain,
-          limit: async () => ({
-            data: state.members.filter(
-              (m) => m.engagement_id === f.engagement_id && m.role === f.role),
-          }),
+          or: (expr: string) => {
+            orEngagement = /engagement_id\.eq\.([^,]+)/.exec(expr)?.[1] ?? null;
+            return chain;
+          },
+          order: () => Object.assign(Promise.resolve(result()), { limit: async () => result() }),
+          limit: async () => result(),
         };
         return chain;
       }
       const chain: Record<string, unknown> = {
         select: () => chain, eq: () => chain, limit: () => chain, order: () => chain,
-        maybeSingle: async () => ({ data: table === "engagement" ? { jira_project: "KAN" } : null }),
+        // `org_id` because `holdersOn` asks the engagement which org it belongs to — 055 made that
+        // a column, and without it here every roster read comes back empty.
+        maybeSingle: async () => ({
+          data: table === "engagement" ? { jira_project: "KAN", org_id: "org-1" } : null,
+        }),
       };
       return chain;
     },
@@ -91,8 +112,8 @@ const commitment = (over: Row = {}) => ({
 } as never);
 
 beforeEach(() => {
-  state.members = [{ engagement_id: "e1", role: "engineer", name: "Jay" },
-                   { engagement_id: "e1", role: "designer", name: "Priya" }];
+  state.members = [{ org_id: "org-1", engagement_id: "e1", role: "engineer", name: "Jay" },
+                   { org_id: "org-1", engagement_id: "e1", role: "designer", name: "Priya" }];
   state.users = { Jay: { accountId: "j1", displayName: "Jay" },
                   Priya: { accountId: "p1", displayName: "Priya" } };
   state.updateOk = true;

@@ -21,7 +21,7 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
-import type { Actor } from "./actor";
+import { holdersOn, type Actor } from "./actor";
 import { emit } from "./events";
 import { parseRoster } from "./roster-rows";
 import { parseCommitments } from "./sprint-rows";
@@ -57,11 +57,13 @@ async function materialiseRoster(actor: Actor, markdown: string): Promise<Materi
   const byLabel = new Map((roles ?? []).map((r) => [String(r.label).toLowerCase(), r]));
   const byCode = new Map((roles ?? []).map((r) => [String(r.code).toLowerCase(), r]));
 
-  const { data: existing } = await sb.from("member")
-    .select("id, role, name").eq("engagement_id", actor.engagementId);
-  const already = new Map((existing ?? []).map((m) => [`${m.role}::${String(m.name).toLowerCase()}`, m]));
+  // Org-level holders count as already staffed. Without this an approved roster naming the PMO
+  // Analyst would insert a SECOND row for the same person on this engagement — the org default plus
+  // a copy — and every read that resolves precedence would then quietly prefer the copy.
+  const existing = await holdersOn(actor.engagementId);
+  const already = new Map(existing.map((m) => [`${m.role}::${String(m.name).toLowerCase()}`, m]));
 
-  let ord = existing?.length ?? 0;
+  let ord = existing.length;
   for (const row of rows) {
     if (!row.holder) continue;                       // a recorded vacancy is not a person
 

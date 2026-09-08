@@ -28,6 +28,7 @@ import { supabaseAdmin } from "../supabase";
 import { resolveJira, createIssue, updateIssue, transitionIssue, projectStatuses, findUser, searchIssues, type JiraCreds } from "../jira";
 import { emit } from "./events";
 import { sortByStep } from "./steps";
+import { holdersOn } from "./actor";
 import { backlogOf } from "./backlog";
 import { nextSprintNumber, claimSprintNumber, sprintLabel, sprintJql } from "./sprint";
 import type { Commitment } from "./sprint-rows";
@@ -454,15 +455,17 @@ export async function mirrorSprint(
   // searches, and the cache also guarantees every story owned by a role gets the SAME person —
   // resolving per story could pick differently on an ambiguous name partway down the list.
   const assigneeOf = new Map<string, { accountId: string; displayName: string } | null>();
+
+  // The roster once for the whole mirror, not once per role. `holdersOn` includes roles held at ORG
+  // level and returns rows rather than one, so a role with two holders is ordinary rather than an
+  // error — which is why this used to avoid `resolveActor` entirely. That is fixed in
+  // `resolveActor` itself now.
+  const roster = await holdersOn(engagementId);
+
   const resolve = async (role: string) => {
     if (assigneeOf.has(role)) return assigneeOf.get(role) ?? null;
 
-    // Deliberately NOT `resolveActor`: its `.maybeSingle()` on `member` errors the moment a role
-    // has two holders, which is ordinary on a real engagement.
-    const { data: members } = await sb.from("member")
-      .select("name").eq("engagement_id", engagementId).eq("role", role)
-      .order("ord").limit(1);
-    const name = (members ?? [])[0]?.name as string | undefined;
+    const name = roster.find((h) => h.role === role)?.name ?? undefined;
     if (!name) {
       out.problems.push(`No one is on the roster as \`${role}\`, so its stories are unassigned.`);
       assigneeOf.set(role, null);

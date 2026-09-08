@@ -16,7 +16,7 @@ import { destinationOf } from "../adapters";
 import { supabaseAdmin, must } from "../supabase";
 import { resolveJira, searchIssues } from "../jira";
 import { nextSprintNumber, committedJql } from "../data/sprint";
-import type { Actor } from "./../data/actor";
+import { holdersOn, type Actor } from "./../data/actor";
 
 
 /**
@@ -569,12 +569,12 @@ async function loadSprintContext(
     reachedTracker = true;
   }
 
-  const { data: members } = await sb
-    .from("member").select("role, name").eq("engagement_id", engagementId).order("ord");
+  // Through `holdersOn`, so the roster the agent is handed includes roles held at ORG level — the
+  // PMO Analyst is on every engagement in the org without being staffed to each one.
   const byRole = new Map<string, string[]>();
-  for (const m of members ?? []) {
+  for (const m of await holdersOn(engagementId)) {
     if (!m.role || !m.name) continue;
-    byRole.set(m.role, [...(byRole.get(m.role) ?? []), m.name as string]);
+    byRole.set(m.role, [...(byRole.get(m.role) ?? []), m.name]);
   }
 
   return {
