@@ -12,9 +12,9 @@ status flow, this one wins and that one is stale.
 Hosted rather than committed, because they are read as pages and regenerated from live data. This
 document links them; nothing else should hold a second copy of the link.
 
-| document | what it holds |
-| -------- | ------------- |
-| [Compass Schema](https://claude.ai/code/artifact/edcdba3f-8315-4d80-8e04-7720aa39460d) | the data model — catalogue and instance tables, the ER diagram, the four phases as rows, and the four rules the schema enforces. Counts are read from the live database, so the page is dated: check its date against this one before trusting a number |
+| document                                                                               | what it holds                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Compass Schema](https://claude.ai/code/artifact/edcdba3f-8315-4d80-8e04-7720aa39460d) | the data model — catalogue and instance tables, the ER diagram, the phases as rows, and the four rules the schema enforces. Counts are read from the live database, so the page is dated: check its date against this one before trusting a number |
 
 ---
 
@@ -24,7 +24,7 @@ document links them; nothing else should hold a second copy of the link.
 
 In SAP nobody "does" procurement freeform and then reports on it. A purchase order **sits at a step
 in a process**. People work on screens — approve, release, post — and the object advances. The
-system *is* the process; you cannot do the work except by moving the object through it.
+system _is_ the process; you cannot do the work except by moving the object through it.
 
 Software delivery never worked that way for one reason: the real work — the code, the architecture,
 the brief — was craft, done by individuals in their own tools. The process layer (Jira, Confluence)
@@ -38,13 +38,13 @@ decide, advance.
 So the lifecycle becomes what a business process is everywhere else in the enterprise: executable,
 with screens.
 
-| piece | is |
-| ----- | -- |
-| the lifecycle — setup → pre-sprint-0 → sprint 0 → sprint N → release | the process definition |
-| the project | the object moving through it |
-| the screens | where a human advances it |
-| the AI | the transaction engine — it does what used to be typed |
-| **status** | **position in the flow, not a report** |
+| piece                                                 | is                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| the lifecycle — setup → sprint 0 → sprint N → release | the process definition                                 |
+| the project                                           | the object moving through it                           |
+| the screens                                           | where a human advances it                              |
+| the AI                                                | the transaction engine — it does what used to be typed |
+| **status**                                            | **position in the flow, not a report**                 |
 
 The user's job shifts from producer to **functional operator of a process** — the same shift
 accountants had when ledgers became systems, and buyers had when procurement became SAP.
@@ -66,7 +66,7 @@ Today a tracker holds only the **engineering half** of delivery. The PM writing 
 architect producing a design, the DM staffing the engagement — that work happens, and the board
 never knows it exists.
 
-Putting the *whole* lifecycle on the board is the first time an organisation can see planning work
+Putting the _whole_ lifecycle on the board is the first time an organisation can see planning work
 as work. That is the differentiator, and it is sharper than "the tower has a WBS."
 
 ---
@@ -76,7 +76,7 @@ as work. That is the differentiator, and it is sharper than "the tower has a WBS
 **The MVP is one engagement, moving through the lifecycle, with every deliverable AI-drafted and
 every acceptance recorded in the tracker.**
 
-In scope: the four phases in §4, the task loop in §3, drafting and revision through the agentic
+In scope: the three phases in §4, the task loop in §3, drafting and revision through the agentic
 interface, publication to the docs system, and tickets in the tracker for every row.
 
 Deliberately deferred — ERP completeness, not proof of it: authorization, capacity and rate master
@@ -104,12 +104,12 @@ no reviewer.
 
 Tracker vocabulary, discovered from the client's board rather than assumed:
 
-| Compass | on the board |
-| ------- | ------------ |
-| not started | Backlog / To Do |
-| agent running | In Progress |
+| Compass                | on the board                                                                |
+| ---------------------- | --------------------------------------------------------------------------- |
+| not started            | Backlog / To Do                                                             |
+| agent running          | In Progress                                                                 |
 | **awaiting the human** | **Awaiting HITL approval**, or In Review where the board has no gate status |
-| accepted | Done |
+| accepted               | Done                                                                        |
 
 The third is load-bearing and is a **first-class status, not a workflow mechanic** — `config.yaml`
 declares it and `tracker.ts` prefers it — so "everything waiting on a person" is a column you can
@@ -144,19 +144,19 @@ assistant fills the deliverable's trail with noise.
 Load from the top, unpack one level at a time. Each row is the same loop: **AI drafts, the ceremony
 the team already holds accepts it.**
 
-| level | AI drafts | accepted at |
-| ----- | --------- | ----------- |
-| SOW / BRD | — (supplied) | — |
-| timeline + milestones | ✓ | kickoff |
-| epics | ✓ per milestone / OKR | pre-sprint-0 review |
-| stories | ✓ per epic | refinement |
-| sprint allocation | ✓ | **sprint planning** |
-| the work | ✓ first version | the assignee, in Compass |
-| closure | — | the assignee, **in the tracker** |
-| sprint outcome | ✓ demo notes, retro input | **demo + retro** |
+| level                 | AI drafts                 | accepted at                      |
+| --------------------- | ------------------------- | -------------------------------- |
+| SOW / BRD             | — (supplied)              | —                                |
+| timeline + milestones | ✓                         | kickoff                          |
+| epics                 | ✓ per milestone / OKR     | the sprint 0 epics row           |
+| stories               | ✓ per epic                | refinement                       |
+| sprint allocation     | ✓                         | **sprint planning**              |
+| the work              | ✓ first version           | the assignee, in Compass         |
+| closure               | —                         | the assignee, **in the tracker** |
+| sprint outcome        | ✓ demo notes, retro input | **demo + retro**                 |
 
 **The ceremony is the gate.** No new ritual, no new approval step, nobody asked to log in somewhere
-and click approve. The meetings a delivery team already runs *are* the HITL gates, acceptance is
+and click approve. The meetings a delivery team already runs _are_ the HITL gates, acceptance is
 attributable because the meeting happened and those people were in it, and the value lands in the
 most credible unit there is: the meeting got shorter.
 
@@ -172,10 +172,10 @@ assumed), and closure discipline (inherited, not fixed).
 
 Two kinds of phase, same execution model — only the row generator differs:
 
-| | rows come from |
-| --- | -------------- |
-| **Authored** | a table written once per org, tailored per engagement — setup · pre-sprint-0 · sprint-0 |
-| **Derived** | generated from an upstream artifact at open — each implementation sprint |
+|              | rows come from                                                                          |
+| ------------ | --------------------------------------------------------------------------------------- |
+| **Authored** | a table written once per org, tailored per engagement — setup · sprint 0                |
+| **Derived**  | generated from an upstream artifact at open — each implementation sprint                |
 
 Row shape: `ord · role · task · title · reads · produces · depends_on`.
 
@@ -183,12 +183,12 @@ Row shape: `ord · role · task · title · reads · produces · depends_on`.
 
 Nothing can start until this is true.
 
-| ord | role | task | depends-on |
-| --- | ---- | ---- | ---------- |
-| 1 | dm | Name the delivery manager | — |
-| 2 | dm | Configure document storage | 1 |
-| 3 | dm | Configure the tracker | 1 |
-| 4 | dm | Validate the connections | 2, 3 |
+| ord | role | task                       | depends-on |
+| --- | ---- | -------------------------- | ---------- |
+| 1   | dm   | Name the delivery manager  | —          |
+| 2   | dm   | Configure document storage | 1          |
+| 3   | dm   | Configure the tracker      | 1          |
+| 4   | dm   | Validate the connections   | 2, 3       |
 
 Row 4 earns the phase: write a probe page, create and delete a probe issue, read the board's status
 vocabulary. **Config that was never exercised is not config.** It is a `machine` row — the check is
@@ -199,48 +199,62 @@ tickets. Phase 1 runs in Compass and row 4 **back-fills** the epic and its four 
 Done. A setup epic showing four Done stories with real timestamps is a better first impression than
 an empty board.
 
-### 4.2 · Pre-sprint 0
+### 4.2 · Sprint 0
 
-What are we doing, with whom, by when.
+What are we doing, with whom, by when — and then everything a team needs before it can pick up a
+story. Starts from a signed SOW; ends when sprint 1 can open.
 
-| ord | role | task |
-| --- | ---- | ---- |
-| 1 | dm | File the SOW / BRD / product brief |
-| 2 | dm | Engagement timeline — start, end, milestones |
-| 3 | dm | Staffing plan and resources |
-| 4 | dm | Roles and responsibilities |
-| 5 | pm | Epics from milestones / OKRs |
-| 6 | dm | Tailor the delivery plan to this engagement |
+This was two phases. Pre-sprint 0 answered "what are we doing" and sprint 0 answered "can the team
+start", and between them sat a gate nobody was waiting at. One phase running in dependency order does
+both, so its rows are numbered once and the two tables below became one.
 
-Every row is owned by `dm` because the DM is the only person known before staffing exists. **Row 3
-gates every later phase's ticket creation** — you cannot route acceptance to a role nobody fills. The
-precondition on phase 3 is *staffing published*, not merely *phase 2 done*.
+**The rows live in `compass/seed/workflow-steps.csv` and run from the version published in the
+database.** The table here is illustrative — when the two disagree, the seed is what executes.
 
-Row 6 is where the org's phase tables become this engagement's: a tracked, accepted deliverable
+Roles are `role_code` as the rows carry them, not the `dm` / `pm` shorthand used above, so the table
+can be diffed against the published version without a translation step.
+
+| ord | role                 | task                        | depends-on |
+| --- | -------------------- | --------------------------- | ---------- |
+| 1   | delivery-manager     | File the SOW                | —          |
+| 2   | product-manager      | Product brief               | 1          |
+| 3   | designer             | Design library              | 2          |
+| 4   | delivery-manager     | Timeline and milestones     | 1          |
+| 5   | delivery-manager     | Staffing plan and resources | 4, 1       |
+| 6   | delivery-manager     | Roles and responsibilities  | 5          |
+| 7   | product-manager      | Epics from milestones       | 4, 2       |
+| 8   | delivery-manager     | Tailor the delivery plan    | 6, 7, 5    |
+| 9   | enterprise-architect | Foundation architecture     | 2, 7       |
+| 10  | delivery-manager     | Team working agreement      | 5, 6       |
+| 11  | product-manager      | Sprint plan for sprint 1    | 7, 5, 8    |
+| 12  | delivery-manager     | Kickoff                     | 11, 10, 8  |
+
+**Row 1 files the SOW; it does not write one.** The contract arrives from the delivery manager and
+lands verbatim — an agent that drafts it paraphrases, and everything downstream cites the paraphrase
+without being able to tell. Drafting the brief from it is row 2's job, which is why they are separate
+rows.
+
+**Row 5 gates every later phase's ticket creation** — you cannot route acceptance to a role nobody
+fills, which is why staffing is a row rather than a setting, and why it precedes the RACI, the plan
+and the sprint plan.
+
+**Row 8 is where the org's phase tables become this engagement's**: a tracked, accepted deliverable
 like any other.
 
-### 4.3 · Sprint 0
+**Row 11 plans sprint 1 only, not sprints 1–3.** It is the same row as sprint N's planning ceremony —
+same inputs, same tool, same criteria — because planning three ahead here and one at a time later was
+two answers to one question.
 
-The team can start.
+### 4.3 · Sprint N — hybrid, repeats
 
-| ord | role | task |
-| --- | ---- | ---- |
-| 1 | architect | Architecture design |
-| 2 | designer | Design library |
-| 3 | dm | Team working agreement |
-| 4 | pm | Sprint plan — stories for sprints 1–3 |
-| 5 | dm | Kickoff |
-
-### 4.4 · Sprint N — hybrid, repeats
-
-| | rows | source |
-| --- | ---- | ------ |
-| **ceremony** | sprint planning · demo · retro | authored, same every sprint |
-| **work** | one row per story in the sprint | derived from the sprint plan |
+|              | rows                            | source                       |
+| ------------ | ------------------------------- | ---------------------------- |
+| **ceremony** | sprint planning · demo · retro  | authored, same every sprint  |
+| **work**     | one row per story in the sprint | derived from the sprint plan |
 
 A work row's `produces` is a PR rather than a document — a declaration, not a different process.
 
-### 4.5 · Reviews and staffing
+### 4.4 · Reviews and staffing
 
 **A review is an ordinary row**: it `reads` the deliverable, `produces` findings, and `depends_on`
 the row that made it. The reviewer's agent drafts the findings; the reviewer accepts or corrects
@@ -248,7 +262,7 @@ them — the same leverage the author got.
 
 **The plan is authored against actual staffing.** No fallback for unstaffed or double-hatted roles:
 if the engagement has no EA, the DM does not write the EA review row. Adding or not adding a row
-*is* the governance dial. Validated at publish — every role named as an owner or a reviewer must be
+_is_ the governance dial. Validated at publish — every role named as an owner or a reviewer must be
 staffed, refused at publish, never resolved at run time.
 
 **Send back generalises.** Any row can send back to its dependencies, so nothing needs to know a row
@@ -256,7 +270,7 @@ staffed, refused at publish, never resolved at run time.
 deliverable puts everything downstream back automatically, because the edges already name that set.
 A send-back carries a recorded reason.
 
-### 4.6 · Amending a running plan
+### 4.5 · Amending a running plan
 
 - adding a row to a running phase creates a new task and its ticket
 - editing a row whose task is **closed never retro-changes it**
@@ -270,10 +284,10 @@ A send-back carries a recorded reason.
 
 **The tracker and Compass are both storage engines for Compass.**
 
-| | owns |
-| --- | ---- |
-| **the tracker** | work items and their state — epics, stories, sprints, points, assignees, links, status, and every report built on them |
-| **Compass** | the process — phases, rows, dependencies, ownership — and the **production**: agent runs, drafts, versions, citations, chat trails |
+|                 | owns                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **the tracker** | work items and their state — epics, stories, sprints, points, assignees, links, status, and every report built on them             |
+| **Compass**     | the process — phases, rows, dependencies, ownership — and the **production**: agent runs, drafts, versions, citations, chat trails |
 
 The tracker has no concept of a delivery process. Compass has no business rebuilding a sprint.
 
@@ -298,7 +312,7 @@ because that is the only half ever on the board. Once the whole lifecycle is tic
 burnup becomes the schedule view, and Compass adds:
 
 1. **What is owed but not yet drafted.** The tracker knows about tickets that exist; only the
-   process definition knows what *should* exist.
+   process definition knows what _should_ exist.
 2. **What derives from what.** Pinned inputs and citations. A tracker link says "blocks", never
    "was written from version 4 of this".
 3. **Where the constraint is.** Time-in-review per person, from state transitions already recorded.
@@ -322,12 +336,12 @@ catch sloppiness, never wrongness. And a tool whose opening move is "we are chec
 really reviewed that" is the worst posture for landing inside a consultancy. Attributed human
 judgment is already the professional-services standard; reproducing it faithfully is the goal.
 
-*Kept: a record, not a gate.* The revision trail exists anyway. When a program goes sideways in
+_Kept: a record, not a gate._ The revision trail exists anyway. When a program goes sideways in
 month four, "what did we know in month one" has an answer.
 
 **Measurement is not hand-authored.** The row declares what it produces and who accepts it; that is
 the criterion. Rejected: requiring a Done criterion per row, which puts a vacuity problem on the
-extensibility path — *"Done when: the team is aligned"* passes any such rule. Hand-written criteria
+extensibility path — _"Done when: the team is aligned"_ passes any such rule. Hand-written criteria
 survive only where there is no document and no reviewer, only a probe.
 
 **Reviews are authored rows.** Rejected: declaring `reviewers` on a step and generating review
@@ -378,11 +392,12 @@ Grounded in what the app contains as of 2026-08-19.
 ### R1 · Re-author the phases
 
 The largest item and mostly writing. The seed now carries §4's phases and nothing else — `setup`
-(1 row), `sprint-0` (13) and `sprint` (3); the pre-rename phases are gone from both the seed and
-the database. What remains is `pre-sprint-0`, which has a phase row and no steps at all, so §4.2 is
-still a section nothing can run.
+(1 row), `sprint-0` (12) and `sprint` (3); the pre-rename phases are gone from the seed. The
+absorption is complete: `pre-sprint-0` has no row in the seed at all, and the database keeps it only
+as a retired workflow — disabled, no steps, no runs — because the importer retires rather than
+deletes, so history that still resolves keeps resolving.
 
-- the four tables in the row shape of §4
+- the three tables in the row shape of §4
 - `hitl` rows folded into the step each was approving
 - `kind` reduced to `agent | machine`, role constraint reworded
 - nesting expanded flat — `create-product-brief` and `setup-foundation-architecture` become rows
@@ -398,7 +413,7 @@ part of its draft — an agent-file change as well as a column.
 ### R3 · The bar in the prompt
 
 **A direct consequence of dropping hand-authored criteria.** `systemPrompt` ends its criteria block
-with *"No done criteria are recorded. Say so; do not invent a bar for your own work."* Making
+with _"No done criteria are recorded. Say so; do not invent a bar for your own work."_ Making
 `produces` + acceptance the criterion makes that the NORMAL branch — so every agent would open by
 announcing it has no bar to work to.
 
@@ -433,16 +448,16 @@ every draft. R2, R4, R5 and R6 are each small.
 
 ## 8 · Out of scope
 
-| | why |
-| --- | --- |
-| a tracker listener / webhook | the close button writes through instead. Needed when developers close their own stories from the board in sprints |
-| epics · stories · sprints · estimates as Compass entities | tracker-native (§5) |
-| `close_task` checking that `produces` exists | raised, deferred. If it bites the fix needs no new authoring — the promise is already in the row |
-| a fetch tool for the agent | none exists, so declared-vs-fetch is moot. If added, a fetch must write a `task_input` row like any pin, or prompt reconstruction stops working |
-| a staleness query | falls out of the pins whenever wanted; nothing depends on it |
-| an assignee column on `work_task` | `role_code` routes correctly until two people share a role |
-| authorization | the MVP is one operator |
-| content quality scanning | §6 — deliberately not built |
+|                                                           | why                                                                                                                                             |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| a tracker listener / webhook                              | the close button writes through instead. Needed when developers close their own stories from the board in sprints                               |
+| epics · stories · sprints · estimates as Compass entities | tracker-native (§5)                                                                                                                             |
+| `close_task` checking that `produces` exists              | raised, deferred. If it bites the fix needs no new authoring — the promise is already in the row                                                |
+| a fetch tool for the agent                                | none exists, so declared-vs-fetch is moot. If added, a fetch must write a `task_input` row like any pin, or prompt reconstruction stops working |
+| a staleness query                                         | falls out of the pins whenever wanted; nothing depends on it                                                                                    |
+| an assignee column on `work_task`                         | `role_code` routes correctly until two people share a role                                                                                      |
+| authorization                                             | the MVP is one operator                                                                                                                         |
+| content quality scanning                                  | §6 — deliberately not built                                                                                                                     |
 
 ---
 
@@ -455,7 +470,7 @@ The claim has an in-loop sensor, which the quality framing never did:
 - **what fraction of the owed deliverables exist at all**, at any moment
 - **time saved per ceremony** — the unit the customer actually feels
 
-The MVP is proved when one engagement walks setup → pre-sprint-0 → sprint 0 with every deliverable
+The MVP is proved when one engagement walks setup → sprint 0 → sprint 1 with every deliverable
 drafted by the agent, revised by chat rather than typing, accepted by a named human, and closed on
 the board.
 

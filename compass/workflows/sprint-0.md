@@ -2,9 +2,10 @@
      story. The DM initiates it once setup's connections are validated. Every row below becomes one
      task in that run.
 
-     It absorbed pre-sprint-0. That phase is parked (`enabled=false` in seed/workflows.csv) and its
-     rows — the SOW, the timeline, staffing, the RACI, the epics, the tailored plan — are rows 1-8
-     here. The split existed when "what are we doing" and "can the team start" were separate
+     It absorbed pre-sprint-0. That phase is gone from the seed entirely — the database keeps it
+     only as a retired workflow, disabled and with no steps — and its rows, the SOW, the timeline,
+     staffing, the RACI, the epics and the tailored plan, are rows 1-8 here. The split existed when
+     "what are we doing" and "can the team start" were separate
      ceremonies; one phase that runs in dependency order does the same work without a gate between
      them that nobody was waiting at. -->
 ---
@@ -20,7 +21,7 @@ version: 2.0.0
 # ── ENTRY GATE ────────────────────────────────────────────────────────────
 # Setup, and nothing else. This phase no longer requires a roster or a scope — it PRODUCES them, at
 # rows 5 and 7. The old gate demanded `01-foundation/team` published before a phase whose own job is
-# to publish it, which was unsatisfiable the moment pre-sprint-0 was parked.
+# to publish it, which was unsatisfiable the moment pre-sprint-0 was absorbed.
 requires:
   - setup@phase == closed        # connections validated; there is somewhere for status to live
 

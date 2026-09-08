@@ -31,7 +31,7 @@ produces:
 ## Purpose
 
 Prove that the engagement's systems of record answer, before anything downstream is derived from
-them. Ends when pre-sprint 0 can start.
+them. Ends when sprint 0 can start.
 
 ## Dispatch graph
 
