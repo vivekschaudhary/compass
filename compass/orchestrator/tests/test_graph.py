@@ -137,15 +137,15 @@ class TestRealWorkflows(unittest.TestCase):
         self.assertEqual((step2.agent, step2.task), ("automation", "write-e2e-tests"))
 
     def test_create_brief(self):
-        steps = load_workflow(WORKFLOWS / "create-brief.md")
+        steps = load_workflow(WORKFLOWS / "product-brief.md")
         self.assertEqual([s.number for s in steps if s.is_hitl], [3])
 
     def test_create_bet_architecture(self):
-        steps = load_workflow(WORKFLOWS / "create-epic-architecture.md")
+        steps = load_workflow(WORKFLOWS / "feature-architecture.md")
         self.assertEqual([s.number for s in steps if s.is_hitl], [2])
 
     def test_setup_foundation_architecture(self):
-        steps = load_workflow(WORKFLOWS / "setup-foundation-architecture.md")
+        steps = load_workflow(WORKFLOWS / "foundation-architecture.md")
         # 8 since the design library builds here — after the architecture picks the
         # stack it is written in — with its own approval gate.
         self.assertEqual(len(steps), 8)
@@ -169,7 +169,7 @@ class TestRealWorkflows(unittest.TestCase):
         )
 
     def test_create_story(self):
-        steps = load_workflow(WORKFLOWS / "create-story.md")
+        steps = load_workflow(WORKFLOWS / "story.md")
         self.assertEqual(len(steps), 5)
         # PM decompose first, designer + ux-writer conditional, DM status last
         self.assertEqual((steps[0].agent, steps[0].task), ("product-manager", "decompose-epic-to-story"))
@@ -185,7 +185,7 @@ class TestRealWorkflows(unittest.TestCase):
         )
 
     def test_create_story_requires_brief(self):
-        meta = load_workflow_meta(WORKFLOWS / "create-story.md")
+        meta = load_workflow_meta(WORKFLOWS / "story.md")
         self.assertEqual(meta["requires_approved"], ["docs/epics/<epic-id>/brief.md"])
 
     def test_triage_front_door_graph(self):

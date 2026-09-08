@@ -1,5 +1,5 @@
 ---
-name: create-brief
+name: product-brief
 status: active
 owner: product-manager
 auto_invokes: []

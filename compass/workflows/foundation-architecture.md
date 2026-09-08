@@ -1,5 +1,5 @@
 ---
-name: setup-foundation-architecture
+name: foundation-architecture
 status: active
 owner: enterprise-architect
 auto_invokes: []

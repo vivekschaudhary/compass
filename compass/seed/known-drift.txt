@@ -8,9 +8,22 @@
 unseeded       advance
 unseeded       create-epics
 unseeded       dashboard
-unseeded       measure
 unseeded       metrics
 unseeded       plan
 unseeded       retro
 unseeded       scan
 unseeded       status
+
+# `build` was parked, so its graph was never compared. Enabling it surfaced a disagreement that
+# predates today: build.md declares 8 `### Step N.` headings and the seed has 7. The extra is step 8,
+# "Post-merge — tech-writer engagement + story status finalization", which no seed row performs.
+# DEBT, not permission: either the seed gains that row or the .md loses it, and until then build
+# closes without the post-merge work anybody reading the .md would expect.
+step-count     build
+
+# `ops` is v1's, like the nine above it. Its seed row was dropped in the workflow restructure but
+# `compass/workflows/ops.md` stays: v1's orchestrator still loads it, `_CODE_WORKFLOWS` still lists
+# it, and deleting the file breaks a workflow that still runs. Unseeded is the right state — v2 does
+# not offer it, v1 still does — and that is exactly what the nine entries above record.
+unseeded       ops
+

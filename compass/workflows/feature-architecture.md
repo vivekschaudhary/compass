@@ -1,5 +1,5 @@
 ---
-name: create-epic-architecture
+name: feature-architecture
 status: active
 owner: architect
 auto_invokes: []

@@ -85,7 +85,7 @@ class TestWorkflowMeta(unittest.TestCase):
             p.unlink()
 
     def test_real_create_brief_requirements(self):
-        meta = load_workflow_meta(WORKFLOWS / "create-brief.md")
+        meta = load_workflow_meta(WORKFLOWS / "product-brief.md")
         self.assertEqual(
             meta["requires_approved"],
             ["docs/foundation/product.md", "docs/foundation/architecture.md"],
@@ -118,9 +118,9 @@ class TestArtifactTargetParsing(unittest.TestCase):
         # artifact has no repo file at all. Carried by setup-foundation-architecture since
         # create-product-brief was flattened into sprint-0 rows and deleted — the PROPERTY is what
         # this pins, and it needs some workflow that still ships to demonstrate it.
-        sfa = load_workflow(WORKFLOWS / "setup-foundation-architecture.md")
+        sfa = load_workflow(WORKFLOWS / "foundation-architecture.md")
         self.assertIn("design-library@docs", [s.artifact_target for s in sfa if s.is_hitl])
-        cb = load_workflow(WORKFLOWS / "create-brief.md")
+        cb = load_workflow(WORKFLOWS / "product-brief.md")
         self.assertEqual(
             next(s for s in cb if s.is_hitl).artifact_target,
             "docs/epics/<epic-id>/brief.md",

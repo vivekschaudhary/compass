@@ -16,14 +16,21 @@ scope: foundation
 trigger: delivery-manager initiates it
 creates: one task per row below, in dependency order
 status: active
-version: 2.0.0
+version: 2.1.0
 
 # ── ENTRY GATE ────────────────────────────────────────────────────────────
-# Setup, and nothing else. This phase no longer requires a roster or a scope — it PRODUCES them, at
-# rows 5 and 7. The old gate demanded `01-foundation/team` published before a phase whose own job is
-# to publish it, which was unsatisfiable the moment pre-sprint-0 was absorbed.
+# The systems of record, and nothing else. This phase no longer requires a roster or a scope — it
+# PRODUCES them, at rows 5 and 8. The old gate demanded `01-foundation/team` published before a
+# phase whose own job is to publish it, which was unsatisfiable the moment pre-sprint-0 was absorbed.
+#
+# STATED AS THE PROBES, NOT AS "onboarding is closed". The gate that actually runs is two connector
+# checks in criteria.csv, and a phase-closed gate is not something the criteria vocabulary can
+# express — `subject_kind` is document, ticket, connector or backlog. Naming the phase here read as
+# a dependency the engine never evaluated, which is worse than naming none: it looked like a gate
+# and was a sentence.
 requires:
-  - setup@phase == closed        # connections validated; there is somewhere for status to live
+  - docs.wired == true           # the same two probes `onboarding` runs, asked again at the door
+  - tickets.wired == true
 
 # ── PRODUCES ──────────────────────────────────────────────────────────────
 produces:
@@ -33,6 +40,7 @@ produces:
   - 02-scope/timeline@docs: published
   - 01-foundation/team@docs: published
   - 01-foundation/raci@docs: published
+  - 02-scope/features@docs: published
   - 02-scope/deliverables@docs: published
   - 03-delivery/plan@docs: published
   - 01-foundation/foundational-architecture@docs: published
@@ -63,12 +71,13 @@ Depending on a row means consuming what it produces.
 | 4 | Timeline and milestones | `agent: delivery-manager.draft-timeline` | delivery-manager | `01-foundation/product-brief` · `02-scope/sow` | `02-scope/timeline` | 2, 1 |
 | 5 | Staffing plan and resources | `agent: delivery-manager.propose-staffing` | delivery-manager | `02-scope/timeline` · `02-scope/sow` | `01-foundation/team` | 4, 1 |
 | 6 | Roles and responsibilities | `agent: delivery-manager.draft-raci` | delivery-manager | `01-foundation/team` | `01-foundation/raci` | 5 |
-| 7 | Epics from milestones | `agent: product-manager.draft-epics` | product-manager | `02-scope/timeline` · `01-foundation/product-brief` | `02-scope/deliverables` | 4, 2 |
-| 8 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `01-foundation/raci` · `02-scope/deliverables` · `01-foundation/team` | `03-delivery/plan` | 6, 7, 5 |
-| 9 | Foundation architecture | `agent: enterprise-architect.draft-foundation-architecture` | enterprise-architect | `01-foundation/product-brief` · `02-scope/deliverables` | `01-foundation/foundational-architecture` | 2, 7 |
-| 10 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `01-foundation/team` · `01-foundation/raci` | `01-foundation/ways-of-working` | 5, 6 |
-| 11 | Sprint plan for sprint 1 | `agent: product-manager.draft-sprint-plan` | product-manager | `02-scope/deliverables` · `01-foundation/team` · `03-delivery/plan` | `05-cadence/sprint-plans` | 7, 5, 8 |
-| 12 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `05-cadence/sprint-plans` · `01-foundation/ways-of-working` · `03-delivery/plan` | `05-cadence/kickoff` | 11, 10, 8 |
+| 7 | Features and how each is judged | `agent: product-manager.draft-features` | product-manager | `02-scope/timeline` · `01-foundation/product-brief` · `02-scope/business-requirements` | `02-scope/features` | 4, 2 |
+| 8 | Epics from milestones | `agent: product-manager.draft-epics` | product-manager | `02-scope/features` · `02-scope/timeline` · `01-foundation/product-brief` | `02-scope/deliverables` | 7, 4, 2 |
+| 9 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `01-foundation/raci` · `02-scope/deliverables` · `01-foundation/team` | `03-delivery/plan` | 6, 8, 5 |
+| 10 | Foundation architecture | `agent: enterprise-architect.draft-foundation-architecture` | enterprise-architect | `01-foundation/product-brief` · `02-scope/deliverables` | `01-foundation/foundational-architecture` | 2, 8 |
+| 11 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `01-foundation/team` · `01-foundation/raci` | `01-foundation/ways-of-working` | 5, 6 |
+| 12 | Sprint plan for sprint 1 | `agent: product-manager.draft-sprint-plan` | product-manager | `02-scope/deliverables` · `01-foundation/team` · `03-delivery/plan` | `05-cadence/sprint-plans` | 8, 5, 9 |
+| 13 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `05-cadence/sprint-plans` · `01-foundation/ways-of-working` · `03-delivery/plan` | `05-cadence/kickoff` | 12, 11, 9 |
 
 **Row 1 files the SOW; it does not write one.** The contract arrives from the delivery manager, in
 chat, and lands verbatim — an agent that drafts it into a page paraphrases, and every document

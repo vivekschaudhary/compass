@@ -41,7 +41,7 @@ class TestCodeRunNeedsChecks(unittest.TestCase):
 
     def test_doc_workflow_is_not_gated(self):
         self.assertFalse(R._code_run_needs_checks(
-            _steps("create-brief"), "create-brief", allow_write=True, no_write=False))
+            _steps("product-brief"), "product-brief", allow_write=True, no_write=False))
 
     def test_not_gated_without_write(self):
         self.assertFalse(R._code_run_needs_checks(

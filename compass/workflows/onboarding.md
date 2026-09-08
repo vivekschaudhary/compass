@@ -1,21 +1,21 @@
-<!-- SETUP — the phase that proves an engagement can hold work. One row, and it is a probe.
+<!-- ONBOARDING — the phase that proves an engagement can hold work. One row, and it is a probe.
 
      THIS TABLE IS THE PHASE. Add a row and the engagement gains one; change a gate and the bar
-     moves. None of it is encoded in code — a practice amends its own setup without a release.
+     moves. None of it is encoded in code — a practice amends its own onboarding without a release.
 
      BOOTSTRAP: this is the phase that proves the tracker, so there is nowhere to put its own ticket
-     while it runs. The row back-fills its epic and story, already Done, once the tracker answers. A
-     setup epic showing a closed story with a real timestamp is a better first impression than an
+     while it runs. The row back-fills its epic and story, already Done, once the tracker answers. An
+     onboarding epic showing a closed story with a real timestamp is a better first impression than an
      empty board. -->
 ---
-name: setup
-title: Setup engagement
-owner: delivery-manager
+name: onboarding
+title: Onboarding engagement
+owner: pmo-analyst
 scope: foundation
-trigger: delivery-manager initiates it   # intake provisions; it does not start anything
+trigger: pmo-analyst initiates it        # intake provisions; it does not start anything
 creates: one task per row below
 status: active
-version: 1.0.0
+version: 2.0.0
 
 # ── ENTRY GATE ────────────────────────────────────────────────────────────
 # None. This is the first phase; an engagement row existing is all it requires.
@@ -31,7 +31,7 @@ produces:
 ## Purpose
 
 Prove that the engagement's systems of record answer, before anything downstream is derived from
-them. Ends when sprint 0 can start.
+them. Ends when discovery can start.
 
 ## Dispatch graph
 
@@ -59,7 +59,7 @@ Both are probes, not settings lookups — `evaluateConnector` writes a page to t
 board's status vocabulary back. **Config that was never exercised is not config.**
 
 It is a `machine` row: no owner and no reviewer, because the probe IS the evidence and there is
-nothing for a person to judge. It is also the only row across the four phases carrying hand-written
+nothing for a person to judge. It is also the only row across the phases carrying hand-written
 machine criteria; everywhere else what a row produces and who accepts it is the criterion.
 
 ## Notes

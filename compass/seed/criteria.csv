@@ -1,6 +1,6 @@
 workflow,task,kind,text,subject_kind,subject_ref,operator,value
-setup,validate-connections,done,The doc store answers,connector,docs,is,wired
-setup,validate-connections,done,The tracker answers,connector,tickets,is,wired
+onboarding,validate-connections,done,The doc store answers,connector,docs,is,wired
+onboarding,validate-connections,done,The tracker answers,connector,tickets,is,wired
 sprint-0,,ready,The systems of record answered,connector,docs,is,wired
 sprint-0,,ready,,connector,tickets,is,wired
 sprint-0,file-sow,done,The SOW is filed — everything downstream derives from it and cannot be invented,document,02-scope/sow,status,published
@@ -15,7 +15,12 @@ sprint-0,propose-staffing,done,Every role a later phase assigns work to has a na
 sprint-0,propose-staffing,done,Roles left deliberately unstaffed are recorded with a reason,,,,
 sprint-0,draft-raci,done,Roles and responsibilities are published,document,01-foundation/raci,status,published
 sprint-0,draft-raci,done,Every named holder appears against at least one responsibility,,,,
+sprint-0,draft-features,done,The features are published,document,02-scope/features,status,published
+sprint-0,draft-features,done,Every feature names the outcome it is betting on,,,,
+sprint-0,draft-features,done,"Every feature says how it will be judged — the target, and where the number comes from",,,,
+sprint-0,draft-features,done,"What the brief leaves unclear is an open question, not a guessed feature",,,,
 sprint-0,draft-epics,done,The epics are published,document,02-scope/deliverables,status,published
+sprint-0,draft-epics,done,Every epic belongs to a feature,,,,
 sprint-0,draft-epics,done,Every epic traces to something the brief or the SOW commits to,,,,
 sprint-0,draft-epics,done,Every epic names the milestone it serves,,,,
 sprint-0,draft-epics,done,"What the brief leaves unclear is an open question, not a guessed epic",,,,
@@ -41,11 +46,3 @@ sprint,sprint-review,done,The review is published,document,05-cadence/sprint-rev
 sprint,sprint-review,done,Every story that did not land says why,,,,
 sprint,sprint-retro,done,The retro is published,document,05-cadence/retros,status,published
 sprint,sprint-retro,done,"Actions have a named owner, or are recorded as not taken",,,,
-feature-loop,,ready,The feature is framed and published,document,02-scope/features/{feature},status,published
-feature-loop,ship-feature,done,Every epic under this feature is closed on the board,ticket,feature-epics-closed,is,true
-feature-loop,measure-feature,done,The measurement is published,document,02-scope/features/{feature}/measurement,status,published
-feature-loop,measure-feature,done,Every target has at least one reading,,,,
-feature-loop,measure-feature,done,"A metric that could not be measured says so, rather than being left out",,,,
-feature-loop,learn-from-feature,done,The decision is published,document,02-scope/features/{feature}/decision,status,published
-feature-loop,learn-from-feature,done,The verdict names the readings it rests on,,,,
-feature-loop,learn-from-feature,done,"An inconclusive measurement is recorded as inconclusive, not as persevere",,,,

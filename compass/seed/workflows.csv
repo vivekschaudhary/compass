@@ -1,14 +1,19 @@
 code,label,workstream,phase,owner_role,trigger,enabled,repeatable
-build,Workflow: /build,Engineering,,engineer,,false,false
-create-epic-architecture,Workflow: /create-epic-architecture,Engineering,,architect,,false,false
-create-brief,Workflow: /create-brief,Product,,researcher,,false,false
-create-story,Workflow: /create-story,Product,,product-manager,,false,false
-fix,Workflow: /fix,Engineering,,engineer,,false,false
-ops,Workflow: /ops,Engineering,,enterprise-architect,,false,false
-setup-foundation-architecture,Workflow: /setup-foundation-architecture,Engineering,,enterprise-architect,,false,false
-tech-design,Workflow: /tech-design,Engineering,,architect,,false,false
-triage,Workflow: /triage,Support,,support,,false,false
-setup,Setup engagement,Delivery,Setup,delivery-manager,,false,false
-sprint-0,Sprint 0,Delivery,Sprint 0,delivery-manager,,true,false
-sprint,Sprint,Delivery,Sprint,delivery-manager,,true,true
-feature-loop,Feature loop,Product,,product-manager,,false,true
+onboarding,Onboarding engagement,Delivery,Onboarding,pmo-analyst,,true,false
+sprint-0,Discovery,Delivery,Discovery,delivery-manager,,true,false
+foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,enterprise-architect,,false,false
+feature,Feature,Product,Build,product-manager,,false,true
+product-brief,Workflow: /product-brief,Product,Discovery,product-manager,,false,false
+feature-architecture,Workflow: /feature-architecture,Engineering,Build,architect,,false,true
+build,Workflow: /build,Engineering,Build,engineer,,true,true
+tech-design,Technical design,Engineering,Build,architect,,true,true
+story,Workflow: /story,Product,Build,product-manager,,false,true
+sprint,Sprint,Delivery,Build,delivery-manager,,true,true
+release,Release,Delivery,Build,delivery-manager,,false,true
+fix,Workflow: /fix,Engineering,Build,engineer,,true,true
+triage,Workflow: /triage,Support,Operate,support,,true,true
+launch-readiness,Launch readiness,GTM,Build,gtm,,false,true
+release-comms,Release comms,GTM,Build,gtm,,false,true
+job-aids,Job aids and enablement,GTM,Build,tech-writer,,false,true
+measure,Measure,Product,Operate,researcher,,false,true
+learn,Learn,Product,Operate,product-manager,,false,true

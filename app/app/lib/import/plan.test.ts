@@ -29,13 +29,13 @@ const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], do
 
 
 /**
- * The delivery phases the seed ships. Setup → sprint 0 → sprint.
+ * The delivery phases the seed ships. Onboarding → sprint 0 → sprint.
  *
  * `pre-sprint-0` was one of these. Its rows — the SOW, the timeline, staffing, the RACI, the epics,
  * the tailored plan — are now sprint-0 steps 1-8, and the phase is gone from the seed rather than
  * parked, so asserting on it here would be asserting on a workflow no import produces.
  */
-const PHASES = ["setup", "sprint-0", "sprint"] as const;
+const PHASES = ["onboarding", "sprint-0", "sprint"] as const;
 
 describe("the shipped seed", () => {
   const planned = () => {
@@ -102,13 +102,41 @@ describe("the shipped seed", () => {
     const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
     expect(byCode.get("sprint")?.repeatable).toBe(true);
     expect(byCode.get("sprint-0")?.repeatable).toBe(false);
-    expect(byCode.get("setup")?.repeatable).toBe(false);
+    expect(byCode.get("onboarding")?.repeatable).toBe(false);
   });
 
-  it("seeds every delivery phase, owned by the delivery manager", () => {
+  /**
+   * Every phase has an owner, and `onboarding`'s is not the delivery manager's.
+   *
+   * This asserted one blanket role until `onboarding` moved to `pmo-analyst`, and then failed — for the
+   * right reason, so it is rewritten rather than deleted. Provisioning an engagement is platform
+   * work: the PMO Analyst is titled "Configures the org and its engagements" in roles.csv and holds
+   * `edit-org-defaults`, `edit-engagement-specs` and `manage-users`. The delivery manager runs the
+   * delivery, and cannot run it until someone has set the engagement up.
+   *
+   * `owner_role_code` is not a label. `phasesFor` filters on it, so it decides who can see a phase
+   * at all, and `open_workflow_run` falls back to it for any step that names no role.
+   */
+  it("gives every phase an owner, and onboarding's is the PMO analyst", () => {
+    const OWNERS: Record<(typeof PHASES)[number], string> = {
+      onboarding: "pmo-analyst",
+      "sprint-0": "delivery-manager",
+      sprint: "delivery-manager",
+    };
     const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
     for (const code of PHASES) {
-      expect(byCode.get(code)?.ownerRole, `${code} has no owner`).toBe("delivery-manager");
+      expect(byCode.get(code)?.ownerRole, `${code} has no owner`).toBe(OWNERS[code]);
+    }
+  });
+
+  it("names an owner role that exists in roles.csv", () => {
+    // An owner nobody can hold is a phase nobody can start: `phasesFor` matches the actor's role
+    // against this column, so a typo here produces a phase that is invisible to everyone.
+    const plan = planned();
+    const roles = new Set(plan.roles.map((r) => r.row.code));
+    for (const wf of plan.workflows) {
+      if (!wf.row.ownerRole) continue;
+      expect(roles.has(wf.row.ownerRole), `${wf.row.code} is owned by unknown '${wf.row.ownerRole}'`).toBe(true);
     }
   });
 
@@ -126,30 +154,48 @@ describe("the shipped seed", () => {
   });
 
   /**
-   * The feature loop is held to the same gate rule, and is NOT in `PHASES`.
+   * EVERY ENABLED WORKFLOW'S ROWS HAVE A DONE GATE — with four recorded exceptions.
    *
-   * It is not a delivery phase: it is scoped to one bet, its owner is the product manager rather
-   * than the delivery manager, and it ships parked (`enabled=false`) until the engine can give a
-   * run a feature. None of that makes the vacuous-close bug any less real — a step with no Done
-   * criteria closes green over `string_agg` of nothing — so the rule is asserted here rather than
-   * left to the day somebody flips `enabled` and finds out.
+   * This replaces two tests that asserted the same rule about `feature-loop`, a workflow since
+   * removed from the seed: measuring and learning became `measure` and `learn` rather than steps of
+   * one loop. They failed for the right reason, so the rule they encoded is generalised here rather
+   * than deleted with them.
+   *
+   * The rule is the vacuous-close bug. `close_task` builds its refusal with `string_agg` over the
+   * Done criteria, and over zero rows that returns NULL — so a step with no criteria closes GREEN,
+   * with no evidence, indistinguishable from one that passed a real gate. A phase whose rows have
+   * no gates is worse than no phase.
+   *
+   * UNGATED IS THE DEBT, NOT THE ALLOWANCE. The four below are enabled today and every one of their
+   * rows would close on nothing: build 7/7, fix 6/6, triage 9/9, tech-design 1/1 — 23 steps. They
+   * are listed so this test passes against the seed as it is while FAILING the moment a fifth
+   * appears. Deleting a name from this list is how one gets fixed; adding one needs a reason.
    */
-  it("gives every feature-loop row a Done gate, though it is not a delivery phase", () => {
-    const wf = planned().workflows.find((w) => w.row.code === "feature-loop");
-    expect(wf, "feature-loop is not in the seed").toBeTruthy();
-    expect(wf!.steps.length).toBe(3);
-    for (const step of wf!.steps) {
-      const gates = wf!.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
-      expect(gates.length, `feature-loop step ${step.ord} has no Done criteria`).toBeGreaterThan(0);
+  const UNGATED_DEBT = new Set(["build", "fix", "triage", "tech-design"]);
+
+  it("gives every row of every enabled workflow a Done gate", () => {
+    const offenders: string[] = [];
+    for (const wf of planned().workflows) {
+      if (!wf.row.enabled || UNGATED_DEBT.has(wf.row.code)) continue;
+      for (const step of wf.steps) {
+        const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
+        if (!gates.length) offenders.push(`${wf.row.code}.${step.task}`);
+      }
     }
+    expect(offenders, "these rows would close green over string_agg of nothing").toEqual([]);
   });
 
-  it("ships the feature loop parked, so nothing can open it yet", () => {
-    // `enabled` is what `phasesFor` and `initiatePhase` filter on. Until `open_phase_run` can carry
-    // a feature, a true here would offer a phase that cannot do what its rows say.
-    const wf = planned().workflows.find((w) => w.row.code === "feature-loop")!;
-    expect(wf.row.enabled).toBe(false);
-    expect(wf.row.repeatable).toBe(true);
+  it("keeps the ungated-workflow debt honest", () => {
+    // A name here that no longer needs to be is a stale exemption, and a stale exemption is how the
+    // list stops meaning anything. Every entry must still be enabled AND still be ungated.
+    const plan = planned();
+    for (const code of UNGATED_DEBT) {
+      const wf = plan.workflows.find((w) => w.row.code === code);
+      if (!wf || !wf.row.enabled) continue;               // parked or gone: nothing to police
+      const ungated = wf.steps.filter(
+        (s) => !wf.criteria.some((c) => c.kind === "done" && c.stepTask === s.task));
+      expect(ungated.length, `${code} is gated now — remove it from UNGATED_DEBT`).toBeGreaterThan(0);
+    }
   });
 
   it("only a `workflow` step nests, and it nests something that exists", () => {

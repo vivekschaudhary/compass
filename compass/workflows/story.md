@@ -1,5 +1,5 @@
 ---
-name: create-story
+name: story
 status: active
 owner: product-manager
 auto_invokes: []
