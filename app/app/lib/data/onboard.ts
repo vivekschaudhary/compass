@@ -217,6 +217,9 @@ export async function createEngagement(
 
   const { error: engErr } = await sb.from("engagement").insert({
     id,
+    // 055 made this NOT NULL. It was the one row in the schema that did not name its org, so
+    // org -> engagement was held up entirely by the children agreeing with each other.
+    org_id: org.id,
     name: input.name,
     client: input.client,
     // A short label for the UI. The CONTRACT is the document — this is a chip, and v1's mistake was
