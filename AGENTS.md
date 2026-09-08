@@ -22,7 +22,7 @@ having.
 
 ## The product, in short
 
-An **ERP for software delivery**. The lifecycle — setup → pre-sprint-0 → sprint 0 → sprint N — is an
+An **ERP for software delivery**. The lifecycle — setup → sprint 0 → sprint N — is an
 executable process rather than a document. The AI drafts the first version of every deliverable the
 plan calls for; a named human reviews it and advances it. Status is **position in the flow**, and it
 lives in the client's tracker, not here.
@@ -92,10 +92,16 @@ Several places describe the same workflows. Know which one executes:
 - **the database** — a *versioned* copy of the seed. Published versions match it row for row; older
   versions accumulate, so raw counts overstate.
 - `compass/workflows/*.md` — the dispatch graphs. Two formats: the old `### Step N.` headings and
-  the newer table used by the four phase files — `setup.md`, `pre-sprint-0.md`, `sprint-0.md` and
-  `sprint.md`. `graph.py` parses both.
+  the newer table used by the three phase files — `setup.md`, `sprint-0.md` and `sprint.md`.
+  `graph.py` parses both.
 - `.claude/skills/` — slash commands, most of which map to workflows the app cannot run.
 - `compass/reference/workflow-catalog.csv` — derived from the .md, CI-checked.
+- **prose inside the code** — migration headers, module docstrings, the `### Task:` sections. These
+  record why a change was made ON THE DAY IT WAS MADE; `app/supabase/MIGRATIONS.md` asks for exactly
+  that ("the diff says what changed and the comment says why"). So a header's opening paragraph is
+  usually the BEFORE state, written to justify the change shipping in the same commit —
+  `047_backlog_item` opens "`draft-epics` produced a DOCUMENT" inside the very commit that stopped
+  it doing only that. Read them for reasoning. Never quote them for current behaviour.
 
 **Run `python3 compass/scripts/seed-consistency-check.py` before believing the .md files describe
 what runs.** It fails on NEW drift only; today's known gaps are baselined in
@@ -162,6 +168,11 @@ Generic to this runtime. Task-specific rules live in the agent files.
     mocked client cannot see an authorization rule that is wrong.
 14. **Reproduce before diagnosing.** An explanation built on a story about the failure, rather than
     on the failure itself, fixes the story.
+15. **Claim only what you checked, at the scope you checked it.** "No code reads this" after
+    grepping one file extension, a count read off a list instead of counted, a defect inferred from
+    one row without checking the row next to it — each is a true observation reported at a wider
+    scope than the evidence covers, and it is indistinguishable from a verified fact to whoever
+    reads it. Widen the check or narrow the sentence.
 
 ---
 
