@@ -83,6 +83,9 @@ product-brief,approve-brief,done,"Every finding from the review is answered — 
 feature,draft-feature,done,The features are published,document,features,status,published
 feature,draft-feature,done,Every feature names the outcome it is betting on,,,,
 feature,draft-feature,done,"Every feature says how it will be judged — the target, and where the number comes from",,,,
+feature,draft-feature,done,"Every feature carries a Metric section — what is being measured, its target, and where the number will be read from",,,,
+feature,draft-feature,done,"Every feature carries a Measurement section, present and empty before launch rather than absent — a section that appears later is one nobody agreed to",,,,
+feature,draft-feature,done,"Every feature carries a Decision section reserved for persevere, pivot, kill or inconclusive — stated as not yet due, never pre-filled",,,,
 feature,review-feature,done,The review is published,document,feature-review,status,published
 feature,review-feature,done,"Each target is judged on whether it could actually be measured, not on whether it sounds right",,,,
 feature,approve-feature,done,"The features are accepted by the product manager, and their name is on the close",,,,

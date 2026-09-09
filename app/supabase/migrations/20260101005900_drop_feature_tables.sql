@@ -13,16 +13,23 @@
 -- become. The thing that forced 047 is absent here, and without it a row buys nothing: nothing
 -- iterates features, nothing links to them, nothing measures them.
 --
--- WHAT IS BEING GIVEN UP, STATED SO IT IS A DECISION AND NOT A DISCOVERY.
---   1. `feature-architecture` stays ONE shared document. Per-feature pages need rows to fan out
---      over; that door closes here, and re-opening it means re-adding a producer, not just a table.
---   2. "Every epic belongs to a feature" stays a JUDGMENT criterion — a person attests it. It could
---      have been machine-checked against a `feature_id`. It will not be.
---   3. `measure` and `learn` lose the schema they were drawn against. Both are PARKED placeholders
---      with no rows and no code, so nothing breaks today — but `feature_metric_reading` was the
---      series `measure` would have written and `learn` would have ruled on. When they are written
---      for real they need somewhere to put readings, and that is now an open question rather than
---      an answered one. Recorded here because the alternative is discovering it as a surprise.
+-- THE CONCEPTS SURVIVE AS SECTIONS. This drops tables, not ideas. A feature still has a metric, a
+-- measurement and a decision — they are SECTIONS OF THE FEATURE PAGE, gated by Done criteria on
+-- `feature.draft-feature`, and the last two are reserved-and-empty until after launch rather than
+-- absent. `feature_metric` becomes the Metric section, `feature_metric_reading` the Measurement
+-- section, `feature_decision` the Decision section. `measure` and `learn` (both parked, no rows)
+-- write into that page when they are built, instead of into a table nothing could read.
+--
+-- WHAT IS ACTUALLY GIVEN UP, STATED SO IT IS A DECISION AND NOT A DISCOVERY.
+--   1. `feature-architecture` stays ONE shared document. A fan-out iterates rows, and features are
+--      not rows anywhere — not here, and deliberately not in `backlog_item` either, since that
+--      table is "the product backlog as rows, between the draft and the board" (047) and exists to
+--      reach the TRACKER. A feature stops at Confluence: SOW/BR -> product brief -> foundation
+--      architecture, design library, features -> [Jira] epics, stories, sub-tasks -> code. The
+--      Confluence/Jira boundary is what decides this, not the absence of a table.
+--   2. "Every epic belongs to a feature" stays a JUDGMENT criterion — a person attests it. The
+--      link crosses that same boundary (a Jira epic to a Confluence page), so there are no two
+--      rows to join.
 --
 -- DEAD SCHEMA THAT LOOKS ALIVE IS THE REASON THIS IS A DROP AND NOT A COMMENT. A table with a
 -- thoughtful header, indexes and constraints reads as load-bearing to whoever finds it next; this
