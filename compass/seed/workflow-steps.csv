@@ -7,12 +7,12 @@ sprint-0,3,agent,delivery-manager,draft-timeline,Milestones and timeline,,,,,Mil
 sprint-0,4,agent,delivery-manager,propose-staffing,Staffing plan,roster,,,,Staffing plan and resources,"draft-timeline,file-sow"
 sprint-0,5,agent,delivery-manager,draft-raci,RACI,,,,,Roles and responsibilities,propose-staffing
 sprint-0,6,agent,delivery-manager,draft-ways-of-working,ways-of-working,,,,,Team working agreement,"propose-staffing,draft-raci"
-sprint-0,7,workflow,product-owner,draft-features,,,,,feature,Features and how each is judged,"file-requirements,draft-product-brief"
-sprint-0,8,workflow,staff-engineer,draft-foundation-architecture,,,,,foundation-architecture,Foundation architecture,"file-requirements,draft-product-brief, draft-features"
-sprint-0,9,workflow,staff-engineer,design-feature-architecture,,,,,feature-architecture,Feature architecture,draft-foundation-architecture
+sprint-0,7,workflow,product-owner,draft-features,,,,,feature,Features and how each is judged,"file-sow,file-requirements,draft-product-brief"
+sprint-0,8,workflow,staff-engineer,draft-foundation-architecture,,,,,foundation-architecture,Foundation architecture,"file-requirements,file-sow, draft-product-brief, draft-features"
+sprint-0,9,workflow,staff-engineer,draft-feature-architecture,,,,,feature-architecture,Feature architecture,"draft-product-brief,draft-foundation-architecture, draft-features"
 sprint-0,10,workflow,designer,build-design-library,,,,,design-library,Design library,"draft-product-brief, file-requirements"
-sprint-0,11,workflow,product-owner,draft-epics,,,,,epics,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features,draft-timeline"
-sprint-0,12,agent,delivery-manager,tailor-delivery-plan,delivery plan,,deliverables,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing, file-sow,draft-features"
+sprint-0,11,workflow,product-owner,draft-epics,,,,,epics,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features, draft-timeline"
+sprint-0,12,agent,delivery-manager,tailor-delivery-plan,delivery plan,,deliverables,,,Tailor the delivery plan,"draft-raci, draft-timeline, draft-epics,propose-staffing,file-sow,draft-features,draft-foundation-architecture,draft-feature-architecture"
 sprint-0,13,workflow,product-owner,draft-sprint-plan,,,deliverables,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
 sprint-0,14,agent,delivery-manager,kickoff,kickoff,,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,tailor-delivery-plan"
 foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,,,,Research the ground,

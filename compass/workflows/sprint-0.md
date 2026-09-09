@@ -76,12 +76,12 @@ behaviour while the step went on passing its gates.
 | 4 | Staffing plan and resources | `agent: delivery-manager.propose-staffing` | delivery-manager | `Staffing plan` | roster | 3, 0 |
 | 5 | Roles and responsibilities | `agent: delivery-manager.draft-raci` | delivery-manager | `RACI` | — | 4 |
 | 6 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `ways-of-working` | — | 4, 5 |
-| 7 | Features and how each is judged | `workflow: feature` | product-owner | `—` | — | 1, 2 |
-| 8 | Foundation architecture | `workflow: foundation-architecture` | staff-engineer | `—` | — | 1, 2, 7 |
-| 9 | Feature architecture | `workflow: feature-architecture` | staff-engineer | `—` | — | 8 |
+| 7 | Features and how each is judged | `workflow: feature` | product-owner | `—` | — | 0, 1, 2 |
+| 8 | Foundation architecture | `workflow: foundation-architecture` | staff-engineer | `—` | — | 0, 1, 2, 7 |
+| 9 | Feature architecture | `workflow: feature-architecture` | staff-engineer | `—` | — | 2, 7, 8 |
 | 10 | Design library | `workflow: design-library` | designer | `—` | — | 2, 1 |
 | 11 | Epics from milestones and features | `workflow: epics` | product-owner | `—` | — | 1, 2, 7, 3 |
-| 12 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `delivery plan` | — | 5, 11, 4, 0, 7 |
+| 12 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `delivery plan` | — | 0, 3, 4, 5, 7, 8, 9, 11 |
 | 13 | Sprint plan for sprint 1 | `workflow: sprint-plan` | product-owner | `—` | — | 11, 4, 12 |
 | 14 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `kickoff` | — | 13, 6, 12 |
 
