@@ -136,37 +136,29 @@ class TestRealWorkflows(unittest.TestCase):
         step2 = next(s for s in steps if s.number == 2)
         self.assertEqual((step2.agent, step2.task), ("automation", "write-e2e-tests"))
 
-    def test_create_brief(self):
+    def test_product_brief(self):
+        # Was `create-brief`, and was three rows with the researcher approving the PM's draft.
+        # Rewritten so the author does not accept its own work: researcher gathers evidence,
+        # product owner drafts, reviewer reviews, product manager approves at row 4.
         steps = load_workflow(WORKFLOWS / "product-brief.md")
-        self.assertEqual([s.number for s in steps if s.is_hitl], [3])
+        self.assertEqual(len(steps), 4)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [4])
 
     def test_create_bet_architecture(self):
         steps = load_workflow(WORKFLOWS / "feature-architecture.md")
         self.assertEqual([s.number for s in steps if s.is_hitl], [2])
 
-    def test_setup_foundation_architecture(self):
+    def test_foundation_architecture(self):
+        # Was `setup-foundation-architecture`: eight rows, gates at 2, 4 and 7, and the same role
+        # authoring and approving. Now nine — research, architecture and scaffold, each written by
+        # the staff engineer, reviewed independently, and accepted by the principal engineer.
+        #
+        # The HITL positions are the point of the rewrite, so they are asserted rather than the
+        # count alone: an agent drafts in a role's name, and a role that also closes the gate has
+        # approved its own work.
         steps = load_workflow(WORKFLOWS / "foundation-architecture.md")
-        # 8 since the design library builds here — after the architecture picks the
-        # stack it is written in — with its own approval gate.
-        self.assertEqual(len(steps), 8)
-        # three HITL gates now — research, architecture, and the design library that
-        # is built here because it is written in the stack the architecture picked
-        gates = [s for s in steps if s.is_hitl]
-        self.assertEqual([s.number for s in gates], [2, 4, 7])
-        self.assertEqual(
-            gates[0].artifact_target, "docs/foundation/architecture-phase-a-research.md"
-        )
-        self.assertEqual(gates[1].artifact_target, "docs/foundation/architecture.md")
-        # three EA tasks dispatched in order
-        ea = [(s.agent, s.task) for s in steps if s.agent == "enterprise-architect"]
-        self.assertEqual(
-            ea,
-            [
-                ("enterprise-architect", "research-architecture"),
-                ("enterprise-architect", "derive-architecture"),
-                ("enterprise-architect", "scaffold-foundation"),
-            ],
-        )
+        self.assertEqual(len(steps), 9)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [3, 6, 9])
 
     def test_create_story(self):
         steps = load_workflow(WORKFLOWS / "story.md")
@@ -383,7 +375,7 @@ class TestSkipForRoute(unittest.TestCase):
         self.assertEqual(len(steps), 7)
         self.assertEqual([s.number for s in steps if s.is_hitl], [2, 6])
         self.assertEqual(
-            (steps[0].agent, steps[0].task), ("enterprise-architect", "lead-ops-change")
+            (steps[0].agent, steps[0].task), ("principal-engineer", "lead-ops-change")
         )
         self.assertEqual((steps[2].agent, steps[2].task), ("engineer", "apply-ops-change"))
         self.assertEqual(load_workflow_meta(WORKFLOWS / "ops.md")["requires_approved"], [])
@@ -479,7 +471,7 @@ class TestRefusalDetection(unittest.TestCase):
 
     def test_prose_mentioning_refuse_not_flagged(self):
         for txt in (
-            "The architect may refuse if the stack deviates, but here it's fine.",
+            "The staff-engineer may refuse if the stack deviates, but here it's fine.",
             "Classification: bug. Proceeding — no reason to refuse.",
             "",
             "Here is the design. It does not refuse anything.",

@@ -52,6 +52,11 @@ AGENT_TASK = re.compile(r"`([a-z0-9-]+)\.([a-z0-9-]+)`")
 TABLE_ROW = re.compile(r"^\|\s*(\d+)\s*\|(.+)\|\s*$", re.M)
 DISPATCH_AGENT = re.compile(r"`agent:\s*([a-z0-9-]+)\.([a-z0-9-]+)`")
 DISPATCH_NESTS = re.compile(r"`workflow:\s*([a-z0-9-]+)`")
+# A HITL row: a human acts, nothing dispatches. Without this the fallback below called every one
+# of them `machine` — a silent misread, because a machine row is measured and self-closes while a
+# hitl row waits for a person. The seed has had hitl steps since sprint-0; the table format simply
+# could not say so, so no graph ever used one until now.
+DISPATCH_HITL = re.compile(r"`hitl`")
 
 
 def table_steps(text: str) -> list[dict]:
@@ -66,12 +71,17 @@ def table_steps(text: str) -> list[dict]:
         joined = " ".join(cells)
         m_agent = DISPATCH_AGENT.search(joined)
         m_nests = DISPATCH_NESTS.search(joined)
+        m_hitl  = DISPATCH_HITL.search(joined)
         # The owner column carries the role for a nesting row — the agent form carries its own.
         owner = next((c for c in cells if re.fullmatch(r"[a-z][a-z0-9-]+", c)), "")
         if m_agent:
             out.append({"ord": int(ord_), "kind": "agent", "role": m_agent.group(1), "task": m_agent.group(2)})
         elif m_nests:
             out.append({"ord": int(ord_), "kind": "workflow", "role": owner, "task": "", "nests": m_nests.group(1)})
+        elif m_hitl:
+            # The owner column carries the role, as it does for a nesting row — a hitl row has no
+            # `agent:` form to carry its own.
+            out.append({"ord": int(ord_), "kind": "hitl", "role": owner, "task": ""})
         else:
             # Nothing dispatches. The seed calls this `machine` and holds no role for it.
             out.append({"ord": int(ord_), "kind": "machine", "role": "", "task": ""})

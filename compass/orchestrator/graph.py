@@ -71,6 +71,11 @@ def _parse_route_target(raw: str):
 _TABLE_ROW = re.compile(r'^\|\s*(\d+)\s*\|(.+)\|\s*$', re.MULTILINE)
 _DISPATCH_AGENT = re.compile(r'`agent:\s*([a-z0-9-]+)\.([a-z0-9-]+)`')
 _DISPATCH_NESTS = re.compile(r'`workflow:\s*([a-z0-9-]+)`')
+# A HITL row: a human acts and the run halts there. Without this the fallback below built it with
+# `is_hitl=False`, so a table-format workflow's approval rows were not gates at all — a run would
+# pass straight through three of them in `foundation-architecture`. The heading format has always
+# carried HITL; the table format could not say it until the seed grew rows that needed to.
+_DISPATCH_HITL = re.compile(r'`hitl`')
 
 
 def _load_table_steps(graph_text: str) -> list:
@@ -80,6 +85,7 @@ def _load_table_steps(graph_text: str) -> list:
 
         `agent: <role>.<task>`   one agent task, defined in that agent's file
         `workflow: <code>`       a nested run — the row is done when that run closes
+        `hitl`                   a person acts; the run halts here until they do
         an em-dash               nothing dispatches; something else satisfies the gate
     """
     steps = []
@@ -90,6 +96,7 @@ def _load_table_steps(graph_text: str) -> list:
 
         agent_m = _DISPATCH_AGENT.search(joined)
         nests_m = _DISPATCH_NESTS.search(joined)
+        hitl_m  = _DISPATCH_HITL.search(joined)
         title = cells[0] if cells else ''
         owner = next((c for c in cells if re.fullmatch(r'[a-z][a-z0-9-]+', c)), None)
 
@@ -103,6 +110,12 @@ def _load_table_steps(graph_text: str) -> list:
             steps.append(WorkflowStep(
                 number=ord_, title=title, agent=owner, task=None,
                 agent_file=None, is_hitl=False, nests=nests_m.group(1)))
+        elif hitl_m:
+            # The owner column carries the role, as it does for a nested row — a HITL row has no
+            # `agent:` form of its own.
+            steps.append(WorkflowStep(
+                number=ord_, title=title, agent=owner, task=None,
+                agent_file=None, is_hitl=True))
         else:
             steps.append(WorkflowStep(
                 number=ord_, title=title, agent=None, task=None,
