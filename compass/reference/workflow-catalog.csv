@@ -1,6 +1,5 @@
 workflow,step,kind,agent,practice,task,conditional,detail
 advance,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
-basecamp,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
 build,1,agent,engineer,Engineering,implement-story,,engineer.implement-story (Engineer agent owns) — covers Phase 2 + Phase 4
 build,2,agent,automation,QA,write-e2e-tests,,automation.write-e2e-tests (Automation agent owns) — covers Phase 3
 build,3,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns) — covers Phase 5 review side
@@ -9,38 +8,28 @@ build,5,agent,pm,Product,arbitrate-dispute,,pm.arbitrate-dispute (PM agent owns)
 build,6,hitl,human,,approve,,HITL gate — human approves merge (human)
 build,7,machine,,,mechanical check,,Mechanical merge constraints (CI + branch protection)
 build,8,other,,,Post-merge,,Post-merge — tech-writer engagement + story status finalization
-create-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,,researcher.cite-evidence-6-category-9-moat (Researcher agent owns)
-create-brief,2,agent,pm,Product,draft-brief,,pm.draft-brief (PM agent owns)
-create-brief,3,hitl,human,,approve,,HITL gate (human)
-create-brief,4,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
-create-epic-architecture,1,agent,staff-engineer,Engineering,draft-epic-architecture,,staff-engineer.draft-epic-architecture (Architect agent owns)
-create-epic-architecture,2,hitl,human,,approve,,HITL gate (human)
-create-epic-architecture,3,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
 create-epics,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
-create-product-brief,1,agent,researcher,Product,cite-evidence-6-category-9-moat,,researcher.cite-evidence-6-category-9-moat (Researcher agent owns)
-create-product-brief,2,hitl,human,,approve,,HITL gate (human) — research review
-create-product-brief,3,agent,pm,Product,draft-product-brief,,pm.draft-product-brief (PM agent owns)
-create-product-brief,4,hitl,human,,approve,,HITL gate (human) — brief approval
-create-product-brief,5,agent,designer,Design,spec-design-foundation,,designer.spec-design-foundation (Designer agent owns)
-create-product-brief,6,hitl,human,,approve,,HITL gate (human) — design foundation approval
-create-product-brief,7,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
-create-story,1,agent,pm,Product,decompose-epic-to-story,,pm.decompose-epic-to-story (PM agent owns)
-create-story,2,agent,designer,Design,draft-design-spec,,designer.draft-design-spec (Designer agent owns) — per UI slice (into the design story)
-create-story,3,agent,ux-writer,Design,write-copy,,ux-writer.write-copy (UX Writer agent owns) — per UI slice (into the copy story)
-create-story,4,hitl,human,,approve,,HITL gate (human — only when hitl_level: every_phase)
-create-story,5,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
 dashboard,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
+design-library,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+epics,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+feature-architecture,1,agent,staff-engineer,,draft-feature-architecture,,staff-engineer.draft-feature-architecture (Architect agent owns)
+feature-architecture,2,hitl,human,,approve,,HITL gate (human)
+feature-architecture,3,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+feature,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 fix,1,agent,engineer,Engineering,triage-and-fix,,engineer.triage-and-fix (Engineer agent owns)
 fix,2,agent,automation,QA,write-e2e-tests,,automation.write-e2e-tests (Automation agent owns)
 fix,3,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns)
 fix,4,agent,engineer,Engineering,respond-to-review,,engineer.respond-to-review (Engineer agent owns)
 fix,5,hitl,human,,approve,,HITL gate — approve merge (human)
 fix,6,agent,tech-writer,Product,accumulate-changelog,,tech-writer.accumulate-changelog (Tech Writer agent owns)
-groundwork,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
-improvements,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, recurring"
+foundation-architecture,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+job-aids,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+launch-readiness,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+learn,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 measure,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 metrics,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
-ops,1,agent,principal-engineer,Engineering,lead-ops-change,,principal-engineer.lead-ops-change (Principal Engineer agent owns)
+onboarding,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+ops,1,agent,principal-engineer,,lead-ops-change,,principal-engineer.lead-ops-change (Principal Engineer agent owns)
 ops,2,hitl,human,,approve,,HITL gate — plan approved (human)
 ops,3,agent,engineer,Engineering,apply-ops-change,,engineer.apply-ops-change (Engineer agent owns)
 ops,4,agent,reviewer,QA,review-pr,,reviewer.review-pr (Reviewer agent owns)
@@ -48,18 +37,21 @@ ops,5,agent,engineer,Engineering,respond-to-review,,engineer.respond-to-review (
 ops,6,hitl,human,,approve,,HITL gate — approve merge (human)
 ops,7,agent,tech-writer,Product,accumulate-changelog,,tech-writer.accumulate-changelog (Tech Writer agent owns)
 plan,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
+product-brief,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+release-comms,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+release,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 retro,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
 scan,1,refresh,scanner,Security,refresh,,"No dispatch graph — one agent, recurring"
-setup-foundation-architecture,1,agent,principal-engineer,Engineering,research-architecture,,principal-engineer.research-architecture (Principal Engineer agent owns)
-setup-foundation-architecture,2,hitl,human,,approve,,HITL gate — research approved (human)
-setup-foundation-architecture,3,agent,principal-engineer,Engineering,derive-architecture,,principal-engineer.derive-architecture (Principal Engineer agent owns)
-setup-foundation-architecture,4,hitl,human,,approve,,HITL gate — architecture approved (human)
-setup-foundation-architecture,5,agent,principal-engineer,Engineering,scaffold-foundation,,principal-engineer.scaffold-foundation (Principal Engineer agent owns)
-setup-foundation-architecture,6,agent,designer,Design,build-design-library,,designer.build-design-library (Designer agent owns)
-setup-foundation-architecture,7,hitl,human,,approve,,HITL gate — design library approved (human)
-setup-foundation-architecture,8,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+sprint-0,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+sprint-plan,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+sprint,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 status,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
-tech-design,1,agent,staff-engineer,Engineering,design-story-tech,,staff-engineer.design-story-tech (Architect agent owns)
+story,1,agent,product-manager,,decompose-epic-to-story,,product-manager.decompose-epic-to-story (PM agent owns)
+story,2,agent,designer,Design,draft-design-spec,,designer.draft-design-spec (Designer agent owns) — per UI slice (into the design story)
+story,3,agent,ux-writer,Design,write-copy,,ux-writer.write-copy (UX Writer agent owns) — per UI slice (into the copy story)
+story,4,hitl,human,,approve,,HITL gate (human — only when hitl_level: every_phase)
+story,5,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+tech-design,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 triage,1,agent,support,Support,classify-intake,,support.classify-intake (Support agent owns)
 triage,2,hitl,human,,approve,,HITL — ITIL intake routing gate (human)
 triage,3,agent,support,Support,triage-incident,incident branch,support.triage-incident (Support agent owns) — [incident branch]

@@ -11,7 +11,7 @@ Schema (one JSON object per line):
   epic_id        str   — bet ID if --bet was passed (e.g. CB-4), else null
   step          int   — step number within the workflow
   agent         str   — agent name (e.g. staff-engineer)
-  task          str   — task name (e.g. draft-epic-architecture)
+  task          str   — task name (e.g. draft-feature-architecture)
   host          str   — host that dispatched (claude / openai / gemini)
   model         str   — model override if set, else null
   gate_result   str   — pass | exit | hitl_approved | hitl_rejected | unknown

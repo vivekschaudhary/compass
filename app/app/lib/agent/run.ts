@@ -639,6 +639,19 @@ export async function runAgent(
       };
     }
 
+    // A path naming a subject the run does not have halts here rather than filing. Filing it at the
+    // literal `…/{epic}` would put every epic's design at one path, each overwriting the last, and
+    // the Done gate would pass on all of them — a false green built out of real-looking documents.
+    if (ctx.unresolvedProduces) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      return {
+        kind: "error",
+        message:
+          `This step produces \`${ctx.unresolvedProduces}\`, which names a subject this run does ` +
+          `not have. The run was opened without one — nothing was filed.`,
+      };
+    }
+
     if (!ctx.produces) {
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
       return {

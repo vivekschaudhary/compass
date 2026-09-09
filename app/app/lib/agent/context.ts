@@ -12,11 +12,12 @@
 
 import "server-only";
 import { resolveSpec } from "../specs";
-import { destinationOf } from "../adapters";
+import { destinationOf, resolvePath } from "../adapters";
 import { supabaseAdmin, must } from "../supabase";
 import { resolveJira, searchIssues } from "../jira";
 import { nextSprintNumber, committedJql } from "../data/sprint";
 import { holdersOn, type Actor } from "./../data/actor";
+import { sortByStep } from "../data/steps";
 
 
 /**
@@ -62,6 +63,15 @@ export type AgentContext = {
    * every run and nothing would say why.
    */
   produces: string | null;
+  /**
+   * The path this step declares when it names a subject the run does not have — `…/{epic}` on a
+   * run opened with no epic. Null whenever `produces` resolved, which is every ordinary step.
+   *
+   * Carried separately because "this step produces nothing" and "this step's document has nowhere
+   * to go" are different failures with the same symptom (`produces === null`), and a halt that
+   * reports the wrong one sends whoever reads it to the wrong file.
+   */
+  unresolvedProduces: string | null;
   /** Where it goes. `docs` publishes a page; `tickets` creates issues on the board. */
   destination: "docs" | "tickets" | null;
   /**
@@ -74,6 +84,19 @@ export type AgentContext = {
   doneCriteria: string[];
   /** What workflows this engagement can actually run. Without it the agent guesses. */
   inventory: WorkflowSummary[];
+  /**
+   * The other rows of THIS run — what each is for, who holds it, and whether it comes after.
+   *
+   * `inventory` lists the engagement's WORKFLOWS, which is a different thing: an agent could see
+   * that `sprint-0` exists with fourteen steps and not that row 4 is "Staffing plan and resources",
+   * owned by the delivery manager. So `file-sow` — which reads nothing and starts from a blank page
+   * — asked the human for the team, and `propose-staffing` asked again four rows later.
+   *
+   * This is the PLAN the agent is part of, not other agents' conversations. Turns stay task-scoped
+   * and documents remain the only thing that crosses a row boundary; sharing chatter would cost
+   * provenance, the pinned version, and a bounded prompt, for a problem this solves more cheaply.
+   */
+  phaseRows: PhaseRow[];
   /** What it produced last time, and what a reviewer said about it. Null on the first run. */
   priorDraft: { version: string; sections: { heading: string; body: string }[] } | null;
   rejections: { criterion: string; reason: string; by: string }[];
@@ -101,6 +124,15 @@ export type SprintContext = {
   roster: { role: string; holders: string[] }[];
   /** False when the tracker could not be reached, so `committable` is unknown rather than empty. */
   reachedTracker: boolean;
+};
+
+export type PhaseRow = {
+  ord: number;
+  title: string;
+  role: string;
+  produces: string | null;
+  /** After this task's own row. What a later row produces is that row's to gather, not this one's. */
+  later: boolean;
 };
 
 export type WorkflowSummary = {
@@ -300,6 +332,59 @@ async function loadInputs(taskId: string, engagementId: string): Promise<PinnedI
  * graph was never written, and "this exists but its steps are unspecified" is a fact worth having
  * rather than an absence to infer from.
  */
+/**
+ * What the run this task belongs to is ABOUT, when it is about one thing.
+ *
+ * Null for every run that covers its whole engagement — which is all of them except the per-epic
+ * technical designs, so the common path is one cheap read that returns nothing and changes nothing.
+ */
+export async function subjectOfRun(
+  runId: string | null,
+): Promise<{ ref: string | null; key: string | null } | null> {
+  if (!runId) return null;
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("workflow_run")
+    .select("subject_ref, subject_key").eq("id", runId).maybeSingle();
+  if (!data?.subject_ref && !data?.subject_key) return null;
+  return { ref: data.subject_ref ?? null, key: data.subject_key ?? null };
+}
+
+/**
+ * The rows of the run this task belongs to.
+ *
+ * Ordered by the STEP's ord, never `created_at`: a phase writes every row in one transaction, so
+ * their timestamps are identical to the millisecond and ordering by them is arbitrary — that is
+ * `sortByStep`'s whole reason for existing.
+ *
+ * Empty for a task with no run, which is a real case rather than an error: the section is then
+ * omitted from the prompt entirely.
+ */
+async function loadPhaseRows(taskId: string, runId: string | null, ownOrd: number): Promise<PhaseRow[]> {
+  const sb = supabaseAdmin();
+  if (!sb || !runId) return [];
+
+  const { data } = await sb.from("work_task")
+    .select("id, title, role_code, workflow_step(ord, produces)")
+    .eq("workflow_run_id", runId);
+
+  return sortByStep(data ?? [])
+    .filter((r) => r.id !== taskId)
+    .map((r) => {
+      const step = Array.isArray(r.workflow_step) ? r.workflow_step[0] : r.workflow_step;
+      const ord = step?.ord ?? Number.MAX_SAFE_INTEGER;
+      return {
+        ord,
+        title: (r.title as string) ?? "",
+        role: (r.role_code as string) ?? "",
+        // The bare path: `produces` may name a destination (`…@tickets`) and that suffix is routing,
+        // not the document's name.
+        produces: destinationOf(step?.produces)?.path ?? null,
+        later: ord > ownOrd,
+      };
+    });
+}
+
 async function loadInventory(orgId: string): Promise<WorkflowSummary[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
@@ -487,7 +572,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   const task = must(
     "read task",
     await sb.from("work_task")
-      .select("id, title, subtitle, role_code, workflow_step_id")
+      .select("id, title, subtitle, role_code, workflow_step_id, workflow_run_id")
       .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle(),
   );
   if (!task) return null;
@@ -495,16 +580,26 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   const agentFile = await agentMarkdown(actor.engagementId, actor.orgId, task.role_code);
 
   let produces: string | null = null;
+  let unresolvedProduces: string | null = null;
   let destination: AgentContext["destination"] = null;
   let output: string | null = null;
   let doneCriteria: string[] = [];
+  let ownOrd = Number.MAX_SAFE_INTEGER;
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
-      .select("produces, output").eq("id", task.workflow_step_id).maybeSingle();
+      .select("ord, produces, output").eq("id", task.workflow_step_id).maybeSingle();
     const dest = destinationOf(step?.produces);
-    produces = dest?.path ?? null;
+    // A per-subject path (`03-architecture/epic/{epic}`) is filled from the run this task belongs
+    // to. Resolved HERE and nowhere else on the write side: `ctx.produces` is what gets filed, what
+    // the prior draft is looked up by, and what the prompt tells the agent it is writing.
+    produces = dest ? resolvePath(dest.path, await subjectOfRun(task.workflow_run_id as string | null)) : null;
+    // Resolution failing is not the same as the step producing nothing, and the two must not report
+    // the same way — one is a row that drafts no document, the other is a row whose document has
+    // nowhere to go. Kept apart so the halt can say which.
+    if (dest && !produces) unresolvedProduces = dest.path;
     destination = dest?.slot ?? null;
     output = (step?.output as string | null) ?? null;
+    ownOrd = (step?.ord as number | null) ?? Number.MAX_SAFE_INTEGER;
     doneCriteria = await doneCriteriaFor(task.workflow_step_id);
   }
 
@@ -516,11 +611,13 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     roleCode: task.role_code,
     agentFile,
     produces,
+    unresolvedProduces,
     destination,
     output,
     inputs: await ensureInputs(taskId, actor.engagementId),
     doneCriteria,
     inventory: await loadInventory(actor.orgId),
+    phaseRows: await loadPhaseRows(task.id, task.workflow_run_id as string | null, ownOrd),
     priorDraft: await loadPriorDraft(actor.engagementId, produces),
     rejections: await loadRejections(taskId),
     sprint: produces === SPRINT_PLAN_PATH
@@ -636,6 +733,26 @@ written. You may place work against them; you cannot say what they do step by st
 
 No workflow inventory was found. Say so rather than working from what you assume Compass provides —
 any workflow name you produce would be a guess.`.trim());
+  }
+
+  if (ctx.phaseRows.length) {
+    parts.push(`
+# The rest of this phase
+
+Each row below is somebody's work, with its own deliverable and its own gate.
+
+A row AFTER yours is not a gap for you to fill. What it produces is that row's to gather — and
+asking for it here does not just make the human answer twice: **the answer is lost**. It lands in
+this task's conversation, and the row that needs it never reads it. Name the row instead, and let
+the person hear that it is coming.
+
+A row BEFORE yours has already produced something. If you were not given it and you need it, say
+which row and which document rather than asking the human to retype what Compass already has.
+
+${ctx.phaseRows.map((r) =>
+  `- ${r.ord} · ${r.title}${r.role ? ` — ${r.role}` : ""}` +
+  (r.produces ? ` → ${r.produces}` : "") +
+  (r.later ? "   (after yours)" : "")).join("\n")}`.trim());
   }
 
   parts.push(`

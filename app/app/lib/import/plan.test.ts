@@ -195,7 +195,7 @@ describe("the shipped seed", () => {
     "build.mechanical check",
     "fix.triage-and-fix", "fix.write-e2e-tests", "fix.review-pr",
     "fix.respond-to-review", "fix.approve", "fix.accumulate-changelog",
-    "tech-design.design-story-tech",
+    "epics.design-epics-tech",                       // nesting row — same hole as draft-epics, #173
     "triage.classify-intake", "triage.approve", "triage.triage-incident",
     "triage.triage-and-fix", "triage.review-pr", "triage.write-postmortem",
     "triage.accumulate-changelog",
@@ -213,6 +213,31 @@ describe("the shipped seed", () => {
       }
     }
     expect(offenders, "these rows would close green over string_agg of nothing").toEqual([]);
+  });
+
+  /**
+   * `tech-design` closing its own gates, stated as a number rather than left to the generic
+   * assertion above.
+   *
+   * The generic test passes when a row is exempt AND when it is gated, so on its own it cannot
+   * tell "we fixed this" from "we removed the row". This one fails if the workflow shrinks back to
+   * a single unreviewed step, or if the author regains the close — which is the whole point of the
+   * three-row shape, not a side effect of it.
+   */
+  it("gates every row of tech-design, and nobody approves their own design", () => {
+    const wf = planned().workflows.find((w) => w.row.code === "tech-design");
+    expect(wf, "tech-design is gone from the seed").toBeTruthy();
+    expect(wf!.steps.map((s) => s.task)).toEqual([
+      "draft-epic-tech-design", "review-epic-tech-design", "approve-epic-tech-design",
+    ]);
+    for (const step of wf!.steps) {
+      const gates = wf!.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
+      expect(gates.length, `${step.task} has no Done gate`).toBeGreaterThan(0);
+    }
+    const author = wf!.steps.find((s) => s.task === "draft-epic-tech-design")!.role;
+    const approver = wf!.steps.find((s) => s.task === "approve-epic-tech-design")!.role;
+    expect(author).toBe("staff-engineer");
+    expect(approver).not.toBe(author);
   });
 
   it("keeps the ungated-row debt honest", () => {

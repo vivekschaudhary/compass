@@ -115,3 +115,12 @@ epics,review-epics,done,The review is published,document,epic-review,status,publ
 epics,review-epics,done,"Each epic is judged on whether it can be estimated, not on whether it sounds right",,,,
 epics,approve-epics,done,"The epics are accepted by the product manager, and their name is on the close",,,,
 epics,approve-epics,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+tech-design,draft-epic-tech-design,done,The epic technical design is published,document,03-architecture/epic/{epic},status,published
+tech-design,draft-epic-tech-design,done,"Every claim about the code cites a file that was read, not a file that was assumed",,,,
+tech-design,draft-epic-tech-design,done,"Every story in the epic has a named home in the design, or is called out as not needing one",,,,
+tech-design,draft-epic-tech-design,done,"Any departure from the foundation or feature architecture is named and justified, not quietly taken",,,,
+tech-design,review-epic-tech-design,done,The review is published,document,03-architecture/epic/{epic}-review,status,published
+tech-design,review-epic-tech-design,done,"The design is judged against the architecture above it, not against the reviewer's preference",,,,
+tech-design,review-epic-tech-design,done,"A review that found nothing says so explicitly, rather than being an empty document",,,,
+tech-design,approve-epic-tech-design,done,"The technical design is accepted by the principal engineer, and their name is on the close",,,,
+tech-design,approve-epic-tech-design,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,

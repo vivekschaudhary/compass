@@ -34,7 +34,7 @@ build,4,agent,engineer,respond-to-review,,,,,,,
 build,5,agent,product-manager,arbitrate-dispute,,,,,,,
 build,6,hitl,engineer,approve,,,,,,,
 build,7,machine,,mechanical check,,,,,,,
-feature-architecture,1,agent,staff-engineer,draft-epic-architecture,,,,,,,
+feature-architecture,1,agent,staff-engineer,draft-feature-architecture,,,,,,,
 feature-architecture,2,hitl,staff-engineer,approve,,,,,,,
 feature-architecture,3,agent,delivery-manager,update-status,,,,,,,
 story,1,agent,product-manager,decompose-epic-to-story,,,,,,,
@@ -48,7 +48,9 @@ fix,3,agent,reviewer,review-pr,,,,,,,
 fix,4,agent,engineer,respond-to-review,,,,,,,
 fix,5,hitl,engineer,approve,,,,,,,
 fix,6,agent,tech-writer,accumulate-changelog,,,,,,,
-tech-design,1,agent,staff-engineer,design-story-tech,,,,,,,
+tech-design,1,agent,staff-engineer,draft-epic-tech-design,03-architecture/epic/{epic},,,,,Epic technical design,
+tech-design,2,agent,reviewer,review-epic-tech-design,03-architecture/epic/{epic}-review,,,,,Review the technical design,draft-epic-tech-design
+tech-design,3,hitl,principal-engineer,approve-epic-tech-design,,,,,,Accept the technical design,review-epic-tech-design
 triage,1,agent,support,classify-intake,,,,,,,
 triage,2,hitl,support,approve,,,,,,,
 triage,3,agent,support,triage-incident,,,,,,,
@@ -79,3 +81,4 @@ epics,2,hitl,product-manager,approve-research,,,,,,Accept the coverage,research-
 epics,3,agent,product-owner,draft-epics,deliverables@tickets,backlog,,,,The epics,approve-research
 epics,4,agent,reviewer,review-epics,epic-review,,,,,Review the epics,draft-epics
 epics,5,hitl,product-manager,approve-epics,,,,,,Accept the epics,review-epics
+epics,6,workflow,staff-engineer,design-epics-tech,,,,,tech-design,Technical design per epic,approve-epics

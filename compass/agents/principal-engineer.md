@@ -230,7 +230,7 @@ If no violations: log approval with specific coverage note (which checks passed)
 - If blocked: Architect receives specific named violations (not vague "doesn't fit") to resolve
 
 **Handoffs:**
-- Upstream: Architect's `draft-epic-architecture` task
+- Upstream: Architect's `draft-feature-architecture` task
 - Downstream: Architect resolves violations and requests re-review; or PM arbitrates escalation
 
 ---

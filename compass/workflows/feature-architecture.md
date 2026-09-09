@@ -46,10 +46,10 @@ Either runtime is valid:
 - **Today (no orchestrator):** human opens Architect agent on a CLI host (Claude Code, Codex), pastes workflow context, agent runs task, halts at HITL.
 - **v0.4 (orchestrator):** `python3 -m compass.orchestrator.run create-epic-architecture --context "epic-id: <epic-id>"`.
 
-### Step 1. `staff-engineer.draft-epic-architecture` (Architect agent owns)
+### Step 1. `staff-engineer.draft-feature-architecture` (Architect agent owns)
 
 **Dispatches:** Architect agent
-**Task definition:** `compass/agents/staff-engineer.md` → Task `draft-epic-architecture`
+**Task definition:** `compass/agents/staff-engineer.md` → Task `draft-feature-architecture`
 **Input:** epic-id · brief · `docs/foundation/architecture.md` Stack table · `docs/foundation/product.md` · existing code (read-only) · prior bet architectures (if any)
 **What it covers:** state check (architecture_required: false → exit with DRI) → load context → foundational-stack deviation gate (STOP + escalate if new tools detected) → draft 12-section `docs/epics/<epic-id>/architecture.md` → set `status: proposed` → halt at HITL gate.
 **Output:** `docs/epics/<epic-id>/architecture.md` with `status: proposed`

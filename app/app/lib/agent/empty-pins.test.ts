@@ -13,7 +13,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../specs", () => ({ resolveSpec: async () => null, COMPASS_DIR: "/nowhere" }));
-vi.mock("../adapters", () => ({ destinationOf: (p: string) => ({ path: p, slot: "docs" }) }));
+vi.mock("../adapters", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../adapters")>()),
+  destinationOf: (p: string) => ({ path: p, slot: "docs" }),
+}));
 
 type Row = Record<string, unknown>;
 

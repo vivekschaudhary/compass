@@ -32,6 +32,7 @@ edge twice.
 | 3 | The epics | `agent: product-owner.draft-epics` | product-owner | `deliverables@tickets` | backlog | 2 |
 | 4 | Review the epics | `agent: reviewer.review-epics` | reviewer | `epic-review` | — | 3 |
 | 5 | Accept the epics | `hitl` | product-manager | `—` | — | 4 |
+| 6 | Technical design per epic | `workflow: tech-design` | staff-engineer | `—` | — | 5 |
 
 ## Why it is these rows
 
@@ -45,3 +46,10 @@ epic set drafted against a coverage nobody agreed gets renegotiated at review, a
 
 **The review judges estimability, not taste.** An epic that reads well and cannot be estimated is
 the one that breaks a sprint plan two rows later.
+
+**Row 6 fans out.** It is one row and it opens one `tech-design` run PER approved epic, because a
+technical design is authored per epic and each is reviewed and approved on its own. Every other
+nesting row in the seed opens exactly one child; this is the first that does not, and what makes the
+difference is that `tech-design` produces a per-epic path (`03-architecture/epic/{epic}`) rather
+than a fixed one. The row cannot run before row 5, which is the point — designing against epics
+nobody has accepted is work done twice.

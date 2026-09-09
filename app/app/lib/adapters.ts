@@ -200,3 +200,46 @@ export function destinationOf(produces: string | null | undefined): Destination 
   if (slot === "docs" || slot === "tickets") return { path, slot };
   return { path, slot: null };
 }
+
+/**
+ * A path that names its subject: `03-architecture/epic/{epic}`.
+ *
+ * Epic technical design is authored per epic, as its own page, so its `produces` cannot be the
+ * fixed string every other step's is — five epics would collide on one `document`, which is unique
+ * on (engagement, path). The token is what the run's subject fills in.
+ *
+ * ONE RESOLVER, because three call sites read a path and all three must agree: `buildContext` sets
+ * what gets filed, `materialiseFrom` reads back what was filed, and `evaluateDocument` decides
+ * whether the gate passes. If any one of them resolved differently, the document would be filed at
+ * one path and measured at another — and the gate would read "no document at …" forever while the
+ * page sat there published.
+ *
+ * NULL WHEN THE TOKEN CANNOT BE FILLED, never the literal. A run with no subject resolving
+ * `…/{epic}` to itself would file every epic's design at the same path named `{epic}` — each one
+ * overwriting the last, and the gate passing on all of them. That is the exact false green this
+ * whole area exists to prevent, so the caller gets a null and halts.
+ *
+ * Unknown tokens are also null, for the reason `destinationOf` refuses an unknown slot: a typo that
+ * silently publishes somewhere plausible is the failure nobody notices.
+ */
+export function resolvePath(
+  raw: string | null | undefined,
+  subject: { ref?: string | null; key?: string | null } | null,
+): string | null {
+  const path = (raw ?? "").trim();
+  if (!path) return null;
+  if (!path.includes("{")) return path;         // the common case, byte-for-byte unchanged
+
+  // The tracker's name is preferred: a page called `KAN-12` is findable by someone holding the
+  // ticket, and `E1` is meaningful only inside the turn that drafted it.
+  const filled = subject?.key || subject?.ref || null;
+
+  let bad = false;
+  const out = path.replace(/\{([a-z_]+)\}/g, (whole, token) => {
+    if (token !== "epic" && token !== "subject") { bad = true; return whole; }
+    if (!filled) { bad = true; return whole; }
+    return filled;
+  });
+  if (bad || out.includes("{")) return null;
+  return out;
+}

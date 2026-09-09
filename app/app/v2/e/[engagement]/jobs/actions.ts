@@ -12,7 +12,7 @@ import { startTask } from "@/app/lib/data/tasks";
 import { measureTask } from "@/app/lib/data/gates";
 import {
   initiatePhase,
-  openNested,
+  openNestedFanOut,
   nestedWorkflowOf,
   remirrorPhase,
 } from "@/app/lib/data/phases";
@@ -68,6 +68,8 @@ export async function startTaskAction(
   role: string,
   taskId: string,
 ): Promise<{ ok: boolean; error?: string; openedWorkflow?: string;
+            /** How many child runs opened — more than one when the row fans out per epic. */
+            openedRuns?: number;
             mirrored?: Mirrored; problems?: string[] }> {
   const actor = await resolveActor(engagement, role);
   if (!actor)
@@ -87,17 +89,22 @@ export async function startTaskAction(
   // three graph-less workflows looked on Provider FFS.
   const nests = await nestedWorkflowOf(taskId);
   if (nests) {
-    const child = await openNested(actor, taskId);
+    // One child, or one per epic — the nested workflow decides by whether it produces a per-epic
+    // path. See `openNestedFanOut`.
+    const child = await openNestedFanOut(actor, taskId);
     revalidatePath(`/v2/e/${engagement}/jobs`);
     if (!child.ok) return { ok: false, error: child.error };
     // The board result is RETURNED, not dropped. The run opened either way — but a nested run whose
     // sub-tasks never reached Jira is invisible to everyone outside Compass, and saying nothing
     // about it is how that goes unnoticed until somebody asks where the work went.
+    const problems = child.runs.flatMap((r) =>
+      r.mirrored.problems.map((p) => (r.subject ? `${r.subject}: ${p}` : p)));
     return {
       ok: true,
       openedWorkflow: nests,
-      mirrored: child.mirrored,
-      problems: child.mirrored.problems.length ? child.mirrored.problems : undefined,
+      openedRuns: child.runs.length,
+      mirrored: child.runs[0].mirrored,
+      problems: problems.length ? problems : undefined,
     };
   }
 

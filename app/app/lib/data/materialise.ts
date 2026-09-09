@@ -27,7 +27,8 @@ import { parseRoster } from "./roster-rows";
 import { parseCommitments } from "./sprint-rows";
 import { backlogOf } from "./backlog";
 import { mirrorBacklog, mirrorSprint } from "./tracker";
-import { destinationOf } from "../adapters";
+import { destinationOf, resolvePath } from "../adapters";
+import { subjectOfRun } from "../agent/context";
 
 export type Materialised = { path: string; created: number; updated: number; problems: string[] };
 
@@ -193,7 +194,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   if (!sb) return null;
 
   const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id").eq("id", taskId).maybeSingle();
+    .select("workflow_step_id, workflow_run_id").eq("id", taskId).maybeSingle();
   if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb.from("workflow_step")
@@ -203,8 +204,12 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   const run = step?.output ? REGISTRY[step.output as string] : undefined;
   if (!run) return null;
   // Still the bare PATH for the read — a step may decorate `produces` with a destination
-  // (`…@tickets`), and looking a document up by the decorated string finds nothing.
-  const path = destinationOf(step?.produces)?.path;
+  // (`…@tickets`), and looking a document up by the decorated string finds nothing. A path naming
+  // a subject (`…/{epic}`) is filled from the run, exactly as the write side filled it.
+  const path = resolvePath(
+    destinationOf(step?.produces)?.path,
+    await subjectOfRun(task.workflow_run_id as string | null),
+  );
   if (!path) return null;
 
   const { data: doc } = await sb.from("document")

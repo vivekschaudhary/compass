@@ -350,6 +350,7 @@ async function tasksOfRun(runId: string) {
 export async function openNested(
   actor: Actor,
   taskId: string,
+  subjectRef: string | null = null,
 ): Promise<{ ok: true; runId: string; mirrored: Mirrored } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
@@ -367,6 +368,7 @@ export async function openNested(
     p_task_id: taskId,
     p_actor: actor.holder ?? actor.roleCode,
     p_actor_role: actor.roleCode,
+    p_subject_ref: subjectRef,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -378,6 +380,108 @@ export async function openNested(
     mirrored.problems.push(`The parent row's ticket did not move: ${moved.note}`);
   }
   return { ok: true, runId: runId as string, mirrored };
+}
+
+/**
+ * Open the child run(s) for a nesting row — one, or one per epic.
+ *
+ * Most nesting rows open a single child: `sprint-0.draft-features` opens one `feature` run, and
+ * every feature lands in one `features` document. Epic technical design is the first that does not
+ * — a design is authored per epic, as its own page, reviewed and approved on its own.
+ *
+ * WHICH IT IS, IS DERIVED, NOT CONFIGURED. A workflow declares itself per-epic by producing a
+ * per-epic path (`03-architecture/epic/{epic}`), which it must do anyway or its documents would
+ * collide. A separate flag saying the same thing is a second source of truth, and the two would
+ * eventually disagree — one of them silently.
+ *
+ * FANNING OUT OVER ZERO EPICS REFUSES. `for (const e of [])` completes, the row closes, and a
+ * technical design phase that designed nothing looks exactly like one that designed everything.
+ * That is the aggregate-over-no-rows failure this repo keeps re-learning, so it is an error.
+ */
+export async function openNestedFanOut(
+  actor: Actor,
+  taskId: string,
+): Promise<{ ok: true; runs: { runId: string; subject: string | null; mirrored: Mirrored }[] } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  if (!(await nestedIsPerEpic(taskId))) {
+    const one = await openNested(actor, taskId);
+    return one.ok
+      ? { ok: true, runs: [{ runId: one.runId, subject: null, mirrored: one.mirrored }] }
+      : one;
+  }
+
+  const epics = await epicsOfRun(taskId);
+  if (!epics.length) {
+    return {
+      ok: false,
+      error: "This row opens one technical design per epic, and this run has no epics. " +
+             "Nothing was opened — draft and approve the epics first.",
+    };
+  }
+
+  const runs: { runId: string; subject: string | null; mirrored: Mirrored }[] = [];
+  for (const epic of epics) {
+    const child = await openNested(actor, taskId, epic.ref);
+    // One epic failing does not silently drop the rest: the others still open, and the failure is
+    // returned rather than logged nowhere. A partial fan-out is honest; a quiet one is not.
+    if (!child.ok) return { ok: false, error: `${epic.ref}: ${child.error}` };
+    runs.push({ runId: child.runId, subject: epic.ref, mirrored: child.mirrored });
+  }
+  return { ok: true, runs };
+}
+
+/** Does the workflow this row nests author one document per epic? */
+async function nestedIsPerEpic(taskId: string): Promise<boolean> {
+  const sb = supabaseAdmin();
+  if (!sb) return false;
+
+  const { data: task } = await sb.from("work_task")
+    .select("org_id, engagement_id, workflow_step_id").eq("id", taskId).maybeSingle();
+  if (!task?.workflow_step_id) return false;
+
+  const { data: step } = await sb.from("workflow_step")
+    .select("nests_workflow_code").eq("id", task.workflow_step_id).maybeSingle();
+  const code = step?.nests_workflow_code as string | null;
+  if (!code) return false;
+
+  // The engagement's override wins over the org default, exactly as `open_workflow_run` resolves it
+  // — reading the org copy here would answer for a workflow this run is not using.
+  const { data: wf } = await sb.from("workflow")
+    .select("id").eq("org_id", task.org_id).eq("code", code)
+    .or(`engagement_id.eq.${task.engagement_id},engagement_id.is.null`)
+    .order("engagement_id", { nullsFirst: false }).limit(1).maybeSingle();
+  if (!wf) return false;
+
+  const { data: ver } = await sb.from("workflow_version")
+    .select("id").eq("workflow_id", wf.id).eq("status", "published").maybeSingle();
+  if (!ver) return false;
+
+  const { data: steps } = await sb.from("workflow_step")
+    .select("produces").eq("workflow_version_id", ver.id);
+  return (steps ?? []).some((s) => (s.produces as string | null)?.includes("{epic}"));
+}
+
+/** The epics drafted in this task's own run — what the fan-out opens a design for. */
+async function epicsOfRun(taskId: string): Promise<{ ref: string; key: string | null }[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_run_id").eq("id", taskId).maybeSingle();
+  if (!task?.workflow_run_id) return [];
+
+  // Every task of this run, because the epics belong to whichever row drafted them — this row only
+  // knows it comes after.
+  const { data: siblings } = await sb.from("work_task")
+    .select("id").eq("workflow_run_id", task.workflow_run_id);
+  const ids = (siblings ?? []).map((s) => s.id as string);
+  if (!ids.length) return [];
+
+  const { data: items } = await sb.from("backlog_item")
+    .select("ref, ticket_key").in("task_id", ids).eq("kind", "epic").order("ord");
+  return (items ?? []).map((i) => ({ ref: i.ref as string, key: (i.ticket_key as string | null) ?? null }));
 }
 
 /** Is this task's row a machine check — something measured rather than performed? */
