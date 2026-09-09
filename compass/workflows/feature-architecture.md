@@ -54,12 +54,18 @@ edge twice.
 
 ## Why it is these rows
 
-**One document, not one per feature — for now.** The tier below it (`tech-design`) files a page per
-epic, because an epic is a `backlog_item` row the fan-out can iterate. A feature is not: the
-`feature` table exists in the schema and **nothing in the app writes to it**, so features live only
-as prose inside the `features` document. Fanning out per feature would iterate zero rows and refuse
-forever. When something populates `feature`, this row becomes a fan-out with a `{feature}` path,
-exactly as `epics` row 6 already is.
+**One document, not one per feature — and this is settled, not pending.** The tier below it
+(`tech-design`) files a page per epic, because an epic is a `backlog_item` row the fan-out can
+iterate. A feature is not a row and is not going to be: **a feature is a page.**
+
+That is a decision about what a feature IS, not a gap. Epics are rows because epics become Jira
+issues, and a heading cannot be reliably turned into one — the reasoning in migration 047. A feature
+never reaches the tracker: the hierarchy is Feature → Epic → Story against Jira's Epic → Story →
+Sub-task, so there is no issue for it to become, and the argument that forced 047 does not apply.
+Migration 059 dropped the `feature` tables that were built on the assumption it did.
+
+So a per-feature fan-out is not deferred, it is off. Re-opening it would mean deciding a feature is
+a row after all, and that is a bigger change than adding a `{feature}` path.
 
 **The author does not accept it.** It used to: row 2 was `hitl` held by the same `staff-engineer`
 who drafted row 1. A reviewer judges it against the foundation architecture rather than against

@@ -39,9 +39,12 @@ could actually be measured, not whether they sound right; the product manager ac
 drafts in the product owner's name, so a product owner closing this gate would be approving its
 own work.
 
-**A feature without a target is not a bet.** `feature_metric.target` is NOT NULL for the same
-reason the gate is here: a loop that reaches its learn step with nothing to compare against fails
-nowhere.
+**A feature without a target is not a bet.** This used to point at `feature_metric.target` being
+NOT NULL. That table is gone (migration 059) — **a feature is a page, not a row** — so the rule is
+carried by the Done criterion on row 1 instead: every feature says how it will be judged, the target
+and where the number comes from. The reason is unchanged: a loop that reaches its learn step with
+nothing to compare against fails nowhere. What changed is that a person attests it rather than a
+NOT NULL constraint, which is the trade a page-not-a-table feature makes.
 
 **Row 4 is the architecture tier below this one.** A feature that has been accepted gets its
 technical shape decided before any epic under it is designed — foundation architecture (the
