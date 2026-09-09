@@ -28,13 +28,8 @@ product-brief,1,agent,researcher,gather-evidence,brief-evidence,,,,,Evidence for
 product-brief,2,agent,product-owner,draft-brief,product-brief,,,,,Product brief,gather-evidence
 product-brief,3,agent,reviewer,review-brief,brief-review,,,,,Review the brief,draft-brief
 product-brief,4,hitl,product-manager,approve-brief,,,,,,Accept the brief,review-brief
-build,1,agent,engineer,implement-story,,,,,,,
-build,2,agent,automation,write-e2e-tests,,,,,,,
-build,3,agent,reviewer,review-pr,,,,,,,
-build,4,agent,engineer,respond-to-review,,,,,,,
-build,5,agent,product-manager,arbitrate-dispute,,,,,,,
-build,6,hitl,engineer,approve,,,,,,,
-build,7,machine,,mechanical check,,,,,,,
+build,1,agent,engineer,implement-story,{subject}@scm,code,,,,Build the story,
+build,2,hitl,principal-engineer,approve-build,,,,,,Accept the change,implement-story
 feature-architecture,1,agent,staff-engineer,draft-feature-architecture,03-architecture/features,,,,,Feature architecture,
 feature-architecture,2,agent,reviewer,review-feature-architecture,03-architecture/features-review,,,,,Review the feature architecture,draft-feature-architecture
 feature-architecture,3,hitl,principal-engineer,approve-feature-architecture,,,,,,Accept the feature architecture,review-feature-architecture

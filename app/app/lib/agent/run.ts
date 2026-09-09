@@ -29,6 +29,8 @@ import { commitmentsSection, overviewSection } from "../data/sprint-rows";
 import { resolveCommitments } from "../data/sprint";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
+import { runCode, storyFor } from "./code-run";
+import { jiraForStory, addRemoteLink, addComment } from "../jira";
 import { nestedWorkflowOf } from "../data/phases";
 import { selectHost, MODEL } from "./hosts/select";
 import { toolsFor } from "./hosts/tools";
@@ -539,6 +541,68 @@ export async function runAgent(
   // Giving each its own branch would mean a third copy of filing, citations, the empty-output
   // diagnosis, the superseded-questions sweep and the HITL transition, and the copies are where
   // they would drift.
+  // ── the build hand-off ─────────────────────────────────────────────────────────────────────
+  //
+  // The only tool whose outcome this app does not author. The orchestrator creates the branch, runs
+  // the project's CI-parity checks and opens a pull request ONLY on green; what comes back is a
+  // fact, not a claim, which is why the model writes the intent and the app writes the result.
+  if (call.name === "code") {
+    const input = call.input as { summary?: string; approach?: string; files?: unknown };
+    const files = Array.isArray(input.files) ? (input.files as string[]).filter((f) => typeof f === "string") : [];
+
+    const intent =
+      `**Building.** ${input.summary ?? ""}\n\n` +
+      `**Approach.** ${input.approach ?? ""}\n\n` +
+      (files.length ? `**Files expected to change.**\n${files.map((f) => `- \`${f}\``).join("\n")}\n` : "");
+
+    // Written BEFORE the spawn. A build takes minutes and can be killed; if the intent were only
+    // recorded on success, a run that died would leave no trace of what it was trying to do.
+    await recordTurn(taskId, intent, ctx);
+
+    const built = await runCode(actor.engagementId, taskId);
+
+    if (built.refusal) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await recordTurn(taskId, `**The build did not start.** ${built.refusal}`, ctx);
+      return { kind: "error", message: built.refusal };
+    }
+
+    // The record goes on the STORY, not into a document. A build's deliverable is the pull request;
+    // filing a page about it would invent an artifact nobody asked for, and the person who needs
+    // the link is looking at the ticket.
+    const story = await storyFor(taskId);
+    const jira = story ? await jiraForStory(story) : null;
+    if (jira && story) {
+      if (built.prUrl) await addRemoteLink(jira, story, built.prUrl, `PR — ${story}`);
+      await addComment(
+        jira, story,
+        built.prUrl
+          ? `Build complete — checks passed and a pull request is open: ${built.prUrl}`
+          : `Build did not ship. The orchestrator exited ${built.exit} and opened no pull request.`,
+      );
+    }
+
+    const outcome = built.ok
+      ? `**Built.** Checks passed and the pull request is open: ${built.prUrl}` +
+        (built.branch ? `\n\nBranch \`${built.branch}\`.` : "")
+      // Said plainly, because a run that completes every step and ships nothing is the failure this
+      // is most likely to be mistaken for a success.
+      : `**UNSHIPPED — no pull request.** The orchestrator exited ${built.exit}. ` +
+        `Nothing reached review, so there is nothing to merge.` +
+        (built.branch ? ` The work is on \`${built.branch}\`.` : "");
+
+    await recordTurn(taskId, `${outcome}\n\n\`\`\`\n${built.log.slice(-4000)}\n\`\`\``, ctx);
+
+    // hitl either way. A failed build still needs a person to look — silently returning it to the
+    // agent would let it retry forever against a repo that cannot build.
+    await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
+    await mirrorState(actor.engagementId, taskId, "hitl", ctx.roleCode);
+
+    return built.ok
+      ? { kind: "drafted", summary: outcome, sections: files.length, path: built.prUrl ?? null }
+      : { kind: "error", message: `The build produced no pull request (exit ${built.exit}).` };
+  }
+
   if (call.name === "draft" || call.name === "backlog" || call.name === "sprint") {
     const isBacklog = call.name === "backlog";
     const isSprint = call.name === "sprint";

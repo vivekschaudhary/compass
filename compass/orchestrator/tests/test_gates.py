@@ -105,9 +105,29 @@ class TestWorkflowMeta(unittest.TestCase):
         # assertion below would be vacuous — which is exactly how this check would rot into always
         # passing once the last v1 file is rewritten.
         self.assertIsNotNone(best, "no shipped workflow declares requires_approved — nothing parsed")
-        self.assertGreater(len(entries), 1, f"{best.name} is the richest and has {len(entries)}")
+        self.assertGreaterEqual(len(entries), 1, f"{best.name} is the richest and has {len(entries)}")
         self.assertTrue(all(e.endswith(".md") for e in entries), entries)
         self.assertTrue(all(not e.startswith("[") and not e.endswith("]") for e in entries), entries)
+
+    def test_multi_entry_requires_approved_parses(self):
+        """Several entries on one line, against a FIXTURE rather than a shipped file.
+
+        This used to be part of the test above, asserting the richest shipped workflow had more than
+        one entry. `build.md` was that file, with two; rewriting it for v2 left `foundation-architecture`
+        as the richest with exactly one, and the assertion failed — for the right reason, because it
+        was really an assertion about the SEED and not about the parser.
+
+        Splitting the two keeps both properties and ties neither to how many entries a shipped file
+        happens to carry today: the test above proves a real file still parses, and this one proves
+        the comma-splitting works, permanently.
+        """
+        p = _tmp_md("---\nname: x\nrequires_approved: [a/b.md, c/d.md, e/f.md]\n---\nbody\n")
+        try:
+            self.assertEqual(
+                load_workflow_meta(p)["requires_approved"], ["a/b.md", "c/d.md", "e/f.md"]
+            )
+        finally:
+            p.unlink()
 
 
 class TestArtifactTargetParsing(unittest.TestCase):

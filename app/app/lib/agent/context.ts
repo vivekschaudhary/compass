@@ -72,8 +72,12 @@ export type AgentContext = {
    * reports the wrong one sends whoever reads it to the wrong file.
    */
   unresolvedProduces: string | null;
-  /** Where it goes. `docs` publishes a page; `tickets` creates issues on the board. */
-  destination: "docs" | "tickets" | null;
+  /**
+   * Where it goes. `docs` publishes a page; `tickets` creates issues on the board; `scm` means the
+   * deliverable is a branch and a pull request, and the record belongs on the story in the tracker
+   * rather than in a document.
+   */
+  destination: "docs" | "tickets" | "scm" | null;
   /**
    * What KIND of thing this step makes — `roster`, `backlog`, `sprint`, or null for an ordinary
    * document. What `toolsFor` keys on. It used to key on `produces`, and a path the author renames

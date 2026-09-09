@@ -183,6 +183,49 @@ export const TOOLS: Anthropic.Tool[] = [
     strict: true,
   },
   {
+    name: "code",
+    description:
+      "Build the story: state what you are about to change and why, then hand off to the " +
+      "orchestrator, which creates the branch, writes the code, runs this project's CI-parity " +
+      "checks and opens a pull request ONLY if they pass. Use this instead of `draft` when the " +
+      "deliverable is shipped behaviour rather than a document.\n\n" +
+      "YOU ARE NOT WRITING THE CODE IN THIS CALL. What you write here is the intent — the record " +
+      "of what was meant to happen, which is what the reviewer reads the diff against. The outcome " +
+      "(branch, checks, pull request) is appended by the app, not by you, so it cannot be claimed " +
+      "into existence: a build that opened no pull request is reported as one that shipped nothing.\n\n" +
+      "Ground the approach in the story's technical design and the code that exists. An approach " +
+      "that names files it has not read is the one that survives review and fails at build.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "What this change does, in the product's vocabulary. Note any input that was missing " +
+            "and what it cost.",
+        },
+        approach: {
+          type: "string",
+          description:
+            "How it will be built — data model, contract, and how it fits what is already there. " +
+            "Bounded by the story's technical design; name any departure from it rather than " +
+            "taking it quietly.",
+        },
+        files: {
+          type: "array",
+          description:
+            "The files you expect to touch, as real paths from the technical design. An empty " +
+            "list is a real answer only if the change genuinely touches nothing you can name yet " +
+            "— say so in the approach if so.",
+          items: { type: "string" },
+        },
+      },
+      required: ["summary", "approach", "files"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "sprint",
     description:
       "Plan ONE sprint: commit to a set of stories that already exist on the board, and say which " +
@@ -289,6 +332,7 @@ export const TOOLS: Anthropic.Tool[] = [
 export const TOOL_FOR: Record<string, string> = {
   backlog: "backlog",
   sprint: "sprint",
+  code: "code",
 };
 
 /** Every tool that is not gated behind a produced path. */

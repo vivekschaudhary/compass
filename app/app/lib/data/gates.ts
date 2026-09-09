@@ -17,7 +17,7 @@ import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolvePath } from "../adapters";
 import { subjectOfRun } from "../agent/context";
-import { resolveJira, projectStatuses, searchIssues } from "../jira";
+import { resolveJira, projectStatuses, searchIssues, remoteLinks, issueStatus } from "../jira";
 import { sprintJql, sprintNoOf } from "./sprint";
 import type { Actor } from "./actor";
 export { describeCriterion } from "@/app/v2/_ui/criterion";
@@ -281,6 +281,55 @@ export async function evaluate(actor: Actor, c: CriterionRow, taskId: string | n
     case "roster": return { state: "unmeasurable", why: "no roster evaluator yet" };
     default: return { state: "unmeasurable", why: `no evaluator for '${c.subjectKind}'` };
   }
+}
+
+/**
+ * A criterion about the ONE story a run is the subject of.
+ *
+ * `pr-linked` is the build's real bar and it is deliberately indirect: the orchestrator opens a
+ * pull request ONLY when the project's CI-parity checks pass, so a linked pull request is evidence
+ * the checks ran and were green. Asking Jira what is on the issue rather than trusting the write
+ * that put it there — a gate that reads back its own call is measuring itself.
+ */
+async function evaluateStoryTicket(actor: Actor, c: CriterionRow, taskId: string): Promise<Verdict> {
+  const sb = supabaseAdmin();
+  if (!sb) return { state: "unmeasurable", why: "no database" };
+
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_run_id").eq("id", taskId).maybeSingle();
+  const { data: run } = task?.workflow_run_id
+    ? await sb.from("workflow_run").select("subject_key").eq("id", task.workflow_run_id).maybeSingle()
+    : { data: null };
+  const key = (run?.subject_key as string | null) ?? null;
+  if (!key) {
+    // Not unsatisfied: a run with no story is misconfigured, not a build that failed. Blaming the
+    // engineer for it would send someone to read a diff that was never produced.
+    return { state: "unmeasurable", why: "this run has no story on the tracker to read" };
+  }
+
+  const { data: eng } = await sb.from("engagement")
+    .select("jira_project, atlassian_base_url, atlassian_email, atlassian_api_token")
+    .eq("id", actor.engagementId).maybeSingle();
+  const creds = eng ? resolveJira(eng) : null;
+  if (!creds) return { state: "unmeasurable", why: "no Jira is configured for this engagement" };
+
+  if (c.subjectRef === "pr-linked") {
+    const links = await remoteLinks(creds, key);
+    // Null is "could not look", which is not "found none". Collapsing them would report a missing
+    // pull request during an outage.
+    if (links === null) return { state: "unmeasurable", why: `${key} could not be read` };
+    const prs = links.filter((l) => /\/pull\/\d+/.test(l.url));
+    return prs.length
+      ? { state: "satisfied", source: "tracker", detail: `${key} links ${prs.length} pull request(s): ${prs.map((p) => p.url).join(", ")}.` }
+      : { state: "unsatisfied", source: "tracker", detail: `${key} has no pull request linked — nothing shipped.` };
+  }
+
+  const status = await issueStatus(creds, key);
+  if (status === null) return { state: "unmeasurable", why: `${key} could not be read` };
+  const want = (c.value ?? "Done").toLowerCase();
+  return status.toLowerCase() === want
+    ? { state: "satisfied", source: "tracker", detail: `${key} is ${status}.` }
+    : { state: "unsatisfied", source: "tracker", detail: `${key} is ${status}, not ${c.value ?? "Done"}.` };
 }
 
 /* ── reading the criteria that apply to a task ───────────────────────────── */
@@ -689,6 +738,14 @@ export async function checkConnectors(actor: Actor): Promise<{ connector: string
 async function evaluateTicket(actor: Actor, c: CriterionRow, taskId: string | null): Promise<Verdict> {
   const sb = supabaseAdmin();
   if (!sb || !taskId) return { state: "unmeasurable", why: "no task to read a sprint from" };
+
+  // STORY-SCOPED FIRST. The refs below are about ONE issue — the story this run is about — and
+  // everything after them is about a sprint's worth of them. They were separated rather than folded
+  // together because `sprintNoOf` returns null for a build run, and falling through would report
+  // "this plan has no sprint number" for a workflow that never had one.
+  if (c.subjectRef === "pr-linked" || c.subjectRef === "merged") {
+    return evaluateStoryTicket(actor, c, taskId);
+  }
 
   const n = await sprintNoOf(taskId);
   if (!n) {

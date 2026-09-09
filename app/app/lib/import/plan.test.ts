@@ -190,9 +190,6 @@ describe("the shipped seed", () => {
    */
   const UNGATED_DEBT = new Set([
     "sprint-0.draft-epics",                          // nesting row — issue #173, see above
-    "build.implement-story", "build.write-e2e-tests", "build.review-pr",
-    "build.respond-to-review", "build.arbitrate-dispute", "build.approve",
-    "build.mechanical check",
     "fix.triage-and-fix", "fix.write-e2e-tests", "fix.review-pr",
     "fix.respond-to-review", "fix.approve", "fix.accumulate-changelog",
     "epics.design-epics-tech",                       // nesting row — same hole as draft-epics, #173

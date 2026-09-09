@@ -136,3 +136,12 @@ feature-architecture,review-feature-architecture,done,"Each decision is judged a
 feature-architecture,review-feature-architecture,done,"A review that found nothing says so explicitly, rather than being an empty document",,,,
 feature-architecture,approve-feature-architecture,done,"The feature architecture is accepted by the principal engineer, and their name is on the close",,,,
 feature-architecture,approve-feature-architecture,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+build,implement-story,done,A pull request is linked on the story,ticket,pr-linked,is,true
+build,implement-story,done,"The checks ran and passed — the pull request is opened only on green, so its absence is the failure and not a delay",,,,
+build,implement-story,done,"Every acceptance criterion on the story is implemented, or is named as not covered and why",,,,
+build,implement-story,done,"The change is on a branch, never on the default branch",,,,
+build,implement-story,done,"Each test fails without the change and passes with it — a test that passes either way proves nothing",,,,
+build,implement-story,done,"The review inside the run was answered — every finding resolved, or overruled with a reason",,,,
+build,approve-build,done,"The change is accepted by the principal engineer, and their name is on the close",,,,
+build,approve-build,done,"The diff was read, not just the summary of it",,,,
+build,approve-build,done,"The engineer who wrote the change did not accept it",,,,

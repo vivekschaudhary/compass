@@ -132,7 +132,7 @@ const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
  * what stops a typo falling through to "ordinary document", which is how the old path-matching
  * failed and said nothing.
  */
-const STEP_OUTPUTS = ["roster", "backlog", "sprint"];
+const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code"];
 const CRITERION_KINDS = ["ready", "done"];
 
 /* ── parsing ─────────────────────────────────────────────────────────────── */

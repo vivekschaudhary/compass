@@ -14,11 +14,15 @@ unseeded       retro
 unseeded       scan
 unseeded       status
 
-# `build` was parked, so its graph was never compared. Enabling it surfaced a disagreement that
-# predates today: build.md declares 8 `### Step N.` headings and the seed has 7. The extra is step 8,
-# "Post-merge — tech-writer engagement + story status finalization", which no seed row performs.
-# DEBT, not permission: either the seed gains that row or the .md loses it, and until then build
-# closes without the post-merge work anybody reading the .md would expect.
+# `build` is TWO LAYERS and the counts differ on purpose. build.md is v1's dispatch graph — eight
+# steps the orchestrator executes — and the seed has two: hand off, then a human gate. Row 1 carries
+# `output: code`, which spawns `compass.orchestrator.run build`, which runs all eight. Restating
+# them as seed rows would dispatch each twice.
+#
+# NOT DEBT, unlike everything else in this file: there is no edit that resolves it, because the two
+# numbers describe different layers. It is recorded so the checker stays quiet about a difference
+# that is the design. Trimming build.md to match the seed deletes the work the seed delegates to —
+# it was done once, in the session that wrote this, and caught before it shipped.
 step-count     build
 
 # `ops` is v1's, like the nine above it. Its seed row was dropped in the workflow restructure but

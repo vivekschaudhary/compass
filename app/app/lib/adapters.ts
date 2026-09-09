@@ -181,11 +181,13 @@ export function secretColumns(): string[] {
  * a bare path goes to the doc store, because that is what every existing row means and a default
  * that changed their behaviour would be a silent rewrite of eleven steps.
  *
- * An UNKNOWN slot is not treated as docs. `@scm` and anything mistyped resolve to null, so a caller
- * halts on it rather than quietly publishing a deliverable to the wrong surface — the failure would
- * otherwise look exactly like success.
+ * An UNKNOWN slot is not treated as docs. Anything mistyped resolves to null, so a caller halts on
+ * it rather than quietly publishing a deliverable to the wrong surface — the failure would
+ * otherwise look exactly like success. `@scm` was the example of an unknown slot until `build`
+ * needed it: a build's deliverable is a branch and a pull request, and its record belongs on the
+ * story in the tracker. Filing it as a page would invent an artifact nobody asked for.
  */
-export type Destination = { path: string; slot: "docs" | "tickets" | null };
+export type Destination = { path: string; slot: "docs" | "tickets" | "scm" | null };
 
 export function destinationOf(produces: string | null | undefined): Destination | null {
   const raw = (produces ?? "").trim();
@@ -197,7 +199,7 @@ export function destinationOf(produces: string | null | undefined): Destination 
   const path = raw.slice(0, at).trim();
   const slot = raw.slice(at + 1).trim().toLowerCase();
   if (!path) return null;                       // "@tickets" names no deliverable
-  if (slot === "docs" || slot === "tickets") return { path, slot };
+  if (slot === "docs" || slot === "tickets" || slot === "scm") return { path, slot };
   return { path, slot: null };
 }
 

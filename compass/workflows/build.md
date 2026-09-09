@@ -1,3 +1,16 @@
+<!-- TWO LAYERS, AND THIS FILE IS THE LOWER ONE.
+
+     The eight steps below are V1'S DISPATCH GRAPH and `graph.py` executes them: the orchestrator
+     reads this file when the app spawns `compass.orchestrator.run build`.
+
+     v2's `build` in compass/seed/workflow-steps.csv has TWO rows — hand off, then a human gate —
+     and that is not a disagreement with this file. Row 1 carries `output: code`, which gives it the
+     `code` tool, which spawns the orchestrator, which runs everything below. Restating these eight
+     as v2 rows would dispatch each of them twice: once by the row and once by the run the row
+     started.
+
+     So DO NOT "reconcile" the step counts by trimming this file. Trimming it deletes the work.
+     The seed-consistency-check records the difference in known-drift.txt for exactly this reason. -->
 ---
 name: build
 status: active

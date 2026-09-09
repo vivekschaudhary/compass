@@ -318,3 +318,28 @@ export async function jiraForStory(storyKey: string): Promise<JiraCreds | null> 
     .eq("id", ep.engagement_id).maybeSingle();
   return resolveJira(eng ?? {});
 }
+
+/**
+ * The remote links on an issue — where a pull request shows up once something links it.
+ *
+ * Read rather than assumed: `gateOnPr` writes the link, but a gate that trusted the write would be
+ * measuring its own side of the call. This asks Jira what is actually on the issue.
+ *
+ * Null, not [], when the call fails. An empty list means "looked, found none" and is a real answer;
+ * a failed call means nothing is known, and collapsing the two is how a gate reports "no pull
+ * request" for an outage.
+ */
+export async function remoteLinks(c: JiraCreds, key: string): Promise<{ url: string; title: string }[] | null> {
+  try {
+    const r = await fetch(`${c.baseUrl}/rest/api/3/issue/${encodeURIComponent(key)}/remotelink`, {
+      headers: { Authorization: authHeader(c), Accept: "application/json" },
+    });
+    if (!r.ok) return null;
+    const rows = (await r.json()) as { object?: { url?: string; title?: string } }[];
+    return (Array.isArray(rows) ? rows : [])
+      .map((x) => ({ url: x.object?.url ?? "", title: x.object?.title ?? "" }))
+      .filter((x) => x.url);
+  } catch {
+    return null;
+  }
+}

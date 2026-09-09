@@ -22,11 +22,22 @@ describe("destinationOf", () => {
     expect(destinationOf("02-scope/deliverables@TICKETS")?.slot).toBe("tickets");
   });
 
-  // An unknown slot must NOT fall back to docs. `@scm` would then publish a page and look exactly
-  // like it worked — the failure nobody can see. The caller halts on a null slot.
+  // An unknown slot must NOT fall back to docs. It would publish a page and look exactly like it
+  // worked — the failure nobody can see. The caller halts on a null slot.
+  //
+  // THIS TEST USED `@scm` AS ITS UNKNOWN, and that is why it changed rather than being deleted:
+  // `build` needed the slot and it is known now, so the assertion was true about a world that no
+  // longer exists. A typo'd slot is the case that still has to hold, and it is the one that
+  // actually catches something.
   it("refuses to guess at an unknown destination", () => {
-    expect(destinationOf("code/repo@scm")).toEqual({ path: "code/repo", slot: null });
     expect(destinationOf("02-scope/x@tickest")).toEqual({ path: "02-scope/x", slot: null });
+    expect(destinationOf("02-scope/x@confluence")).toEqual({ path: "02-scope/x", slot: null });
+  });
+
+  // A build's deliverable is a branch and a pull request, and its record belongs on the story in
+  // the tracker — not in a page invented to give the gate something to read.
+  it("routes @scm to source control", () => {
+    expect(destinationOf("{subject}@scm")).toEqual({ path: "{subject}", slot: "scm" });
   });
 
   it("is null when there is nothing to produce", () => {
