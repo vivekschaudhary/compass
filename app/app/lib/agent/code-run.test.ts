@@ -10,7 +10,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 type Row = Record<string, unknown>;
-const state: { tasks: Row[]; runs: Row[]; repos: Row[] } = { tasks: [], runs: [], repos: [] };
+const state: { tasks: Row[]; runs: Row[]; repos: Row[]; steps: Row[] } = { tasks: [], runs: [], repos: [], steps: [] };
 
 /** What the fake orchestrator prints, and what it exits with. */
 const proc = { stdout: "", exit: 0 as number | null, spawned: [] as string[][] };
@@ -18,7 +18,11 @@ const proc = { stdout: "", exit: 0 as number | null, spawned: [] as string[][] }
 vi.mock("../supabase", () => ({
   supabaseAdmin: () => ({
     from(table: string) {
-      let rows = table === "work_task" ? state.tasks : table === "workflow_run" ? state.runs : state.repos;
+      let rows =
+        table === "work_task" ? state.tasks
+        : table === "workflow_run" ? state.runs
+        : table === "workflow_step" ? state.steps
+        : state.repos;
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, val: unknown) => { rows = rows.filter((r) => r[col] === val); return chain; },
@@ -53,8 +57,9 @@ vi.mock("child_process", () => ({
 
 const { runCode } = await import("./code-run");
 
-function seed(opts: { subjectKey?: string | null; localPath?: string | null } = {}) {
-  state.tasks = [{ id: "t1", workflow_run_id: "r1" }];
+function seed(opts: { subjectKey?: string | null; localPath?: string | null; ord?: number } = {}) {
+  state.tasks = [{ id: "t1", workflow_run_id: "r1", workflow_step_id: "s1" }];
+  state.steps = [{ id: "s1", ord: opts.ord ?? 1 }];
   state.runs = [{ id: "r1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
   state.repos = opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
 }
@@ -113,5 +118,62 @@ describe("running a build", () => {
     expect(args).toContain("KAN-42");
     expect(args).not.toContain("E1-S3");
     expect(args).toContain("--non-interactive");
+  });
+});
+
+// ── which step, on which branch ──────────────────────────────────────────────────────────────
+//
+// The seed holds the steps and the orchestrator executes ONE. These flags are the whole of that,
+// and the one that matters is `--from-step`: it is what makes a later step reuse the branch the
+// first step cut. Get it wrong and every step lands on its own branch — tests separated from the
+// code they cover, and a pull request containing neither. A unit test can see the flags; only a
+// live run can see the branch, which is exactly why the flags are pinned here.
+describe("which step it runs, and on which branch", () => {
+  it("cuts the branch on step 1 — no --from-step, because there is none to recover", async () => {
+    seed({ ord: 1 });
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1");
+    const args = proc.spawned[0];
+    expect(args).toEqual(expect.arrayContaining(["--step", "1"]));
+    expect(args, "step 1 has no prior branch to reuse").not.toContain("--from-step");
+  });
+
+  it("reuses the branch on every later step", async () => {
+    for (const ord of [2, 3, 4]) {
+      proc.spawned = [];
+      seed({ ord });
+      proc.stdout = "https://github.com/a/b/pull/1";
+      await runCode("e1", "t1");
+      const args = proc.spawned[0];
+      const at = args.indexOf("--from-step");
+      expect(at, `step ${ord} must pass --from-step or it cuts a new branch`).toBeGreaterThan(-1);
+      expect(args[at + 1]).toBe(String(ord));
+      // Both filters apply, so this is exactly step N and not "N onwards".
+      expect(args[args.indexOf("--step") + 1]).toBe(String(ord));
+    }
+  });
+
+  // `_prior_run_branch` finds the branch by scanning for a RUN_START carrying this exact id, so
+  // every step of one v2 run has to pass the same one. Derived from the run, not stored.
+  it("passes the same derived run id from every step", async () => {
+    const ids: string[] = [];
+    for (const ord of [1, 2, 3, 4]) {
+      proc.spawned = [];
+      seed({ ord });
+      proc.stdout = "https://github.com/a/b/pull/1";
+      await runCode("e1", "t1");
+      const args = proc.spawned[0];
+      ids.push(args[args.indexOf("--run-id") + 1]);
+    }
+    expect(new Set(ids).size, `every step must share one run id, got ${ids.join(", ")}`).toBe(1);
+    expect(ids[0]).toContain("r1");
+  });
+
+  it("refuses when the task is not a row of a run — nothing to execute", async () => {
+    seed({ ord: 1 });
+    state.steps = [];
+    const r = await runCode("e1", "t1");
+    expect(r.refusal).toMatch(/no step to execute/i);
+    expect(proc.spawned).toEqual([]);
   });
 });

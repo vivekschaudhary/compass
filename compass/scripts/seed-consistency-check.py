@@ -142,10 +142,20 @@ def shared_produces_drift() -> list[str]:
     """
     produces: dict[str, list[tuple[str, str]]] = {}
     for r in csv.DictReader((SEED / "workflow-steps.csv").open()):
+        raw = (r.get("produces") or "").strip()
+        # `@scm` IS EXEMPT, and it is the opposite case rather than a loophole. This check exists
+        # because two steps writing one DOCUMENT means the later silently supersedes the earlier, so
+        # they had better be gated identically. Steps sharing one BRANCH are the reverse: `build`
+        # implements, adds the tests, reviews, then answers the review — four steps contributing to
+        # one branch and one pull request, in order, each seeing the last one's work. Nothing is
+        # superseded, and requiring identical gates would mean the review row had to be gated on
+        # the same bar as the row that wrote the code.
+        if raw.rsplit("@", 1)[-1].lower() == "scm" and "@" in raw:
+            continue
         # The bare path. A step may name where its deliverable goes (`…@tickets`) and that suffix
         # is routing, not identity — two steps producing the same document by different routes are
         # still producing the same document.
-        path = (r.get("produces") or "").split("@")[0].strip()
+        path = raw.split("@")[0].strip()
         if not path:
             continue
         produces.setdefault(path, []).append((r["workflow"], r["task"]))

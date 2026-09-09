@@ -15,14 +15,15 @@ unseeded       scan
 unseeded       status
 
 # `build` is TWO LAYERS and the counts differ on purpose. build.md is v1's dispatch graph — eight
-# steps the orchestrator executes — and the seed has two: hand off, then a human gate. Row 1 carries
-# `output: code`, which spawns `compass.orchestrator.run build`, which runs all eight. Restating
-# them as seed rows would dispatch each twice.
+# steps the orchestrator executes — and the seed has five, each a gated row. Seed ord 1-4 map onto
+# build.md steps 1-4 and each invokes `--step N`, so the orchestrator executes ONE step per row
+# rather than running its own copy of the graph. The seed is the procedural memory; build.md is v1's
+# and goes when v1 does.
 #
-# NOT DEBT, unlike everything else in this file: there is no edit that resolves it, because the two
-# numbers describe different layers. It is recorded so the checker stays quiet about a difference
-# that is the design. Trimming build.md to match the seed deletes the work the seed delegates to —
-# it was done once, in the session that wrote this, and caught before it shipped.
+# NOT DEBT: there is no edit that resolves it while both exist, because build.md's steps 5-8
+# (arbitrate, gate, mechanical checks, post-merge) are v1 concepts the seed deliberately does not
+# carry. Recorded so the checker stays quiet. Do NOT trim build.md to match — that deletes the work
+# the rows delegate to, and it was nearly done once already.
 step-count     build
 
 # `ops` is v1's, like the nine above it. Its seed row was dropped in the workflow restructure but

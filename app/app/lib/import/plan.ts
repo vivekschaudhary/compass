@@ -397,8 +397,16 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   // `tailor-delivery-plan` and `draft-sprint-plan` both writing `03-delivery/plan` on parallel
   // branches, so whichever finished last silently superseded the other — and `sprint`'s entry gate
   // names that path, which made the next phase's readiness depend on branch timing.
+  //
+  // `@scm` IS THE EXCEPTION, and it is the opposite case rather than a loophole. Several rows
+  // sharing one document means the last writer wins silently. Several rows sharing one BRANCH is
+  // what a build is: implement, add the tests, review, answer the review — four steps contributing
+  // to one branch and one pull request, in order, each seeing the last one's work. Nothing is
+  // superseded, which is the whole reason the rule exists.
   workflows.forEach((w) => {
-    const here = authored.filter((s) => s.workflow === w.code && s.produces);
+    const here = authored.filter(
+      (s) => s.workflow === w.code && s.produces && destinationOf(s.produces)?.slot !== "scm",
+    );
     const by = new Map<string, string[]>();
     here.forEach((s) => by.set(s.produces, [...(by.get(s.produces) ?? []), s.task]));
     for (const [path, tasks] of by) {
