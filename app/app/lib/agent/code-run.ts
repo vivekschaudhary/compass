@@ -101,7 +101,7 @@ const BRANCH_RE = /(?:work branch|branch)\s+[`'"]?([\w./-]+)[`'"]?/i;
 export async function runCode(
   engagementId: string,
   taskId: string,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; context?: string } = {},
 ): Promise<CodeRun> {
   const empty = { ok: false, exit: null, branch: null, prUrl: null, log: "", repoName: null };
 
@@ -166,6 +166,15 @@ export async function runCode(
     "--project-dir", repo.path,
     ...(vendored ? [] : ["--compass-dir", COMPASS_DIR]),
     "--story", story,
+    // THE BRANCH NAME'S KEYWORDS COME FROM HERE. `_work_branch_name` builds
+    // `<type>/<story>-<slug>` and `_slug` takes the first six meaningful words of the context —
+    // so with nothing passed, every branch came out `feat/KAN-42-` with a trailing hyphen and
+    // nothing saying what it was. Passing the agent's own summary makes it `feat/KAN-42-saved-
+    // report-definitions`, readable in a branch list without opening the ticket.
+    //
+    // Only step 1 uses it. Steps 2-4 recover the recorded branch through `--from-step`, so a
+    // different summary on a later step cannot rename the branch out from under the work.
+    ...(opts.context ? ["--context", opts.context] : []),
     "--step", String(ord),
     ...(ord > 1 ? ["--from-step", String(ord)] : []),
     "--run-id", orchestratorRunId,

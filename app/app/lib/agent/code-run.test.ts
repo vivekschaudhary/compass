@@ -177,3 +177,37 @@ describe("which step it runs, and on which branch", () => {
     expect(proc.spawned).toEqual([]);
   });
 });
+
+// ── the branch name ──────────────────────────────────────────────────────────────────────────
+//
+// `_work_branch_name` builds `<type>/<story>-<slug>` and `_slug` takes the first six meaningful
+// words of `--context`. Passing nothing is not neutral: the slug comes out empty and every branch
+// is `feat/KAN-42-`, a trailing hyphen and no indication of what the work was.
+describe("what the branch gets called", () => {
+  it("passes the summary through as the slug source", async () => {
+    seed({ ord: 1 });
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1", { context: "saved report definitions" });
+    const args = proc.spawned[0];
+    expect(args[args.indexOf("--context") + 1]).toBe("saved report definitions");
+  });
+
+  // Omitted rather than passed empty: `--context ""` and no flag reach the same slug, but only one
+  // of them claims a value was supplied.
+  it("omits --context when there is nothing to say", async () => {
+    seed({ ord: 1 });
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1");
+    expect(proc.spawned[0]).not.toContain("--context");
+  });
+
+  // Steps 2-4 recover the branch step 1 recorded, so a later step's different summary must not be
+  // able to rename it — the flag is harmless there, but the recovery is what decides the name.
+  it("still reuses the recorded branch on a later step, whatever its summary says", async () => {
+    seed({ ord: 3 });
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1", { context: "something else entirely" });
+    const args = proc.spawned[0];
+    expect(args).toEqual(expect.arrayContaining(["--from-step", "3"]));
+  });
+});

@@ -559,7 +559,7 @@ export async function runAgent(
     // recorded on success, a run that died would leave no trace of what it was trying to do.
     await recordTurn(taskId, intent, ctx);
 
-    const built = await runCode(actor.engagementId, taskId);
+    const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "" });
 
     if (built.refusal) {
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
