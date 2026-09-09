@@ -78,11 +78,12 @@ behaviour while the step went on passing its gates.
 | 6 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `ways-of-working` | — | 4, 5 |
 | 7 | Features and how each is judged | `workflow: feature` | product-owner | `—` | — | 1, 2 |
 | 8 | Foundation architecture | `workflow: foundation-architecture` | staff-engineer | `—` | — | 1, 2, 7 |
-| 9 | Design library | `workflow: design-library` | designer | `—` | — | 2, 1 |
-| 10 | Epics from milestones and features | `workflow: epics` | product-owner | `—` | — | 1, 2, 7, 3 |
-| 11 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `delivery plan` | — | 5, 10, 4, 0, 7 |
-| 12 | Sprint plan for sprint 1 | `workflow: sprint-plan` | product-owner | `—` | — | 10, 4, 11 |
-| 13 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `kickoff` | — | 12, 6, 11 |
+| 9 | Feature architecture | `workflow: feature-architecture` | staff-engineer | `—` | — | 8 |
+| 10 | Design library | `workflow: design-library` | designer | `—` | — | 2, 1 |
+| 11 | Epics from milestones and features | `workflow: epics` | product-owner | `—` | — | 1, 2, 7, 3 |
+| 12 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `delivery plan` | — | 5, 11, 4, 0, 7 |
+| 13 | Sprint plan for sprint 1 | `workflow: sprint-plan` | product-owner | `—` | — | 11, 4, 12 |
+| 14 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `kickoff` | — | 13, 6, 12 |
 
 **Rows 2, 7 and 8 NEST a workflow rather than doing the work in one row.** The product brief, the
 features and the foundation architecture each have an author, an independent reviewer and a

@@ -9,11 +9,12 @@ sprint-0,5,agent,delivery-manager,draft-raci,RACI,,,,,Roles and responsibilities
 sprint-0,6,agent,delivery-manager,draft-ways-of-working,ways-of-working,,,,,Team working agreement,"propose-staffing,draft-raci"
 sprint-0,7,workflow,product-owner,draft-features,,,,,feature,Features and how each is judged,"file-requirements,draft-product-brief"
 sprint-0,8,workflow,staff-engineer,draft-foundation-architecture,,,,,foundation-architecture,Foundation architecture,"file-requirements,draft-product-brief, draft-features"
-sprint-0,9,workflow,designer,build-design-library,,,,,design-library,Design library,"draft-product-brief, file-requirements"
-sprint-0,10,workflow,product-owner,draft-epics,,,,,epics,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features,draft-timeline"
-sprint-0,11,agent,delivery-manager,tailor-delivery-plan,delivery plan,,deliverables,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing, file-sow,draft-features"
-sprint-0,12,workflow,product-owner,draft-sprint-plan,,,deliverables,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
-sprint-0,13,agent,delivery-manager,kickoff,kickoff,,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,tailor-delivery-plan"
+sprint-0,9,workflow,staff-engineer,design-feature-architecture,,,,,feature-architecture,Feature architecture,draft-foundation-architecture
+sprint-0,10,workflow,designer,build-design-library,,,,,design-library,Design library,"draft-product-brief, file-requirements"
+sprint-0,11,workflow,product-owner,draft-epics,,,,,epics,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features,draft-timeline"
+sprint-0,12,agent,delivery-manager,tailor-delivery-plan,delivery plan,,deliverables,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing, file-sow,draft-features"
+sprint-0,13,workflow,product-owner,draft-sprint-plan,,,deliverables,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
+sprint-0,14,agent,delivery-manager,kickoff,kickoff,,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,tailor-delivery-plan"
 foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,,,,Research the ground,
 foundation-architecture,2,agent,reviewer,review-research,architecture-research-review,,,,,Review the research,research-architecture
 foundation-architecture,3,hitl,principal-engineer,approve-research,,,,,,Accept the research,review-research
@@ -66,7 +67,6 @@ sprint,3,agent,delivery-manager,sprint-retro,05-cadence/retros,,,,,Retro,sprint-
 feature,1,agent,product-owner,draft-feature,features,,,,,The feature and its targets,
 feature,2,agent,reviewer,review-feature,feature-review,,,,,Review the feature,draft-feature
 feature,3,hitl,product-manager,approve-feature,,,,,,Accept the feature,review-feature
-feature,4,workflow,staff-engineer,design-feature-architecture,,,,,feature-architecture,Feature architecture,approve-feature
 design-library,1,agent,designer,research-design,design-research,,,,,Research the design ground,
 design-library,2,hitl,product-manager,approve-research,,,,,,Accept the research,research-design
 design-library,3,agent,designer,derive-library,design-library,,,,,The design library,approve-research

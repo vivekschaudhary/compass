@@ -30,7 +30,6 @@ edge twice. See `deriveReads` in `app/app/lib/import/plan.ts`.
 | 1 | The feature and its targets | `agent: product-owner.draft-feature` | product-owner | `features` | — |
 | 2 | Review the feature | `agent: reviewer.review-feature` | reviewer | `feature-review` | 1 |
 | 3 | Accept the feature | `hitl` | product-manager | `—` | 2 |
-| 4 | Feature architecture | `workflow: feature-architecture` | staff-engineer | `—` | 3 |
 
 ## Why it is these rows
 
@@ -57,7 +56,8 @@ that found nothing says so explicitly rather than being an empty document.
 
 `measure` and `learn` (both parked, no rows) write into those sections when they are built.
 
-**Row 4 is the architecture tier below this one.** A feature that has been accepted gets its
-technical shape decided before any epic under it is designed — foundation architecture (the
-product) → **feature architecture** → epic technical design → build. It cannot run before row 3,
-because deciding how to build a feature nobody has accepted is work done twice.
+**The architecture tier is NOT a row here, and that was a mistake once.** `feature-architecture`
+was nested off this workflow, which put it inside sprint-0 row 7 — so it ran before
+`draft-foundation-architecture` at row 8, the very architecture it declares itself bounded by. It
+now hangs off sprint-0 directly, after the foundation architecture exists. Features are still its
+input; being accepted first is enforced by sprint-0's own dependency, not by a row in here.
