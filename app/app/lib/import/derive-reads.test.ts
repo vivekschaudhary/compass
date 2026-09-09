@@ -7,7 +7,7 @@ import { planImport, deriveReads, type StepRow } from "./plan";
 
 const step = (over: Partial<StepRow>): StepRow => ({
   workflow: "sprint-0", ord: 1, kind: "agent", role: "delivery-manager", task: "t",
-  produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [],
+  produces: "", output: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [],
   ...over,
 });
 

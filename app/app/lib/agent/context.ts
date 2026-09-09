@@ -64,6 +64,12 @@ export type AgentContext = {
   produces: string | null;
   /** Where it goes. `docs` publishes a page; `tickets` creates issues on the board. */
   destination: "docs" | "tickets" | null;
+  /**
+   * What KIND of thing this step makes — `roster`, `backlog`, `sprint`, or null for an ordinary
+   * document. What `toolsFor` keys on. It used to key on `produces`, and a path the author renames
+   * is not a safe key for behaviour: the rename silently took the tool away and nothing said so.
+   */
+  output: string | null;
   inputs: PinnedInput[];
   doneCriteria: string[];
   /** What workflows this engagement can actually run. Without it the agent guesses. */
@@ -490,13 +496,15 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
 
   let produces: string | null = null;
   let destination: AgentContext["destination"] = null;
+  let output: string | null = null;
   let doneCriteria: string[] = [];
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
-      .select("produces").eq("id", task.workflow_step_id).maybeSingle();
+      .select("produces, output").eq("id", task.workflow_step_id).maybeSingle();
     const dest = destinationOf(step?.produces);
     produces = dest?.path ?? null;
     destination = dest?.slot ?? null;
+    output = (step?.output as string | null) ?? null;
     doneCriteria = await doneCriteriaFor(task.workflow_step_id);
   }
 
@@ -509,6 +517,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     agentFile,
     produces,
     destination,
+    output,
     inputs: await ensureInputs(taskId, actor.engagementId),
     doneCriteria,
     inventory: await loadInventory(actor.orgId),

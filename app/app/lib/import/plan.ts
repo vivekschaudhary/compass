@@ -49,6 +49,13 @@ export type StepRow = {
    * a document from another workflow, or one a human supplied. Two of twenty-one reads across the
    * whole seed are of that kind.
    */
+  /**
+   * What kind of thing this step makes, from the closed set the app implements — or empty for an
+   * ordinary document, which is most rows. This is what `tools.ts` and `materialise.ts` key on.
+   * They used to key on `produces`, and a path is a value the author renames: doing so made both
+   * lookups miss and the step silently stopped creating tickets while still passing its gates.
+   */
+  output: string;
   reads: string[]; conditional: string;
   /** `kind: workflow` only — the workflow this row nests. The row is done when that run closes. */
   nests: string;
@@ -117,6 +124,15 @@ const SCOPES = ["mine", "workstream", "everyone"];
 // Previously anything larger than a single task had to BE a top-level workflow, which is how one
 // engagement ended up with nine peer runs holding six tasks.
 const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
+/**
+ * What a step can declare it makes. CLOSED, and each value points at code that exists:
+ * `roster` parses the approved table into member rows, `backlog` unlocks the backlog tool and
+ * creates the issues on approval, `sprint` the same for a sprint plan. Empty is an ordinary
+ * document. A fifth value means writing the behaviour first — refusing an unknown one here is
+ * what stops a typo falling through to "ordinary document", which is how the old path-matching
+ * failed and said nothing.
+ */
+const STEP_OUTPUTS = ["roster", "backlog", "sprint"];
 const CRITERION_KINDS = ["ready", "done"];
 
 /* ── parsing ─────────────────────────────────────────────────────────────── */
@@ -153,7 +169,8 @@ function readWorkflows(csv: string): WorkflowRow[] {
 function readSteps(csv: string): StepRow[] {
   return parseRecords(csv).map((r) => ({
     workflow: r.workflow, ord: num(r.ord), kind: r.kind || "agent", role: r.role ?? "",
-    task: r.task ?? "", produces: r.produces ?? "", reads: parseList(r.reads),
+    task: r.task ?? "", produces: r.produces ?? "", output: (r.output ?? "").trim(),
+    reads: parseList(r.reads),
     conditional: r.conditional ?? "", nests: r.nests ?? "", title: r.title ?? "",
     dependsOn: parseList(r.depends_on),
   }));
@@ -312,6 +329,10 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     if (s.kind !== "machine" && !s.role)
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} names no role.`,
         "A step someone has to hold needs a role, or it lands in nobody's queue.");
+    if (s.output && !STEP_OUTPUTS.includes(s.output))
+      add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} declares output '${s.output}'.`,
+        `Use one of: ${STEP_OUTPUTS.join(", ")} — or leave it empty for an ordinary document. A value ` +
+        `the app has no behaviour for is a row that promises something nothing does.`);
     if (s.role && !knownRoles.has(s.role))
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} names role '${s.role}', which does not exist.`,
         "Add it to roles.csv, or correct the spelling.");
@@ -543,7 +564,7 @@ function describeChanges(
   // could change which workflow it nests and the importer would report "unchanged" — a diff that
   // does not compare everything is a diff that lies. Adding a column means adding it here.
   const key = (s: StepRow) =>
-    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.dependsOn.join("|")}`;
+    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.output}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.dependsOn.join("|")}`;
   const ckey = (c: CriterionRow) =>
     `${c.stepTask ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
 

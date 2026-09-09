@@ -218,39 +218,47 @@ describe("dispatch", () => {
 // `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` the same step written twice without
 // being able to drift — and it is also a guard, because a model that can reach for `backlog` from
 // any step can return epics from one whose approval has nothing to do with them.
+//
+// KEYED ON THE STEP'S DECLARED `output` NOW, not on its produced path. The path is a value the
+// seed's author renames, and renaming it silently took the tool away — the step still ran, still
+// filed, still passed its gates, and stopped creating the client's issues. `output` is a closed
+// vocabulary the app owns; the anti-drift property survives because both sprint-planning rows
+// declare `sprint`.
 describe("toolsFor", () => {
-  const names = (produces: string | null) => toolsFor(produces).map((t) => t.name).sort();
+  const names = (output: string | null) => toolsFor(output).map((t) => t.name).sort();
 
   it("gives an ordinary step ask and draft", () => {
-    expect(names("01-foundation/team")).toEqual(["ask", "draft"]);
+    // `roster` is a materialiser, not a tool: the roster is DRAFTED as an ordinary document and
+    // only its approval is special. So it takes the same tools as a step declaring nothing.
+    expect(names("roster")).toEqual(["ask", "draft"]);
     expect(names(null)).toEqual(["ask", "draft"]);
   });
 
-  it("gives both sprint-planning rows the same tool, because both produce the same path", () => {
-    expect(names("05-cadence/sprint-plans")).toEqual(["ask", "sprint"]);
+  it("gives both sprint-planning rows the same tool, because both declare the same output", () => {
+    expect(names("sprint")).toEqual(["ask", "sprint"]);
   });
 
   it("gives the epics step the backlog tool", () => {
-    expect(names("02-scope/deliverables")).toEqual(["ask", "backlog"]);
+    expect(names("backlog")).toEqual(["ask", "backlog"]);
   });
 
   // A specialised tool REPLACES draft rather than joining it. Offering both would let a model file
   // a sprint plan as prose whose commitments never reach the board — a document that looks
   // complete and does nothing.
   it("does not leave draft available beside a specialised tool", () => {
-    expect(names("05-cadence/sprint-plans")).not.toContain("draft");
-    expect(names("02-scope/deliverables")).not.toContain("draft");
+    expect(names("sprint")).not.toContain("draft");
+    expect(names("backlog")).not.toContain("draft");
   });
 
   it("never withholds ask — every step can still say what it does not know", () => {
-    for (const p of [null, "01-foundation/team", "02-scope/deliverables", "05-cadence/sprint-plans"]) {
+    for (const p of [null, "roster", "backlog", "sprint"]) {
       expect(names(p)).toContain("ask");
     }
   });
 
   // The CLI host builds its schema from the tools it is HANDED, so the filtering reaches it too.
   it("narrows the CLI host's schema as well", () => {
-    const schema = unionSchema(toolsFor("05-cadence/sprint-plans")) as
+    const schema = unionSchema(toolsFor("sprint")) as
       { properties: { tool: { enum: string[] } } };
     expect(schema.properties.tool.enum).toEqual(["ask", "sprint"]);
   });

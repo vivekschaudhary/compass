@@ -142,6 +142,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         workflow_version_id: versionId, ord: s.ord, kind: s.kind,
         role_code: s.kind === "machine" ? null : s.role,   // the check constraint enforces this too
         task: s.task, produces: s.produces || null, reads: s.reads,
+        output: s.output || null,
         conditional: s.conditional || null,
         nests_workflow_code: s.kind === "workflow" ? s.nests : null,
         title: s.title || null,
@@ -258,7 +259,7 @@ export async function readExisting(
     // makes the comparison read `undefined` against a real value, so every row reports changed —
     // the mirror image of the bug where a field is compared on neither side and nothing ever does.
     const { data: steps } = await sb.from("workflow_step")
-      .select("ord, kind, role_code, task, produces, reads, conditional, nests_workflow_code, title, depends_on")
+      .select("ord, kind, role_code, task, produces, output, reads, conditional, nests_workflow_code, title, depends_on")
       .eq("workflow_version_id", ver.id).order("ord");
     const { data: crits } = await sb.from("criterion")
       .select("step_task, kind, statement, subject_kind, subject_ref, operator, value")
@@ -268,7 +269,8 @@ export async function readExisting(
       code: wf.code,
       steps: (steps ?? []).map((s): StepRow => ({
         workflow: wf.code, ord: s.ord, kind: s.kind, role: s.role_code ?? "", task: s.task,
-        produces: s.produces ?? "", reads: s.reads ?? [], conditional: s.conditional ?? "",
+        produces: s.produces ?? "", output: s.output ?? "",
+        reads: s.reads ?? [], conditional: s.conditional ?? "",
         nests: s.nests_workflow_code ?? "", title: s.title ?? "",
         dependsOn: s.depends_on ?? [],
       })),

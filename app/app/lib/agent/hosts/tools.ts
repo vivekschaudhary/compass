@@ -222,11 +222,11 @@ export const TOOLS: Anthropic.Tool[] = [
               },
               role: {
                 type: "string",
-                enum: ["designer", "ux-writer", "engineer", "automation", "sre", "architect"],
+                enum: ["designer", "ux-writer", "engineer", "automation", "sre", "staff-engineer"],
                 description:
                   "Who owns this story. `designer` when it needs new screens or flows; " +
                   "`ux-writer` when the work is the words on a screen; `automation` when SRE, " +
-                  "DevOps, pipeline or QA owns the outcome; `architect` when the deliverable is a " +
+                  "DevOps, pipeline or QA owns the outcome; `staff-engineer` when the deliverable is a " +
                   "technical design rather than shipped behaviour; `engineer` otherwise. Judge the " +
                   "story, not the epic it sits under.",
               },
@@ -268,20 +268,27 @@ export const TOOLS: Anthropic.Tool[] = [
 ];
 
 /**
- * Which producing path unlocks which specialised tool.
+ * Which declared output unlocks which specialised tool.
  *
- * THE ANTI-DRIFT SEAM. `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` are the same step
- * written twice — sprint 0 has to end with sprint 1 planned, and every sprint after plans itself.
- * Keying the tool on the produced PATH rather than on either row's slug is what makes them the same
- * behaviour by construction: `materialise.ts`'s REGISTRY is keyed the same way, and the criteria are
- * held identical by `seed-consistency-check.py`.
+ * KEYED ON THE STEP'S `output`, NOT ITS PATH. This was `PRODUCES_TOOL`, keyed on the produced path,
+ * and the reason was sound: `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` are the same
+ * step written twice, and one registration against a shared path made them the same behaviour by
+ * construction. The flaw was the choice of key. `produces` is a value the author writes in a CSV,
+ * so renaming `02-scope/deliverables` to `deliverables` — an ordinary tidy-up — made this lookup
+ * miss, and the step went on running, filing its document and passing its gates while silently no
+ * longer creating the client's issues. Not a crash; a green step that did nothing.
  *
- * It is also a guard. A step that does not produce a backlog cannot call `backlog`, so a model
+ * `output` is a closed vocabulary the app owns and the importer refuses unknown values for, so a
+ * rename cannot disable behaviour and a typo fails at import with a file and a line number. Both
+ * sprint-planning rows carry `sprint`, so they are still one behaviour — now stated in the seed
+ * where a reader can see it, rather than resting on two paths staying spelled alike.
+ *
+ * It remains a guard: a step that does not declare `backlog` cannot call `backlog`, so a model
  * cannot decide to return epics from a step whose approval has nothing to do with them.
  */
-export const PRODUCES_TOOL: Record<string, string> = {
-  "02-scope/deliverables": "backlog",
-  "05-cadence/sprint-plans": "sprint",
+export const TOOL_FOR: Record<string, string> = {
+  backlog: "backlog",
+  sprint: "sprint",
 };
 
 /** Every tool that is not gated behind a produced path. */
@@ -294,8 +301,8 @@ const GENERAL = new Set(["ask", "draft"]);
  * has one way to produce it, and offering both invites a model to file a plan whose commitments
  * never reach the board — a document that looks complete and does nothing.
  */
-export function toolsFor(produces: string | null | undefined): Anthropic.Tool[] {
-  const special = produces ? PRODUCES_TOOL[produces] : undefined;
+export function toolsFor(output: string | null | undefined): Anthropic.Tool[] {
+  const special = output ? TOOL_FOR[output] : undefined;
   return TOOLS.filter((t) =>
     special ? t.name === "ask" || t.name === special : GENERAL.has(t.name),
   );

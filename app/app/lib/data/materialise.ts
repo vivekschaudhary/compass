@@ -40,7 +40,7 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
  * `01-foundation/team` → `member` rows.
  *
  * Role LABELS are matched against the catalogue rather than hardcoded, because the agent writes
- * "Enterprise Architect" and the app stores `enterprise-architect`, and a hardcoded map would drift
+ * "Principal Engineer" and the app stores `principal-engineer`, and a hardcoded map would drift
  * from the roles the moment one is added.
  */
 async function materialiseRoster(actor: Actor, markdown: string): Promise<Materialised> {
@@ -161,19 +161,25 @@ async function materialiseSprint(actor: Actor, markdown: string, taskId: string)
 }
 
 /**
- * What each producing path turns into. Register here; do not branch in the caller.
+ * What each declared output turns into. Register here; do not branch in the caller.
  *
- * KEYED ON THE PATH, which is what lets `sprint-0.draft-sprint-plan` and `sprint.sprint-planning`
- * be the same step written twice without being able to drift: both produce `05-cadence/sprint-plans`
- * and therefore both get this, with no second registration to keep in step. `tools.ts`'s
- * PRODUCES_TOOL is keyed the same way, and `seed-consistency-check.py` holds their criteria equal.
+ * KEYED ON THE STEP'S `output`, NOT ITS PATH. This was keyed on `produces`, and the reason was
+ * sound — `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` are the same step written
+ * twice, and one registration against a shared path made them one behaviour with no second copy to
+ * drift. The flaw was that `produces` is a path the author writes in a CSV. Renaming it made this
+ * lookup miss, and approval then materialised nothing: no member rows, no issues, no sprint labels
+ * — while the step closed green, because nothing here reports a miss.
+ *
+ * `output` is a closed vocabulary the app owns and the importer refuses unknown values for. Both
+ * sprint-planning rows carry `sprint`, so they remain one behaviour by construction, and a path
+ * rename can no longer disable anything.
  */
 const REGISTRY: Record<
   string, (actor: Actor, markdown: string, taskId: string) => Promise<Materialised>
 > = {
-  "01-foundation/team": materialiseRoster,
-  "02-scope/deliverables": materialiseBacklog,
-  "05-cadence/sprint-plans": materialiseSprint,
+  roster: materialiseRoster,
+  backlog: materialiseBacklog,
+  sprint: materialiseSprint,
 };
 
 /**
@@ -191,12 +197,15 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb.from("workflow_step")
-    .select("produces").eq("id", task.workflow_step_id).maybeSingle();
-  // The PATH, not the raw `produces` — a step may name its destination (`…@tickets`), and matching
-  // the registry against the decorated string would silently stop materialising the moment a
-  // deliverable was routed somewhere new.
+    .select("produces, output").eq("id", task.workflow_step_id).maybeSingle();
+  // The declared output decides WHAT happens; the path only says where the document is read from.
+  // A step that declares nothing materialises nothing, which is the common case.
+  const run = step?.output ? REGISTRY[step.output as string] : undefined;
+  if (!run) return null;
+  // Still the bare PATH for the read — a step may decorate `produces` with a destination
+  // (`…@tickets`), and looking a document up by the decorated string finds nothing.
   const path = destinationOf(step?.produces)?.path;
-  if (!path || !REGISTRY[path]) return null;
+  if (!path) return null;
 
   const { data: doc } = await sb.from("document")
     .select("current_version_id").eq("engagement_id", actor.engagementId).eq("path", path).maybeSingle();
@@ -206,7 +215,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
     .select("heading, body").eq("document_version_id", doc.current_version_id).order("ord");
   const markdown = (sections ?? []).map((s) => `## ${s.heading}\n${s.body}`).join("\n\n");
 
-  const result = await REGISTRY[path](actor, markdown, taskId);
+  const result = await run(actor, markdown, taskId);
 
   await emit({
     engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,

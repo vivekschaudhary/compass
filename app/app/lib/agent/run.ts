@@ -373,7 +373,7 @@ export async function runAgent(
       // task needs room for both.
       maxTokens: 64000,
       system: systemPrompt(ctx),
-      tools: toolsFor(ctx.produces),
+      tools: toolsFor(ctx.output),
       messages: [
         { role: "user", content: inputPrompt(ctx) },
         ...(await priorMessages(taskId)),
