@@ -25,7 +25,7 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
-import { resolveJira, createIssue, updateIssue, transitionIssue, projectStatuses, findUser, searchIssues, type JiraCreds } from "../jira";
+import { resolveJira, createIssue, updateIssue, transitionIssue, projectStatuses, subtaskType, findUser, searchIssues, type JiraCreds } from "../jira";
 import { emit } from "./events";
 import { sortByStep } from "./steps";
 import { holdersOn } from "./actor";
@@ -98,7 +98,8 @@ export type Mirrored = {
    * and did not deliver. A caller cannot tell those apart from a `problems` string without parsing
    * English.
    */
-  reason?: "no-supabase" | "no-tracker" | "no-run" | "epic-refused" | "story-refused";
+  reason?: "no-supabase" | "no-tracker" | "no-run" | "epic-refused" | "story-refused"
+        | "no-parent-ticket" | "no-subtask-type" | "nested-too-deep";
 };
 
 /**
@@ -111,6 +112,135 @@ export type Mirrored = {
 export function mirrorIncomplete(m: Mirrored): boolean {
   if (m.reason === "no-tracker" || m.reason === "no-supabase") return false;
   return !m.epic || m.stories.length < m.expected;
+}
+
+/**
+ * Put a NESTED run on the board: one sub-task per row, under the parent row's story.
+ *
+ * Epic -> Story -> Sub-task is Jira's own hierarchy and it already matches Compass's: a phase run
+ * is the epic, a phase row is the story, and a row that nests a workflow becomes the parent of that
+ * workflow's rows.
+ *
+ * WITHOUT THIS THE WORK IS INVISIBLE. `putOnBoard` is called from `initiatePhase` and
+ * `remirrorPhase` only, so opening a nested run changed nothing in Jira: five of sprint-0's fourteen
+ * rows nest, and they are the substantial ones. The board showed the thin work — file the SOW, the
+ * RACI, kickoff — while the brief, the architecture and the sprint plan happened somewhere nobody
+ * outside Compass could see.
+ *
+ * THREE REFUSALS, none of them a fallback:
+ *
+ *   no subtask type   A team-managed project can have sub-tasks disabled. Creating Stories instead
+ *                     would leave a flat pile that reads exactly like success.
+ *   no parent ticket  Nothing to hang them under. Ordinary during a Jira outage rather than an
+ *                     error, and `remirrorNested` puts them up afterwards.
+ *   nested too deep   Jira sub-tasks cannot have sub-tasks. Nothing nests two deep today; building
+ *                     a malformed hierarchy would be discovered by a person, in Jira, later.
+ */
+export async function mirrorNested(
+  engagementId: string, runId: string, actorRole: string,
+): Promise<Mirrored> {
+  const out: Mirrored = { epic: null, stories: [], expected: 0, problems: [] };
+  const sb = supabaseAdmin();
+  if (!sb) return { ...out, reason: "no-supabase", problems: ["Supabase is not configured."] };
+
+  const creds = await credsFor(engagementId);
+  if (!creds) {
+    // Not an error: an engagement may deliberately run without a tracker, and the work still happens.
+    return { ...out, reason: "no-tracker", problems: ["No Jira configured for this engagement — nothing mirrored."] };
+  }
+
+  const { data: run } = await sb.from("workflow_run")
+    .select("id, parent_task_id").eq("id", runId).maybeSingle();
+  if (!run) return { ...out, reason: "no-run", problems: ["No such run."] };
+  if (!run.parent_task_id) {
+    return { ...out, reason: "no-run", problems: ["That run is not nested — it has no parent row to hang sub-tasks under."] };
+  }
+
+  const { data: parent } = await sb.from("work_task")
+    .select("id, ticket_key, workflow_run_id").eq("id", run.parent_task_id).maybeSingle();
+  if (!parent?.ticket_key) {
+    return {
+      ...out, reason: "no-parent-ticket",
+      problems: ["The row that opened this run has no ticket yet, so there is nothing to hang sub-tasks under. Re-mirror the phase, then this run."],
+    };
+  }
+  out.epic = parent.ticket_key as string;
+
+  // Two deep is not expressible in Jira, so it is refused here rather than half-built.
+  const { data: parentRun } = await sb.from("workflow_run")
+    .select("parent_task_id").eq("id", parent.workflow_run_id).maybeSingle();
+  if (parentRun?.parent_task_id) {
+    return {
+      ...out, reason: "nested-too-deep",
+      problems: ["This run is nested two deep. Jira sub-tasks cannot have sub-tasks, so nothing was created."],
+    };
+  }
+
+  const type = await subtaskType(creds);
+  if (!type) {
+    return {
+      ...out, reason: "no-subtask-type",
+      problems: [`Project ${creds.project} has no sub-task issue type, so nothing was created. Enable sub-tasks on the project, or this run stays off the board.`],
+    };
+  }
+
+  const { data: rows } = await sb.from("work_task")
+    .select("id, title, role_code, state, ticket_key, workflow_step(ord)")
+    .eq("workflow_run_id", runId);
+  const tasks = sortByStep(rows ?? []);
+  // Recorded before anything is attempted: `stories.length` alone cannot say whether four is all of
+  // them or two short.
+  out.expected = tasks.length;
+
+  // ONE user lookup per role, not per task. The cache also guarantees every row a role holds gets
+  // the SAME person — resolving per task could pick differently on an ambiguous name partway down.
+  const roster = await holdersOn(engagementId);
+  const assigneeOf = new Map<string, { accountId: string; displayName: string } | null>();
+  const resolve = async (role: string) => {
+    if (assigneeOf.has(role)) return assigneeOf.get(role) ?? null;
+    const name = roster.find((h) => h.role === role)?.name;
+    if (!name) {
+      out.problems.push(`No one is on the roster as \`${role}\`, so its sub-tasks are unassigned.`);
+      assigneeOf.set(role, null);
+      return null;
+    }
+    const user = await findUser(creds, name);
+    if (!user) out.problems.push(`No single Jira user matches "${name}" (\`${role}\`), so its sub-tasks are left unassigned.`);
+    assigneeOf.set(role, user);
+    return user;
+  };
+
+  for (const t of tasks) {
+    if (t.ticket_key) { out.stories.push({ taskId: t.id, key: t.ticket_key, title: t.title }); continue; }
+
+    const created = await createIssue(creds, {
+      type, summary: t.title, parentKey: parent.ticket_key as string,
+      description: `${t.title}.\n\n_Part of ${parent.ticket_key}._`,
+      labels: [t.role_code],
+    });
+    if (!created) {
+      out.problems.push(`Could not create a sub-task for "${t.title}".`);
+      out.reason = "story-refused";
+      continue;
+    }
+
+    // Jira first, then the local row: a key is stored only once it exists, which is what lets this
+    // re-run with no bookkeeping to say what it did last time.
+    await sb.from("work_task").update({ ticket_key: created.key }).eq("id", t.id);
+    out.stories.push({ taskId: t.id, key: created.key, title: t.title });
+
+    const user = await resolve(t.role_code);
+    if (user) await updateIssue(creds, created.key, { assignee: { accountId: user.accountId } });
+    if (t.state !== "idle") await mirrorState(engagementId, t.id, t.state, actorRole);
+  }
+
+  await emit({
+    engagementId, subjectType: "workflow_run", subjectId: runId,
+    verb: "run.mirrored", actorKind: "system", actorRoleCode: actorRole,
+    payload: { parent: parent.ticket_key, subtasks: out.stories.length, expected: out.expected, problems: out.problems },
+  });
+
+  return out;
 }
 
 /**

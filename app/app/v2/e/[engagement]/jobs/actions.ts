@@ -16,7 +16,7 @@ import {
   nestedWorkflowOf,
   remirrorPhase,
 } from "@/app/lib/data/phases";
-import { mirrorIncomplete } from "@/app/lib/data/tracker";
+import { mirrorIncomplete, type Mirrored } from "@/app/lib/data/tracker";
 import { composeIncomplete } from "@/app/lib/data/ticket-body";
 import type { BoardResult } from "@/app/lib/data/phases";
 
@@ -67,7 +67,8 @@ export async function startTaskAction(
   engagement: string,
   role: string,
   taskId: string,
-): Promise<{ ok: boolean; error?: string; openedWorkflow?: string }> {
+): Promise<{ ok: boolean; error?: string; openedWorkflow?: string;
+            mirrored?: Mirrored; problems?: string[] }> {
   const actor = await resolveActor(engagement, role);
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
@@ -89,7 +90,15 @@ export async function startTaskAction(
     const child = await openNested(actor, taskId);
     revalidatePath(`/v2/e/${engagement}/jobs`);
     if (!child.ok) return { ok: false, error: child.error };
-    return { ok: true, openedWorkflow: nests };
+    // The board result is RETURNED, not dropped. The run opened either way — but a nested run whose
+    // sub-tasks never reached Jira is invisible to everyone outside Compass, and saying nothing
+    // about it is how that goes unnoticed until somebody asks where the work went.
+    return {
+      ok: true,
+      openedWorkflow: nests,
+      mirrored: child.mirrored,
+      problems: child.mirrored.problems.length ? child.mirrored.problems : undefined,
+    };
   }
 
   revalidatePath(`/v2/e/${engagement}/jobs`);

@@ -27,7 +27,7 @@ import {
   evaluate,
   type CriterionRow,
 } from "./gates";
-import { mirrorPhase, type Mirrored } from "./tracker";
+import { mirrorPhase, mirrorNested, mirrorState, type Mirrored } from "./tracker";
 import { composeTicketBodies, type Composed } from "./ticket-body";
 
 /**
@@ -334,15 +334,23 @@ async function tasksOfRun(runId: string) {
 }
 
 /**
- * Open the child run for a row that nests a workflow.
+ * Open the child run for a row that nests a workflow, and put it on the board.
  *
  * The row is done when that run closes — the trigger from 034 does that half. This is the other
  * half: someone starting the row.
+ *
+ * THE MIRROR RESULT IS RETURNED, NOT DROPPED. It used to return only `{ ok, runId }`, so a nested
+ * run that could not reach Jira looked exactly like one that had — the same failure `initiatePhase`
+ * already returns `mirrored` to avoid.
+ *
+ * THE PARENT STORY MOVES. Every other `mirrorState` call sits on the agent path or the close path,
+ * and a nesting row runs no agent — so its story was created To Do and stayed there for the whole
+ * nested run. A week of work under a card nobody saw move reads as a stalled row, not a busy one.
  */
 export async function openNested(
   actor: Actor,
   taskId: string,
-): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; runId: string; mirrored: Mirrored } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
@@ -361,7 +369,15 @@ export async function openNested(
     p_actor_role: actor.roleCode,
   });
   if (error) return { ok: false, error: error.message };
-  return { ok: true, runId: runId as string };
+
+  const mirrored = await mirrorNested(actor.engagementId, runId as string, actor.roleCode);
+  // The row itself is now in progress: its work is the child run. Reported through `mirrored`
+  // rather than failing the open — the run exists whether or not the board heard about it.
+  const moved = await mirrorState(actor.engagementId, taskId, "running", actor.roleCode);
+  if (!moved.ok && moved.reason !== "no-tracker" && moved.reason !== "no-ticket") {
+    mirrored.problems.push(`The parent row's ticket did not move: ${moved.note}`);
+  }
+  return { ok: true, runId: runId as string, mirrored };
 }
 
 /** Is this task's row a machine check — something measured rather than performed? */

@@ -234,6 +234,29 @@ export async function projectStatuses(c: JiraCreds): Promise<string[] | null> {
   return [...names];
 }
 
+// What THIS project calls a sub-task, or null if it has none.
+//
+// `createIssue` sends `issuetype: { name }` verbatim and nothing here discovers types, so a
+// hardcoded "Sub-task" 400s on an instance that calls it "Subtask" — and `createIssue` returns null
+// on failure, so the miss would read as "Jira refused" rather than "we asked for a type that does
+// not exist". Same endpoint `projectStatuses` uses; that one keeps the statuses and throws these
+// names away.
+//
+// NULL IS A REAL ANSWER, not an error. A team-managed project can have sub-tasks disabled entirely,
+// and the caller must refuse rather than fall back to creating Stories — a flat pile of stories
+// where sub-tasks were expected looks exactly like it worked.
+export async function subtaskType(c: JiraCreds): Promise<string | null> {
+  const r = await jreq(c, `/project/${c.project}/statuses`);
+  if (!r.ok) return null;
+  const body = await r.json().catch(() => null);
+  if (!Array.isArray(body)) return null;
+  // `subtask: true` is the authoritative flag; the name match is the fallback for a payload that
+  // omits it, and it accepts both spellings Jira ships with.
+  const t = body.find((x) => x?.subtask === true)
+        ?? body.find((x) => /^sub-?task$/i.test(String(x?.name ?? "")));
+  return t?.name ? String(t.name) : null;
+}
+
 export async function issueStatus(c: JiraCreds, key: string): Promise<string | null> {
   const r = await jreq(c, `/issue/${key}?fields=status`);
   if (!r.ok) return null;
