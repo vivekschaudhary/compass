@@ -1,7 +1,7 @@
 ---
 name: ops
 status: active
-owner: enterprise-architect
+owner: principal-engineer
 auto_invokes: []
 invoked_by: [manual, triage]
 version: 0.3.47
@@ -21,7 +21,7 @@ Non-code change — infrastructure, dependency upgrades, config, secret rotation
 
 ## Architectural shape (v0.3.45)
 
-Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th workflow in dispatch-graph shape. Methodology lives in the agent tasks (`enterprise-architect.lead-ops-change`, `engineer.apply-ops-change`, `reviewer.review-pr`, `engineer.respond-to-review`, `tech-writer.accumulate-changelog`).
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th workflow in dispatch-graph shape. Methodology lives in the agent tasks (`principal-engineer.lead-ops-change`, `engineer.apply-ops-change`, `reviewer.review-pr`, `engineer.respond-to-review`, `tech-writer.accumulate-changelog`).
 
 ## Preconditions (workflow-level GATE)
 
@@ -30,17 +30,17 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th work
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/enterprise-architect.md` — `lead-ops-change` (classify, blast radius, plan, mandatory rollback) — leads
+- `compass/agents/principal-engineer.md` — `lead-ops-change` (classify, blast radius, plan, mandatory rollback) — leads
 - `compass/agents/engineer.md` — `apply-ops-change` (execute per plan, test rollback) + `respond-to-review`
 - `compass/agents/reviewer.md` — `review-pr` (+ `security-reviewer.review-pr-security` auto-engages on secrets/IAM/network/auth/certs)
 - `compass/agents/tech-writer.md` — `accumulate-changelog` (if user-impacting)
 
 ## Dispatch graph
 
-### Step 1. `enterprise-architect.lead-ops-change` (Enterprise Architect agent owns)
+### Step 1. `principal-engineer.lead-ops-change` (Principal Engineer agent owns)
 
-**Dispatches:** Enterprise Architect agent
-**Task definition:** `compass/agents/enterprise-architect.md` → Task `lead-ops-change`
+**Dispatches:** Principal Engineer agent
+**Task definition:** `compass/agents/principal-engineer.md` → Task `lead-ops-change`
 **Input:** ops description / ticket · `docs/foundation/architecture.md` · affected bet/system context
 **What it covers:** classify the change (additive / amendment / emergency) — record it as `change_class` in the doc frontmatter → determine bet-link vs standalone hygiene → assess blast radius (`[cross-artifact-sweep-on-contract-shift]`) → draft the ops-change doc (`compass/templates/ops-change.md`) with domain tag, affected systems, and a **mandatory, explicit, testable, time-bounded rollback procedure** → DRI seed → **project the ops-change to Jira (#72) as a Task** (or a **Bug** when `change_class: emergency` — an incident-driven change), **bet-linked → under the bet's Epic**, hygiene → standalone, holding the `jira_key` pointer (status derives from ground truth, #57).
 **Output:** ops-change doc (`docs/ops/<ops-id>.md` or `docs/epics/<epic-id>/ops/<ops-id>.md`), `status: proposed`, projected to Jira as a **Task** (or **Bug** if emergency)
@@ -107,4 +107,4 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); 8th work
 ### Migration (legacy prose → v0.3.45 dispatch graph)
 
 - **Pre-v0.3.45:** 6-phase embedded-methodology prose (18 numbered steps).
-- **v0.3.45:** thin dispatch graph (8th in dispatch-graph shape). Methodology moved INTO agent tasks — new `engineer.apply-ops-change` task added (execute per approved plan + test rollback); `enterprise-architect.lead-ops-change` already existed. No behavior dropped (mandatory tested rollback, all-ops-equal, security auto-engage, domain tags, hygiene-cron-still-reviewed all preserved). `[explicit-dispatch-surfaces-latent-participation]`: confirmed reviewer/tech-writer/security-reviewer `ops` participation (already in frontmatter).
+- **v0.3.45:** thin dispatch graph (8th in dispatch-graph shape). Methodology moved INTO agent tasks — new `engineer.apply-ops-change` task added (execute per approved plan + test rollback); `principal-engineer.lead-ops-change` already existed. No behavior dropped (mandatory tested rollback, all-ops-equal, security auto-engage, domain tags, hygiene-cron-still-reviewed all preserved). `[explicit-dispatch-surfaces-latent-participation]`: confirmed reviewer/tech-writer/security-reviewer `ops` participation (already in frontmatter).

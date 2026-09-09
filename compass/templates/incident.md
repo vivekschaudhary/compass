@@ -63,7 +63,7 @@ area_tags: []
 ## DRI Log
 
 ### Decisions
-- [time] [Engineer | Enterprise Architect | PM] <decision> — rationale
+- [time] [Engineer | Principal Engineer | PM] <decision> — rationale
 
 ### Risks
 - [time] [role] <risk of recurrence / spread> — likelihood — impact

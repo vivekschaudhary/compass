@@ -1,7 +1,7 @@
 ---
 name: feature-architecture
 status: active
-owner: architect
+owner: staff-engineer
 auto_invokes: []
 invoked_by: [create-brief, manual]
 version: 0.3.26
@@ -37,7 +37,7 @@ This workflow is a **thin dispatch graph** per `[workflow-as-dispatch-graph]` (c
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/architect.md` — primary agent; drafts bet architecture + runs deviation gate
+- `compass/agents/staff-engineer.md` — primary agent; drafts bet architecture + runs deviation gate
 - `compass/agents/delivery-manager.md` — final status update step
 
 ## Dispatch graph
@@ -46,10 +46,10 @@ Either runtime is valid:
 - **Today (no orchestrator):** human opens Architect agent on a CLI host (Claude Code, Codex), pastes workflow context, agent runs task, halts at HITL.
 - **v0.4 (orchestrator):** `python3 -m compass.orchestrator.run create-epic-architecture --context "epic-id: <epic-id>"`.
 
-### Step 1. `architect.draft-epic-architecture` (Architect agent owns)
+### Step 1. `staff-engineer.draft-epic-architecture` (Architect agent owns)
 
 **Dispatches:** Architect agent
-**Task definition:** `compass/agents/architect.md` → Task `draft-epic-architecture`
+**Task definition:** `compass/agents/staff-engineer.md` → Task `draft-epic-architecture`
 **Input:** epic-id · brief · `docs/foundation/architecture.md` Stack table · `docs/foundation/product.md` · existing code (read-only) · prior bet architectures (if any)
 **What it covers:** state check (architecture_required: false → exit with DRI) → load context → foundational-stack deviation gate (STOP + escalate if new tools detected) → draft 12-section `docs/epics/<epic-id>/architecture.md` → set `status: proposed` → halt at HITL gate.
 **Output:** `docs/epics/<epic-id>/architecture.md` with `status: proposed`
@@ -78,7 +78,7 @@ Before marking this workflow complete, verify:
 - [ ] ≥1 real alternative documented (not strawman)
 - [ ] Consequences has both positive AND negative + reversibility rating
 - [ ] ≥1 DRI Decision logged
-- [ ] If deviation gate fired: DRI Issue logged (severity High, owner Enterprise Architect) + escalation path named
+- [ ] If deviation gate fired: DRI Issue logged (severity High, owner Principal Engineer) + escalation path named
 - [ ] Principle #16 satisfied: no silent stack widening inside the bet doc
 
 ## Output summary contract
@@ -89,7 +89,7 @@ Before marking this workflow complete, verify:
 
 **ADR-not-gate:** architecture is an artifact, not a hard gate. Small bets can skip via `architecture_required: false` in brief DRI (Architect logs rationale and exits at Step 1 — no architecture.md produced). Engineer can start as soon as architecture is `approved`; no waiting for "perfect."
 
-**Enterprise/Solution Architect:** the legacy workflow always engaged Enterprise Architect alongside Architect. In the dispatch-graph shape, cross-system implications live in the architecture.md "Cross-system implications" section (Step 1, section 7). If Enterprise Architect review is required for a specific bet, run it as a separate `/ops` task or inline in the HITL review — do not silently skip it. Enterprise Architect agent migration deferred — not in the MVP.
+**Enterprise/Solution Architect:** the legacy workflow always engaged Principal Engineer alongside Architect. In the dispatch-graph shape, cross-system implications live in the architecture.md "Cross-system implications" section (Step 1, section 7). If Principal Engineer review is required for a specific bet, run it as a separate `/ops` task or inline in the HITL review — do not silently skip it. Principal Engineer agent migration deferred — not in the MVP.
 
 **Anti-patterns:**
 - `silent-stack-introduction` — introducing tools not in the foundational stack inside a bet doc. Deviation gate hard-stops this; never rationalize past it.

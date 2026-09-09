@@ -28,7 +28,7 @@ const BLURB: Record<string, string> = {
   "product-owner":
     "Stories to shape and refine before they reach the build queue.",
   engineer: "Stories arrive here tech-ready; the agent implements, you review.",
-  architect: "Technical designs to author against the code as it actually is.",
+  "staff-engineer": "Technical designs to author against the code as it actually is.",
   designer: "Design specs and the library every screen is built from.",
   reviewer:
     "Diffs to review on a fresh context — you see the change and the spec, not the history.",

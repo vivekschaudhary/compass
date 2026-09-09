@@ -1,16 +1,17 @@
 code,label,title,tier,scope,workstream,agent,hosts,capabilities
 delivery-manager,Delivery Manager,Runs the engagement,oversight,everyone,Delivery,delivery-manager,"claude,codex,gemini","edit-engagement-specs,approve-gates"
-product-manager,Product Manager,Owns the why,oversight,everyone,Product,product-manager,"claude,codex","approve-gates"
-researcher,Researcher,Evidence for the bet,practitioner,workstream,Product,researcher,"claude",""
-designer,Designer,Flows and screens,practitioner,mine,Design,designer,"claude",""
-ux-writer,UX Writer,The words on the screen,practitioner,mine,Design,ux-writer,"claude",""
-architect,Architect,The how — grounded in the code,practitioner,workstream,Engineering,architect,"claude,codex",""
-engineer,Engineer,Builds and ships,practitioner,mine,Engineering,engineer,"claude,codex,gemini",""
-automation,Automation,End-to-end tests,practitioner,mine,QA,automation,"claude",""
-gtm,GTM,Launch and comms,practitioner,mine,GTM,gtm,"claude",""
-sre,SRE,Change and runbooks,practitioner,mine,SRE,sre,"claude",""
-pmo-analyst,PMO Analyst,Configures the org and its engagements,platform,everyone,,pmo-analyst,"","edit-org-defaults,edit-engagement-specs,manage-users"
+product-manager,Product Manager,The bar for what gets built,oversight,everyone,Product,product-manager,"claude,codex",approve-gates
+product-owner,Product Owner,Writes what to build,practitioner,everyone,Product,product-owner,"claude,codex",
+researcher,Researcher,Evidence for the bet,practitioner,workstream,Product,researcher,claude,
+designer,Designer,Flows and screens,practitioner,mine,Design,designer,claude,
+ux-writer,UX Writer,The words on the screen,practitioner,mine,Design,ux-writer,claude,
+principal-engineer,Principal Engineer,The standard the how is held to,oversight,everyone,Engineering,principal-engineer,,
+staff-engineer,Staff Engineer,The how — grounded in the code,practitioner,workstream,Engineering,staff-engineer,"claude,codex",
+engineer,Engineer,Builds and ships,practitioner,mine,Engineering,engineer,"claude,codex,gemini",
+automation,Automation,End-to-end tests,practitioner,mine,QA,automation,claude,
+gtm,GTM,Launch and comms,practitioner,mine,GTM,gtm,claude,
+sre,SRE,Change and runbooks,practitioner,mine,SRE,sre,claude,
+pmo-analyst,PMO Analyst,Configures the org and its engagements,platform,everyone,,pmo-analyst,,"edit-org-defaults,edit-engagement-specs,manage-users"
 reviewer,Reviewer,Reviewer,practitioner,everyone,Engineering,reviewer,,
 tech-writer,Tech Writer,Technical Writer,practitioner,mine,Product,tech-writer,,
-enterprise-architect,Enterprise Architect,Enterprise Architect,oversight,everyone,Engineering,enterprise-architect,,
 support,Support,Support Engineer,practitioner,mine,Support,support,,

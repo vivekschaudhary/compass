@@ -63,7 +63,7 @@ everything eliminates, and it needs no argument about quality to be true.
 ### What is actually new
 
 Today a tracker holds only the **engineering half** of delivery. The PM writing a story, the
-architect producing a design, the DM staffing the engagement — that work happens, and the board
+staff-engineer producing a design, the DM staffing the engagement — that work happens, and the board
 never knows it exists.
 
 Putting the _whole_ lifecycle on the board is the first time an organisation can see planning work
@@ -216,7 +216,7 @@ can be diffed against the published version without a translation step.
 
 | ord | role                 | task                        | depends-on |
 | --- | -------------------- | --------------------------- | ---------- |
-| 1   | delivery-manager     | File the SOW                | —          |
+| 1   | delivery-manager     | SOW                         | —          |
 | 2   | product-manager      | Product brief               | 1          |
 | 3   | designer             | Design library              | 2          |
 | 4   | delivery-manager     | Timeline and milestones     | 1          |
@@ -224,7 +224,7 @@ can be diffed against the published version without a translation step.
 | 6   | delivery-manager     | Roles and responsibilities  | 5          |
 | 7   | product-manager      | Epics from milestones       | 4, 2       |
 | 8   | delivery-manager     | Tailor the delivery plan    | 6, 7, 5    |
-| 9   | enterprise-architect | Foundation architecture     | 2, 7       |
+| 9   | principal-engineer | Foundation architecture     | 2, 7       |
 | 10  | delivery-manager     | Team working agreement      | 5, 6       |
 | 11  | product-manager      | Sprint plan for sprint 1    | 7, 5, 8    |
 | 12  | delivery-manager     | Kickoff                     | 11, 10, 8  |
@@ -478,6 +478,6 @@ the board.
 
 ## 10 · Open
 
-**Nothing blocking.** The one thing genuinely unanswered: whether an architect will accept a drafted
+**Nothing blocking.** The one thing genuinely unanswered: whether an staff-engineer will accept a drafted
 architecture and revise it by chat rather than opening Confluence and writing it themselves. That is
 answered by one real deliverable with one real person, not by more design.

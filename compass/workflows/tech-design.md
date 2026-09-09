@@ -1,7 +1,7 @@
 ---
 name: tech-design
 status: active
-owner: architect
+owner: staff-engineer
 auto_invokes: []
 invoked_by: [manual]
 version: 0.3.1
@@ -21,7 +21,7 @@ Author **one Ready story's technical design** — the *how* for a single functio
 
 ## Architectural shape
 
-Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24) — story-scoped (one Story per run, like `/build`). Methodology lives in `compass/agents/architect.md` → Task `design-story-tech`. The write-back onto the ticket + the `tech-ready` mark is **orchestrator** machinery (not an agent step), so the tracking can't be skipped (#89).
+Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24) — story-scoped (one Story per run, like `/build`). Methodology lives in `compass/agents/staff-engineer.md` → Task `design-story-tech`. The write-back onto the ticket + the `tech-ready` mark is **orchestrator** machinery (not an agent step), so the tracking can't be skipped (#89).
 
 ## Preconditions (workflow-level GATE)
 
@@ -31,14 +31,14 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24) — story
 
 ## Roles invoked (agents dispatched)
 
-- `compass/agents/architect.md` — Task `design-story-tech` (reads the Story + the real code → authors `## Technical approach`, cited to files; foundational-stack deviation gate holds).
+- `compass/agents/staff-engineer.md` — Task `design-story-tech` (reads the Story + the real code → authors `## Technical approach`, cited to files; foundational-stack deviation gate holds).
 
 ## Dispatch graph
 
-### Step 1. `architect.design-story-tech` (Architect agent owns)
+### Step 1. `staff-engineer.design-story-tech` (Architect agent owns)
 
 **Dispatches:** Architect agent (tool-capable host — it reads the real code via `read_file`/`glob`/`grep`, #130)
-**Task definition:** `compass/agents/architect.md` → Task `design-story-tech`
+**Task definition:** `compass/agents/staff-engineer.md` → Task `design-story-tech`
 **Input:** the Jira Story (functional AC/description) · the project source (read-only) · foundation Stack table · the bet's `architecture.md` if any
 **What it covers:** read the story + the **actual code** → foundational-stack deviation gate (STOP + escalate to `/setup-foundation-architecture` if the slice needs an un-listed tool) → author a `## Technical approach` section (data model / migrations · API / contract · **file/module touch-list of real paths** · how it fits existing patterns · test strategy), **every claim cited to a file read** (`[cite-or-mark-na]`), bounded by the bet architecture. Design only — does NOT write code or build.
 **Output:** the `## Technical approach` section for this story.

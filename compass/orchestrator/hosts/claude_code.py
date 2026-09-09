@@ -111,7 +111,7 @@ def _build_cli_argv(model, agent_file_path, project_dir=None, allow_write=False)
         "--verbose",
         # #170: stream PARTIAL message chunks (token deltas) too. The idle-timeout
         # guard (#152) watches stdout silence — but a long single turn (e.g. the
-        # architect composing a 12-section doc after deep exploration) emits NOTHING
+        # staff-engineer composing a 12-section doc after deep exploration) emits NOTHING
         # until the turn completes, so a *working* step looked idle and got killed at
         # 300s. Partial chunks make the generation continuously visible → the guard
         # only trips on a TRUE hang (zero deltas). _progress_line ignores these (they

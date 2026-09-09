@@ -21,7 +21,7 @@ stories) is **pulled from state** after the foundation is approved; it is NOT pr
 |---|--------|----------|-------|-------------|------------|
 | 1 | Connect systems of record | — (intake/settings) | delivery-manager | tickets.wired && docs.wired && scm.wired | — |
 | 2 | Create product foundation | /create-product-brief | pm | product@docs == approved | 1 |
-| 3 | Foundation architecture | /setup-foundation-architecture | architect | foundation-arch@docs == approved | 2 |
+| 3 | Foundation architecture | /setup-foundation-architecture | staff-engineer | foundation-arch@docs == approved | 2 |
 
 ## How a ticket is worked
 Run its `workflow`; that drives the ticket through the lifecycle:

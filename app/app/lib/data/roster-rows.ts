@@ -5,7 +5,7 @@
 // table is what deserves the tests.
 
 export type RosterRow = {
-  /** As written — "Enterprise Architect". Mapped to a role code by the caller, against the catalogue. */
+  /** As written — "Principal Engineer". Mapped to a role code by the caller, against the catalogue. */
   roleLabel: string;
   /** The person, or null where the row deliberately records a vacancy. */
   holder: string | null;

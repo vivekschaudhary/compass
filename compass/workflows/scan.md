@@ -78,7 +78,7 @@ Each check has: ID · phase · severity · confidence-derivation hints · suppre
 | ARCH-02 | Decision ambiguous (Decision section > 1 paragraph or unclear posture) | High | Yes (DRI) | as above |
 | ARCH-03 | Alternatives not considered (<2 real, non-strawman) | High | Yes (DRI) | as above |
 | ARCH-04 | Reversibility not assessed (no reversibility tag per decision) | Medium | Yes (owner accept) | as above |
-| ARCH-05 | Cross-system review missing (Enterprise Architect sign-off absent) | High | Yes (DRI) — non-suppressible if touches new external service | as above |
+| ARCH-05 | Cross-system review missing (Principal Engineer sign-off absent) | High | Yes (DRI) — non-suppressible if touches new external service | as above |
 | ARCH-06 | Test strategy undefined | Medium | Yes (DRI) | as above |
 | ARCH-07 | Rollout plan missing | Medium | Yes (DRI) — High if feature flag / migration / staged rollout implied | as above |
 

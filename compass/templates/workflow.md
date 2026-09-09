@@ -64,8 +64,8 @@ artifacts:
 
 role.task  (the role's core primitive task — the atom of work):
   researcher.research
-  enterprise-architect.foundation-architecture
-  architect.bet-architecture · architect.tech-design
+  principal-engineer.foundation-architecture
+  staff-engineer.bet-architecture · staff-engineer.tech-design
   pm.decompose · pm.draft-brief · pm.arbitrate-dispute
   product-owner.refine
   designer.design-spec · ux-writer.copy

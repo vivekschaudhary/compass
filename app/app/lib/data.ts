@@ -64,8 +64,8 @@ export const COMPASS_ROLES: { code: string; label: string }[] = [
   { code: "pm", label: "Product Manager" },
   { code: "product-owner", label: "Product Owner" },
   { code: "researcher", label: "Researcher" },
-  { code: "enterprise-architect", label: "Enterprise Architect" },
-  { code: "architect", label: "Architect" },
+  { code: "principal-engineer", label: "Principal Engineer" },
+  { code: "staff-engineer", label: "Architect" },
   { code: "designer", label: "Designer" },
   { code: "ux-writer", label: "UX Writer" },
   { code: "engineer", label: "Engineer" },
@@ -238,7 +238,7 @@ export const FIXTURE: ProgramModel = {
     // Engineer (Maria)
     { id: "j-eng-1", role: "eng", kind: "review", title: "Review PR — KAN-101 Login", subtitle: "Your engineer agent implemented it and tests are green. Your review + merge.", meta: "AI-built · CI ✓", related: "KAN-101", primary: "Review & merge" },
     { id: "j-eng-2", role: "eng", kind: "blocked", title: "KAN-112 Filter bar", subtitle: "Can't start — blocked by the design sub-task (KAN-30d, Alex).", related: "KAN-112", primary: "Get help", secondary: "Raise CR", tone: "warn" },
-    { id: "j-eng-3", role: "eng", kind: "drafting", title: "Tech-design — KAN-105 Saved filters", subtitle: "Your architect agent is drafting the technical approach, grounded in the code…", related: "KAN-105" },
+    { id: "j-eng-3", role: "eng", kind: "drafting", title: "Tech-design — KAN-105 Saved filters", subtitle: "Your staff-engineer agent is drafting the technical approach, grounded in the code…", related: "KAN-105" },
     { id: "j-eng-4", role: "eng", kind: "build", title: "Build & merge — KAN-118 Saved views", subtitle: "Ready + tech-ready. Your engineer agent implements, runs the CI-parity checks, and opens the PR.", meta: "ready · tech-ready", related: "KAN-118", primary: "Build" },
     // QA (Priya)
     { id: "j-qa-1", role: "qa", kind: "review", title: "Review test plan — KAN-22 Auth suite", subtitle: "Your QA agent drafted the auth happy-path + edge coverage.", meta: "AI-drafted", related: "KAN-22", primary: "Review" },

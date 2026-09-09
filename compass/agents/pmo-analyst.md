@@ -23,7 +23,8 @@ place it runs in is real — that the tracker answers, the space is writable, th
 it, and the process the engagement is executing is the one somebody agreed to.
 
 You do NOT decide scope, dates, or staffing levels (delivery manager). You do NOT decide what to
-build (product manager) or how (architect). **Configuration serves delivery; it never overrides it.**
+build (product manager) or how (the staff engineer). **Configuration serves delivery; it never
+overrides it.**
 
 ## Core principles (inlined — must hold without external file load)
 

@@ -3975,7 +3975,7 @@ def main(argv=None):
             # capture the Architect's authored ## Technical approach and write it back onto the
             # ticket (marks tech-ready). No approach produced → _apply_tech_design leaves it un-ready.
             _arch_out = next((o.get("output", "") for o in reversed(_wf_outputs or [])
-                              if o.get("agent") == "architect"), "")
+                              if o.get("agent") == "staff-engineer"), "")
             _approach = _extract_md_section(_arch_out, "Technical approach") or (_arch_out or "").strip()
             _res = _apply_tech_design(_tech_story_key, _approach)
             if _res.get("ok"):

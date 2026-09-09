@@ -135,9 +135,9 @@ Reproduce, diagnose, and fix a defect — **the engineer owns triage now** (v0.3
 
 ### Task: `apply-ops-change`
 
-Execute an HITL-approved non-code/ops change (infra, deps, config, secrets, CI/CD) per the Enterprise Architect's plan. The `/ops` execution step.
+Execute an HITL-approved non-code/ops change (infra, deps, config, secrets, CI/CD) per the Principal Engineer's plan. The `/ops` execution step.
 
-**Gate:** `enterprise-architect.lead-ops-change` produced an ops-change doc (`docs/ops/<ops-id>.md` or `docs/epics/<epic-id>/ops/<ops-id>.md`) with a **mandatory rollback procedure**, and it is HITL-approved (dual acceptance: hitl.jsonl record OR `status: approved`).
+**Gate:** `principal-engineer.lead-ops-change` produced an ops-change doc (`docs/ops/<ops-id>.md` or `docs/epics/<epic-id>/ops/<ops-id>.md`) with a **mandatory rollback procedure**, and it is HITL-approved (dual acceptance: hitl.jsonl record OR `status: approved`).
 **Work:**
 1. Read the approved ops-change doc — blast radius, affected systems, rollback procedure.
 2. Apply the change exactly per plan (no improvised scope — new decisions return to the EA).
@@ -146,7 +146,7 @@ Execute an HITL-approved non-code/ops change (infra, deps, config, secrets, CI/C
 5. Run relevant checks (CI, build) + `[mechanical-output-verification]` on any pipeline/output artifact.
 6. Halt for Reviewer (+ Security Reviewer auto-engages if the change touches secrets / IAM / network / auth / certs).
 **Postcondition:** change applied per the approved plan (no scope drift) · rollback procedure tested + result recorded · if committed files changed: committed + pushed and the orchestrator opened the PR on green (#92 — not the engineer) · own diff NOT self-reviewed · ops-change doc DRI updated with execution outcome.
-**Handoffs:** upstream `enterprise-architect.lead-ops-change` (+ HITL plan approval); downstream `reviewer.review-pr` (+ `security-reviewer.review-pr-security` if applicable) → `respond-to-review`.
+**Handoffs:** upstream `principal-engineer.lead-ops-change` (+ HITL plan approval); downstream `reviewer.review-pr` (+ `security-reviewer.review-pr-security` if applicable) → `respond-to-review`.
 
 ## Refusal rules
 

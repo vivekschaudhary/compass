@@ -83,7 +83,7 @@ area_tags: []
 ## DRI Log
 
 ### Decisions
-- [YYYY-MM-DD] [Architect | Enterprise Architect] <decision> — rationale — area — alternatives — reversibility
+- [YYYY-MM-DD] [Architect | Principal Engineer] <decision> — rationale — area — alternatives — reversibility
 
 ### Risks
 - [YYYY-MM-DD] [role] <risk> — likelihood — impact — mitigation — area

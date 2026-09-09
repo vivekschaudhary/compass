@@ -33,11 +33,11 @@ Run one sprint: commit to work, do it, show it, and amend the plan for the next 
 
 ### Ceremony rows — authored, the same every sprint
 
-| # | task | dispatch | owner | reads | produces | depends-on |
-|---|------|----------|-------|-------|----------|------------|
-| 1 | Sprint planning | `agent: product-manager.sprint-planning` | product-manager | `03-delivery/plan` · `02-scope/deliverables` · `01-foundation/team` | `05-cadence/sprint-plans` | — |
-| 2 | Sprint review | `agent: delivery-manager.sprint-review` | delivery-manager | `05-cadence/sprint-plans` | `05-cadence/sprint-reviews` | 1 |
-| 3 | Retro | `agent: delivery-manager.sprint-retro` | delivery-manager | `05-cadence/sprint-reviews` | `05-cadence/retros` | 2 |
+| # | task | dispatch | owner | produces | depends-on |
+|---|------|----------|-------|----------|------------|
+| 1 | Sprint planning | `workflow: sprint-plan` | product-owner | `—` | — |
+| 2 | Sprint review | `agent: delivery-manager.sprint-review` | delivery-manager | `05-cadence/sprint-reviews` | 1 |
+| 3 | Retro | `agent: delivery-manager.sprint-retro` | delivery-manager | `05-cadence/retros` | 2 |
 
 ### The committed work — on the board, not as rows here
 

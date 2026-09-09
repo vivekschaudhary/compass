@@ -10,7 +10,7 @@ Schema (one JSON object per line):
   workflow      str   — workflow name (e.g. create-epic-architecture)
   epic_id        str   — bet ID if --bet was passed (e.g. CB-4), else null
   step          int   — step number within the workflow
-  agent         str   — agent name (e.g. architect)
+  agent         str   — agent name (e.g. staff-engineer)
   task          str   — task name (e.g. draft-epic-architecture)
   host          str   — host that dispatched (claude / openai / gemini)
   model         str   — model override if set, else null
@@ -288,8 +288,8 @@ _ROLE_BY_AGENT = {
     "reviewer": "reviewer",
     "security-reviewer": "security-reviewer",
     "automation": "automation",
-    "architect": "architect",
-    "enterprise-architect": "architect",
+    "staff-engineer": "staff-engineer",
+    "principal-engineer": "staff-engineer",
     "pm": "pm",
     "delivery-manager": "delivery-manager",
 }

@@ -270,7 +270,7 @@ class TestAgentToolsFrontmatter(unittest.TestCase):
         # review, so it gets the #87 read-only grant (read_file/glob/grep) —
         # and NO write/bash (it does not implement). Load-bearing for the
         # functional-story → arch-review → build flow.
-        arch = Path(__file__).resolve().parents[2] / "agents" / "architect.md"
+        arch = Path(__file__).resolve().parents[2] / "agents" / "staff-engineer.md"
         self.assertEqual(_read_agent_tools(arch), ["read_file", "glob", "grep"])
 
 

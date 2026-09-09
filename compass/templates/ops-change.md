@@ -59,10 +59,10 @@ How will we know it worked?
 ## DRI Log
 
 ### Decisions
-- [YYYY-MM-DD] [Enterprise Architect] <decision> — rationale — area: ops — reversibility
+- [YYYY-MM-DD] [Principal Engineer] <decision> — rationale — area: ops — reversibility
 
 ### Risks
-- [YYYY-MM-DD] [Enterprise Architect] <risk> — likelihood — impact — mitigation
+- [YYYY-MM-DD] [Principal Engineer] <risk> — likelihood — impact — mitigation
 
 ### Issues
 - [YYYY-MM-DD] [role] <issue> — severity — owner — status

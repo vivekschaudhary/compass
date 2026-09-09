@@ -1,12 +1,12 @@
 code,label,workstream,phase,owner_role,trigger,enabled,repeatable
 onboarding,Onboarding engagement,Delivery,Onboarding,pmo-analyst,,true,false
 sprint-0,Discovery,Delivery,Discovery,delivery-manager,,true,false
-foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,enterprise-architect,,false,false
-feature,Feature,Product,Build,product-manager,,false,true
-product-brief,Workflow: /product-brief,Product,Discovery,product-manager,,false,false
-feature-architecture,Workflow: /feature-architecture,Engineering,Build,architect,,false,true
+foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,staff-engineer,,true,false
+feature,Feature,Product,Build,product-owner,,true,true
+product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,true,false
+feature-architecture,Workflow: /feature-architecture,Engineering,Build,staff-engineer,,false,true
 build,Workflow: /build,Engineering,Build,engineer,,true,true
-tech-design,Technical design,Engineering,Build,architect,,true,true
+tech-design,Technical design,Engineering,Build,staff-engineer,,true,true
 story,Workflow: /story,Product,Build,product-manager,,false,true
 sprint,Sprint,Delivery,Build,delivery-manager,,true,true
 release,Release,Delivery,Build,delivery-manager,,false,true
@@ -17,3 +17,5 @@ release-comms,Release comms,GTM,Build,gtm,,false,true
 job-aids,Job aids and enablement,GTM,Build,tech-writer,,false,true
 measure,Measure,Product,Operate,researcher,,false,true
 learn,Learn,Product,Operate,product-manager,,false,true
+design-library,Design library,Design,Discovery,designer,,true,true
+sprint-plan,Sprint plan,Delivery,Build,product-owner,,true,true

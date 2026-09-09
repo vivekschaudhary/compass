@@ -10,7 +10,7 @@ const REAL = `
 |---|---|---|---|
 | Delivery Manager | **John** | \`basecamp\` (2 steps) | Stated by DM at intake |
 | Product Manager | **Jill** | \`create-epics\` | Stated by DM at intake |
-| Enterprise Architect | **Jim** | \`setup-foundation-architecture\` (8 steps) | Stated by DM at intake |
+| Principal Engineer | **Jim** | \`setup-foundation-architecture\` (8 steps) | Stated by DM at intake |
 | Engineer | **Jay** | \`build\`, \`fix\` | Stated by DM at intake |
 | Engineer | **Jackie** | \`build\`, \`fix\` | Stated by DM at intake |
 | Support | **Unassigned** | \`triage\` (9 steps) | See "Deliberately unstaffed" |

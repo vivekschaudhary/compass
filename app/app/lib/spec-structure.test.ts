@@ -83,7 +83,7 @@ describe("additions are informational, not blocking", () => {
   });
 
   it("adding a step and an agent is safe", () => {
-    const after = wf([...BASE.steps, step(6, false, "architect")]);
+    const after = wf([...BASE.steps, step(6, false, "staff-engineer")]);
     const changes = structuralChanges(BASE, after);
     expect(changes.filter(isDangerous)).toEqual([]);
     expect(changes.map((c) => c.kind)).toEqual(expect.arrayContaining(["step-added", "agent-added"]));

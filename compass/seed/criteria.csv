@@ -3,41 +3,43 @@ onboarding,validate-connections,done,The doc store answers,connector,docs,is,wir
 onboarding,validate-connections,done,The tracker answers,connector,tickets,is,wired
 sprint-0,,ready,The systems of record answered,connector,docs,is,wired
 sprint-0,,ready,,connector,tickets,is,wired
-sprint-0,file-sow,done,The SOW is filed — everything downstream derives from it and cannot be invented,document,02-scope/sow,status,published
-sprint-0,draft-product-brief,done,The product brief is published,document,01-foundation/product-brief,status,published
+sprint-0,file-sow,done,The SOW is filed — everything downstream derives from it and cannot be invented,document,SOW,status,published
+sprint-0,file-requirements,done,The requirements are filed,document,Requirements,status,published
+sprint-0,file-requirements,done,"They are filed as supplied, not paraphrased — everything downstream cites them and cannot tell a summary from the source",,,,
+sprint-0,draft-product-brief,done,The product brief is published,document,product-brief,status,published
 sprint-0,draft-product-brief,done,Every feature the SOW commits to is covered or named out of scope,,,,
-sprint-0,build-design-library,done,The design library is published,document,01-foundation/design-library,status,published
+sprint-0,build-design-library,done,The design library is published,document,design-library,status,published
 sprint-0,build-design-library,done,It links the real artifact — the Figma file or component library — rather than describing it,,,,
-sprint-0,draft-timeline,done,The timeline is published,document,02-scope/timeline,status,published
+sprint-0,draft-timeline,done,The timeline is published,document,Milestones and timeline,status,published
 sprint-0,draft-timeline,done,Every milestone has a date and something it delivers,,,,
-sprint-0,propose-staffing,done,The roster is published,document,01-foundation/team,status,published
+sprint-0,propose-staffing,done,The roster is published,document,Staffing plan,status,published
 sprint-0,propose-staffing,done,Every role a later phase assigns work to has a named holder,,,,
 sprint-0,propose-staffing,done,Roles left deliberately unstaffed are recorded with a reason,,,,
-sprint-0,draft-raci,done,Roles and responsibilities are published,document,01-foundation/raci,status,published
+sprint-0,draft-raci,done,Roles and responsibilities are published,document,RACI,status,published
 sprint-0,draft-raci,done,Every named holder appears against at least one responsibility,,,,
-sprint-0,draft-features,done,The features are published,document,02-scope/features,status,published
+sprint-0,draft-features,done,The features are published,document,features,status,published
 sprint-0,draft-features,done,Every feature names the outcome it is betting on,,,,
 sprint-0,draft-features,done,"Every feature says how it will be judged — the target, and where the number comes from",,,,
 sprint-0,draft-features,done,"What the brief leaves unclear is an open question, not a guessed feature",,,,
-sprint-0,draft-epics,done,The epics are published,document,02-scope/deliverables,status,published
+sprint-0,draft-epics,done,The epics are published,document,deliverables,status,published
 sprint-0,draft-epics,done,Every epic belongs to a feature,,,,
 sprint-0,draft-epics,done,Every epic traces to something the brief or the SOW commits to,,,,
 sprint-0,draft-epics,done,Every epic names the milestone it serves,,,,
 sprint-0,draft-epics,done,"What the brief leaves unclear is an open question, not a guessed epic",,,,
-sprint-0,tailor-delivery-plan,done,The delivery plan is published,document,03-delivery/plan,status,published
+sprint-0,tailor-delivery-plan,done,The delivery plan is published,document,delivery plan,status,published
 sprint-0,tailor-delivery-plan,done,Every role the plan names is staffed on the roster,,,,
-sprint-0,draft-foundation-architecture,done,The foundation architecture is published,document,01-foundation/foundational-architecture,status,published
+sprint-0,draft-foundation-architecture,done,The foundation architecture is published,document,foundational-architecture,status,published
 sprint-0,draft-foundation-architecture,done,Every epic has a named home in the architecture,,,,
-sprint-0,draft-ways-of-working,done,Ways of working is published,document,01-foundation/ways-of-working,status,published
-sprint-0,draft-sprint-plan,done,This sprint's plan is published,document,05-cadence/sprint-plans,status,published
+sprint-0,draft-ways-of-working,done,Ways of working is published,document,ways-of-working,status,published
+sprint-0,draft-sprint-plan,done,This sprint's plan is published,document,sprint-plans,status,published
 sprint-0,draft-sprint-plan,done,Every committed story belongs to an epic,ticket,committed-have-epic,is,true
 sprint-0,draft-sprint-plan,done,Every committed story is on the board with an owner,ticket,on-board,is,true
 sprint-0,draft-sprint-plan,done,"The plan fits the roster's capacity, or says where it does not",,,,
 sprint-0,draft-sprint-plan,done,Work taken on that was not in the plan is recorded as unplanned,,,,
-sprint-0,kickoff,done,The kickoff record is published,document,05-cadence/kickoff,status,published
+sprint-0,kickoff,done,The kickoff record is published,document,kickoff,status,published
 sprint-0,kickoff,done,"Kickoff happened — the Delivery Manager confirms it, and their name is on the close",,,,
-sprint,,ready,The delivery plan is published,document,03-delivery/plan,status,published
-sprint,sprint-planning,done,This sprint's plan is published,document,05-cadence/sprint-plans,status,published
+sprint,,ready,The delivery plan is published,document,delivery plan,status,published
+sprint,sprint-planning,done,This sprint's plan is published,document,sprint-plans,status,published
 sprint,sprint-planning,done,Every committed story belongs to an epic,ticket,committed-have-epic,is,true
 sprint,sprint-planning,done,Every committed story is on the board with an owner,ticket,on-board,is,true
 sprint,sprint-planning,done,"The plan fits the roster's capacity, or says where it does not",,,,
@@ -46,3 +48,63 @@ sprint,sprint-review,done,The review is published,document,05-cadence/sprint-rev
 sprint,sprint-review,done,Every story that did not land says why,,,,
 sprint,sprint-retro,done,The retro is published,document,05-cadence/retros,status,published
 sprint,sprint-retro,done,"Actions have a named owner, or are recorded as not taken",,,,
+foundation-architecture,research-architecture,done,The research is published,document,architecture-research,status,published
+foundation-architecture,research-architecture,done,"Every constraint names where it came from — a system, a document, or a person who said it",,,,
+foundation-architecture,research-architecture,done,"What could not be found out is listed, not left as a gap the architecture quietly fills",,,,
+foundation-architecture,review-research,done,The review is published,document,architecture-research-review,status,published
+foundation-architecture,review-research,done,Every finding says what it would cost to be wrong about,,,,
+foundation-architecture,review-research,done,"A review that found nothing says so explicitly, rather than being an empty document",,,,
+foundation-architecture,approve-research,done,"The research is accepted by the principal engineer, and their name is on the close",,,,
+foundation-architecture,derive-architecture,done,The architecture is published,document,foundational-architecture,status,published
+foundation-architecture,derive-architecture,done,Every decision names what it beat and why — an option not considered is not a decision,,,,
+foundation-architecture,derive-architecture,done,Every constraint the research surfaced is either honoured or explicitly overruled,,,,
+foundation-architecture,review-architecture,done,The review is published,document,architecture-review,status,published
+foundation-architecture,review-architecture,done,"Each decision is judged against the research, not against the reviewer's preference",,,,
+foundation-architecture,review-architecture,done,"Disagreements are recorded as findings the approver can rule on, not resolved privately",,,,
+foundation-architecture,approve-architecture,done,"The architecture is accepted by the principal engineer, and their name is on the close",,,,
+foundation-architecture,approve-architecture,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+foundation-architecture,scaffold-foundation,done,The scaffold record is published,document,scaffold-record,status,published
+foundation-architecture,scaffold-foundation,done,"What was created is listed with where it lives, so it can be checked rather than trusted",,,,
+foundation-architecture,scaffold-foundation,done,"The scaffold matches the approved architecture, and any departure is named",,,,
+foundation-architecture,review-scaffold,done,The review is published,document,scaffold-review,status,published
+foundation-architecture,review-scaffold,done,Every departure from the architecture is either justified or raised as a finding,,,,
+foundation-architecture,approve-scaffold,done,"The scaffold is accepted by the principal engineer, and their name is on the close",,,,
+product-brief,gather-evidence,done,The evidence is published,document,brief-evidence,status,published
+product-brief,gather-evidence,done,"Every claim carries a source and a date, or is marked as having none",,,,
+product-brief,gather-evidence,done,"What could not be found out is listed, not left for the brief to assume",,,,
+product-brief,draft-brief,done,The brief is published,document,product-brief,status,published
+product-brief,draft-brief,done,Every claim traces to the evidence or is marked as the author's judgment,,,,
+product-brief,draft-brief,done,"What the client left unclear is an open question, not a guessed requirement",,,,
+product-brief,review-brief,done,The review is published,document,brief-review,status,published
+product-brief,review-brief,done,Each finding says what it would cost to be wrong about,,,,
+product-brief,review-brief,done,"A review that found nothing says so, rather than being an empty document",,,,
+product-brief,approve-brief,done,"The brief is accepted by the product manager, and their name is on the close",,,,
+product-brief,approve-brief,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+feature,draft-feature,done,The features are published,document,features,status,published
+feature,draft-feature,done,Every feature names the outcome it is betting on,,,,
+feature,draft-feature,done,"Every feature says how it will be judged — the target, and where the number comes from",,,,
+feature,review-feature,done,The review is published,document,feature-review,status,published
+feature,review-feature,done,"Each target is judged on whether it could actually be measured, not on whether it sounds right",,,,
+feature,approve-feature,done,"The features are accepted by the product manager, and their name is on the close",,,,
+feature,approve-feature,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+design-library,research-design,done,The research is published,document,design-research,status,published
+design-library,research-design,done,"Existing patterns are named — what the client already uses, and what it costs to depart from it",,,,
+design-library,approve-research,done,"The research is accepted by the product manager, and their name is on the close",,,,
+design-library,derive-library,done,The library is published,document,design-library,status,published
+design-library,derive-library,done,It LINKS the real artifact — the Figma file or component library — rather than describing it,,,,
+design-library,review-library,done,The review is published,document,design-review,status,published
+design-library,review-library,done,"Each finding names the screen or component it is about, not the library in general",,,,
+design-library,approve-library,done,"The library is accepted by the product manager, and their name is on the close",,,,
+design-library,approve-library,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+sprint-plan,research-capacity,done,The capacity picture is published,document,capacity-research,status,published
+sprint-plan,research-capacity,done,"Capacity is derived from the roster and known absence, not assumed from headcount",,,,
+sprint-plan,research-capacity,done,Work already in flight is counted against it,,,,
+sprint-plan,approve-capacity,done,"The capacity picture is accepted by the product manager, and their name is on the close",,,,
+sprint-plan,draft-sprint-plan,done,This sprint's plan is published,document,sprint-plans,status,published
+sprint-plan,draft-sprint-plan,done,Every committed story belongs to an epic,ticket,committed-have-epic,is,true
+sprint-plan,draft-sprint-plan,done,Every committed story is on the board with an owner,ticket,on-board,is,true
+sprint-plan,draft-sprint-plan,done,"The plan fits the capacity that was accepted, or says where it does not",,,,
+sprint-plan,review-plan,done,The review is published,document,sprint-plan-review,status,published
+sprint-plan,review-plan,done,"Each commitment is judged against the accepted capacity, not against ambition",,,,
+sprint-plan,approve-plan,done,"The plan is accepted by the product manager, and their name is on the close",,,,
+sprint-plan,approve-plan,done,Work taken on that was not in the plan is recorded as unplanned,,,,

@@ -1,14 +1,16 @@
-<!-- PLACEHOLDER. Seeded in workflows.csv; its rows are not written yet. The dispatch graph below is
-     empty on purpose — filling it in is what makes this workflow do anything. -->
+<!-- FEATURE — nested from sprint-0, and runnable on its own.
+
+     Author -> independent review -> approval by a different role. The rows below are the seed's;
+     `compass/seed/workflow-steps.csv` is what executes and this is what declares it. -->
 ---
 name: feature
 title: Feature
-owner: product-manager
+owner: product-owner
 scope: product
-trigger: product-manager initiates it
+trigger: product-owner initiates it, or sprint-0 nests it
 creates: one task per row below
-status: draft
-version: 0.1.0
+status: active
+version: 1.0.0
 
 requires: []
 produces: []
@@ -16,11 +18,26 @@ produces: []
 
 ## Purpose
 
-Frame one feature — the bet: what outcome it is betting on, and how it will be judged.
+Frame one feature — the bet: the outcome it is betting on, and how it will be judged.
 
-## Rows — not written yet
+## Dispatch graph
 
-The `## Dispatch graph` heading is deliberately absent until there are rows to put under it.
-`validate.py` refuses a file that declares the section and then has no steps — correctly, since a
-workflow that claims a graph and has none opens runs that create no tasks. The heading arrives with
-the first row.
+`reads` is DERIVED from `depends-on`, so it is not a column here — printing it would author the same
+edge twice. See `deriveReads` in `app/app/lib/import/plan.ts`.
+
+| # | task | dispatch | owner | produces | depends-on |
+|---|------|----------|-------|----------|------------|
+| 1 | The feature and its targets | `agent: product-owner.draft-feature` | product-owner | `features` | — |
+| 2 | Review the feature | `agent: reviewer.review-feature` | reviewer | `feature-review` | 1 |
+| 3 | Accept the feature | `hitl` | product-manager | `—` | 2 |
+
+## Why it is these rows
+
+**The author does not accept it.** The product owner writes; a reviewer judges whether the targets
+could actually be measured, not whether they sound right; the product manager accepts. An agent
+drafts in the product owner's name, so a product owner closing this gate would be approving its
+own work.
+
+**A feature without a target is not a bet.** `feature_metric.target` is NOT NULL for the same
+reason the gate is here: a loop that reaches its learn step with nothing to compare against fails
+nowhere.

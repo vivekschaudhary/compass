@@ -14,7 +14,7 @@ SUMMARY: <2–4 sentences capturing the deliverable + the key recommendation>
 
 const DOC_DELIM = "===DOC===";
 const ACT_DELIM = "===ACTION_ITEMS===";
-const ROLES = ["researcher", "designer", "ux-writer", "engineer", "automation", "pm", "product-owner", "architect", "reviewer", "tech-writer", "gtm", "sre", "scanner"];
+const ROLES = ["researcher", "designer", "ux-writer", "engineer", "automation", "pm", "product-owner", "staff-engineer", "reviewer", "tech-writer", "gtm", "sre", "scanner"];
 
 // Parse "role: title" | "- title" | "title" into an action item (role optional, validated).
 function parseActionLine(line: string): ActionItem | null {

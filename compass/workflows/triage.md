@@ -96,7 +96,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th wo
 
 **Dispatches:** Support agent
 **Task definition:** `compass/agents/support.md` → Task `write-postmortem`
-**What it covers:** blameless postmortem — timeline + root-cause analysis + contributing factors + what-went-well/didn't + **action items** (each routable to a `/create-brief` tech-debt bet or `/create-story` slice). Recurring/systemic root → flag Enterprise Architect for foundational review.
+**What it covers:** blameless postmortem — timeline + root-cause analysis + contributing factors + what-went-well/didn't + **action items** (each routable to a `/create-brief` tech-debt bet or `/create-story` slice). Recurring/systemic root → flag Principal Engineer for foundational review.
 **Output:** `postmortem.md` with action items
 
 ### Step 8. **HITL — postmortem approved** (human)
@@ -129,7 +129,7 @@ Thin dispatch graph per `[workflow-as-dispatch-graph]` (canon v0.3.24); **9th wo
 
 **Discipline always:** the human confirms every route (no autonomous routing in v1); full Reviewer pass on any incident code change, Security Reviewer when applicable, comms HITL-gated, postmortem HITL-gated. The framework's speed makes this practical — no P0 exceptions.
 
-**Cross-cutting:** incident artifacts carry `area:*` tags; recurring incidents auto-flag as systemic → Enterprise Architect foundational review; postmortem action items roll up into `/metrics` as incident-driven work.
+**Cross-cutting:** incident artifacts carry `area:*` tags; recurring incidents auto-flag as systemic → Principal Engineer foundational review; postmortem action items roll up into `/metrics` as incident-driven work.
 
 ### Migration (legacy prose → v0.3.49 front-door dispatch graph)
 

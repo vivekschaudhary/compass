@@ -81,21 +81,43 @@ describe("the shipped seed", () => {
     expect(s0, "sprint-0 has no draft-sprint-plan row").toBeDefined();
     expect(sn, "sprint has no sprint-planning row").toBeDefined();
 
-    const want = ["01-foundation/team", "02-scope/deliverables", "03-delivery/plan"];
-    expect([...s0!.reads].sort()).toEqual(want);
-    expect([...sn!.reads].sort()).toEqual(want);
+    // Asserted as EQUAL TO EACH OTHER rather than against three literals. The literals were the
+    // real paths until the seed renamed them, at which point this failed for spelling rather than
+    // for drift — and a test that has to be edited on every rename teaches people to edit it
+    // without reading it. What must hold is that the two rows are handed the same inputs; what
+    // those inputs are called is the seed's business.
+    expect([...s0!.reads].sort()).toEqual([...sn!.reads].sort());
+    expect(s0!.reads.length, "sprint planning reads the plan, the backlog and the roster").toBe(3);
   });
 
-  it("has both sprint-planning rows produce the one path everything else is keyed on", () => {
-    // `materialise.ts`'s REGISTRY and `tools.ts`'s PRODUCES_TOOL are both keyed on this path. If
-    // either row stopped producing it, that row would silently lose its tool and its materialiser
-    // and still look like a working step.
+  it("plans a sprint from one definition, nested by both phases", () => {
+    // THIS ASSERTION HAS NOW OUTLIVED TWO MECHANISMS, and the second time is the point.
+    //
+    // `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` were the same step written twice —
+    // sprint 0 ends with sprint 1 planned, every sprint after plans itself. Keeping two copies in
+    // step needed machinery: first a shared produced PATH, then a shared declared `output` when the
+    // path turned out to be renameable. Both were ways of holding two definitions equal.
+    //
+    // There is one definition now. Both rows NEST `sprint-plan`, so they cannot differ — the thing
+    // that used to be an invariant to police is a fact about the data. `output: sprint` lives on
+    // that workflow's drafting row, which is what still gives it the sprint tool and the
+    // materialiser that puts commitments on the board.
     const plan = planned();
-    for (const [workflow, task] of [["sprint-0", "draft-sprint-plan"], ["sprint", "sprint-planning"]]) {
-      const steps = plan.workflows.find((w) => w.row.code === workflow)?.steps ?? [];
-      const row = steps.find((x) => x.task === task);
-      expect(row?.produces, `${workflow}.${task}`).toBe("05-cadence/sprint-plans");
-    }
+    const nested = [["sprint-0", "draft-sprint-plan"], ["sprint", "sprint-planning"]].map(
+      ([workflow, task]) => {
+        const steps = plan.workflows.find((w) => w.row.code === workflow)?.steps ?? [];
+        const row = steps.find((x) => x.task === task);
+        return { kind: row?.kind, nests: row?.nests };
+      },
+    );
+    expect(nested).toEqual([
+      { kind: "workflow", nests: "sprint-plan" },
+      { kind: "workflow", nests: "sprint-plan" },
+    ]);
+
+    // And the behaviour lives exactly once, on the row that drafts.
+    const sp = plan.workflows.find((w) => w.row.code === "sprint-plan")?.steps ?? [];
+    expect(sp.filter((x) => x.output === "sprint").map((x) => x.task)).toEqual(["draft-sprint-plan"]);
   });
 
   it("marks `sprint` as the one phase that repeats", () => {
@@ -385,7 +407,7 @@ describe("import is versioning", () => {
     workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] }],
       criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
@@ -428,7 +450,7 @@ describe("import is versioning", () => {
           steps: [
             already.workflows[0].steps[0],
             { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "write-tests",
-              produces: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] },
+              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] },
           ],
         }],
       },

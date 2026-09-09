@@ -14,7 +14,7 @@ export const STATUS = {
 
 // The delivery roles that OWN a story (and become its Jira label). Creation/gate roles
 // (pm, product-owner, delivery-manager) don't own build tickets, so they're not in this set.
-export const DELIVERY_ROLES = ["researcher", "designer", "ux-writer", "engineer", "automation", "architect", "reviewer", "tech-writer", "gtm", "sre", "scanner"] as const;
+export const DELIVERY_ROLES = ["researcher", "designer", "ux-writer", "engineer", "automation", "staff-engineer", "reviewer", "tech-writer", "gtm", "sre", "scanner"] as const;
 
 // Coerce a model-provided or user-provided role into a valid, label-safe code (default engineer).
 export function normalizeRole(raw: string | undefined | null, fallback = "engineer"): string {

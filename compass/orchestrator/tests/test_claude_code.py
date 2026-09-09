@@ -54,7 +54,7 @@ class TestBuildArgv(unittest.TestCase):
         self.assertEqual(argv[argv.index("--output-format") + 1], "stream-json")
         self.assertIn("--verbose", argv)
         # #170: partial chunks stream token deltas so a long compose turn isn't silent
-        # (else the idle guard false-kills the architect mid-draft).
+        # (else the idle guard false-kills the staff engineer mid-draft).
         self.assertIn("--include-partial-messages", argv)
         self.assertEqual(argv[argv.index("--append-system-prompt-file") + 1], "/x/agent.md")
         self.assertEqual(argv[argv.index("--model") + 1], "sonnet")

@@ -210,7 +210,7 @@ Evaluated against the declared fitness functions and pillars — **not generic p
 
 ## Architecture Research
 
-Findings from the 6-category architecture-research framework (see `compass/roles/enterprise-architect.md` → "Where to research"). For substantial research, move to `docs/foundation/architecture-research.md` and link here.
+Findings from the 6-category architecture-research framework (see `compass/roles/principal-engineer.md` → "Where to research"). For substantial research, move to `docs/foundation/architecture-research.md` and link here.
 
 ### 1. Prior art
 <Comparable companies, their workload, the stack they ended up at, link to source.>
@@ -280,13 +280,13 @@ _Populated automatically by `/measure` cron._
 ## DRI Log
 
 ### Decisions
-- [YYYY-MM-DD] [Enterprise Architect] <decision> — rationale: <why> — area: <tag> — alternatives: <what> — reversibility: <hard / one-way>
+- [YYYY-MM-DD] [Principal Engineer] <decision> — rationale: <why> — area: <tag> — alternatives: <what> — reversibility: <hard / one-way>
 
 ### Risks
-- [YYYY-MM-DD] [Enterprise Architect] <risk> — likelihood — impact — mitigation — area
+- [YYYY-MM-DD] [Principal Engineer] <risk> — likelihood — impact — mitigation — area
 
 ### Issues
-- [YYYY-MM-DD] [Enterprise Architect] <issue> — severity — owner — status — area
+- [YYYY-MM-DD] [Principal Engineer] <issue> — severity — owner — status — area
 
 ---
 

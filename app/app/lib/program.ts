@@ -194,7 +194,7 @@ export async function getProgram(engagementId?: string): Promise<ProgramModel & 
       }));
     // Sprint 0 · Foundation & Setup — the DM-owned kickoff backlog, seeded at intake as the `<id>-S0`
     // epic + one story per sprint-0.md row. Surface each open ticket as a job in its OWNING role's
-    // queue (mostly delivery-manager; pm/architect for tickets 2–3) — its visible home. The story's
+    // queue (mostly delivery-manager; pm/staff-engineer for tickets 2–3) — its visible home. The story's
     // acceptance is "Done: <gate> · via <workflow>"; offer the workflow as the primary action.
     // Informational (no fake action button) — the Sprint 0 workflows (/create-product-brief, …) aren't
     // app-runnable yet; the card's job is to make the kickoff backlog VISIBLE in its owner's queue

@@ -177,9 +177,11 @@ export async function rolesOnEngagement(
     if (!holderOf.has(h.role)) holderOf.set(h.role, h.name);
   }
 
-  // Ordered by tier, not alphabetically. Alphabetical put `architect` first, which meant a visit
-  // with no ?role= landed on a practitioner scoped to a workstream with no work — an empty queue
-  // that looked like a bug. Oversight roles see the engagement, so they are the sane landing.
+  // Ordered by tier, not alphabetically. Alphabetical put `architect` first — the role now called
+  // `staff-engineer` — which meant a visit with no ?role= landed on a practitioner scoped to a
+  // workstream with no work: an empty queue that looked like a bug. Oversight roles see the
+  // engagement, so they are the sane landing. The example is kept in its original spelling because
+  // it is a record of what happened, and `staff-engineer` does not sort first.
   const TIER_ORDER: Record<string, number> = {
     oversight: 0,
     practitioner: 1,

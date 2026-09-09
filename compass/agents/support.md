@@ -55,7 +55,7 @@ Gates + postconditions = load-bearing. Work = guidance.
 ### `write-postmortem` — blameless postmortem after an incident is resolved
 
 **Gate:** incident resolved (stop-the-bleed done; fix-forward landed or mitigation held). Incident artifact (`triage.md`) exists.
-**Work:** assemble the postmortem at `docs/incidents/<incident-id>/postmortem.md` (or `docs/epics/<epic-id>/incidents/<incident-id>/postmortem.md`): **timeline** with timestamps → **root-cause analysis** → contributing factors → what went well / what didn't (blameless) → **action items**, each phrased so it becomes a `/create-brief` tech-debt bet or a `/create-story` slice → DRI log. Recurring-incident or systemic root → flag for Enterprise Architect foundational review.
+**Work:** assemble the postmortem at `docs/incidents/<incident-id>/postmortem.md` (or `docs/epics/<epic-id>/incidents/<incident-id>/postmortem.md`): **timeline** with timestamps → **root-cause analysis** → contributing factors → what went well / what didn't (blameless) → **action items**, each phrased so it becomes a `/create-brief` tech-debt bet or a `/create-story` slice → DRI log. Recurring-incident or systemic root → flag for Principal Engineer foundational review.
 **Postcondition:** postmortem artifact exists with timeline + RCA + ≥1 action item (each routable to a bet/story) · DRI ≥1 Decision + ≥1 Risk · HITL approval announced before marking `complete` (humans approve the postmortem).
 
 ### `supply-user-pain` — provide user-voice signal for brief creation

@@ -1,5 +1,5 @@
 <!-- SPRINT 0 — the phase that takes an engagement from a signed SOW to a team that can pick up a
-     story. The DM initiates it once setup's connections are validated. Every row below becomes one
+     story. The DM initiates it once onboarding's connections are validated. Every row below becomes one
      task in that run.
 
      It absorbed pre-sprint-0. That phase is gone from the seed entirely — the database keeps it
@@ -59,25 +59,37 @@ Starts from a signed SOW and nothing else. Ends when sprint 1 can open.
 
 ## Dispatch graph
 
-`reads` is DERIVED from `depends-on` for anything produced inside this phase, so the column below is
-shown for reading rather than authored twice — see `deriveReads` in `app/app/lib/import/plan.ts`.
-Depending on a row means consuming what it produces.
+`reads` is DERIVED from `depends-on` for anything produced inside this phase, so it is not a column
+here — printing it would be authoring the same edge twice. See `deriveReads` in
+`app/app/lib/import/plan.ts`. Depending on a row means consuming what it produces.
 
-| # | task | dispatch | owner | reads | produces | depends-on |
-|---|------|----------|-------|-------|----------|------------|
-| 1 | File the SOW | `agent: delivery-manager.file-sow` | delivery-manager | — | `02-scope/sow` | — |
-| 2 | Product brief | `agent: product-manager.draft-product-brief` | product-manager | `02-scope/sow` | `01-foundation/product-brief` | 1 |
-| 3 | Design library | `agent: designer.build-design-library` | designer | `01-foundation/product-brief` | `01-foundation/design-library` | 2 |
-| 4 | Timeline and milestones | `agent: delivery-manager.draft-timeline` | delivery-manager | `01-foundation/product-brief` · `02-scope/sow` | `02-scope/timeline` | 2, 1 |
-| 5 | Staffing plan and resources | `agent: delivery-manager.propose-staffing` | delivery-manager | `02-scope/timeline` · `02-scope/sow` | `01-foundation/team` | 4, 1 |
-| 6 | Roles and responsibilities | `agent: delivery-manager.draft-raci` | delivery-manager | `01-foundation/team` | `01-foundation/raci` | 5 |
-| 7 | Features and how each is judged | `agent: product-manager.draft-features` | product-manager | `02-scope/timeline` · `01-foundation/product-brief` · `02-scope/business-requirements` | `02-scope/features` | 4, 2 |
-| 8 | Epics from milestones | `agent: product-manager.draft-epics` | product-manager | `02-scope/features` · `02-scope/timeline` · `01-foundation/product-brief` | `02-scope/deliverables` | 7, 4, 2 |
-| 9 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `01-foundation/raci` · `02-scope/deliverables` · `01-foundation/team` | `03-delivery/plan` | 6, 8, 5 |
-| 10 | Foundation architecture | `agent: enterprise-architect.draft-foundation-architecture` | enterprise-architect | `01-foundation/product-brief` · `02-scope/deliverables` | `01-foundation/foundational-architecture` | 2, 8 |
-| 11 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `01-foundation/team` · `01-foundation/raci` | `01-foundation/ways-of-working` | 5, 6 |
-| 12 | Sprint plan for sprint 1 | `agent: product-manager.draft-sprint-plan` | product-manager | `02-scope/deliverables` · `01-foundation/team` · `03-delivery/plan` | `05-cadence/sprint-plans` | 8, 5, 9 |
-| 13 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `05-cadence/sprint-plans` · `01-foundation/ways-of-working` · `03-delivery/plan` | `05-cadence/kickoff` | 12, 11, 9 |
+`output` is what the app keys behaviour on — `roster`, `backlog`, `sprint`, or blank for an
+ordinary document. It used to key on the produced path, and renaming a path silently disabled the
+behaviour while the step went on passing its gates.
+
+| # | task | dispatch | owner | produces | output | depends-on |
+|---|------|----------|-------|----------|--------|------------|
+| 0 | File the SOW | `agent: delivery-manager.file-sow` | delivery-manager | `SOW` | — | — |
+| 1 | File the Requirements | `agent: delivery-manager.file-requirements` | delivery-manager | `Requirements` | — | 0 |
+| 2 | Product brief | `workflow: product-brief` | product-owner | `—` | — | 0, 1 |
+| 3 | Milestones and timeline | `agent: delivery-manager.draft-timeline` | delivery-manager | `Milestones and timeline` | — | 0 |
+| 4 | Staffing plan and resources | `agent: delivery-manager.propose-staffing` | delivery-manager | `Staffing plan` | roster | 3, 0 |
+| 5 | Roles and responsibilities | `agent: delivery-manager.draft-raci` | delivery-manager | `RACI` | — | 4 |
+| 6 | Team working agreement | `agent: delivery-manager.draft-ways-of-working` | delivery-manager | `ways-of-working` | — | 4, 5 |
+| 7 | Features and how each is judged | `workflow: feature` | product-owner | `—` | — | 1, 2 |
+| 8 | Foundation architecture | `workflow: foundation-architecture` | staff-engineer | `—` | — | 1, 2, 7 |
+| 9 | Design library | `workflow: design-library` | designer | `—` | — | 2, 1 |
+| 10 | Epics from milestones and features | `agent: product-manager.draft-epics` | product-manager | `deliverables@tickets` | backlog | 1, 2, 7, 3 |
+| 11 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `delivery plan` | — | 5, 10, 4, 0, 7 |
+| 12 | Sprint plan for sprint 1 | `workflow: sprint-plan` | product-owner | `—` | — | 10, 4, 11 |
+| 13 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `kickoff` | — | 12, 6, 11 |
+
+**Rows 2, 7 and 8 NEST a workflow rather than doing the work in one row.** The product brief, the
+features and the foundation architecture each have an author, an independent reviewer and a
+different role approving — nine rows for the architecture alone. Doing that in a single sprint-0 row
+meant the agent's draft was accepted by the role whose name it drafted in. The nested run's rows
+become Jira sub-tasks under this row's story, so the work is visible to the team rather than only
+inside Compass.
 
 **Row 1 files the SOW; it does not write one.** The contract arrives from the delivery manager, in
 chat, and lands verbatim — an agent that drafts it into a page paraphrases, and every document
@@ -97,8 +109,8 @@ decided. The meeting itself is not something Compass does; the record of it is, 
 delivery manager confirming it happened with their name on the close.
 
 **No review rows are authored here.** The plan is authored against actual staffing, and adding or
-not adding a review row is the governance dial: an engagement with an enterprise architect and an
-architect can author a review of row 9, and one without does not. A review is an ordinary row — it
+not adding a review row is the governance dial: an engagement with an enterprise staff-engineer and an
+staff-engineer can author a review of row 9, and one without does not. A review is an ordinary row — it
 reads the deliverable, produces findings, and depends on the row that made it — so nothing needs to
 know it "is a review" for send-back to work.
 

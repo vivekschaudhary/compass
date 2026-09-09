@@ -127,7 +127,7 @@ describe("the shipped agent files", () => {
 
   // The transform must not be delivery-manager-shaped: every role's file uses the same heading.
   it("every agent file loses its catalogue and keeps its refusal rules", () => {
-    for (const role of ["engineer", "architect", "designer", "product-manager", "reviewer"]) {
+    for (const role of ["engineer", "staff-engineer", "designer", "product-manager", "reviewer"]) {
       const path = `${dir}/${role}.md`;
       if (!existsSync(path)) continue;
       const src = readFileSync(path, "utf8");

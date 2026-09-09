@@ -228,7 +228,7 @@ export async function POST(req: Request) {
   const baseCodes = d.staffing?.length ? d.staffing.map((s) => normTeamRole(s.role)).filter((c): c is string => !!c) : DEFAULT_TEAM;
   const qRoles = (d.questions ?? []).filter((q) => q.field.startsWith("member:")).map((q) => normTeamRole(q.field.slice(7))).filter((c): c is string => !!c);
   // Always seed the delivery-manager (owns intake + kickoff visibility) AND every Sprint 0 ticket
-  // owner (pm, architect, …) — else those roles have no roster entry, no role view, and their
+  // owner (pm, staff-engineer, …) — else those roles have no roster entry, no role view, and their
   // Sprint 0 tickets + clarifying questions would be invisible in the switcher.
   // Read the engagement's OWN spec: if this client's kickoff adds a ticket owned by a role the
   // framework default never names, that role still needs a roster entry or its ticket lands

@@ -1,61 +1,76 @@
-workflow,ord,kind,role,task,produces,reads,conditional,nests,title,depends_on
-onboarding,1,machine,,validate-connections,,,,,Validate the connections,
-sprint-0,1,agent,delivery-manager,file-sow,02-scope/sow,,,,File the SOW,
-sprint-0,2,agent,product-manager,draft-product-brief,01-foundation/product-brief,,,,Product brief,file-sow
-sprint-0,3,agent,designer,build-design-library,01-foundation/design-library,,,,Design library,draft-product-brief
-sprint-0,4,agent,delivery-manager,draft-timeline,02-scope/timeline,,,,Timeline and milestones,file-sow
-sprint-0,5,agent,delivery-manager,propose-staffing,01-foundation/team,,,,Staffing plan and resources,"draft-timeline,file-sow"
-sprint-0,6,agent,delivery-manager,draft-raci,01-foundation/raci,,,,Roles and responsibilities,propose-staffing
-sprint-0,7,agent,product-manager,draft-features,02-scope/features@docs,02-scope/business-requirements,,,Features and how each is judged,"draft-timeline,draft-product-brief"
-sprint-0,8,agent,product-manager,draft-epics,02-scope/deliverables@tickets,02-scope/business-requirements,,,Epics from milestones,"draft-features,draft-timeline,draft-product-brief"
-sprint-0,9,agent,delivery-manager,tailor-delivery-plan,03-delivery/plan,,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing"
-sprint-0,10,agent,enterprise-architect,draft-foundation-architecture,01-foundation/foundational-architecture,,,,Foundation architecture,"draft-product-brief,draft-epics"
-sprint-0,11,agent,delivery-manager,draft-ways-of-working,01-foundation/ways-of-working,,,,Team working agreement,"propose-staffing,draft-raci"
-sprint-0,12,agent,product-manager,draft-sprint-plan,05-cadence/sprint-plans,,,,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
-sprint-0,13,agent,delivery-manager,kickoff,05-cadence/kickoff,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,tailor-delivery-plan"
-build,1,agent,engineer,implement-story,,,,,,
-build,2,agent,automation,write-e2e-tests,,,,,,
-build,3,agent,reviewer,review-pr,,,,,,
-build,4,agent,engineer,respond-to-review,,,,,,
-build,5,agent,product-manager,arbitrate-dispute,,,,,,
-build,6,hitl,engineer,approve,,,,,,
-build,7,machine,,mechanical check,,,,,,
-feature-architecture,1,agent,architect,draft-epic-architecture,,,,,,
-feature-architecture,2,hitl,architect,approve,,,,,,
-feature-architecture,3,agent,delivery-manager,update-status,,,,,,
-product-brief,1,agent,researcher,cite-evidence-6-category-9-moat,,,,,,
-product-brief,2,agent,product-manager,draft-brief,,,,,,
-product-brief,3,hitl,researcher,approve,,,,,,
-product-brief,4,agent,delivery-manager,update-status,,,,,,
-story,1,agent,product-manager,decompose-epic-to-story,,,,,,
-story,2,agent,designer,draft-design-spec,,,,,,
-story,3,agent,ux-writer,write-copy,,,,,,
-story,4,hitl,product-manager,approve,,,,,,
-story,5,agent,delivery-manager,update-status,,,,,,
-fix,1,agent,engineer,triage-and-fix,,,,,,
-fix,2,agent,automation,write-e2e-tests,,,,,,
-fix,3,agent,reviewer,review-pr,,,,,,
-fix,4,agent,engineer,respond-to-review,,,,,,
-fix,5,hitl,engineer,approve,,,,,,
-fix,6,agent,tech-writer,accumulate-changelog,,,,,,
-foundation-architecture,1,agent,enterprise-architect,research-architecture,,,,,,
-foundation-architecture,2,hitl,enterprise-architect,approve,,,,,,
-foundation-architecture,3,agent,enterprise-architect,derive-architecture,,,,,,
-foundation-architecture,4,hitl,enterprise-architect,approve,,,,,,
-foundation-architecture,5,agent,enterprise-architect,scaffold-foundation,,,,,,
-foundation-architecture,6,agent,designer,build-design-library,,,,,,
-foundation-architecture,7,hitl,enterprise-architect,approve,,,,,,
-foundation-architecture,8,agent,delivery-manager,update-status,,,,,,
-tech-design,1,agent,architect,design-story-tech,,,,,,
-triage,1,agent,support,classify-intake,,,,,,
-triage,2,hitl,support,approve,,,,,,
-triage,3,agent,support,triage-incident,,,,,,
-triage,4,hitl,support,approve,,,,,,
-triage,5,agent,engineer,triage-and-fix,,,,,,
-triage,6,agent,reviewer,review-pr,,,,,,
-triage,7,agent,support,write-postmortem,,,,,,
-triage,8,hitl,support,approve,,,,,,
-triage,9,agent,tech-writer,accumulate-changelog,,,,,,
-sprint,1,agent,product-manager,sprint-planning,05-cadence/sprint-plans,"03-delivery/plan,02-scope/deliverables,01-foundation/team",,,Sprint planning,
-sprint,2,agent,delivery-manager,sprint-review,05-cadence/sprint-reviews,,,,Sprint review,sprint-planning
-sprint,3,agent,delivery-manager,sprint-retro,05-cadence/retros,,,,Retro,sprint-review
+workflow,ord,kind,role,task,produces,output,reads,conditional,nests,title,depends_on
+onboarding,1,machine,,validate-connections,,,,,,Validate the connections,
+sprint-0,0,agent,delivery-manager,file-sow,SOW,,,,,File the SOW,
+sprint-0,1,agent,delivery-manager,file-requirements,Requirements,,,,,File the Requirements,file-sow
+sprint-0,2,workflow,product-owner,draft-product-brief,,,,,product-brief,Product brief,"file-sow,file-requirements"
+sprint-0,3,agent,delivery-manager,draft-timeline,Milestones and timeline,,,,,Milestones and timeline,file-sow
+sprint-0,4,agent,delivery-manager,propose-staffing,Staffing plan,roster,,,,Staffing plan and resources,"draft-timeline,file-sow"
+sprint-0,5,agent,delivery-manager,draft-raci,RACI,,,,,Roles and responsibilities,propose-staffing
+sprint-0,6,agent,delivery-manager,draft-ways-of-working,ways-of-working,,,,,Team working agreement,"propose-staffing,draft-raci"
+sprint-0,7,workflow,product-owner,draft-features,,,,,feature,Features and how each is judged,"file-requirements,draft-product-brief"
+sprint-0,8,workflow,staff-engineer,draft-foundation-architecture,,,,,foundation-architecture,Foundation architecture,"file-requirements,draft-product-brief, draft-features"
+sprint-0,9,workflow,designer,build-design-library,,,,,design-library,Design library,"draft-product-brief, file-requirements"
+sprint-0,10,agent,product-manager,draft-epics,deliverables@tickets,backlog,,,,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features,draft-timeline"
+sprint-0,11,agent,delivery-manager,tailor-delivery-plan,delivery plan,,,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing, file-sow,draft-features"
+sprint-0,12,workflow,product-owner,draft-sprint-plan,,,,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
+sprint-0,13,agent,delivery-manager,kickoff,kickoff,,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,tailor-delivery-plan"
+foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,,,,Research the ground,
+foundation-architecture,2,agent,reviewer,review-research,architecture-research-review,,,,,Review the research,research-architecture
+foundation-architecture,3,hitl,principal-engineer,approve-research,,,,,,Accept the research,review-research
+foundation-architecture,4,agent,staff-engineer,derive-architecture,foundational-architecture,,,,,Foundation architecture,approve-research
+foundation-architecture,5,agent,reviewer,review-architecture,architecture-review,,,,,Review the architecture,derive-architecture
+foundation-architecture,6,hitl,principal-engineer,approve-architecture,,,,,,Accept the architecture,review-architecture
+foundation-architecture,7,agent,staff-engineer,scaffold-foundation,scaffold-record,,,,,Scaffold the foundation,approve-architecture
+foundation-architecture,8,agent,reviewer,review-scaffold,scaffold-review,,,,,Review the scaffold,scaffold-foundation
+foundation-architecture,9,hitl,principal-engineer,approve-scaffold,,,,,,Accept the scaffold,review-scaffold
+product-brief,1,agent,researcher,gather-evidence,brief-evidence,,,,,Evidence for the brief,
+product-brief,2,agent,product-owner,draft-brief,product-brief,,,,,Product brief,gather-evidence
+product-brief,3,agent,reviewer,review-brief,brief-review,,,,,Review the brief,draft-brief
+product-brief,4,hitl,product-manager,approve-brief,,,,,,Accept the brief,review-brief
+build,1,agent,engineer,implement-story,,,,,,,
+build,2,agent,automation,write-e2e-tests,,,,,,,
+build,3,agent,reviewer,review-pr,,,,,,,
+build,4,agent,engineer,respond-to-review,,,,,,,
+build,5,agent,product-manager,arbitrate-dispute,,,,,,,
+build,6,hitl,engineer,approve,,,,,,,
+build,7,machine,,mechanical check,,,,,,,
+feature-architecture,1,agent,staff-engineer,draft-epic-architecture,,,,,,,
+feature-architecture,2,hitl,staff-engineer,approve,,,,,,,
+feature-architecture,3,agent,delivery-manager,update-status,,,,,,,
+story,1,agent,product-manager,decompose-epic-to-story,,,,,,,
+story,2,agent,designer,draft-design-spec,,,,,,,
+story,3,agent,ux-writer,write-copy,,,,,,,
+story,4,hitl,product-manager,approve,,,,,,,
+story,5,agent,delivery-manager,update-status,,,,,,,
+fix,1,agent,engineer,triage-and-fix,,,,,,,
+fix,2,agent,automation,write-e2e-tests,,,,,,,
+fix,3,agent,reviewer,review-pr,,,,,,,
+fix,4,agent,engineer,respond-to-review,,,,,,,
+fix,5,hitl,engineer,approve,,,,,,,
+fix,6,agent,tech-writer,accumulate-changelog,,,,,,,
+tech-design,1,agent,staff-engineer,design-story-tech,,,,,,,
+triage,1,agent,support,classify-intake,,,,,,,
+triage,2,hitl,support,approve,,,,,,,
+triage,3,agent,support,triage-incident,,,,,,,
+triage,4,hitl,support,approve,,,,,,,
+triage,5,agent,engineer,triage-and-fix,,,,,,,
+triage,6,agent,reviewer,review-pr,,,,,,,
+triage,7,agent,support,write-postmortem,,,,,,,
+triage,8,hitl,support,approve,,,,,,,
+triage,9,agent,tech-writer,accumulate-changelog,,,,,,,
+sprint,1,workflow,product-owner,sprint-planning,,,"delivery plan,deliverables,Staffing plan",,sprint-plan,Sprint planning,
+sprint,2,agent,delivery-manager,sprint-review,05-cadence/sprint-reviews,,,,,Sprint review,sprint-planning
+sprint,3,agent,delivery-manager,sprint-retro,05-cadence/retros,,,,,Retro,sprint-review
+feature,1,agent,product-owner,draft-feature,features,,,,,The feature and its targets,
+feature,2,agent,reviewer,review-feature,feature-review,,,,,Review the feature,draft-feature
+feature,3,hitl,product-manager,approve-feature,,,,,,Accept the feature,review-feature
+design-library,1,agent,designer,research-design,design-research,,,,,Research the design ground,
+design-library,2,hitl,product-manager,approve-research,,,,,,Accept the research,research-design
+design-library,3,agent,designer,derive-library,design-library,,,,,The design library,approve-research
+design-library,4,agent,reviewer,review-library,design-review,,,,,Review the library,derive-library
+design-library,5,hitl,product-manager,approve-library,,,,,,Accept the library,review-library
+sprint-plan,1,agent,product-owner,research-capacity,capacity-research,,,,,What the team can take on,
+sprint-plan,2,hitl,product-manager,approve-capacity,,,,,,Accept the capacity picture,research-capacity
+sprint-plan,3,agent,product-owner,draft-sprint-plan,sprint-plans,sprint,,,,The sprint plan,approve-capacity
+sprint-plan,4,agent,reviewer,review-plan,sprint-plan-review,,,,,Review the plan,draft-sprint-plan
+sprint-plan,5,hitl,product-manager,approve-plan,,,,,,Accept the plan,review-plan
