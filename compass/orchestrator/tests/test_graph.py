@@ -144,9 +144,16 @@ class TestRealWorkflows(unittest.TestCase):
         self.assertEqual(len(steps), 4)
         self.assertEqual([s.number for s in steps if s.is_hitl], [4])
 
-    def test_create_bet_architecture(self):
+    def test_feature_architecture(self):
+        # Was `create-bet-architecture`, three rows with the gate at 2 — and that gate was held by
+        # the `staff-engineer` who authored row 1, i.e. the author approving their own architecture.
+        # Rewritten for the feature tier: staff engineer drafts, reviewer reviews, principal
+        # engineer accepts at row 3. The position IS the assertion, for the same reason it is in
+        # `test_foundation_architecture` below — a gate that moves back to row 2 has put the author
+        # in charge of the close again.
         steps = load_workflow(WORKFLOWS / "feature-architecture.md")
-        self.assertEqual([s.number for s in steps if s.is_hitl], [2])
+        self.assertEqual(len(steps), 3)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [3])
 
     def test_foundation_architecture(self):
         # Was `setup-foundation-architecture`: eight rows, gates at 2, 4 and 7, and the same role

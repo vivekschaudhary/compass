@@ -6,7 +6,7 @@ feature,Feature,Product,Build,product-owner,,true,true
 product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,true,false
 design-library,Design library,Design,Discovery,designer,,true,true
 sprint-plan,Sprint plan,Delivery,Build,product-owner,,true,true
-feature-architecture,Workflow: /feature-architecture,Engineering,Build,staff-engineer,,false,true
+feature-architecture,Feature architecture,Engineering,Build,staff-engineer,,true,true
 build,Workflow: /build,Engineering,Build,engineer,,true,true
 tech-design,Technical design,Engineering,Build,staff-engineer,,true,true
 story,Workflow: /story,Product,Build,product-manager,,false,true

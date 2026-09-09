@@ -30,6 +30,7 @@ edge twice. See `deriveReads` in `app/app/lib/import/plan.ts`.
 | 1 | The feature and its targets | `agent: product-owner.draft-feature` | product-owner | `features` | — |
 | 2 | Review the feature | `agent: reviewer.review-feature` | reviewer | `feature-review` | 1 |
 | 3 | Accept the feature | `hitl` | product-manager | `—` | 2 |
+| 4 | Feature architecture | `workflow: feature-architecture` | staff-engineer | `—` | 3 |
 
 ## Why it is these rows
 
@@ -41,3 +42,8 @@ own work.
 **A feature without a target is not a bet.** `feature_metric.target` is NOT NULL for the same
 reason the gate is here: a loop that reaches its learn step with nothing to compare against fails
 nowhere.
+
+**Row 4 is the architecture tier below this one.** A feature that has been accepted gets its
+technical shape decided before any epic under it is designed — foundation architecture (the
+product) → **feature architecture** → epic technical design → build. It cannot run before row 3,
+because deciding how to build a feature nobody has accepted is work done twice.

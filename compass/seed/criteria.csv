@@ -124,3 +124,12 @@ tech-design,review-epic-tech-design,done,"The design is judged against the archi
 tech-design,review-epic-tech-design,done,"A review that found nothing says so explicitly, rather than being an empty document",,,,
 tech-design,approve-epic-tech-design,done,"The technical design is accepted by the principal engineer, and their name is on the close",,,,
 tech-design,approve-epic-tech-design,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,
+feature-architecture,draft-feature-architecture,done,The feature architecture is published,document,03-architecture/features,status,published
+feature-architecture,draft-feature-architecture,done,Every feature has a named home in the architecture,,,,
+feature-architecture,draft-feature-architecture,done,"Every decision names what it beat and why — an option not considered is not a decision",,,,
+feature-architecture,draft-feature-architecture,done,"Any departure from the foundation architecture is named and justified, not quietly taken",,,,
+feature-architecture,review-feature-architecture,done,The review is published,document,03-architecture/features-review,status,published
+feature-architecture,review-feature-architecture,done,"Each decision is judged against the foundation architecture, not against the reviewer's preference",,,,
+feature-architecture,review-feature-architecture,done,"A review that found nothing says so explicitly, rather than being an empty document",,,,
+feature-architecture,approve-feature-architecture,done,"The feature architecture is accepted by the principal engineer, and their name is on the close",,,,
+feature-architecture,approve-feature-architecture,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,

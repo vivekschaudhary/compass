@@ -1,98 +1,69 @@
+<!-- FEATURE-ARCHITECTURE — nested from feature, once the feature is accepted.
+
+     draft -> review -> approve. The author never accepts: an agent drafts in the staff engineer's
+     name, so a staff engineer closing this gate would approve its own architecture. The principal
+     engineer holds the close, which is foundation-architecture's pairing and tech-design's.
+
+     THIS FILE WAS `/create-epic-architecture` AND IS NOT ANY MORE. It described a bet-level
+     artifact at `docs/epics/<epic-id>/architecture.md`, a repo-file `requires_approved` gate, and
+     an `approve` row held by the author. None of that ran: the workflow was disabled, ungated, and
+     its first task was named `draft-epic-architecture` — one tier off its own workflow. -->
 ---
 name: feature-architecture
-status: active
+title: Feature architecture
 owner: staff-engineer
-auto_invokes: []
-invoked_by: [create-brief, manual]
-version: 0.3.26
-requires_approved: [docs/foundation/product.md, docs/foundation/architecture.md, docs/epics/<epic-id>/brief.md]
+scope: feature
+trigger: feature nests it, once the feature is accepted
+creates: one task per row below
+status: active
+version: 2.0.0
+
+requires: []
+produces: []
 ---
-
-# Workflow: /create-epic-architecture
-
-## Framework grounding
-
-- **Architecture frameworks:** [well-architected] · [evolutionary-architecture]
-- **Bet-based commitment:** [shape-up] (architecture as artifact, not gate)
-- **Compass-originals operationalized:** [agent-as-surface-independent-unit] (v0.3.14) · [workflow-as-dispatch-graph] (v0.3.24) · [refuse-escalate] (foundational-stack deviation gate) · [soft-spec-hardening] · [cite-or-mark-na]
-- **Verifies adherence to:** Principle #14 (soft spec → AI rationalization) · Principle #16 (refuse + escalate to upstream)
 
 ## Purpose
 
-Creates the **bet-level architecture artifact** (`docs/epics/<epic-id>/architecture.md`) — how this bet will be built within the constraints of the approved foundational stack. Must run after the bet's brief is `approved`. Engineer can start as soon as architecture is approved (no waiting for "perfect").
+Decide **how an accepted feature will be built**, within the foundation architecture — boundaries,
+data model, contract shape, dependencies and risks.
 
-## Architectural shape (v0.3.26)
+## Where it sits
 
-This workflow is a **thin dispatch graph** per `[workflow-as-dispatch-graph]` (canon v0.3.24). The gate/work/postcondition content lives in the agent task definitions in `compass/agents/`. This file declares:
+Second of three architecture tiers:
 
-1. **Workflow-level preconditions** (cross-agent invariants)
-2. **Dispatch graph** — ordered sequence of `<agent>.<task>` invocations + HITL gate
-3. **Workflow-level verification** — cross-agent invariants the dispatch graph must satisfy
+| tier | scope | workflow |
+|------|-------|----------|
+| foundation architecture | the whole product | `foundation-architecture` |
+| **feature architecture** | **one feature** | **this** |
+| epic technical design | one epic | `tech-design` |
 
-## Preconditions (workflow-level GATE — checked once at start)
-
-- **Brief approved** — `docs/epics/<epic-id>/brief.md` must exist with `status: approved`. **On failure, refuse:** *"Brief for `<epic-id>` is not approved. Run `/create-brief` and obtain approval before creating the bet architecture."*
-- **Foundation docs present** — `docs/foundation/product.md` and `docs/foundation/architecture.md` must exist with `status: approved`. **On failure, refuse:** *"Foundation docs missing or unapproved. Run `/create-product-brief` and `/setup-foundation-architecture` first."*
-- **Not already approved** — if `docs/epics/<epic-id>/architecture.md` exists with `status: approved`, refuse unless the user explicitly requests amend mode.
-
-## Roles invoked (agents dispatched)
-
-- `compass/agents/staff-engineer.md` — primary agent; drafts bet architecture + runs deviation gate
-- `compass/agents/delivery-manager.md` — final status update step
+Below those, `build` implements a story. This workflow decides shape, not implementation: it writes
+no code and picks no foundational stack tool. A feature needing something outside the foundation
+architecture escalates there rather than widening the stack quietly.
 
 ## Dispatch graph
 
-Either runtime is valid:
-- **Today (no orchestrator):** human opens Architect agent on a CLI host (Claude Code, Codex), pastes workflow context, agent runs task, halts at HITL.
-- **v0.4 (orchestrator):** `python3 -m compass.orchestrator.run create-epic-architecture --context "epic-id: <epic-id>"`.
+`reads` is DERIVED from `depends-on`, so it is not a column here — printing it would author the same
+edge twice.
 
-### Step 1. `staff-engineer.draft-feature-architecture` (Architect agent owns)
+| # | task | dispatch | owner | produces | depends-on |
+|---|------|----------|-------|----------|------------|
+| 1 | Feature architecture | `agent: staff-engineer.draft-feature-architecture` | staff-engineer | `03-architecture/features` | — |
+| 2 | Review the feature architecture | `agent: reviewer.review-feature-architecture` | reviewer | `03-architecture/features-review` | 1 |
+| 3 | Accept the feature architecture | `hitl` | principal-engineer | `—` | 2 |
 
-**Dispatches:** Architect agent
-**Task definition:** `compass/agents/staff-engineer.md` → Task `draft-feature-architecture`
-**Input:** epic-id · brief · `docs/foundation/architecture.md` Stack table · `docs/foundation/product.md` · existing code (read-only) · prior bet architectures (if any)
-**What it covers:** state check (architecture_required: false → exit with DRI) → load context → foundational-stack deviation gate (STOP + escalate if new tools detected) → draft 12-section `docs/epics/<epic-id>/architecture.md` → set `status: proposed` → halt at HITL gate.
-**Output:** `docs/epics/<epic-id>/architecture.md` with `status: proposed`
+## Why it is these rows
 
-### Step 2. **HITL gate** (human)
+**One document, not one per feature — for now.** The tier below it (`tech-design`) files a page per
+epic, because an epic is a `backlog_item` row the fan-out can iterate. A feature is not: the
+`feature` table exists in the schema and **nothing in the app writes to it**, so features live only
+as prose inside the `features` document. Fanning out per feature would iterate zero rows and refuse
+forever. When something populates `feature`, this row becomes a fan-out with a `{feature}` path,
+exactly as `epics` row 6 already is.
 
-**Dispatches:** HUMAN (not an agent)
-**Artifact target:** `docs/epics/<epic-id>/architecture.md`
-**What it covers:** human reviews `docs/epics/<epic-id>/architecture.md` against the Verification checklist below. If all items pass, human approves — orchestrator runs promote to the Artifact target with `status: approved` automatically; interactive sessions flip `status: proposed` → `status: approved` (or `--approve` CLI) and set `architecture_status: approved` in brief frontmatter + commit. If any item fails, reject and re-dispatch Architect. **Per Principle #16:** Architect must NOT self-approve; HITL is a hard stop.
+**The author does not accept it.** It used to: row 2 was `hitl` held by the same `staff-engineer`
+who drafted row 1. A reviewer judges it against the foundation architecture rather than against
+preference, and the principal engineer accepts.
 
-### Step 3. `delivery-manager.update-status` (Delivery Manager agent owns)
-
-**Dispatches:** Delivery Manager agent
-**Task definition:** `compass/agents/delivery-manager.md` → Task `update-status`
-**What it covers:** confirm architecture approved · update bet status · surface next recommended workflow (`/create-story` or `/build` if story already exists).
-**Output:** bet status current in delivery tracking
-
-## Workflow-level verification (final GATE)
-
-Before marking this workflow complete, verify:
-
-- [ ] `docs/epics/<epic-id>/architecture.md` exists with `status: approved`
-- [ ] Brief frontmatter has `architecture_status: approved`
-- [ ] All 12 architecture sections populated (Decision · Context · Approach · Data model · API/contracts · Dependencies · Cross-system implications · Alternatives · Consequences · Test strategy · Rollout · DRI Log)
-- [ ] Foundational-stack assertion explicit: either "no deviation — uses `<stack entries>`" OR "deviation escalated — awaiting ADR-NNN"
-- [ ] ≥1 real alternative documented (not strawman)
-- [ ] Consequences has both positive AND negative + reversibility rating
-- [ ] ≥1 DRI Decision logged
-- [ ] If deviation gate fired: DRI Issue logged (severity High, owner Principal Engineer) + escalation path named
-- [ ] Principle #16 satisfied: no silent stack widening inside the bet doc
-
-## Output summary contract
-
-**TL;DR** (3 bullets max) · **Files created/modified** (paths + change types) · **Next recommended command** (typically `/create-story <epic-id>`) · **Open questions/risks** if applicable.
-
-## Notes
-
-**ADR-not-gate:** architecture is an artifact, not a hard gate. Small bets can skip via `architecture_required: false` in brief DRI (Architect logs rationale and exits at Step 1 — no architecture.md produced). Engineer can start as soon as architecture is `approved`; no waiting for "perfect."
-
-**Enterprise/Solution Architect:** the legacy workflow always engaged Principal Engineer alongside Architect. In the dispatch-graph shape, cross-system implications live in the architecture.md "Cross-system implications" section (Step 1, section 7). If Principal Engineer review is required for a specific bet, run it as a separate `/ops` task or inline in the HITL review — do not silently skip it. Principal Engineer agent migration deferred — not in the MVP.
-
-**Anti-patterns:**
-- `silent-stack-introduction` — introducing tools not in the foundational stack inside a bet doc. Deviation gate hard-stops this; never rationalize past it.
-- `exploration-shaped-architecture` — architecture doc that reads like research rather than decision. Symptom: no clear "we will" statement in Decision section.
-- `strawman-alternatives` — listing one alternative that clearly doesn't work to justify your first choice. ≥1 real alternative means an alternative that a reasonable engineer would actually consider.
-- `vague-consequences` — "might cause performance issues" without a reversibility rating or measurement. Every consequence needs: positive/negative label + reversibility (easy / hard / irreversible).
+**Departures are named.** The foundation architecture is the bar. An option not considered is not a
+decision, and a stack widening that nobody wrote down is the one that surfaces at build.

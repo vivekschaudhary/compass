@@ -85,15 +85,29 @@ class TestWorkflowMeta(unittest.TestCase):
             p.unlink()
 
     def test_real_requires_approved_parses(self):
-        # Was pinned to `create-brief`, which became `product-brief` and was then rewritten for v2 —
-        # its frontmatter no longer carries `requires_approved` at all. `feature-architecture` is
-        # still v1-shaped and carries three, so the parser has something real to read.
-        meta = load_workflow_meta(WORKFLOWS / "feature-architecture.md")
-        self.assertEqual(
-            meta["requires_approved"],
-            ["docs/foundation/product.md", "docs/foundation/architecture.md",
-             "docs/epics/<epic-id>/brief.md"],
-        )
+        # THIS ASSERTION HAS NOW OUTLIVED THREE FILES, and that is the useful part of its history.
+        # It was pinned to `create-brief`, which became `product-brief` and lost the key in the v2
+        # rewrite; then to `feature-architecture`, which was the last v1-shaped file carrying three
+        # entries until it was rewritten for the feature tier and lost them too.
+        #
+        # So it no longer names a file. What the parser must do is read a real multi-entry list off
+        # a real workflow, and `build` is the one that still has one — pinning to it by NAME would
+        # just queue up the same failure the day build is rewritten for v2. Instead: find whichever
+        # shipped workflow declares the most entries, and assert the parse against it. The test now
+        # follows the seed rather than being edited each time the seed moves.
+        best, entries = None, []
+        for path in sorted(WORKFLOWS.glob("*.md")):
+            got = load_workflow_meta(path).get("requires_approved") or []
+            if len(got) > len(entries):
+                best, entries = path, got
+
+        # The guard. Over zero files with a non-empty list, the loop above completes and every
+        # assertion below would be vacuous — which is exactly how this check would rot into always
+        # passing once the last v1 file is rewritten.
+        self.assertIsNotNone(best, "no shipped workflow declares requires_approved — nothing parsed")
+        self.assertGreater(len(entries), 1, f"{best.name} is the richest and has {len(entries)}")
+        self.assertTrue(all(e.endswith(".md") for e in entries), entries)
+        self.assertTrue(all(not e.startswith("[") and not e.endswith("]") for e in entries), entries)
 
 
 class TestArtifactTargetParsing(unittest.TestCase):

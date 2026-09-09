@@ -196,6 +196,7 @@ describe("the shipped seed", () => {
     "fix.triage-and-fix", "fix.write-e2e-tests", "fix.review-pr",
     "fix.respond-to-review", "fix.approve", "fix.accumulate-changelog",
     "epics.design-epics-tech",                       // nesting row — same hole as draft-epics, #173
+    "feature.design-feature-architecture",           // nesting row — same hole, #173
     "triage.classify-intake", "triage.approve", "triage.triage-incident",
     "triage.triage-and-fix", "triage.review-pr", "triage.write-postmortem",
     "triage.accumulate-changelog",

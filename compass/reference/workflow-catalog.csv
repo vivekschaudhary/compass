@@ -12,9 +12,7 @@ create-epics,1,refresh,pm,Product,refresh,,"No dispatch graph — one agent, rec
 dashboard,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
 design-library,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 epics,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
-feature-architecture,1,agent,staff-engineer,,draft-feature-architecture,,staff-engineer.draft-feature-architecture (Architect agent owns)
-feature-architecture,2,hitl,human,,approve,,HITL gate (human)
-feature-architecture,3,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
+feature-architecture,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 feature,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 fix,1,agent,engineer,Engineering,triage-and-fix,,engineer.triage-and-fix (Engineer agent owns)
 fix,2,agent,automation,QA,write-e2e-tests,,automation.write-e2e-tests (Automation agent owns)
