@@ -79,7 +79,7 @@ behaviour while the step went on passing its gates.
 | 7 | Features and how each is judged | `workflow: feature` | product-owner | `—` | — | 1, 2 |
 | 8 | Foundation architecture | `workflow: foundation-architecture` | staff-engineer | `—` | — | 1, 2, 7 |
 | 9 | Design library | `workflow: design-library` | designer | `—` | — | 2, 1 |
-| 10 | Epics from milestones and features | `agent: product-manager.draft-epics` | product-manager | `deliverables@tickets` | backlog | 1, 2, 7, 3 |
+| 10 | Epics from milestones and features | `workflow: epics` | product-owner | `—` | — | 1, 2, 7, 3 |
 | 11 | Tailor the delivery plan | `agent: delivery-manager.tailor-delivery-plan` | delivery-manager | `delivery plan` | — | 5, 10, 4, 0, 7 |
 | 12 | Sprint plan for sprint 1 | `workflow: sprint-plan` | product-owner | `—` | — | 10, 4, 11 |
 | 13 | Kickoff | `agent: delivery-manager.kickoff` | delivery-manager | `kickoff` | — | 12, 6, 11 |

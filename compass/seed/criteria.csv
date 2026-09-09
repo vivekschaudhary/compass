@@ -21,11 +21,11 @@ sprint-0,draft-features,done,The features are published,document,features,status
 sprint-0,draft-features,done,Every feature names the outcome it is betting on,,,,
 sprint-0,draft-features,done,"Every feature says how it will be judged — the target, and where the number comes from",,,,
 sprint-0,draft-features,done,"What the brief leaves unclear is an open question, not a guessed feature",,,,
-sprint-0,draft-epics,done,The epics are published,document,deliverables,status,published
-sprint-0,draft-epics,done,Every epic belongs to a feature,,,,
-sprint-0,draft-epics,done,Every epic traces to something the brief or the SOW commits to,,,,
-sprint-0,draft-epics,done,Every epic names the milestone it serves,,,,
-sprint-0,draft-epics,done,"What the brief leaves unclear is an open question, not a guessed epic",,,,
+epics,draft-epics,done,The epics are published,document,deliverables,status,published
+epics,draft-epics,done,Every epic belongs to a feature,,,,
+epics,draft-epics,done,Every epic traces to something the brief or the SOW commits to,,,,
+epics,draft-epics,done,Every epic names the milestone it serves,,,,
+epics,draft-epics,done,"What the brief leaves unclear is an open question, not a guessed epic",,,,
 sprint-0,tailor-delivery-plan,done,The delivery plan is published,document,delivery plan,status,published
 sprint-0,tailor-delivery-plan,done,Every role the plan names is staffed on the roster,,,,
 sprint-0,draft-foundation-architecture,done,The foundation architecture is published,document,foundational-architecture,status,published
@@ -108,3 +108,10 @@ sprint-plan,review-plan,done,The review is published,document,sprint-plan-review
 sprint-plan,review-plan,done,"Each commitment is judged against the accepted capacity, not against ambition",,,,
 sprint-plan,approve-plan,done,"The plan is accepted by the product manager, and their name is on the close",,,,
 sprint-plan,approve-plan,done,Work taken on that was not in the plan is recorded as unplanned,,,,
+epics,research-epics,done,The coverage is published,document,epic-research,status,published
+epics,research-epics,done,"Every feature and milestone is named, with what it still needs to become epics",,,,
+epics,approve-research,done,"The coverage is accepted by the product manager, and their name is on the close",,,,
+epics,review-epics,done,The review is published,document,epic-review,status,published
+epics,review-epics,done,"Each epic is judged on whether it can be estimated, not on whether it sounds right",,,,
+epics,approve-epics,done,"The epics are accepted by the product manager, and their name is on the close",,,,
+epics,approve-epics,done,"Every finding from the review is answered — accepted, actioned, or overruled with a reason",,,,

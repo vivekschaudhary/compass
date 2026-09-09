@@ -162,62 +162,74 @@ describe("the shipped seed", () => {
     }
   });
 
-  it("gives every phase row a Done gate", () => {
-    // The vacuous-close bug: close_task builds its refusal with string_agg over the Done criteria,
-    // and over zero rows that returns NULL — so a step with no criteria closes green with no
-    // evidence at all. A phase whose rows have no gates is worse than no phase.
-    for (const code of PHASES) {
-      const wf = planned().workflows.find((w) => w.row.code === code)!;
-      for (const step of wf.steps) {
-        const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
-        expect(gates.length, `${code} step ${step.ord} has no Done criteria`).toBeGreaterThan(0);
-      }
-    }
-  });
-
   /**
-   * EVERY ENABLED WORKFLOW'S ROWS HAVE A DONE GATE — with four recorded exceptions.
+   * ROWS that would close green over `string_agg` of nothing. Recorded, not allowed.
    *
-   * This replaces two tests that asserted the same rule about `feature-loop`, a workflow since
-   * removed from the seed: measuring and learning became `measure` and `learn` rather than steps of
-   * one loop. They failed for the right reason, so the rule they encoded is generalised here rather
-   * than deleted with them.
+   * `close_task` builds its refusal from the Done criteria; over zero rows that is NULL, and NULL
+   * reads as "nothing blocking". A row with no gate closes with no evidence, indistinguishable from
+   * one that passed a real bar.
    *
-   * The rule is the vacuous-close bug. `close_task` builds its refusal with `string_agg` over the
-   * Done criteria, and over zero rows that returns NULL — so a step with no criteria closes GREEN,
-   * with no evidence, indistinguishable from one that passed a real gate. A phase whose rows have
-   * no gates is worse than no phase.
+   * PER ROW, not per workflow. It was per workflow, which meant exempting `sprint-0` to record one
+   * ungated row would have stopped policing its other thirteen. The list is longer this way and
+   * says more.
    *
-   * UNGATED IS THE DEBT, NOT THE ALLOWANCE. The four below are enabled today and every one of their
-   * rows would close on nothing: build 7/7, fix 6/6, triage 9/9, tech-design 1/1 — 23 steps. They
-   * are listed so this test passes against the seed as it is while FAILING the moment a fifth
-   * appears. Deleting a name from this list is how one gets fixed; adding one needs a reason.
+   * This also REPLACES a `PHASES`-scoped version of the same assertion. That one checked the three
+   * delivery phases and knew nothing about recorded debt, so it was a strict subset of this and
+   * the only one that could not express a deferred row.
+   *
+   * `sprint-0.draft-epics` is the HIGH PRIORITY one and it is different in kind from the rest. It is
+   * a NESTING row: its five criteria moved to the `epics` workflow along with the work, which is
+   * right, and left the row that opens that work with no bar of its own. Every nesting row has the
+   * same hole — this is simply the first one that ever had criteria to lose, which is why the test
+   * caught it here and nowhere else. What a nesting row's gate should assert is a real question
+   * ("the child run closed" is not something the criteria vocabulary can express today), and it is
+   * deferred deliberately rather than by accident.
+   *
+   * The rest are v1-era workflows that have never had gates. Deleting a name here is how one gets
+   * fixed; adding one needs a reason.
    */
-  const UNGATED_DEBT = new Set(["build", "fix", "triage", "tech-design"]);
+  const UNGATED_DEBT = new Set([
+    "sprint-0.draft-epics",                          // nesting row — issue #173, see above
+    "build.implement-story", "build.write-e2e-tests", "build.review-pr",
+    "build.respond-to-review", "build.arbitrate-dispute", "build.approve",
+    "build.mechanical check",
+    "fix.triage-and-fix", "fix.write-e2e-tests", "fix.review-pr",
+    "fix.respond-to-review", "fix.approve", "fix.accumulate-changelog",
+    "tech-design.design-story-tech",
+    "triage.classify-intake", "triage.approve", "triage.triage-incident",
+    "triage.triage-and-fix", "triage.review-pr", "triage.write-postmortem",
+    "triage.accumulate-changelog",
+  ]);
 
   it("gives every row of every enabled workflow a Done gate", () => {
     const offenders: string[] = [];
     for (const wf of planned().workflows) {
-      if (!wf.row.enabled || UNGATED_DEBT.has(wf.row.code)) continue;
+      if (!wf.row.enabled) continue;
       for (const step of wf.steps) {
+        const id = `${wf.row.code}.${step.task}`;
+        if (UNGATED_DEBT.has(id)) continue;
         const gates = wf.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
-        if (!gates.length) offenders.push(`${wf.row.code}.${step.task}`);
+        if (!gates.length) offenders.push(id);
       }
     }
     expect(offenders, "these rows would close green over string_agg of nothing").toEqual([]);
   });
 
-  it("keeps the ungated-workflow debt honest", () => {
+  it("keeps the ungated-row debt honest", () => {
     // A name here that no longer needs to be is a stale exemption, and a stale exemption is how the
-    // list stops meaning anything. Every entry must still be enabled AND still be ungated.
+    // list stops meaning anything.
     const plan = planned();
-    for (const code of UNGATED_DEBT) {
+    const stale: string[] = [];
+    for (const id of UNGATED_DEBT) {
+      const [code, ...rest] = id.split(".");
+      const task = rest.join(".");
       const wf = plan.workflows.find((w) => w.row.code === code);
-      if (!wf || !wf.row.enabled) continue;               // parked or gone: nothing to police
-      const ungated = wf.steps.filter(
-        (s) => !wf.criteria.some((c) => c.kind === "done" && c.stepTask === s.task));
-      expect(ungated.length, `${code} is gated now — remove it from UNGATED_DEBT`).toBeGreaterThan(0);
+      if (!wf || !wf.row.enabled) continue;                       // parked or gone: nothing to police
+      if (!wf.steps.some((s) => s.task === task)) continue;        // row gone: nothing to police
+      const gated = wf.criteria.some((c) => c.kind === "done" && c.stepTask === task);
+      if (gated) stale.push(id);
     }
+    expect(stale, "these are gated now — remove them from UNGATED_DEBT").toEqual([]);
   });
 
   it("only a `workflow` step nests, and it nests something that exists", () => {

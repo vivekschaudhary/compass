@@ -10,9 +10,9 @@ sprint-0,6,agent,delivery-manager,draft-ways-of-working,ways-of-working,,,,,Team
 sprint-0,7,workflow,product-owner,draft-features,,,,,feature,Features and how each is judged,"file-requirements,draft-product-brief"
 sprint-0,8,workflow,staff-engineer,draft-foundation-architecture,,,,,foundation-architecture,Foundation architecture,"file-requirements,draft-product-brief, draft-features"
 sprint-0,9,workflow,designer,build-design-library,,,,,design-library,Design library,"draft-product-brief, file-requirements"
-sprint-0,10,agent,product-manager,draft-epics,deliverables@tickets,backlog,,,,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features,draft-timeline"
-sprint-0,11,agent,delivery-manager,tailor-delivery-plan,delivery plan,,,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing, file-sow,draft-features"
-sprint-0,12,workflow,product-owner,draft-sprint-plan,,,,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
+sprint-0,10,workflow,product-owner,draft-epics,,,,,epics,Epics from milestones and features,"file-requirements,draft-product-brief, draft-features,draft-timeline"
+sprint-0,11,agent,delivery-manager,tailor-delivery-plan,delivery plan,,deliverables,,,Tailor the delivery plan,"draft-raci,draft-epics,propose-staffing, file-sow,draft-features"
+sprint-0,12,workflow,product-owner,draft-sprint-plan,,,deliverables,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,tailor-delivery-plan"
 sprint-0,13,agent,delivery-manager,kickoff,kickoff,,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,tailor-delivery-plan"
 foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,,,,Research the ground,
 foundation-architecture,2,agent,reviewer,review-research,architecture-research-review,,,,,Review the research,research-architecture
@@ -74,3 +74,8 @@ sprint-plan,2,hitl,product-manager,approve-capacity,,,,,,Accept the capacity pic
 sprint-plan,3,agent,product-owner,draft-sprint-plan,sprint-plans,sprint,,,,The sprint plan,approve-capacity
 sprint-plan,4,agent,reviewer,review-plan,sprint-plan-review,,,,,Review the plan,draft-sprint-plan
 sprint-plan,5,hitl,product-manager,approve-plan,,,,,,Accept the plan,review-plan
+epics,1,agent,product-owner,research-epics,epic-research,,,,,What the epics must cover,
+epics,2,hitl,product-manager,approve-research,,,,,,Accept the coverage,research-epics
+epics,3,agent,product-owner,draft-epics,deliverables@tickets,backlog,,,,The epics,approve-research
+epics,4,agent,reviewer,review-epics,epic-review,,,,,Review the epics,draft-epics
+epics,5,hitl,product-manager,approve-epics,,,,,,Accept the epics,review-epics

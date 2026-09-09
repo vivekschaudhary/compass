@@ -4,6 +4,8 @@ sprint-0,Discovery,Delivery,Discovery,delivery-manager,,true,false
 foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,staff-engineer,,true,false
 feature,Feature,Product,Build,product-owner,,true,true
 product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,true,false
+design-library,Design library,Design,Discovery,designer,,true,true
+sprint-plan,Sprint plan,Delivery,Build,product-owner,,true,true
 feature-architecture,Workflow: /feature-architecture,Engineering,Build,staff-engineer,,false,true
 build,Workflow: /build,Engineering,Build,engineer,,true,true
 tech-design,Technical design,Engineering,Build,staff-engineer,,true,true
@@ -17,5 +19,4 @@ release-comms,Release comms,GTM,Build,gtm,,false,true
 job-aids,Job aids and enablement,GTM,Build,tech-writer,,false,true
 measure,Measure,Product,Operate,researcher,,false,true
 learn,Learn,Product,Operate,product-manager,,false,true
-design-library,Design library,Design,Discovery,designer,,true,true
-sprint-plan,Sprint plan,Delivery,Build,product-owner,,true,true
+epics,Epics,Product,Discovery,product-owner,,true,true
