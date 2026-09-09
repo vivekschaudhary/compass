@@ -41,12 +41,12 @@ story,2,agent,designer,draft-design-spec,,,,,,,
 story,3,agent,ux-writer,write-copy,,,,,,,
 story,4,hitl,product-manager,approve,,,,,,,
 story,5,agent,delivery-manager,update-status,,,,,,,
-fix,1,agent,engineer,triage-and-fix,,,,,,,
-fix,2,agent,automation,write-e2e-tests,,,,,,,
-fix,3,agent,reviewer,review-pr,,,,,,,
-fix,4,agent,engineer,respond-to-review,,,,,,,
-fix,5,hitl,engineer,approve,,,,,,,
-fix,6,agent,tech-writer,accumulate-changelog,,,,,,,
+fix,1,agent,engineer,triage-and-fix,{subject}@scm,code,,,,Reproduce and fix,
+fix,2,agent,automation,write-e2e-tests,{subject}@scm,code,,,,Regression test,triage-and-fix
+fix,3,agent,reviewer,review-pr,{subject}@scm,code,,,,Review the fix,write-e2e-tests
+fix,4,agent,engineer,respond-to-review,{subject}@scm,code,,,,Answer the review,review-pr
+fix,5,hitl,principal-engineer,approve-fix,,,,,,Accept the fix,respond-to-review
+fix,6,agent,tech-writer,accumulate-changelog,{subject}@scm,code,,,,Record it in the changelog,approve-fix
 tech-design,1,agent,staff-engineer,draft-epic-tech-design,03-architecture/epic/{epic},,,,,Epic technical design,
 tech-design,2,agent,reviewer,review-epic-tech-design,03-architecture/epic/{epic}-review,,,,,Review the technical design,draft-epic-tech-design
 tech-design,3,hitl,principal-engineer,approve-epic-tech-design,,,,,,Accept the technical design,review-epic-tech-design

@@ -61,12 +61,18 @@ async function repoFor(engagementId: string): Promise<{ path: string; name: stri
   return null;
 }
 
-/** What a build step needs to know about itself: the story, its position, and its run. */
-type Placement = { story: string | null; ord: number | null; runId: string | null };
+/** What a code step needs to know about itself: the story, its position, its run, its workflow. */
+type Placement = {
+  story: string | null;
+  ord: number | null;
+  runId: string | null;
+  /** `build`, `fix`, … — which graph the orchestrator walks. Never assumed. */
+  workflow: string | null;
+};
 
 async function placementOf(taskId: string): Promise<Placement> {
   const sb = supabaseAdmin();
-  const none: Placement = { story: null, ord: null, runId: null };
+  const none: Placement = { story: null, ord: null, runId: null, workflow: null };
   if (!sb) return none;
 
   const { data: task } = await sb.from("work_task")
@@ -74,7 +80,10 @@ async function placementOf(taskId: string): Promise<Placement> {
   if (!task?.workflow_run_id) return none;
 
   const { data: run } = await sb.from("workflow_run")
-    .select("id, subject_key").eq("id", task.workflow_run_id).maybeSingle();
+    .select("id, subject_key, workflow_id").eq("id", task.workflow_run_id).maybeSingle();
+  const { data: wf } = run?.workflow_id
+    ? await sb.from("workflow").select("code").eq("id", run.workflow_id).maybeSingle()
+    : { data: null };
   const { data: step } = task.workflow_step_id
     ? await sb.from("workflow_step").select("ord").eq("id", task.workflow_step_id).maybeSingle()
     : { data: null };
@@ -85,6 +94,7 @@ async function placementOf(taskId: string): Promise<Placement> {
     story: (run?.subject_key as string | null) ?? null,
     ord: (step?.ord as number | null) ?? null,
     runId: (run?.id as string | null) ?? null,
+    workflow: (wf?.code as string | null) ?? null,
   };
 }
 
@@ -105,7 +115,7 @@ export async function runCode(
 ): Promise<CodeRun> {
   const empty = { ok: false, exit: null, branch: null, prUrl: null, log: "", repoName: null };
 
-  const { story, ord, runId } = await placementOf(taskId);
+  const { story, ord, runId, workflow } = await placementOf(taskId);
   if (!story) {
     return {
       ...empty,
@@ -114,7 +124,7 @@ export async function runCode(
         "must carry a Jira key before there is anything to build.",
     };
   }
-  if (ord === null || !runId) {
+  if (ord === null || !runId || !workflow) {
     return {
       ...empty,
       refusal:
@@ -162,7 +172,10 @@ export async function runCode(
   // coupling to a file that is going away with v1, recorded here rather than discovered later.
   const orchestratorRunId = `v2-${runId}`;
   const args = [
-    "-m", "compass.orchestrator.run", "build",
+    // The RUN's workflow, never a literal. This said `build`, which meant a `fix` step would have
+    // walked build's graph — same step numbers, different tasks, and the mismatch is silent
+    // because both graphs have a step 2.
+    "-m", "compass.orchestrator.run", workflow,
     "--project-dir", repo.path,
     ...(vendored ? [] : ["--compass-dir", COMPASS_DIR]),
     "--story", story,

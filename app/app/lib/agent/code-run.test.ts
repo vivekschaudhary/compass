@@ -10,7 +10,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 type Row = Record<string, unknown>;
-const state: { tasks: Row[]; runs: Row[]; repos: Row[]; steps: Row[] } = { tasks: [], runs: [], repos: [], steps: [] };
+const state: { tasks: Row[]; runs: Row[]; repos: Row[]; steps: Row[]; workflows: Row[] } =
+  { tasks: [], runs: [], repos: [], steps: [], workflows: [] };
 
 /** What the fake orchestrator prints, and what it exits with. */
 const proc = { stdout: "", exit: 0 as number | null, spawned: [] as string[][] };
@@ -22,6 +23,7 @@ vi.mock("../supabase", () => ({
         table === "work_task" ? state.tasks
         : table === "workflow_run" ? state.runs
         : table === "workflow_step" ? state.steps
+        : table === "workflow" ? state.workflows
         : state.repos;
       const chain: Record<string, unknown> = {
         select: () => chain,
@@ -57,10 +59,11 @@ vi.mock("child_process", () => ({
 
 const { runCode } = await import("./code-run");
 
-function seed(opts: { subjectKey?: string | null; localPath?: string | null; ord?: number } = {}) {
+function seed(opts: { subjectKey?: string | null; localPath?: string | null; ord?: number; workflow?: string } = {}) {
   state.tasks = [{ id: "t1", workflow_run_id: "r1", workflow_step_id: "s1" }];
   state.steps = [{ id: "s1", ord: opts.ord ?? 1 }];
-  state.runs = [{ id: "r1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
+  state.workflows = [{ id: "w1", code: opts.workflow ?? "build" }];
+  state.runs = [{ id: "r1", workflow_id: "w1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
   state.repos = opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
 }
 
@@ -209,5 +212,33 @@ describe("what the branch gets called", () => {
     await runCode("e1", "t1", { context: "something else entirely" });
     const args = proc.spawned[0];
     expect(args).toEqual(expect.arrayContaining(["--from-step", "3"]));
+  });
+});
+
+// ── which graph it walks ─────────────────────────────────────────────────────────────────────
+//
+// `build` and `fix` both have a step 2, and they are different tasks. A hardcoded workflow name
+// would send a fix step through build's graph and nothing would say so — the run would report a
+// step that ran, just not the one the row asked for.
+describe("which workflow it runs", () => {
+  it("walks the run's own graph, not a literal", async () => {
+    for (const code of ["build", "fix"]) {
+      proc.spawned = [];
+      seed({ workflow: code });
+      proc.stdout = "https://github.com/a/b/pull/1";
+      await runCode("e1", "t1");
+      const args = proc.spawned[0];
+      // `-m compass.orchestrator.run <workflow>` — the module is one argv entry, so the
+      // workflow is the one right after it.
+      expect(args[args.indexOf("compass.orchestrator.run") + 1]).toBe(code);
+    }
+  });
+
+  it("refuses when the run names no workflow", async () => {
+    seed();
+    state.workflows = [];
+    const r = await runCode("e1", "t1");
+    expect(r.refusal).toMatch(/no step to execute/i);
+    expect(proc.spawned).toEqual([]);
   });
 });
