@@ -1,31 +1,33 @@
-<!-- DOC-TREE — the workspace document structure Compass scaffolds for an engagement (Confluence
-     space or Teams/SharePoint library). This file is the DEFAULT, and the SOURCE OF TRUTH for it:
-     edit the rows to change the structure every NEW engagement starts with.
+<!-- DOC-TREE — the workspace document structure of an engagement. This file is the SOURCE OF TRUTH
+     for which document paths exist: add a row to declare a new one.
 
-     Per-engagement refinement: at kickoff (Sprint 0, ticket "Connect systems of record") the intake
-     seeds a COPY of this table into the engagement's own `doc_tree_spec`. The user refines that copy
-     (add / remove / rename nodes) and approves it; the APPROVED copy is what gets created. So the
-     default here flows to new engagements, while existing engagements keep their refined structure
-     (`[sprint-0-materializes-refinable-defaults]`, canon). Vocab (kind · provider slots):
-     compass/templates/workflow.md. -->
+     What the app does with it today: the seed importer (app/app/lib/import/store.ts) treats every
+     non-folder row as a DECLARED document path, so a workflow step may produce or read a path listed
+     here before any document exists at it. That is what lets a new document and the step that reads
+     it land in one commit.
+
+     What it no longer does: v1's intake seeded a per-engagement copy of this table into
+     `doc_tree_spec`, let the user refine and approve it, and scaffolded the approved copy into
+     Confluence or SharePoint. That path was deleted with v1; nothing seeds, refines or scaffolds from
+     this file now. Vocab (kind · provider slots): compass/templates/workflow.md. -->
 ---
 name: doc-tree
 title: Workspace document structure
-trigger: engagement created (intake) → seeded per-engagement, refined, then scaffolded on approve
-creates: one node per row below, into the wired docs provider (confluence | teams-sharepoint)
+trigger: read by the seed importer as the catalogue of declared document paths
+creates: nothing on its own — declares the paths workflow steps may produce and read
 ---
 
 # Workspace doc tree — default
 
-The folder/page structure every engagement's workspace starts with. `kind`:
+The folder/page structure of an engagement's workspace. `kind`:
 - **folder** — a container (SharePoint folder; on Confluence, a parent page — Confluence has no folders).
-- **doc** — a content page/file, body seeded by Compass.
+- **doc** — a content page/file.
 - **template** — a reusable page/file template (e.g. the sprint-review form).
 
-`parent` is another row's `path`, or `—` for a top-level node. Rows are created in `#` order so a
-parent always precedes its children.
+`parent` is another row's `path`, or `—` for a top-level node. Keep rows in `#` order so a parent
+always precedes its children.
 
-## Nodes  (seeded per-engagement at kickoff)
+## Nodes
 | # | path | title | kind | parent |
 |---|------|-------|------|--------|
 | 1 | 00-overview | 00 · Overview | doc | — |
@@ -59,11 +61,10 @@ parent always precedes its children.
 | 29 | 02-scope/features | Features (the bets) | folder | 02-scope |
 
 ## Notes
-- **This table is the default — and load-bearing.** The intake creates whatever rows are here
-  (data-driven; no code change to add a node). Editing a row changes what NEW engagements start with.
-- **Refinable per engagement.** The seeded copy lives in `doc_tree_spec` and is edited/approved before
-  folders are created — so an engagement can diverge from this default without changing it.
-- **Provider-agnostic.** The same tree renders as Confluence pages or SharePoint folders/files via the
-  wired docs adapter. `template` nodes carry a reusable body (e.g. the sprint-review form).
-- **Body content** for `doc`/`template` nodes is generated at scaffold time (per-node). Richer,
-  spec-defined bodies (incl. landing the full SOW in `02-scope/sow`) are a planned follow-up.
+- **Load-bearing.** Every non-folder row is a declared document path: the seed importer accepts a
+  workflow step that produces or reads it. Removing a row that a step still references makes the
+  import refuse that step.
+- **Not scaffolded.** Nothing creates these folders or pages from this table today. v1's intake did,
+  through a refinable per-engagement copy in `doc_tree_spec`; that went with v1.
+- **Provider-agnostic.** Paths are the same whether the engagement's docs live in Confluence or
+  SharePoint; the wired docs adapter maps them.
