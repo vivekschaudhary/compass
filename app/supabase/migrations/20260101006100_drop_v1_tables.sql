@@ -1,51 +1,47 @@
 -- v1's tables go with v1 — the ones nothing still reads.
 --
--- The app carried two engines, and the code for the first was deleted in an earlier commit. These
--- eleven tables were read and written only by that code: its runs and jobs (`run`, `job`, `task`),
--- its chat (`chat_thread`, `chat_message`, `agent_question`), and its dashboard (`activity`,
--- `metric`, `milestone`, `deliverable`, `change_request`). v2 replaced them with `workflow_run` /
--- `work_task`, `turn` / `question`, and `event`.
+-- The app carried two engines, and the code for the first was deleted. These fourteen tables are
+-- read by no remaining source: v1's runs and jobs (`run`, `job`, `task`), its backlog (`epic`,
+-- `story`), its chat (`chat_thread`, `chat_message`, `agent_question`), its workspace scaffolding
+-- (`doc_tree_spec`) and its dashboard (`activity`, `metric`, `milestone`, `deliverable`,
+-- `change_request`). v2 replaced them with `workflow_run` / `work_task`, `backlog_item`,
+-- `turn` / `question`, and `event`.
 --
 -- THE RULE: a table is dropped only if no remaining source file queries it. Not "only v1 code read
--- it" — that was the first draft of this migration, and it was wrong. It sorted callers by the
--- DIRECTORY they sit in, and root-level `lib/*.ts` looked like v1. Some of those modules are v2's.
--- So these were on the first list and are NOT dropped:
+-- it" — that was this migration's first draft, and it was wrong. It sorted callers by the DIRECTORY
+-- they sit in, and root-level `lib/*.ts` looked like v1 although several of those modules are v2's.
+-- It would have dropped `spec_file`, which `lib/specs.ts` resolveSpec reads on every agent run: the
+-- read would have errored, returned null, and resolution fallen back to the framework file on disk,
+-- ignoring the override without a word. The draft's check also passed while checking nothing — a
+-- zsh `for t in $T` does not word-split, so the loop ran once over the whole list as one string.
 --
---   spec_file          `lib/specs.ts` resolveSpec, which `lib/agent/context.ts` calls on EVERY agent
---                      run to load the role's agent file with its org/engagement override. Dropped,
---                      the read errors, returns null, and resolution silently falls back to the
---                      framework file on disk — an override ignored, and nothing says so.
---   spec_file_version  the edit history of spec_file (88 rows). History of a live table is not v1's.
---   story, epic        `lib/jira.ts` jiraForStory, called from `lib/agent/run.ts` on every code build
---                      to find the engagement's Jira credentials. Both tables are empty today, so that
---                      lookup already falls back to env credentials — a v2 bug to fix in its own
---                      change, after which these two can go.
---   doc_tree_spec      `lib/doctree.ts` seedDocTreeSpec / getEngagementDocTree. Unreached from v2, but
---                      still source; dropped when that dead code is removed, not before.
+-- Three tables were held back by that rule and are dropped now that their readers are gone:
+--   story, epic      read by `lib/jira.ts` jiraForStory, which found an engagement's Jira credentials
+--                    through them. Both were empty, so v2 builds silently used env credentials.
+--                    Replaced by jiraForEngagement, which reads the engagement directly.
+--   doc_tree_spec    read only by `lib/doctree.ts` seedDocTreeSpec / getEngagementDocTree /
+--                    scaffoldDocs, which nothing called after v1. Removed.
 --
--- The first draft's check also passed while checking nothing: a zsh `for t in $T` does not
--- word-split, so the loop ran once over the whole list as a single string, matched no file, and
--- printed a clean result. The list below was checked by a script, per table.
+-- KEPT:
+--   spec_file          read on every agent run for agent-file overrides (above).
+--   spec_file_version  its edit history.
+--   user_role, app_user  the grant tables for real identity; `lib/authz.ts` reads `user_role`.
 --
--- Also KEPT: `user_role` and `app_user`, the grant tables for real identity; `lib/authz.ts` reads
--- `user_role`.
+-- Checked, by a script that first proves it finds a known table, against app code, scripts, and the
+-- Python orchestrator: none of the fourteen is queried. No v2 table holds a foreign key into any of
+-- them; every FK among them points within the set or out to `engagement`. No view exists and no
+-- function body reads them.
 --
--- Checked: no v2 table holds a foreign key into any of the eleven. `task` references `story` and
--- `metric` references `epic`, both kept — a child dropping takes its own FK with it and leaves the
--- parent untouched. `chat_message` references `chat_thread` and `run`, both in this statement. No
--- view exists and no function body reads them.
---
--- `activity` holds 197 rows of v1's event log. v2 writes its own to `event`.
+-- `activity` holds 197 rows of v1's event log; v2 writes its own to `event`. The rest are empty.
 --
 -- NO `cascade`. Anything outside the set that still depends on one of these makes Postgres refuse
 -- the whole statement, which is the answer wanted. `cascade` would take that dependent object too,
 -- silently.
 --
--- `if exists` so a re-run is a no-op rather than an error. Five of these (`run`, `deliverable`,
--- `change_request`, `chat_thread`, `chat_message`) come from the hand-applied baseline in
--- supabase/schema.sql, not from a migration — as do `story`, `epic` and `engagement` in the
--- survivor check below. Every working database has that baseline: the earliest migrations alter
--- `engagement` and would fail without it.
+-- `if exists` so a re-run is a no-op rather than an error. Seven of these (`epic`, `story`, `run`,
+-- `deliverable`, `change_request`, `chat_thread`, `chat_message`) come from the hand-applied
+-- baseline in supabase/schema.sql, not from a migration — as does `engagement` in the survivor check
+-- below. Every working database has that baseline: the earliest migrations alter `engagement`.
 
 drop table if exists
   activity,
@@ -54,15 +50,18 @@ drop table if exists
   chat_message,
   chat_thread,
   deliverable,
+  doc_tree_spec,
+  epic,
   job,
   metric,
   milestone,
   run,
+  story,
   task;
 
 -- ── the migration asserts its own effect ─────────────────────────────────────────────────────
 --
--- A migration in this repo has reported "Finished" and changed nothing. So: none of the eleven may
+-- A migration in this repo has reported "Finished" and changed nothing. So: none of the fourteen may
 -- remain, and every table kept on purpose must still be here.
 do $$
 declare
@@ -73,14 +72,15 @@ begin
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r'
      and relname in ('activity','agent_question','change_request','chat_message','chat_thread',
-                     'deliverable','job','metric','milestone','run','task');
+                     'deliverable','doc_tree_spec','epic','job','metric','milestone','run',
+                     'story','task');
   if survivors is not null then
     raise exception 'v1 tables still present after the drop: %', survivors;
   end if;
 
   select string_agg(t, ', ' order by t) into missing
-    from unnest(array['spec_file','spec_file_version','story','epic','doc_tree_spec',
-                      'user_role','app_user','work_task','workflow_run','document','engagement']) t
+    from unnest(array['spec_file','spec_file_version','user_role','app_user',
+                      'work_task','workflow_run','document','engagement']) t
    where not exists (
      select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r' and c.relname = t);

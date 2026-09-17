@@ -63,11 +63,13 @@ What remains of v1 is the Python orchestrator, and v2 still uses it for exactly 
 | host routing | `lib/agent/hosts/select.ts` — `COMPASS_CLAUDE_HOST` picks the API or the `claude` CLI; one model, not chosen per role | `router.py` → `preferred_hosts` |
 | database | yes | none |
 
-Three v1 remnants are still live, and look deletable when they are not:
+Two v1 remnants are still live, and look deletable when they are not:
 - **`lib/authz.ts` + `user_role` / `app_user`** — kept on purpose as the groundwork for real identity.
-- **`spec_file`** — `lib/specs.ts` resolveSpec reads it on every agent run for agent-file overrides.
-- **`story` / `epic`** — `lib/jira.ts` jiraForStory reads them on every code build to find Jira
-  credentials. Both are empty, so v2 builds use env credentials; replace that lookup, then drop them.
+- **`spec_file` (+ `spec_file_version`)** — `lib/specs.ts` resolveSpec reads it on every agent run for
+  agent-file overrides. Nothing can write it since v1's spec editor went, so overrides are frozen.
+
+Before dropping a table, search ALL remaining source for it and trace each hit to a caller — a
+root-level `lib/*.ts` module is not v1 just because of where it sits.
 
 ---
 
