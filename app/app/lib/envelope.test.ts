@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readEnvelope, describeFailure } from "./envelope";
 import { ok, refuse, fail, respond } from "./http";
 
-// The contract every v2 route answers in. Status AND body are asserted together throughout, because
+// The contract every API route answers in. Status AND body are asserted together throughout, because
 // "a refusal returned 200" is exactly the defect a body-only assertion cannot see.
 
 const json = (body: unknown, status = 200) =>

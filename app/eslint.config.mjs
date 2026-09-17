@@ -26,8 +26,8 @@ const eslintConfig = defineConfig([
   // Mechanical, or it will not hold.
   //
   // Everything in app/ EXCEPT lib/, which is where a raw client is allowed. It used to be scoped to
-  // two globs — the pages and routes under a /v2 prefix — because v1's ~190 direct calls sat
-  // outside it and were legitimate under v1's design. v1 is gone and the prefix with it, so the rule
+  // two globs covering just the pages and routes, because v1's ~190 direct calls sat outside them
+  // and were legitimate under v1's design. v1 is gone, so the rule
   // is written the other way round: a new page or route is covered the moment it exists, rather than
   // when someone remembers to add it to a list.
   {

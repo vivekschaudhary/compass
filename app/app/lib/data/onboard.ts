@@ -1,4 +1,4 @@
-// Starting an engagement, the v2 way.
+// Starting an engagement.
 //
 // v1's intake stored the SOW as a SHORT REFERENCE CHIP — sixty characters, "never the full doc" —
 // and the actual contract text nowhere. That is the gap this whole rebuild kept running into: an
@@ -266,7 +266,7 @@ export async function createEngagement(
         `Engagement '${id}' was created and has nobody on it. Delete it before retrying.`,
     };
 
-  // // The scaffolding: the framework's own doc tree, as v2 documents. Folders and empty docs, so the
+  // // The scaffolding: the framework's own doc tree, as documents. Folders and empty docs, so the
   // // shape of the engagement is visible before anything is written into it.
   // const tree = readShippedDocTree();
   // const docRows = tree.map((n, i) => ({

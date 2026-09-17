@@ -1,4 +1,4 @@
-// Adopt v1's scaffolded doc tree into the v2 `document` table.
+// Adopt v1's scaffolded doc tree into the `document` table.
 //
 // A separate, explicit act rather than something the app does on first render. It is a migration,
 // it is idempotent, and it should be visible when it happens.

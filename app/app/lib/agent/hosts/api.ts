@@ -1,4 +1,4 @@
-// The metered Anthropic API host — what v2 has always done, now behind the seam.
+// The metered Anthropic API host — what the app has always done, now behind the seam.
 //
 // Moved verbatim from `run.ts`, deliberately: this is a refactor, and anything that reads
 // differently here is a behaviour change smuggled into one. Same model, same 64k, same adaptive

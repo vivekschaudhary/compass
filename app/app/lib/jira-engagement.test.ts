@@ -6,8 +6,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // here is what happens with a database: a row, no row, and a read that fails.
 //
 // The defect it replaced: `jiraForStory` found the engagement through v1's `story` → `epic` tables,
-// which v2 never writes. The walk always came up empty and fell back to env credentials, so every
-// v2 build posted to the board `.env` names rather than the engagement's own.
+// which the app never writes. The walk always came up empty and fell back to env credentials, so
+// every build posted to the board `.env` names rather than the engagement's own.
 
 type Result = { data: unknown; error: { message: string } | null };
 let result: Result = { data: null, error: null };

@@ -1,6 +1,6 @@
 // What a host is, and what it owes back.
 //
-// v2 was born calling `new Anthropic()` inline, with one hardcoded model and no way to route a run
+// The app was born calling `new Anthropic()` inline, with one hardcoded model and no way to route a run
 // anywhere else. That is the fork v1's router already solved, and the reason the fork matters is
 // not cost — it is that review independence needs an author and its reviewer on DIFFERENT hosts,
 // and a hardcoded client cannot express that.

@@ -1,4 +1,4 @@
-// The one shape every v2 HTTP route answers in.
+// The one shape every HTTP route answers in.
 //
 // There were five. `onboard` refused with HTTP 200 and a `problems: string[]`, `import` refused with
 // 422 and a `problems: Problem[]` — same key, incompatible types — and the rest used a bare `error`,

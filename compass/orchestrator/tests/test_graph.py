@@ -132,10 +132,10 @@ class TestRealWorkflows(unittest.TestCase):
         """EIGHT steps, and it stays eight.
 
         This file is v1's dispatch graph and `graph.py` executes it — the orchestrator reads it when
-        the app spawns `compass.orchestrator.run build`. v2's seed has TWO rows for build, and the
+        the app spawns `compass.orchestrator.run build`. The seed has TWO rows for build, and the
         temptation is to "reconcile" the counts by trimming this file.
 
-        Trimming it DELETES THE WORK. v2's row 1 carries `output: code`, whose tool spawns the
+        Trimming it DELETES THE WORK. The seed's row 1 carries `output: code`, whose tool spawns the
         orchestrator, which runs all eight of these. Cutting them to two would leave the run doing
         implement-story and stopping — no tests, no review — while every count agreed. That edit was
         made in the session that wrote this docstring and caught before it shipped, which is why the

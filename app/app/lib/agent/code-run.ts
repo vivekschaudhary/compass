@@ -1,6 +1,6 @@
 // Handing a build to the orchestrator.
 //
-// v2's agent has four tools and none of them touches a repo — it drafts documents and returns
+// The app's agent has four tools and none of them touches a repo — it drafts documents and returns
 // structure. The machinery that actually writes code already exists and is v1's: it creates the
 // work branch, dispatches the engineer, runs the project's CI-parity checks, and opens a pull
 // request ONLY on green. Porting that into the model loop would mean rebuilding a year of learned
@@ -8,9 +8,9 @@
 //
 // WHY THIS DID NOT REUSE v1's `lib/orchestrator.ts` (since deleted with v1). That one resolved the
 // repo through v1's `story` and `epic` tables, transitioned a v1 Jira ticket, and wrote `run`, `job`
-// and `activity` rows. None of those describe a v2 build — a v2 build is a `work_task` in a
+// and `activity` rows. None of those describe a build here — a build is a `work_task` in a
 // `workflow_run` whose SUBJECT is the story, and its record is a document behind a gate. So this
-// takes the same spawn and gives it v2's inputs and v2's outputs, rather than bending either.
+// takes the same spawn and gives it the app's inputs and outputs, rather than bending either.
 //
 // NOTHING HERE DECIDES WHETHER THE BUILD WAS GOOD. It reports what happened — exit code, branch,
 // pull request, the tail of the log — and the gate reads that. A function that both ran the build
@@ -164,8 +164,8 @@ export async function runCode(
   // recover; it is the one that records it.
   //
   // THE RUN ID IS DERIVED, NOT STORED. `_prior_run_branch` (run.py:463) finds the branch by scanning
-  // for a RUN_START carrying this exact id, so every step of one v2 run must pass the same one —
-  // and the v2 run's own id already is that, with no column to add and nothing to keep in step.
+  // for a RUN_START carrying this exact id, so every step of one workflow run must pass the same
+  // one — and the workflow run's own id already is that, with no column to add and nothing to keep in step.
   //
   // `--step N` MEANS V1'S STEP NUMBER. Seed ord 1-4 line up with build.md's steps 1-4 today, and
   // nothing enforces it: reorder either side and this sends the wrong step, silently. It is a

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// Every v2 route answers in the envelope, with the status its answer calls for.
+// Every API route answers in the envelope, with the status its answer calls for.
 //
 // One block per route, asserting the status code as well as the body. The defect that started this
 // was a refusal sent as HTTP 200: its body was readable and wrong in a way only the status showed.

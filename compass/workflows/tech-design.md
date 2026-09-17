@@ -6,7 +6,7 @@
 
      THIS FILE WAS STORY-SCOPED AND IS NOT ANY MORE. It described one run per Ready story, a
      `## Technical approach` spliced onto the Story description, and a `tech-ready` label that
-     `/build` refused to proceed without. None of that ran in v2 — the workflow was a single
+     `/build` refused to proceed without. None of that ran in the app — the workflow was a single
      ungated row that nothing opened. The tier is the epic, between feature architecture above and
      the story build below. -->
 ---

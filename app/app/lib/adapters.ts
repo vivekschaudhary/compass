@@ -174,7 +174,7 @@ export function secretColumns(): string[] {
  *
  * The framework has written `brief@docs` and `epic@tickets` in its templates since the slot
  * vocabulary was introduced — a deliverable names the CAPABILITY it goes to, never the vendor. The
- * v2 seed carried bare paths and nothing parsed a suffix, so every deliverable went to the doc
+ * seed carried bare paths and nothing parsed a suffix, so every deliverable went to the doc
  * store: the epics were published as a Confluence page and no Jira issue was ever created from them.
  *
  * This is the one place that parse lives. `02-scope/deliverables@tickets` goes to the tracker;

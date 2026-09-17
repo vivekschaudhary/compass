@@ -2,7 +2,7 @@ import { readFrameworkDefault, parseSpecTable } from "./specs";
 
 // The workspace doc tree, as the framework ships it in compass/templates/doc-tree.md.
 //
-// v2 reads it for one thing: the catalogue of DECLARED document paths. The seed importer
+// The app reads it for one thing: the catalogue of DECLARED document paths. The seed importer
 // (lib/import/store.ts) accepts a step that produces or reads a path declared here before any
 // document at that path exists — otherwise declaring a new document and the step that reads it could
 // never land in one commit.

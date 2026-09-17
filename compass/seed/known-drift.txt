@@ -28,7 +28,7 @@ step-count     build
 
 # `ops` is v1's, like the nine above it. Its seed row was dropped in the workflow restructure but
 # `compass/workflows/ops.md` stays: v1's orchestrator still loads it, `_CODE_WORKFLOWS` still lists
-# it, and deleting the file breaks a workflow that still runs. Unseeded is the right state — v2 does
+# it, and deleting the file breaks a workflow that still runs. Unseeded is the right state — the app does
 # not offer it, v1 still does — and that is exactly what the nine entries above record.
 unseeded       ops
 

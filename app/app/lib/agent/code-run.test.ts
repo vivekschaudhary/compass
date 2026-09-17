@@ -157,7 +157,7 @@ describe("which step it runs, and on which branch", () => {
   });
 
   // `_prior_run_branch` finds the branch by scanning for a RUN_START carrying this exact id, so
-  // every step of one v2 run has to pass the same one. Derived from the run, not stored.
+  // every step of one workflow run has to pass the same one. Derived from the run, not stored.
   it("passes the same derived run id from every step", async () => {
     const ids: string[] = [];
     for (const ord of [1, 2, 3, 4]) {

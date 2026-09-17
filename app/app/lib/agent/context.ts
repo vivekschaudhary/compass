@@ -537,9 +537,8 @@ export async function doneCriteriaFor(stepId: string): Promise<string[]> {
  *
  * Through the spec spine, not off the disk.
  *
- * v1 resolves every framework file in three tiers — engagement override, then org default, then
- * what compass/ ships — and `specs.ts` says plainly that BOTH runtimes read through it. v2 was
- * meant to be a new surface on that spine and instead read `compass/agents/<agent>.md` straight
+ * Every framework file resolves in three tiers — engagement override, then org default, then what
+ * compass/ ships — through `specs.ts`. The app was meant to read through that spine and instead read `compass/agents/<agent>.md` straight
  * from the filesystem, which silently dropped the first two tiers: an engagement that had
  * customised how its delivery manager works got the framework default and no error saying so.
  *

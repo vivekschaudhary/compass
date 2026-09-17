@@ -43,7 +43,7 @@ Gates + postconditions = load-bearing. Work-steps = guidance.
 
 **Gate:** SOW text (or source doc) provided. Refuse to invent a SOW.
 **Work:** extract the guardrails **faithfully** — name, client, pricing, budget, timeline, quality bar, deliverables (D1..Dn), milestones, staffing, and any **named people** (mapped to role codes) → **do NOT silently guess or default**: for every field you had to infer and every load-bearing role (delivery-manager, pm, staff-engineer, engineer, designer) the SOW leaves unnamed, raise a **structured clarifying question** per `[agent-asks-structured-questions]` (choice/number/text, with the target field it sets) → create the engagement + seed roster (real names where stated, else Unassigned) + deliverables + milestones + the Sprint 0 foundation backlog (from `compass/templates/sprint-0.md`) → file the still-open questions into your jobs-to-do.
-**Postcondition:** **no silent defaults** — every inferred/missing field is either confirmed by the human or filed as an open question; never invent scope the SOW doesn't imply. (Host surface: the control-tower app's onboarding — `/v2/new` + `app/api/v2/onboard`; questions land as `question` rows through the `ask` tool.)
+**Postcondition:** **no silent defaults** — every inferred/missing field is either confirmed by the human or filed as an open question; never invent scope the SOW doesn't imply. (Host surface: the control-tower app's onboarding — `/new` + `app/api/onboard`; questions land as `question` rows through the `ask` tool.)
 
 ### `update-status` — refresh `docs/status.md`
 

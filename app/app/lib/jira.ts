@@ -307,9 +307,9 @@ export async function deleteIssue(c: JiraCreds, key: string): Promise<boolean> {
 /**
  * The Jira credentials an engagement uses — its own, each missing field filled from the server env.
  *
- * Keyed on the ENGAGEMENT, which every v2 task already carries. It replaced `jiraForStory`, which
- * found the engagement by walking v1's `story` → `epic` tables. v2 never writes those, so the walk
- * always came up empty and fell back to env credentials: every v2 build posted its pull request to
+ * Keyed on the ENGAGEMENT, which every task already carries. It replaced `jiraForStory`, which
+ * found the engagement by walking v1's `story` → `epic` tables. The app never writes those, so the
+ * walk always came up empty and fell back to env credentials: every build posted its pull request to
  * whichever board `.env` names, not to the engagement's own, and nothing said so.
  *
  * Two answers that are NOT a fallback to env:

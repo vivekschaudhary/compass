@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Every `member` row names its org.
 //
-// 056 made `member.org_id` NOT NULL. Two v2 write paths never set it, so every insert they attempted
+// 056 made `member.org_id` NOT NULL. Two write paths never set it, so every insert they attempted
 // was rejected — and both swallowed the rejection into a `problems` array the caller carried past.
 // Onboarding returned an engagement id for an engagement with an empty `member` table; approving a
 // roster closed the gate green having staffed nobody. Both were live: `engagement` held a row and

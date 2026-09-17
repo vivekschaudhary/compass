@@ -44,7 +44,7 @@ Both halves live here; a change spanning them is one commit.
 - **`app/`** — the control tower (Next.js 16 / Supabase). Its own toolchain; see `app/AGENTS.md`,
   which carries a Next 16 breaking-change warning worth heeding.
 
-**v2 (in `app/`) is the engine.** Where anything disagrees with it, v2 is what runs.
+**The app (in `app/`) is the engine.** Where anything disagrees with it, the app is what runs.
 
 ---
 
@@ -54,9 +54,9 @@ The app used to carry two engines, which was the single most confusing thing in 
 source of most of its drift. v1's app half — its API routes, the root `lib/*.ts` modules that served
 them, its pages, components and eleven of its tables — has been deleted.
 
-What remains of v1 is the Python orchestrator, and v2 still uses it for exactly one job:
+What remains of v1 is the Python orchestrator, and the app still uses it for exactly one job:
 
-| | v2 — `app/app/lib/data`, `lib/agent`, `lib/import`, `app/app/v2/*`, `app/app/api/v2/*` | v1 orchestrator — `compass/orchestrator/` |
+| | the app — `app/app/lib/data`, `lib/agent`, `lib/import`, its pages, `app/app/api/*` | v1 orchestrator — `compass/orchestrator/` |
 |---|---|---|
 | runs | every step, calling a model host itself | only steps whose `output` is `code`, spawned by `lib/agent/code-run.ts` |
 | step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same step by number, from `compass/workflows/*.md` via `graph.py` |
@@ -95,7 +95,7 @@ re-authored, and until then they are to be ignored rather than followed.
 
 Several places describe the same workflows. Know which one executes:
 
-- **`compass/seed/*.csv`** — what v2 imports and actually runs. Carries `produces`, `reads`,
+- **`compass/seed/*.csv`** — what the app imports and actually runs. Carries `produces`, `reads`,
   criteria and `title`.
 - **the database** — a *versioned* copy of the seed. Published versions match it row for row; older
   versions accumulate, so raw counts overstate.

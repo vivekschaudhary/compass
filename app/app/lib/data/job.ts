@@ -85,7 +85,7 @@ export async function draftOf(actor: Actor, path: string | null): Promise<Draft 
  * Record answers to the agent's questions.
  *
  * Lives here rather than in the action because every write goes through this layer — the lint rule
- * that forbids a raw client in v2 exists so the engagement filter can never be forgotten at a call
+ * that forbids a raw client outside lib/ exists so the engagement filter can never be forgotten at a call
  * site, and an answer write is no exception.
  *
  * Unanswered questions stay open. There is no decline: a question the agent needed does not stop

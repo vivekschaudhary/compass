@@ -1,4 +1,4 @@
-// The route side of `./envelope`: three helpers, so a v2 route cannot invent a sixth shape.
+// The route side of `./envelope`: three helpers, so a route cannot invent a sixth shape.
 //
 // The status code carries the same answer as the body. A refusal that returned 200 was
 // indistinguishable, to anything reading the status, from the engagement it declined to create.

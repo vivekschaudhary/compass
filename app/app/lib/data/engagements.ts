@@ -1,7 +1,7 @@
 // Engagement-level reads.
 //
-// Small on purpose. v2 only needs enough to name the thing in the top bar; the four-pillar hero
-// and everything that fed it is v1's, and stays there until the health view is redesigned.
+// Small on purpose. The app only needs enough to name the thing in the top bar; the four-pillar
+// hero and everything that fed it was v1's, and went with it until the health view is redesigned.
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";

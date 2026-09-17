@@ -86,13 +86,13 @@ class TestWorkflowMeta(unittest.TestCase):
 
     def test_real_requires_approved_parses(self):
         # THIS ASSERTION HAS NOW OUTLIVED THREE FILES, and that is the useful part of its history.
-        # It was pinned to `create-brief`, which became `product-brief` and lost the key in the v2
-        # rewrite; then to `feature-architecture`, which was the last v1-shaped file carrying three
+        # It was pinned to `create-brief`, which became `product-brief` and lost the key when the
+        # workflows were rewritten as seed rows; then to `feature-architecture`, which was the last v1-shaped file carrying three
         # entries until it was rewritten for the feature tier and lost them too.
         #
         # So it no longer names a file. What the parser must do is read a real multi-entry list off
         # a real workflow, and `build` is the one that still has one — pinning to it by NAME would
-        # just queue up the same failure the day build is rewritten for v2. Instead: find whichever
+        # just queue up the same failure the day build is rewritten again. Instead: find whichever
         # shipped workflow declares the most entries, and assert the parse against it. The test now
         # follows the seed rather than being edited each time the seed moves.
         best, entries = None, []
@@ -113,7 +113,7 @@ class TestWorkflowMeta(unittest.TestCase):
         """Several entries on one line, against a FIXTURE rather than a shipped file.
 
         This used to be part of the test above, asserting the richest shipped workflow had more than
-        one entry. `build.md` was that file, with two; rewriting it for v2 left `foundation-architecture`
+        one entry. `build.md` was that file, with two; rewriting it as seed rows left `foundation-architecture`
         as the richest with exactly one, and the assertion failed — for the right reason, because it
         was really an assertion about the SEED and not about the parser.
 
