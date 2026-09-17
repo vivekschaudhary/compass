@@ -1,20 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const jetbrains = JetBrains_Mono({
-  variable: "--font-mono-jb",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  display: "swap",
-});
+// The root shell. Everything the app renders is under /v2, whose own layout brings the design system.
+//
+// No `next/font` here. v1 loaded Inter and JetBrains Mono as CSS variables consumed by its Tailwind
+// theme; v2 takes its faces from Organic's own `@import` (Figtree, Caprasimo) — see v2/layout.tsx for
+// why those are vendored rather than self-hosted.
 
 export const metadata: Metadata = {
   title: "Compass — delivery control tower",
@@ -25,7 +16,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable} h-full`} suppressHydrationWarning>
+    <html lang="en" className="h-full" suppressHydrationWarning>
       <body className="min-h-full" suppressHydrationWarning>{children}</body>
     </html>
   );

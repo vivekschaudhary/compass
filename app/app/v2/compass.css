@@ -21,11 +21,10 @@
  */
 
 /* ── ground ──────────────────────────────────────────────────────────────────
- * Re-asserted on a wrapper because v1's globals.css is still imported by the root layout and sets
- * body background/colour/font from the Tailwind theme. Nested-layout CSS loads after root CSS so
- * Organic already wins — but relying on emission order for the page's ground is the kind of thing
- * that breaks silently on a bundler upgrade. v1 and v2 share no token names, so nothing else
- * collides. */
+ * Set on a wrapper rather than on body. It began as a guard: v1's globals.css set body
+ * background/colour/font from its Tailwind theme, and Organic won only by emission order. v1 and
+ * that theme are gone, but the ground stays on `.v2` — the gutter, palette and radii below are all
+ * scoped to it, and a page's ground belongs with the tokens it is drawn from. */
 
 .v2 {
   /* The page gutter. Named because the top bar and the content below it must agree, and they did

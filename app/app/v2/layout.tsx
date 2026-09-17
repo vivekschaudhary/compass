@@ -1,9 +1,6 @@
 // The v2 subtree.
 //
-// Built alongside the existing app rather than replacing it: everything under /v2 uses the Organic
-// design system and the new information architecture, while the current UI at / keeps working
-// untouched until cutover. The two share no CSS token names, so both render correctly from one
-// stylesheet — see the ground note in compass.css.
+// The app. It was built alongside v1 rather than replacing it, which is why it lives under /v2.
 //
 // Where style lives, and the one rule: LOOK is only ever defined in a stylesheet, never at a call
 // site. `organic.css` is the design system, vendored verbatim and never edited, so it can be
@@ -14,11 +11,11 @@
 // Page COMPOSITION is Tailwind. "These three cards sit in three columns" is not a component and
 // inventing a class name for it helps nobody.
 //
-// Tailwind itself comes from v1's globals.css, which is the one thing this subtree still borrows.
-// It cannot be hoisted to a shared file: Tailwind v4 only processes `@theme` in the entry that
-// imports the framework, so separating them orphans v1's tokens and drops its utilities, and the
-// build still compiles. At cutover the `@import "tailwindcss"` line moves here — see the note at
-// the top of globals.css.
+// Tailwind itself is imported by the ROOT layout's globals.css, and deliberately not from here. It
+// brings Preflight, a CSS reset: root CSS is emitted first, so the reset lands before Organic. Imported
+// below, it would land after organic.css and reset Organic's element styles — and still compile. An
+// earlier note here said the import would "move here at cutover"; it was checked at cutover and
+// that would have been the bug. See the note at the top of globals.css.
 //
 // Fonts come from Organic's own `@import`, not from next/font. That is deliberate: the token sheet
 // names the families literally ("Caprasimo", "Figtree") and next/font generates hashed family

@@ -1,79 +1,13 @@
-/* Tailwind v4 only processes `@theme` in the entry that imports the framework, so this line and
- * the theme block below cannot be separated — moving it to a sibling file orphans every token
- * here and silently drops every utility derived from them. The build still compiles.
+/* Tailwind, and only Tailwind. v2 uses it for page composition — flex, grid, gap — and nothing else;
+ * every look is defined in v2/organic.css and v2/compass.css.
  *
- * AT CUTOVER: when v1 is deleted, this import MOVES to the v2 entry. It must not be deleted along
- * with the rest of this file. v2 uses Tailwind for page composition only. */
+ * WHY THIS STAYS IN THE ROOT, AND DOES NOT MOVE TO v2/compass.css. `@import "tailwindcss"` brings
+ * Preflight, Tailwind's CSS reset. Root-layout CSS is emitted before nested-layout CSS, so here the
+ * reset lands first and Organic's base styles are applied on top of it. Imported from compass.css it
+ * would land AFTER organic.css (v2/layout.tsx imports organic first) and reset Organic's element
+ * styles back to Tailwind's defaults — and the build would still compile. The order is the point.
+ *
+ * No `@theme` here. v1's design tokens lived in this file and were removed with v1; v2 derives no
+ * utility from them. `.text-muted` and `.rise`, the two class names v1 and v2 shared, are defined by
+ * organic.css and compass.css respectively. */
 @import "tailwindcss";
-
-/* ─ Compass design tokens — home-app language (clean light SaaS) ───────────── */
-@theme {
-  /* surfaces */
-  --color-shell: #f6f7f9;        /* app background */
-  --color-card: #ffffff;         /* cards */
-  --color-line: #e8eaef;         /* hairline border */
-  --color-line-2: #dfe2e8;       /* stronger divider */
-
-  /* text */
-  --color-ink: #101625;          /* headings */
-  --color-body: #3b4356;         /* body */
-  --color-muted: #6b7280;        /* secondary */
-  --color-faint: #98a0ad;        /* tertiary */
-
-  /* brand signal (used sparingly) */
-  --color-brand: #4f46e5;
-  --color-brand-ink: #4338ca;
-  --color-brand-weak: #eef0fe;
-
-  /* status data-ink */
-  --color-good: #08875d;
-  --color-good-weak: #e6f5ee;
-  --color-warn: #b45309;         /* amber text */
-  --color-warn-weak: #fdf6e7;    /* cream (needs-attention) */
-  --color-warn-line: #f0e4c6;
-  --color-bad: #d64550;
-  --color-bad-weak: #fdecec;
-
-  /* fonts */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono-jb), ui-monospace, "SF Mono", monospace;
-
-  /* radii */
-  --radius-card: 16px;
-  --radius-tile: 11px;
-  --radius-pill: 999px;
-}
-
-html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-
-body {
-  background: var(--color-shell);
-  color: var(--color-body);
-  font-family: var(--font-sans);
-}
-
-/* metrics line up */
-.tnum { font-variant-numeric: tabular-nums; }
-.mono { font-family: var(--font-mono); }
-
-/* focus */
-:where(button, a, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-brand);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
-/* motion */
-@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes barGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-@keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-@keyframes caret { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
-.rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
-.bar-grow { transform-origin: left; animation: barGrow .9s cubic-bezier(.3,.8,.3,1) both; }
-.pulse-dot { animation: pulseDot 1.8s ease-in-out infinite; }
-.caret::after { content: "▍"; margin-left: 1px; animation: caret 1s step-end infinite; color: var(--color-faint); }
-
-@media (prefers-reduced-motion: reduce) {
-  .rise, .bar-grow, .pulse-dot, .caret::after { animation: none !important; }
-  .bar-grow { transform: none; }
-}
