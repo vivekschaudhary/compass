@@ -1,9 +1,7 @@
-import { getProgram } from "./lib/program";
-import { AppShell } from "./components/AppShell";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function Page() {
-  const model = await getProgram();
-  return <AppShell model={model} />;
+// `/` was v1's dashboard. The app lives under /v2, so the root sends you to the project list rather
+// than to a 404.
+export default function Root() {
+  redirect("/v2/projects");
 }
