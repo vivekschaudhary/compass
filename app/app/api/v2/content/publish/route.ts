@@ -4,17 +4,19 @@
 // projection out was never built. This backfills them, and doubles as the retry path for any
 // document whose publish failed.
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { publishAll } from "@/app/lib/data/publish";
+import { ok, refuse } from "@/app/lib/http";
 
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const { engagement } = await req.json();
-  if (!engagement) return NextResponse.json({ error: "engagement is required" }, { status: 400 });
+  if (!engagement) return refuse("engagement is required", 400);
 
   const results = await publishAll(engagement);
-  return NextResponse.json({
+  // `ok: true` even when some documents failed: the backfill ran, and `results` says which did not.
+  return ok({
     published: results.filter((r) => r.ok).length,
     of: results.length,
     results,

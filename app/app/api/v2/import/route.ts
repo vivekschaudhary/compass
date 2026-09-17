@@ -8,7 +8,7 @@
 // from day one rather than being a feature nobody runs until a client needs it. Resetting the
 // demo is re-running the load.
 
-import { NextResponse } from "next/server";
+import { ok, refuse, fail } from "@/app/lib/http";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { COMPASS_DIR } from "@/app/lib/specs";
@@ -38,14 +38,14 @@ function seedBundle(): Bundle {
 
 async function run(bundle: Bundle, orgCode: string, engagementId: string | null, dry: boolean) {
   const existing = await readExistingFor(orgCode, engagementId);
-  if (!existing) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 503 });
+  if (!existing) return fail("Supabase is not configured.", 503);
 
   const planned = planImport(bundle, existing);
 
   // Refusals are the useful output, not an error page: each one names the file, the row and the
   // one next move.
   if (!planned.ok) {
-    return NextResponse.json({ ok: false, problems: planned.problems }, { status: 422 });
+    return refuse(planned.problems, 422);
   }
 
   // Runs already in flight are pinned to the version they started on and do NOT move when a new
@@ -58,8 +58,8 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
   // So the count is in the response whether or not anything changed. It does not act — moving a run
   // is `scripts/repoint-runs.mts`, and a real migration when runs stop being disposable.
   if (dry) {
-    return NextResponse.json({
-      ok: true, dryRun: true, summary: planned.summary,
+    return ok({
+      dryRun: true, summary: planned.summary,
       workflows: planned.plan.workflows.map((w) => ({ code: w.row.code, action: w.action, changes: w.changes })),
       // The one part of a plan that TAKES something away, so it is in the preview or the preview is
       // not a preview. A typo'd `code` column looks exactly like a deliberate retirement, and only
@@ -70,13 +70,13 @@ async function run(bundle: Bundle, orgCode: string, engagementId: string | null,
   }
 
   const store = configStore();
-  if (!store) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 503 });
+  if (!store) return fail("Supabase is not configured.", 503);
 
   const report = await applyPlan(planned.plan, { orgCode, engagementId }, store);
   // Counted AFTER applying: publishing a new version is exactly what strands open runs, so the
   // number that matters is the one this import just created.
-  return NextResponse.json({
-    ok: true, summary: describeReport(report), report,
+  return ok({
+    summary: describeReport(report), report,
     openRunsOnSupersededVersions: await countStaleRuns(),
   });
 }

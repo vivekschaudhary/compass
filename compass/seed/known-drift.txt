@@ -32,3 +32,36 @@ step-count     build
 # not offer it, v1 still does — and that is exactly what the nine entries above record.
 unseeded       ops
 
+
+# The human review gates. `foundation-architecture`, `product-brief`, `tech-design` and `feature`
+# each gained a review held by a PERSON where the .md dispatch graph has an `agent: reviewer` step,
+# and product-brief gained rows besides. The seed is the procedural memory; these .md files are v1's
+# dispatch graphs and go when v1 does, so they are not being rewritten to match.
+#
+# What changed and why: a document is not approved because its author says so. Each deliverable now
+# carries two human gates — the author reviews their own work, then the next role reviews and
+# approves it — and the machine criteria stay on the agent row while the judgment moved onto the
+# hitl rows where a named role owns them.
+step-shape     feature step 2
+step-shape     foundation-architecture step 2
+step-shape     foundation-architecture step 5
+step-shape     foundation-architecture step 8
+step-shape     tech-design step 2
+step-count     product-brief
+
+# The human review gates, second wave. `design-library`, `epics`, `sprint-plan`, `sprint`,
+# `sprint-0` and `feature-architecture` gained the same shape the six above already carry: each
+# authored deliverable is reviewed by its author and then reviewed and approved by an oversight
+# role, so the seed's step counts run ahead of the .md dispatch graphs. Those graphs are v1's and
+# are not being rewritten — the seed is what executes.
+#
+# `sprint-0` is the largest gap (15 -> 25) and the most consequential: `propose-staffing` carries
+# `output: roster`, so approving it writes `member` rows, and until now no human gate stood in front
+# of that at all.
+step-count     design-library
+step-count     epics
+step-count     sprint
+step-count     sprint-0
+step-count     sprint-plan
+step-shape     feature-architecture step 2
+

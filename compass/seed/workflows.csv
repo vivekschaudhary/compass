@@ -19,4 +19,4 @@ release-comms,Release comms,GTM,Build,gtm,,false,true
 job-aids,Job aids and enablement,GTM,Build,tech-writer,,false,true
 measure,Measure,Product,Operate,researcher,,false,true
 learn,Learn,Product,Operate,product-manager,,false,true
-epics,Epics,Product,Discovery,product-owner,,true,true
+epics,Epics,Product,Discovery,product-owner,,true,true 

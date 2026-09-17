@@ -82,6 +82,10 @@ async function materialiseRoster(actor: Actor, markdown: string): Promise<Materi
       // Distinct per person: three engineers must not collide on `<engagement>-<role>`, which is
       // what the delivery manager's own row uses.
       id: `${actor.engagementId}-${role.code}-${slug(row.holder)}`,
+      // 056 made this NOT NULL and this insert never set it, so EVERY row here was rejected — an
+      // approved roster staffed nobody, and the failure went into `problems`, which the caller
+      // discarded. The gate closed green on an engagement with an empty `member` table.
+      org_id: actor.orgId,
       engagement_id: actor.engagementId, role: role.code,
       name: row.holder, title: role.title ?? role.label,
       initials: initialsOf(row.holder), ord: ord++,

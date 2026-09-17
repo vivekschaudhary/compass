@@ -10,6 +10,7 @@
 
 import { parseRecords, parseList, parseBool } from "./csv";
 import { destinationOf } from "../adapters";
+import type { Refusal } from "../envelope";
 
 /* ── what a bundle contains ──────────────────────────────────────────────── */
 
@@ -91,7 +92,12 @@ export type Existing = {
   workflows: { code: string; steps: StepRow[]; criteria: CriterionRow[] }[];
 };
 
-export type Problem = { file: string; row: number | null; message: string; fix: string };
+/**
+ * An import refusal: a `Refusal` with every locating field filled, because a planner that knows the
+ * file and row should never leave them for the reader to find. Assignable to `Refusal`, so the route
+ * sends these through the shared envelope unchanged.
+ */
+export type Problem = Required<Refusal>;
 
 export type Plan = {
   workstreams: { action: "create" | "unchanged"; row: WorkstreamRow }[];

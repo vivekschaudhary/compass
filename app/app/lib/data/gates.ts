@@ -12,6 +12,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit, emitRefusal } from "./events";
+import { expandLinks } from "./links";
 import { mirrorState, moveFailed } from "./tracker";
 import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
@@ -631,7 +632,27 @@ export async function approve(
   // An approved document that the app must KNOW becomes state here — the roster into `member` rows,
   // and whatever else registers later. Only on approval: a draft is a proposal, and materialising
   // one would let an agent staff an engagement by suggesting names.
-  await materialiseFrom(actor, taskId);
+  //
+  // ITS PROBLEMS ARE EMITTED, not discarded. This call's result was dropped on the floor, so an
+  // approved roster that staffed nobody — every insert rejected — closed the gate green and said
+  // nothing anywhere. "Never fatal, and never silent" is the rule materialise.ts states in its own
+  // header; the second half was not held to. Not fatal here either: the human accepted the
+  // document, and refusing the close now would blame them for a write that failed after it.
+  const materialised = await materialiseFrom(actor, taskId);
+  if (materialised?.problems.length) {
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task", subjectId: taskId,
+      verb: "task.materialise_incomplete",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      reason: materialised.problems.join(" · "),
+      payload: {
+        path: materialised.path,
+        created: materialised.created,
+        updated: materialised.updated,
+      },
+    });
+  }
 
   // Approving the backlog no longer materialises anything.
   //
@@ -668,8 +689,16 @@ export async function reject(
     return { ok: false, error: "A rejection needs a reason — the agent has to act on it." };
   }
 
+  // Links in the reasons are read before anything is written. "Doesn't follow <link to the
+  // standard>" is a useful send-back only if the agent gets the standard, and it cannot open a URL.
+  // One unreadable link refuses the whole send-back, so the reviewer can paste the text instead.
+  const typed = `Sent back for revision:\n\n${given.map((r) => `- ${r.reason.trim()}`).join("\n")}`;
+  const read = await expandLinks(typed);
+  if (!read.ok) return { ok: false, error: read.error };
+
   const who = actor.holder ?? actor.roleCode;
   for (const r of given) {
+    // The short reason as typed: this is what the gate and the next reviewer read.
     await sb.from("measurement").upsert({
       task_id: taskId, criterion_id: r.criterionId, satisfied: false,
       measured_at: new Date().toISOString(),
@@ -680,7 +709,7 @@ export async function reject(
       engagementId: actor.engagementId, subjectType: "criterion", subjectId: r.criterionId,
       verb: "criterion.rejected", actorKind: "human",
       actorRoleCode: actor.roleCode, actorUserId: who,
-      payload: { taskId, reason: r.reason.trim() },
+      payload: { taskId, reason: r.reason.trim(), links: read.links.filter((l) => r.reason.includes(l.url)) },
     });
   }
 
@@ -693,7 +722,8 @@ export async function reject(
   await sb.from("turn").insert({
     task_id: taskId, ord: (last?.[0]?.ord ?? -1) + 1,
     author_kind: "human", author_role_code: actor.roleCode, author_user_id: who,
-    body: `Sent back for revision:\n\n${given.map((r) => `- ${r.reason.trim()}`).join("\n")}`,
+    // With every linked page attached — this turn is what the agent replays on its revision run.
+    body: read.text,
   });
 
   return { ok: true };

@@ -5,7 +5,7 @@
 //
 //   POST /api/v2/content/adopt?engagementId=<id>
 
-import { NextResponse } from "next/server";
+import { ok, refuse, fail } from "@/app/lib/http";
 import { adoptV1DocTree } from "@/app/lib/data/documents";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const engagementId = new URL(req.url).searchParams.get("engagementId");
   if (!engagementId) {
-    return NextResponse.json({ ok: false, error: "engagementId is required." }, { status: 400 });
+    return refuse("engagementId is required.", 400);
   }
   try {
     const result = await adoptV1DocTree(engagementId);
-    return NextResponse.json({ ok: true, ...result });
+    return ok(result);
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "failed" }, { status: 500 });
+    return fail(e instanceof Error ? e.message : "failed");
   }
 }

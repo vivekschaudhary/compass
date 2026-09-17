@@ -24,6 +24,7 @@ import {
   type DocEng,
 } from "../docstore";
 import { emit } from "./events";
+import type { Refused, Failed } from "../envelope";
 
 export type NewEngagement = {
   name: string;
@@ -48,15 +49,28 @@ export type NewEngagement = {
   publish?: boolean;
 };
 
-export type OnboardResult = {
-  engagementId: string;
-  //documents: number;
-  // sowVersionId: string | null;
-  // sowSections: number;
-  // openedWorkflow: string | null;
-  published: number;
-  problems: string[];
-};
+/**
+ * Three answers, not one shape with an empty id meaning "no".
+ *
+ * A refusal used to be `{ engagementId: "", problems }` — indistinguishable by type from a success,
+ * and sent with HTTP 200. The form took it for a success, found no id, and drew nothing.
+ *
+ * `problems` survives on SUCCESS only: an engagement that was created while something secondary did
+ * not complete is a real state, and it must not start reading as a refusal.
+ */
+export type OnboardResult =
+  | {
+      ok: true;
+      engagementId: string;
+      //documents: number;
+      // sowVersionId: string | null;
+      // sowSections: number;
+      // openedWorkflow: string | null;
+      published: number;
+      problems: string[];
+    }
+  | Refused
+  | Failed;
 
 const slug = (s: string) =>
   s
@@ -125,30 +139,19 @@ export async function createEngagement(
 ): Promise<OnboardResult> {
   const sb = supabaseAdmin();
   const problems: string[] = [];
-  if (!sb)
-    return {
-      engagementId: "",
-      //documents: 0,
-      //sowVersionId: null,
-      //sowSections: 0,
-      //openedWorkflow: null,
-      published: 0,
-      problems: ["Supabase is not configured."],
-    };
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
 
   if (!input.deliveryManager?.trim()) {
     // Found by creating the second engagement: intake happily made one with no members, so no role
     // had a holder, the queue resolved to nobody and the page 404'd. An engagement is work someone
     // does; creating one without saying who is creating something unusable.
     return {
-      engagementId: "",
-      // documents: 0,
-      // sowVersionId: null,
-      // sowSections: 0,
-      // openedWorkflow: null,
-      published: 0,
-      problems: [
-        "No delivery manager. An engagement with nobody on it has no queue to open.",
+      ok: false,
+      refusals: [
+        {
+          message: "No delivery manager. An engagement with nobody on it has no queue to open.",
+          fix: "Name who runs it.",
+        },
       ],
     };
   }
@@ -160,14 +163,9 @@ export async function createEngagement(
     .maybeSingle();
   if (!org)
     return {
-      engagementId: "",
-      // documents: 0,
-      // sowVersionId: null,
-      // sowSections: 0,
-      // openedWorkflow: null,
-      published: 0,
-      problems: [
-        `No org '${input.orgCode ?? "default"}'. Import the seed first.`,
+      ok: false,
+      refusals: [
+        { message: `No org '${input.orgCode ?? "default"}'.`, fix: "Import the seed first." },
       ],
     };
 
@@ -188,15 +186,7 @@ export async function createEngagement(
   ).filter(Boolean) as string[];
 
   if (keyProblems.length) {
-    return {
-      engagementId: "",
-      // documents: 0,
-      // sowVersionId: null,
-      // sowSections: 0,
-      // openedWorkflow: null,
-      published: 0,
-      problems: keyProblems,
-    };
+    return { ok: false, refusals: keyProblems.map((message) => ({ message })) };
   }
 
   // Store the spelling the system of record uses, not the one that was typed.
@@ -240,22 +230,18 @@ export async function createEngagement(
     quality_criticals: 0,
     quality_spark: [],
   });
-  if (engErr)
-    return {
-      engagementId: "",
-      // documents: 0,
-      // sowVersionId: null,
-      // sowSections: 0,
-      // openedWorkflow: null,
-      published: 0,
-      problems: [`create engagement: ${engErr.message}`],
-    };
+  if (engErr) return { ok: false, error: `create engagement: ${engErr.message}` };
 
   // The first person on it. The rest are staffed by `staff-engagement`, which is a job — but
   // somebody has to be there to run that job, and that somebody is whoever set this up.
   const dmName = input.deliveryManager.trim();
   const { error: memberErr } = await sb.from("member").insert({
     id: `${id}-delivery-manager`,
+    // 056 made this NOT NULL and this insert never set it, so the delivery manager was rejected on
+    // EVERY onboarding — while the engagement above it committed. The result was an engagement with
+    // an empty `member` table, which is precisely the state the guard at the top of this function
+    // refuses when the name is left blank.
+    org_id: org.id,
     engagement_id: id,
     role: "delivery-manager",
     name: dmName,
@@ -268,8 +254,19 @@ export async function createEngagement(
       .slice(0, 2)
       .toUpperCase(),
   });
+  // NOT a `problems.push`, which is what let the above ship. An engagement nobody is on cannot be
+  // worked — no queue opens, `holdersOn` returns nothing, and `mirrorNested` can assign no one — so
+  // it is the same failure the blank-name guard already refuses, and it gets the same answer.
+  // A FAILURE, not a refusal: the database rejected a well-formed row, and nothing the person typed
+  // will change that. Returning no `engagementId` is what stops the form rendering a success page
+  // over it.
   if (memberErr)
-    problems.push(`staff the delivery manager: ${memberErr.message}`);
+    return {
+      ok: false,
+      error:
+        `staff the delivery manager: ${memberErr.message}. ` +
+        `Engagement '${id}' was created and has nobody on it. Delete it before retrying.`,
+    };
 
   // // The scaffolding: the framework's own doc tree, as v2 documents. Folders and empty docs, so the
   // // shape of the engagement is visible before anything is written into it.
@@ -380,6 +377,7 @@ export async function createEngagement(
   });
 
   return {
+    ok: true,
     engagementId: id,
     // documents: docRows.length,
     // Always null and zero now — kept in the shape because callers read them, and reporting "0

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Field, Input, Textarea, Button } from "../_ui/primitives";
+import { readEnvelope, isRefused, type Refusal } from "@/app/lib/envelope";
 
 type Result = {
   engagementId: string;
@@ -26,6 +27,8 @@ export function NewEngagementForm() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Kept apart from `error`: a refusal is something to fix in this form, and there may be several.
+  const [refusals, setRefusals] = useState<Refusal[]>([]);
 
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF((p) => ({ ...p, [k]: e.target.value }));
@@ -33,6 +36,7 @@ export function NewEngagementForm() {
   async function submit() {
     setBusy(true);
     setError(null);
+    setRefusals([]);
     setResult(null);
     try {
       const res = await fetch("/api/v2/onboard", {
@@ -40,9 +44,13 @@ export function NewEngagementForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...f, publish, docsProvider: "confluence" }),
       });
-      const d = await res.json();
-      if (d.error) setError(d.error);
-      else setResult(d);
+      // Checked on `ok`, never on the presence of `error`. A refusal carries no `error` key, and
+      // testing for one sent a declined request down the success branch — where no engagement id
+      // meant nothing rendered at all.
+      const d = await readEnvelope<Result>(res);
+      if (d.ok) setResult(d);
+      else if (isRefused(d)) setRefusals(d.refusals);
+      else setError(d.error);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -150,6 +158,20 @@ export function NewEngagementForm() {
         )}
         {error && <span className="start-error">{error}</span>}
       </div>
+
+      {refusals.length > 0 && (
+        <div className="onboard-problems onboard-refusals" role="alert">
+          <strong>Not created:</strong>
+          <ul>
+            {refusals.map((r, i) => (
+              <li key={i}>
+                {r.message}
+                {r.fix && <> {r.fix}</>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

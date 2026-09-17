@@ -81,7 +81,8 @@ describe("createEngagement stores provider-canonical keys", () => {
   // queue when it was missing.
   it("refuses without a delivery manager, inserting nothing", async () => {
     const r = await createEngagement({ ...INPUT, deliveryManager: "  " });
-    expect(r.engagementId).toBe("");
+    expect(r.ok).toBe(false);
+    expect("refusals" in r && r.refusals[0].message).toMatch(/No delivery manager/);
     expect(inserted.engagement).toBeUndefined();
   });
 });

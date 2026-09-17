@@ -3,6 +3,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
+import { expandLinks, type LinkRead } from "./links";
 import type { Actor } from "./actor";
 
 export type Turn = {
@@ -120,6 +121,18 @@ export async function recordAnswers(
   const promptOf = new Map((open ?? []).map((q) => [q.id, q.prompt as string]));
   const filesToOf = new Map((open ?? []).map((q) => [q.id, (q.files_to as string | null) ?? null]));
 
+  // Read every link BEFORE writing anything. An agent cannot open a URL, so an answer that is a link
+  // has to arrive as what the link says — and if one does not open, the person is told now and
+  // nothing is half-recorded, so they can paste the text instead.
+  const expanded = new Map<string, Extract<Awaited<ReturnType<typeof expandLinks>>, { ok: true }>>();
+  const refusals: string[] = [];
+  await Promise.all(given.map(async ([id, answer]) => {
+    const r = await expandLinks(answer);
+    if (r.ok) expanded.set(id, r);
+    else refusals.push(r.error);
+  }));
+  if (refusals.length) return { ok: false, error: refusals.join(" ") };
+
   for (const q of declined) {
     await sb.from("question").update({
       state: "superseded", superseded_at: new Date().toISOString(),
@@ -134,10 +147,16 @@ export async function recordAnswers(
     });
   }
 
+  // What each answer contributes to the conversation turn.
+  const turnText = new Map<string, string>();
+
   for (const [id, answer] of given) {
+    // The answer stays as typed: the link is the provenance, and the record shows what was given.
     await sb.from("question").update({
       answer, answered_by: who, answered_at: new Date().toISOString(), state: "answered",
     }).eq("id", id).eq("task_id", taskId);
+
+    const read = expanded.get(id)!;
 
     // An answer that IS a document is filed, unmodified.
     //
@@ -145,19 +164,35 @@ export async function recordAnswers(
     // document itself — which paraphrases. A summarised contract or requirement is the worst thing
     // this system could hold, because everything downstream cites it and none of them can tell they
     // are citing a summary.
+    //
+    // An answer that is ONE LINK and nothing else is filed as what the link says, not as the URL.
+    // Filing the URL would give every downstream row a document whose whole body is a string it
+    // cannot open.
     const path = filesToOf.get(id);
-    if (path) await fileAnswer(actor, taskId, path, promptOf.get(id) ?? "Supplied material", answer, who);
+    const soleLink = read.reads.length === 1 && answer.trim() === read.reads[0].url ? read.reads[0] : null;
+    if (path) {
+      await fileAnswer(
+        actor, taskId, path, promptOf.get(id) ?? "Supplied material",
+        soleLink ? soleLink.text : answer, who, soleLink?.finalUrl ?? null,
+      );
+    }
+
+    // A document filed from a link is already the agent's input, pinned at `path`; repeating its
+    // text in the conversation would hand the agent the same contract twice.
+    turnText.set(id, path && soleLink
+      ? `${answer}\n\n_Read ${soleLink.text.length.toLocaleString()} characters from the link and filed them at \`${path}\`._`
+      : read.text);
 
     await emit({
       engagementId: actor.engagementId, subjectType: "question", subjectId: id,
       verb: "question.answered", actorKind: "human",
       actorRoleCode: actor.roleCode, actorUserId: who,
-      payload: { taskId, prompt: promptOf.get(id) ?? null, answer },
+      payload: { taskId, prompt: promptOf.get(id) ?? null, answer, links: read.links },
     });
   }
 
   const body = [
-    ...given.map(([id, a]) => `**${(promptOf.get(id) ?? "question").split("\n")[0]}**\n${a}`),
+    ...given.map(([id, a]) => `**${(promptOf.get(id) ?? "question").split("\n")[0]}**\n${turnText.get(id) ?? a}`),
     ...declined.map((q) => `**${String(q.prompt).split("\n")[0]}**\n_Nothing to supply._`),
   ].join("\n\n");
 
@@ -212,11 +247,35 @@ export async function taskState(actor: Actor, taskId: string): Promise<string | 
 export async function addNote(
   actor: Actor, taskId: string, body: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const sb = supabaseAdmin();
-  if (!sb) return { ok: false, error: "Supabase is not configured." };
-
   const text = body.trim();
   if (!text) return { ok: false, error: "Nothing to add." };
+
+  // Scope before fetching: a task id from another engagement must not make Compass open anything.
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+  const { data: task } = await sb.from("work_task")
+    .select("id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  if (!task) return { ok: false, error: "That task is not in your engagement." };
+
+  // Links in a note are read before it is written, for the same reason as an answer: the agent
+  // replays this turn and cannot open a URL in it.
+  const read = await expandLinks(text);
+  if (!read.ok) return { ok: false, error: read.error };
+
+  return writeNote(actor, taskId, text, read.text, read.links);
+}
+
+/**
+ * The write behind a note, with no link reading.
+ *
+ * Separate so Compass's own notes — "filing your answer failed" — go straight in. A system message
+ * that happened to quote a URL must never be refused because that URL did not open.
+ */
+async function writeNote(
+  actor: Actor, taskId: string, typed: string, body: string, links: LinkRead[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
 
   const { data: task } = await sb.from("work_task")
     .select("id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
@@ -228,7 +287,7 @@ export async function addNote(
   const { error } = await sb.from("turn").insert({
     task_id: taskId, ord: (last?.[0]?.ord ?? -1) + 1,
     author_kind: "human", author_role_code: actor.roleCode,
-    author_user_id: actor.holder ?? actor.roleCode, body: text,
+    author_user_id: actor.holder ?? actor.roleCode, body,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -236,7 +295,8 @@ export async function addNote(
     engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,
     verb: "note.added", actorKind: "human",
     actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? actor.roleCode,
-    payload: { body: text },
+    // The note as typed, not with every linked page inlined into the event log.
+    payload: { body: typed, links },
   });
   return { ok: true };
 }
@@ -259,6 +319,8 @@ export async function addNote(
  */
 async function fileAnswer(
   actor: Actor, taskId: string, path: string, prompt: string, text: string, who: string,
+  /** The URL the text was read from, when the answer was a link. */
+  source: string | null = null,
 ): Promise<void> {
   const sb = supabaseAdmin();
   if (!sb) return;
@@ -279,7 +341,8 @@ async function fileAnswer(
   });
 
   if (error) {
-    await addNote(actor, taskId, `Your answer was recorded, but filing it at \`${path}\` failed: ${error.message}`);
+    const msg = `Your answer was recorded, but filing it at \`${path}\` failed: ${error.message}`;
+    await writeNote(actor, taskId, msg, msg, []);
     return;
   }
 
@@ -287,6 +350,6 @@ async function fileAnswer(
     engagementId: actor.engagementId, subjectType: "document", subjectId: String(versionId),
     verb: "document.filed", actorKind: "human",
     actorRoleCode: actor.roleCode, actorUserId: who,
-    payload: { taskId, path, source: "answer", chars: text.length },
+    payload: { taskId, path, source: "answer", chars: text.length, ...(source ? { url: source } : {}) },
   });
 }

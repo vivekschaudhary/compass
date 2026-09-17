@@ -612,6 +612,8 @@
 .onboard-facts li::before { content: "·"; position: absolute; left: 3px; color: var(--color-neutral-600); }
 .onboard-problems { font-size: 12px; color: var(--color-accent-900); }
 .onboard-problems ul { margin: 4px 0 0; padding-left: 18px; }
+/* A refusal sits under the actions, on the form it refers to — not on a done page it never reaches. */
+.onboard-refusals { margin-top: 12px; }
 
 /* ── textareas are not pills ──────────────────────────────────────────────────
  * organic.css:254 gives `.input` a 999px radius. On a single-line field that is the system's look

@@ -67,7 +67,10 @@ export const TOOLS: Anthropic.Tool[] = [
                 description:
                   "A document path when the ANSWER IS ITSELF A DOCUMENT — a BRD, a policy, a " +
                   "client's existing backlog. The text is filed verbatim at that path and you read " +
-                  "it as an input; it is not yours to rewrite. Omit for an ordinary question.",
+                  "it as an input; it is not yours to rewrite. Omit for an ordinary question. " +
+                  "The human may answer with a link instead of pasting: Compass opens it and files " +
+                  "what it says, or tells them it could not — so never ask them to paste something " +
+                  "they have given you as a link. When you ask for a document, always set this.",
               },
             },
             required: ["prompt", "type", "why"],
