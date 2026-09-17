@@ -1,7 +1,7 @@
 // Jira (Atlassian REST v3) write-path — the consolidation target: bets → Epics, stories →
 // Stories under the Epic (team-managed `parent` link), build/fix → status transitions.
 // Per-engagement creds win; fall back to the server .env. Returns null if incomplete.
-import { supabaseAdmin } from "./supabase";
+import { supabaseAdmin, must } from "./supabase";
 import { decryptSecret } from "./crypto";
 
 export type JiraCreds = { baseUrl: string; email: string; token: string; project: string };
@@ -304,19 +304,29 @@ export async function deleteIssue(c: JiraCreds, key: string): Promise<boolean> {
   return res.ok;
 }
 
-// Resolve the Jira creds for a story's engagement (per-engagement → env). Used by build/fix
-// to transition the issue as the orchestrator runs.
-export async function jiraForStory(storyKey: string): Promise<JiraCreds | null> {
+/**
+ * The Jira credentials an engagement uses — its own, each missing field filled from the server env.
+ *
+ * Keyed on the ENGAGEMENT, which every v2 task already carries. It replaced `jiraForStory`, which
+ * found the engagement by walking v1's `story` → `epic` tables. v2 never writes those, so the walk
+ * always came up empty and fell back to env credentials: every v2 build posted its pull request to
+ * whichever board `.env` names, not to the engagement's own, and nothing said so.
+ *
+ * Two answers that are NOT a fallback to env:
+ *  - no such engagement → null. Nothing is posted; there is no board this could correctly go to.
+ *  - the read failed → throws. Treating a failed read as "no credentials configured" would post to
+ *    the env board, which is the same silent misroute this replaced.
+ */
+export async function jiraForEngagement(engagementId: string): Promise<JiraCreds | null> {
   const sb = supabaseAdmin();
   if (!sb) return resolveJira({});
-  const { data: st } = await sb.from("story").select("epic_id").eq("id", storyKey).maybeSingle();
-  if (!st?.epic_id) return resolveJira({});
-  const { data: ep } = await sb.from("epic").select("engagement_id").eq("id", st.epic_id).maybeSingle();
-  if (!ep?.engagement_id) return resolveJira({});
-  const { data: eng } = await sb.from("engagement")
-    .select("atlassian_base_url, atlassian_email, atlassian_api_token, jira_project")
-    .eq("id", ep.engagement_id).maybeSingle();
-  return resolveJira(eng ?? {});
+  const eng = must(
+    "read the engagement's Jira credentials",
+    await sb.from("engagement")
+      .select("atlassian_base_url, atlassian_email, atlassian_api_token, jira_project")
+      .eq("id", engagementId).maybeSingle(),
+  );
+  return eng ? resolveJira(eng) : null;
 }
 
 /**

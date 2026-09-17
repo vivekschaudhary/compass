@@ -30,7 +30,7 @@ import { resolveCommitments } from "../data/sprint";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { runCode, storyFor } from "./code-run";
-import { jiraForStory, addRemoteLink, addComment } from "../jira";
+import { jiraForEngagement, addRemoteLink, addComment } from "../jira";
 import { nestedWorkflowOf } from "../data/phases";
 import { selectHost, MODEL } from "./hosts/select";
 import { toolsFor } from "./hosts/tools";
@@ -571,7 +571,18 @@ export async function runAgent(
     // filing a page about it would invent an artifact nobody asked for, and the person who needs
     // the link is looking at the ticket.
     const story = await storyFor(taskId);
-    const jira = story ? await jiraForStory(story) : null;
+    // The build has already run, so a failed credentials read must not throw past this point: that
+    // would leave the task `running` with no record of the build. It is caught and said in the turn
+    // below instead — the ticket not being updated is a fact the person reviewing needs to see.
+    let jira: Awaited<ReturnType<typeof jiraForEngagement>> = null;
+    let jiraProblem: string | null = null;
+    if (story) {
+      try {
+        jira = await jiraForEngagement(actor.engagementId);
+      } catch (e) {
+        jiraProblem = e instanceof Error ? e.message : String(e);
+      }
+    }
     if (jira && story) {
       if (built.prUrl) await addRemoteLink(jira, story, built.prUrl, `PR — ${story}`);
       await addComment(
@@ -582,14 +593,15 @@ export async function runAgent(
       );
     }
 
-    const outcome = built.ok
+    const outcome = (built.ok
       ? `**Built.** Checks passed and the pull request is open: ${built.prUrl}` +
         (built.branch ? `\n\nBranch \`${built.branch}\`.` : "")
       // Said plainly, because a run that completes every step and ships nothing is the failure this
       // is most likely to be mistaken for a success.
       : `**UNSHIPPED — no pull request.** The orchestrator exited ${built.exit}. ` +
         `Nothing reached review, so there is nothing to merge.` +
-        (built.branch ? ` The work is on \`${built.branch}\`.` : "");
+        (built.branch ? ` The work is on \`${built.branch}\`.` : "")) +
+      (jiraProblem ? `\n\n**${story} was not updated in Jira.** ${jiraProblem}` : "");
 
     await recordTurn(taskId, `${outcome}\n\n\`\`\`\n${built.log.slice(-4000)}\n\`\`\``, ctx);
 
