@@ -14,8 +14,6 @@
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
-import { readShippedDocTree } from "../doctree";
-import { publishToDocs } from "./publish";
 import {
   checkSpaceKey,
   checkProjectKey,

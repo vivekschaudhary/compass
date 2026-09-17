@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Field, Input, Textarea, Button } from "../_ui/primitives";
+import { Field, Input, Button } from "../_ui/primitives";
 import { readEnvelope, isRefused, type Refusal } from "@/app/lib/envelope";
 
 type Result = {
@@ -23,7 +23,9 @@ export function NewEngagementForm() {
     confluenceRootPageId: "",
     jiraProject: "",
   });
-  const [publish, setPublish] = useState(true);
+  // Always on while the publish toggle is parked; the state stays so restoring the control is a
+  // one-line change rather than a rewire.
+  const [publish] = useState(true);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
