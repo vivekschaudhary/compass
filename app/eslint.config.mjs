@@ -21,12 +21,15 @@ const eslintConfig = defineConfig([
   // Actor, so a caller cannot forget one.
   //
   // "All queries go through lib/data" is exactly the kind of convention that lasts until someone
-  // adds a route at 6pm. v1 already has the bug this prevents: an unfiltered `story` fetch put
-  // another engagement's slipping story into a brand-new engagement's board, and it was caught by
-  // eye. Mechanical, or it will not hold.
+  // adds a route at 6pm. v1 had the bug this prevents: an unfiltered `story` fetch put another
+  // engagement's slipping story into a brand-new engagement's board, and it was caught by eye.
+  // Mechanical, or it will not hold.
   //
-  // Scoped to v2 deliberately. v1 has ~190 direct calls and they are all legitimate under its own
-  // design; flagging them would make the rule noise that everyone learns to ignore.
+  // Scoped to the pages and routes. When this was written v1's ~190 direct calls sat outside it;
+  // v1 is deleted, and every page and route that reads data now lives under these two globs. The
+  // only others are the root layout and the `/` redirect, which touch none; the rest is lib/, which
+  // is where a raw client is allowed. A new route or page outside them is a new
+  // surface, and belongs in this list.
   {
     files: ["app/v2/**/*.{ts,tsx}", "app/api/v2/**/*.{ts,tsx}"],
     rules: {

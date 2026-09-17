@@ -5,13 +5,13 @@ monorepo:
 
 - **`/` (repo root)** — the Compass **framework**: the Python orchestrator (`compass.orchestrator`),
   `compass/agents/`, `compass/workflows/`, templates, docs. This is what consumer projects vendor.
-- **`/app`** — this app. It *drives* the framework: it shells into
-  `python -m compass.orchestrator.run` and reads specs (e.g. `sprint-0.md`) out of the framework's
-  `compass/` dir.
+- **`/app`** — this app, under `/v2`. It runs every workflow step itself, reads agent files and specs
+  out of the framework's `compass/` dir, and shells into `python -m compass.orchestrator.run` only
+  for steps that write code.
 
 The app resolves the framework root relative to its own working directory (`<repo>/app` → `<repo>`),
 so it isn't pinned to any one machine. Set `COMPASS_REPO` / `COMPASS_DIR` to override (see
-[app/lib/repo.ts](app/lib/repo.ts) and [app/api/intake/route.ts](app/api/intake/route.ts)).
+[app/lib/specs.ts](app/lib/specs.ts) and [app/lib/agent/code-run.ts](app/lib/agent/code-run.ts)).
 
 ## Getting started
 
@@ -27,7 +27,7 @@ npm run dev          # http://localhost:3000
 | Key | For |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase (engagements, backlog, docs, metrics) |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | SOW extraction + assistant |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | the agent host (`lib/agent/hosts/`) |
 | `ATLASSIAN_*`, `JIRA_PROJECT`, `GRAPH_*` | Jira / Confluence / Graph connectors |
 | `COMPASS_REPO` *(optional)* | Override the framework root; defaults to the repo root above `app/` |
 

@@ -6,9 +6,9 @@
 // request ONLY on green. Porting that into the model loop would mean rebuilding a year of learned
 // behaviour; calling it is the smaller and more honest move.
 //
-// WHY THIS IS NOT `lib/orchestrator.ts`. That one is the v1 surface: it resolves the repo through
-// v1's `story` and `epic` tables, transitions a v1 Jira ticket, and writes `run`, `job` and
-// `activity` rows. None of those describe a v2 build — a v2 build is a `work_task` in a
+// WHY THIS DID NOT REUSE v1's `lib/orchestrator.ts` (since deleted with v1). That one resolved the
+// repo through v1's `story` and `epic` tables, transitioned a v1 Jira ticket, and wrote `run`, `job`
+// and `activity` rows. None of those describe a v2 build — a v2 build is a `work_task` in a
 // `workflow_run` whose SUBJECT is the story, and its record is a document behind a gate. So this
 // takes the same spawn and gives it v2's inputs and v2's outputs, rather than bending either.
 //

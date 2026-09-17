@@ -44,24 +44,30 @@ Both halves live here; a change spanning them is one commit.
 - **`app/`** — the control tower (Next.js 16 / Supabase). Its own toolchain; see `app/AGENTS.md`,
   which carries a Next 16 breaking-change warning worth heeding.
 
-**v2 (in `app/`) is the engine.** v1's orchestrator is being ported into it. Where they disagree,
-v2 is what runs.
+**v2 (in `app/`) is the engine.** Where anything disagrees with it, v2 is what runs.
 
 ---
 
-## The app has two engines, and v2 is the one
+## One engine, and the v1 orchestrator it still calls
 
-The single most confusing thing in the repo, and the source of most drift.
+The app used to carry two engines, which was the single most confusing thing in the repo and the
+source of most of its drift. v1's app half — its API routes, the root `lib/*.ts` modules that served
+them, its pages, components and eleven of its tables — has been deleted.
 
-| | v1 (`compass/orchestrator/`, `app/app/lib/*.ts`, `app/api/*`) | v2 (`app/app/lib/data`, `app/app/lib/agent`, `app/app/v2/*`) |
+What remains of v1 is the Python orchestrator, and v2 still uses it for exactly one job:
+
+| | v2 — `app/app/lib/data`, `lib/agent`, `lib/import`, `app/app/v2/*`, `app/app/api/v2/*` | v1 orchestrator — `compass/orchestrator/` |
 |---|---|---|
-| executes by | spawning `python -m compass.orchestrator.run` | calling the model SDK itself |
-| step source | `compass/workflows/*.md` via `graph.py` | `workflow_step` rows imported from `compass/seed/*.csv` |
-| spec resolution | `specs.ts` — engagement override → org default | **bypassed**: reads files off disk |
-| host routing | `router.py` → `preferred_hosts` | **hardcoded** `new Anthropic()`, one model |
+| runs | every step, calling a model host itself | only steps whose `output` is `code`, spawned by `lib/agent/code-run.ts` |
+| step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same step by number, from `compass/workflows/*.md` via `graph.py` |
+| host routing | `lib/agent/hosts/select.ts` — `COMPASS_CLAUDE_HOST` picks the API or the `claude` CLI; one model, not chosen per role | `router.py` → `preferred_hosts` |
+| database | yes | none |
 
-**v2 is the engine.** v1 is being ported into it one workflow at a time. v2 forking the spine was a
-defect, not a design.
+Three v1 remnants are still live, and look deletable when they are not:
+- **`lib/authz.ts` + `user_role` / `app_user`** — kept on purpose as the groundwork for real identity.
+- **`spec_file`** — `lib/specs.ts` resolveSpec reads it on every agent run for agent-file overrides.
+- **`story` / `epic`** — `lib/jira.ts` jiraForStory reads them on every code build to find Jira
+  credentials. Both are empty, so v2 builds use env credentials; replace that lookup, then drop them.
 
 ---
 
