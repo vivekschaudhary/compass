@@ -17,7 +17,7 @@ import { Sidebar } from "./Sidebar";
 
 export const dynamic = "force-dynamic";
 
-export default async function EngagementLayout(props: LayoutProps<"/v2/e/[engagement]">) {
+export default async function EngagementLayout(props: LayoutProps<"/e/[engagement]">) {
   const { engagement } = await props.params;
   const summary = await engagementSummary(engagement);
   if (!summary) notFound();

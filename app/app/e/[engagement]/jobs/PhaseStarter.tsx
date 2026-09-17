@@ -42,7 +42,7 @@ function useProgress(engagement: string, role: string, active: boolean) {
     const poll = setInterval(async () => {
       try {
         const res = await fetch(
-          `/api/v2/progress?engagement=${encodeURIComponent(engagement)}` +
+          `/api/progress?engagement=${encodeURIComponent(engagement)}` +
           `&role=${encodeURIComponent(role)}&since=${encodeURIComponent(since.current)}`,
           { cache: "no-store" },
         );

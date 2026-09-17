@@ -106,7 +106,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
             <div className="rail-menu rail-menu-down" role="menu">
               {engagements.map((e) => (
                 <Link
-                  key={e.id} role="menuitem" href={`/v2/e/${e.id}/jobs`}
+                  key={e.id} role="menuitem" href={`/e/${e.id}/jobs`}
                   className={e.id === engagement ? "rail-menu-item rail-menu-item-on" : "rail-menu-item"}
                   onClick={() => setProjectsOpen(false)}
                 >
@@ -116,10 +116,10 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
               {/* Creating and browsing sit with the list, because both are what you came here for
                   when the list did not have what you wanted. */}
               <div className="rail-menu-rule">Organisation</div>
-              <Link href="/v2/new" className="rail-menu-item" role="menuitem" onClick={() => setProjectsOpen(false)}>
+              <Link href="/new" className="rail-menu-item" role="menuitem" onClick={() => setProjectsOpen(false)}>
                 <span className="rail-menu-text"><span>+ New</span></span>
               </Link>
-              <Link href="/v2/projects" className="rail-menu-item" role="menuitem" onClick={() => setProjectsOpen(false)}>
+              <Link href="/projects" className="rail-menu-item" role="menuitem" onClick={() => setProjectsOpen(false)}>
                 <span className="rail-menu-text"><span>Manage projects</span></span>
               </Link>
             </div>
@@ -138,7 +138,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
 
       <nav className="rail-nav">
         {NAV.map((n) => {
-          const href = `/v2/e/${engagement}/${n.href}`;
+          const href = `/e/${engagement}/${n.href}`;
           const active = pathname.startsWith(href);
           return (
             <Link

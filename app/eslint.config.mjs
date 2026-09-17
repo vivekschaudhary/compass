@@ -16,7 +16,7 @@ const eslintConfig = defineConfig([
 
   // ── the data layer is the only door ────────────────────────────────────────────────────────
   //
-  // Every v2 read applies two filters that are not optional: the engagement (tenant isolation,
+  // Every read applies two filters that are not optional: the engagement (tenant isolation,
   // and there is no RLS yet so it is the whole guarantee) and the role's scope. Both come from an
   // Actor, so a caller cannot forget one.
   //
@@ -25,13 +25,14 @@ const eslintConfig = defineConfig([
   // engagement's slipping story into a brand-new engagement's board, and it was caught by eye.
   // Mechanical, or it will not hold.
   //
-  // Scoped to the pages and routes. When this was written v1's ~190 direct calls sat outside it;
-  // v1 is deleted, and every page and route that reads data now lives under these two globs. The
-  // only others are the root layout and the `/` redirect, which touch none; the rest is lib/, which
-  // is where a raw client is allowed. A new route or page outside them is a new
-  // surface, and belongs in this list.
+  // Everything in app/ EXCEPT lib/, which is where a raw client is allowed. It used to be scoped to
+  // two globs — the pages and routes under a /v2 prefix — because v1's ~190 direct calls sat
+  // outside it and were legitimate under v1's design. v1 is gone and the prefix with it, so the rule
+  // is written the other way round: a new page or route is covered the moment it exists, rather than
+  // when someone remembers to add it to a list.
   {
-    files: ["app/v2/**/*.{ts,tsx}", "app/api/v2/**/*.{ts,tsx}"],
+    files: ["app/**/*.{ts,tsx}"],
+    ignores: ["app/lib/**"],
     rules: {
       "no-restricted-imports": ["error", {
         paths: [{

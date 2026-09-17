@@ -15,7 +15,7 @@ export async function answerAction(
   if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await recordAnswers(actor, taskId, answers);
-  revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, remaining: result.remaining };
 }
@@ -28,8 +28,8 @@ export async function approveAction(
   if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await approve(actor, taskId, confirmed);
-  revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
-  revalidatePath(`/v2/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }
@@ -43,8 +43,8 @@ export async function rejectAction(
   if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await reject(actor, taskId, rejections);
-  revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
-  revalidatePath(`/v2/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }
@@ -57,7 +57,7 @@ export async function noteAction(
   if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await addNote(actor, taskId, body);
-  revalidatePath(`/v2/e/${engagement}/jobs/${taskId}`);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }

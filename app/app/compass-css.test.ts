@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
 /**
- * Every Compass class used in v2 has a rule.
+ * Every Compass class the app uses has a rule.
  *
  * This exists because a regex tidying compass.css swept out a block of rules while the components
  * kept using their class names. Nothing failed: no build error, no console warning, no type error —
@@ -14,9 +14,9 @@ import { join } from "path";
  * nothing but a string. This is that join, checked.
  */
 
-const V2 = join(process.cwd(), "app", "v2");
-const CSS = readFileSync(join(V2, "compass.css"), "utf-8");
-const ORGANIC = readFileSync(join(V2, "organic.css"), "utf-8");
+const APP = join(process.cwd(), "app");
+const CSS = readFileSync(join(APP, "compass.css"), "utf-8");
+const ORGANIC = readFileSync(join(APP, "organic.css"), "utf-8");
 
 function tsxFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
@@ -42,7 +42,7 @@ describe("compass.css", () => {
   it("has a rule for every Compass class the components use", () => {
     const missing = new Map<string, string[]>();
 
-    for (const file of tsxFiles(V2)) {
+    for (const file of tsxFiles(APP)) {
       const src = readFileSync(file, "utf-8");
       for (const m of src.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\}|\{cx\(([^)]*)\)\})/g)) {
         // Inside cx(...) only the QUOTED parts are class names — `cx("btn", icon && "btn-icon")`
@@ -82,7 +82,7 @@ describe("compass.css", () => {
  */
 describe("compass.css tokens", () => {
   it("only reads custom properties that are defined", () => {
-    // Anywhere, not just at line start: `.v2 { --rail-w: 232px; }` is a one-liner, and requiring
+    // Anywhere, not just at line start: `.compass { --rail-w: 232px; }` is a one-liner, and requiring
     // a definition to begin its line reported it as undefined — the guard's own false positive.
     const defined = new Set(
       [...CSS.matchAll(/(--[\w-]+)\s*:/g), ...ORGANIC.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]),
@@ -90,7 +90,7 @@ describe("compass.css tokens", () => {
 
     // Some tokens are per-element and set from React — the design library's swatches pass a colour
     // in as `--dl-c`. Those are defined, just not in a stylesheet.
-    for (const file of tsxFiles(V2)) {
+    for (const file of tsxFiles(APP)) {
       for (const m of readFileSync(file, "utf-8").matchAll(/["'`](--[\w-]+)["'`]/g)) defined.add(m[1]);
     }
 

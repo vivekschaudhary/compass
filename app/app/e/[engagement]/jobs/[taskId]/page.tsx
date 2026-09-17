@@ -34,7 +34,7 @@ const STATE_LABEL: Record<string, string> = {
   closed: "closed",
 };
 
-export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/[taskId]">) {
+export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[taskId]">) {
   const { engagement, taskId } = await props.params;
   const search = await props.searchParams;
   const role = Array.isArray(search.role) ? search.role[0] : search.role;
@@ -61,7 +61,7 @@ export default async function JobPage(props: PageProps<"/v2/e/[engagement]/jobs/
   return (
     <div className="job">
       <div className="job-head">
-        <Link href={`/v2/e/${engagement}/jobs${role ? `?role=${role}` : ""}`} className="job-back">← Jobs to do</Link>
+        <Link href={`/e/${engagement}/jobs${role ? `?role=${role}` : ""}`} className="job-back">← Jobs to do</Link>
         <div className="job-title-row">
           <h2>{ctx.taskTitle}</h2>
           <Tag tone={state === "closed" ? "accent-2" : state === "hitl" ? "accent" : "outline"}>

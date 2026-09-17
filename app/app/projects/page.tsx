@@ -21,18 +21,18 @@ export default async function ProjectsPage() {
             {rows.length} engagement{rows.length === 1 ? "" : "s"} in this organisation.
           </p>
         </div>
-        <Link href="/v2/new" className="btn btn-primary">+ New</Link>
+        <Link href="/new" className="btn btn-primary">+ New</Link>
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-muted">Nothing yet. <Link href="/v2/new">Start one</Link>.</p>
+        <p className="text-muted">Nothing yet. <Link href="/new">Start one</Link>.</p>
       ) : (
         <div className="dl-scroll">
           <Table head={["Engagement", "Open work", "Documents", "Systems of record"]}>
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>
-                  <Link href={`/v2/e/${r.id}/jobs`} className="job-card-link">{r.name}</Link>
+                  <Link href={`/e/${r.id}/jobs`} className="job-card-link">{r.name}</Link>
                   <span className="doc-sub">{r.client ?? "—"}{r.phase ? ` · ${r.phase}` : ""}</span>
                 </td>
                 <td>{r.openTasks === 0 ? <span className="text-muted">none</span> : `${r.openTasks} open`}</td>

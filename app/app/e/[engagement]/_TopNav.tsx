@@ -22,7 +22,7 @@ export function TopNav({ engagement }: { engagement: string }) {
   return (
     <nav className="topnav">
       {DESTINATIONS.map((d) => {
-        const href = `/v2/e/${engagement}/${d.slug}`;
+        const href = `/e/${engagement}/${d.slug}`;
         // startsWith, not equality: a job's own page lives under /jobs/<id> and is still Jobs.
         const current = pathname === href || pathname.startsWith(`${href}/`);
         return (

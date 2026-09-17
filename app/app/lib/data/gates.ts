@@ -21,7 +21,7 @@ import { subjectOfRun } from "../agent/context";
 import { resolveJira, projectStatuses, searchIssues, remoteLinks, issueStatus } from "../jira";
 import { sprintJql, sprintNoOf } from "./sprint";
 import type { Actor } from "./actor";
-export { describeCriterion } from "@/app/v2/_ui/criterion";
+export { describeCriterion } from "@/app/_ui/criterion";
 
 export type CriterionRow = {
   id: string;

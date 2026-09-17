@@ -1,13 +1,13 @@
-/* Tailwind, and only Tailwind. v2 uses it for page composition — flex, grid, gap — and nothing else;
- * every look is defined in v2/organic.css and v2/compass.css.
+/* Tailwind, and only Tailwind. The app uses it for page composition — flex, grid, gap — and nothing
+ * else; every look is defined in organic.css and compass.css.
  *
- * WHY THIS STAYS IN THE ROOT, AND DOES NOT MOVE TO v2/compass.css. `@import "tailwindcss"` brings
- * Preflight, Tailwind's CSS reset. Root-layout CSS is emitted before nested-layout CSS, so here the
- * reset lands first and Organic's base styles are applied on top of it. Imported from compass.css it
- * would land AFTER organic.css (v2/layout.tsx imports organic first) and reset Organic's element
- * styles back to Tailwind's defaults — and the build would still compile. The order is the point.
+ * WHY IT IS ITS OWN FILE, IMPORTED FIRST. `@import "tailwindcss"` brings Preflight, Tailwind's CSS
+ * reset. layout.tsx imports this file before organic.css, so the reset lands first and Organic's base
+ * styles are applied on top of it. Imported after organic.css — from compass.css, say — it would reset
+ * Organic's element styles back to Tailwind's defaults, and the build would still compile. The order is
+ * the point.
  *
- * No `@theme` here. v1's design tokens lived in this file and were removed with v1; v2 derives no
- * utility from them. `.text-muted` and `.rise`, the two class names v1 and v2 shared, are defined by
- * organic.css and compass.css respectively. */
+ * No `@theme` here. v1's design tokens lived in this file and were removed with v1; nothing derives a
+ * utility from them. `.text-muted` and `.rise`, the two class names v1 and the current app shared, are
+ * defined by organic.css and compass.css respectively. */
 @import "tailwindcss";

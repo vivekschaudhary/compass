@@ -60,7 +60,7 @@ vi.mock("./tracker", () => ({ mirrorState: async () => ({}), moveFailed: () => f
 vi.mock("./materialise", () => ({ materialiseFrom: async () => null }));
 vi.mock("../docstore", () => ({ probeDocs: async () => ({ ok: true }) }));
 vi.mock("./events", () => ({ emit: async () => {}, emitRefusal: async () => {} }));
-vi.mock("@/app/v2/_ui/criterion", () => ({ describeCriterion: () => "" }));
+vi.mock("@/app/_ui/criterion", () => ({ describeCriterion: () => "" }));
 
 const { evaluate } = await import("./gates");
 

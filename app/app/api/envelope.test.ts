@@ -78,8 +78,8 @@ const publish = await import("./content/publish/route");
 const importRoute = await import("./import/route");
 
 const post = (path: string, body: unknown) =>
-  new Request(`http://x/api/v2/${path}`, { method: "POST", body: JSON.stringify(body) }) as never;
-const get = (pathAndQuery: string) => new Request(`http://x/api/v2/${pathAndQuery}`) as never;
+  new Request(`http://x/api/${path}`, { method: "POST", body: JSON.stringify(body) }) as never;
+const get = (pathAndQuery: string) => new Request(`http://x/api/${pathAndQuery}`) as never;
 
 /** Status and body together, so no assertion can look at one without the other. */
 async function answer(res: Response) {
@@ -101,7 +101,7 @@ const ENGAGEMENT = {
   confluenceSpace: "Compass-test", jiraProject: "",
 };
 
-describe("POST /api/v2/onboard", () => {
+describe("POST /api/onboard", () => {
   // The exact case that rendered a blank form.
   it("refuses a Confluence key that does not exist with 422 and a refusal", async () => {
     s.spaceProblem = "No Confluence space with key 'Compass-test'.";
@@ -140,7 +140,7 @@ describe("POST /api/v2/onboard", () => {
   });
 });
 
-describe("GET /api/v2/progress", () => {
+describe("GET /api/progress", () => {
   it("refuses without engagement and since, with 400", async () => {
     const { status, body } = await answer(await progress.GET(get("progress?engagement=e1")));
     expect(status).toBe(400);
@@ -160,7 +160,7 @@ describe("GET /api/v2/progress", () => {
   });
 });
 
-describe("POST /api/v2/connectors/check", () => {
+describe("POST /api/connectors/check", () => {
   it("refuses an unknown role with 400", async () => {
     s.actor = null;
     const { status, body } = await answer(await connectors.POST(post("connectors/check", { engagement: "e1" })));
@@ -176,7 +176,7 @@ describe("POST /api/v2/connectors/check", () => {
   });
 });
 
-describe("POST /api/v2/agent/measure", () => {
+describe("POST /api/agent/measure", () => {
   it("refuses an unknown role with 400", async () => {
     s.actor = null;
     expect((await measure.POST(post("agent/measure", { engagement: "e1", role: "x", taskId: "t" }))).status).toBe(400);
@@ -189,7 +189,7 @@ describe("POST /api/v2/agent/measure", () => {
   });
 });
 
-describe("POST /api/v2/agent/run", () => {
+describe("POST /api/agent/run", () => {
   const RUN = { engagement: "e1", role: "dm", taskId: "t" };
 
   it("refuses an unknown role with 400", async () => {
@@ -218,7 +218,7 @@ describe("POST /api/v2/agent/run", () => {
   });
 });
 
-describe("POST /api/v2/content/adopt", () => {
+describe("POST /api/content/adopt", () => {
   it("refuses without an engagementId, with 400", async () => {
     expect(await answer(await adopt.POST(post("content/adopt", {})))).toEqual({
       status: 400, body: { ok: false, refusals: [{ message: "engagementId is required." }] },
@@ -239,7 +239,7 @@ describe("POST /api/v2/content/adopt", () => {
   });
 });
 
-describe("POST /api/v2/content/publish", () => {
+describe("POST /api/content/publish", () => {
   it("refuses without an engagement, with 400", async () => {
     expect((await publish.POST(post("content/publish", {}))).status).toBe(400);
   });
@@ -252,10 +252,10 @@ describe("POST /api/v2/content/publish", () => {
   });
 });
 
-describe("/api/v2/import", () => {
+describe("/api/import", () => {
   it("fails with 503 when Supabase is not configured", async () => {
     s.existing = null;
-    expect(await answer(await importRoute.GET(new Request("http://x/api/v2/import")))).toEqual({
+    expect(await answer(await importRoute.GET(new Request("http://x/api/import")))).toEqual({
       status: 503, body: { ok: false, error: "Supabase is not configured." },
     });
   });
@@ -264,19 +264,19 @@ describe("/api/v2/import", () => {
   it("refuses a bad bundle with 422 and every locating field", async () => {
     const problem = { file: "roles.csv", row: 3, message: "unknown tier", fix: "Use one of: oversight." };
     s.planned = { ok: false, problems: [problem] };
-    expect(await answer(await importRoute.GET(new Request("http://x/api/v2/import")))).toEqual({
+    expect(await answer(await importRoute.GET(new Request("http://x/api/import")))).toEqual({
       status: 422, body: { ok: false, refusals: [problem] },
     });
   });
 
   it("answers a dry run with 200", async () => {
-    const { status, body } = await answer(await importRoute.GET(new Request("http://x/api/v2/import")));
+    const { status, body } = await answer(await importRoute.GET(new Request("http://x/api/import")));
     expect(status).toBe(200);
     expect(body).toMatchObject({ ok: true, dryRun: true, summary: "nothing" });
   });
 
   it("answers an applied import with 200", async () => {
-    const res = await importRoute.POST(new Request("http://x/api/v2/import", { method: "POST", body: "{}" }));
+    const res = await importRoute.POST(new Request("http://x/api/import", { method: "POST", body: "{}" }));
     expect(await answer(res)).toMatchObject({ status: 200, body: { ok: true, summary: "applied" } });
   });
 });

@@ -54,7 +54,7 @@ export function DraftPanel({ path, draft, engagement, role }: {
               );
             })}
           </div>
-          <Link href={`/v2/e/${engagement}/content?role=${role}`} className="draft-link">
+          <Link href={`/e/${engagement}/content?role=${role}`} className="draft-link">
             Open in Shared content →
           </Link>
         </>

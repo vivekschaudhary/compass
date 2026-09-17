@@ -15,7 +15,7 @@ export async function requestRun(
   engagement: string, role: string, taskId: string,
 ): Promise<RunOutcome> {
   try {
-    const res = await fetch("/api/v2/agent/run", {
+    const res = await fetch("/api/agent/run", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ engagement, role, taskId }),
     });

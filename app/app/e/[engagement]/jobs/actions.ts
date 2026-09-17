@@ -79,7 +79,7 @@ export async function startTaskAction(
 
   const result = await startTask(actor, taskId);
   if (!result.ok) {
-    revalidatePath(`/v2/e/${engagement}/jobs`);
+    revalidatePath(`/e/${engagement}/jobs`);
     return { ok: false, error: result.error };
   }
 
@@ -92,7 +92,7 @@ export async function startTaskAction(
     // One child, or one per epic — the nested workflow decides by whether it produces a per-epic
     // path. See `openNestedFanOut`.
     const child = await openNestedFanOut(actor, taskId);
-    revalidatePath(`/v2/e/${engagement}/jobs`);
+    revalidatePath(`/e/${engagement}/jobs`);
     if (!child.ok) return { ok: false, error: child.error };
     // The board result is RETURNED, not dropped. The run opened either way — but a nested run whose
     // sub-tasks never reached Jira is invisible to everyone outside Compass, and saying nothing
@@ -108,7 +108,7 @@ export async function startTaskAction(
     };
   }
 
-  revalidatePath(`/v2/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs`);
   return { ok: true };
 }
 
@@ -135,7 +135,7 @@ export async function initiatePhaseAction(
     return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await initiatePhase(actor, workflowCode);
-  revalidatePath(`/v2/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
 
   const m = result.mirrored;
@@ -162,7 +162,7 @@ export async function mirrorPhaseAction(
     return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await remirrorPhase(actor, runId);
-  revalidatePath(`/v2/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
 
   return { ok: true, board: board(result.mirrored) };
@@ -178,6 +178,6 @@ export async function recheckAction(
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
   await measureTask(actor, taskId);
-  revalidatePath(`/v2/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs`);
   return { ok: true };
 }

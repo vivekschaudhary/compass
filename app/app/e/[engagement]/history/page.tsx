@@ -28,7 +28,7 @@ function took(from: string | null, to: string | null) {
   return hrs < 48 ? `${hrs}h` : `${Math.round(hrs / 24)}d`;
 }
 
-export default async function HistoryPage(props: PageProps<"/v2/e/[engagement]/history">) {
+export default async function HistoryPage(props: PageProps<"/e/[engagement]/history">) {
   const { engagement } = await props.params;
   const search = await props.searchParams;
   const role = Array.isArray(search.role) ? search.role[0] : search.role;
@@ -55,7 +55,7 @@ export default async function HistoryPage(props: PageProps<"/v2/e/[engagement]/h
         {jobs.map((j) => (
           <article key={j.id} className="hist">
             <div className="hist-head">
-              <Link href={`/v2/e/${engagement}/jobs/${j.id}?role=${roleCode}`} className="hist-title">
+              <Link href={`/e/${engagement}/jobs/${j.id}?role=${roleCode}`} className="hist-title">
                 {j.title}
               </Link>
               {j.workflowCode && <span className="hist-workflow">{j.workflowCode}</span>}

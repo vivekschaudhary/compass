@@ -41,7 +41,7 @@ export function NewEngagementForm() {
     setRefusals([]);
     setResult(null);
     try {
-      const res = await fetch("/api/v2/onboard", {
+      const res = await fetch("/api/onboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...f, publish, docsProvider: "confluence" }),
@@ -80,7 +80,7 @@ export function NewEngagementForm() {
         )}
         <a
           className="btn btn-primary"
-          href={`/v2/e/${result.engagementId}/jobs`}
+          href={`/e/${result.engagementId}/jobs`}
         >
           Open the queue →
         </a>

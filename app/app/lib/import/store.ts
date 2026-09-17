@@ -21,7 +21,7 @@ import type { Existing, StepRow, CriterionRow, WorkstreamRow, RoleRow, WorkflowR
 // enough that inferring through a wrapper exceeds the instantiation limit. Inline it is.
 
 /** The store, creating its own client. Routes ask for this rather than making one themselves —
- *  data access belongs in a data layer, and the lint rule on app/api/v2 enforces it. */
+ *  data access belongs in a data layer, and the lint rule on everything outside lib/ enforces it. */
 export function configStore(): ConfigStore | null {
   const sb = supabaseAdmin();
   return sb ? supabaseConfigStore(sb) : null;

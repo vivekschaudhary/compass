@@ -42,7 +42,7 @@ const GLYPH: Record<string, string> = {
 };
 
 export default async function JobsPage(
-  props: PageProps<"/v2/e/[engagement]/jobs">,
+  props: PageProps<"/e/[engagement]/jobs">,
 ) {
   const { engagement } = await props.params;
   const search = await props.searchParams;
@@ -116,7 +116,7 @@ export default async function JobsPage(
             {`Nothing is open for ${actor.roleLabel} on this engagement.`}{" "}
             What has already run — what it produced, who accepted it and where
             it was published — is in{" "}
-            <a href={`/v2/e/${engagement}/history`}>the history</a>. The next
+            <a href={`/e/${engagement}/history`}>the history</a>. The next
             phase puts new work here.
           </p>
         </div>
@@ -151,7 +151,7 @@ export default async function JobsPage(
                   role={actor.roleCode}
                   state={t.state}
                   executor={t.executor}
-                  href={`/v2/e/${engagement}/jobs/${t.id}?role=${actor.roleCode}`}
+                  href={`/e/${engagement}/jobs/${t.id}?role=${actor.roleCode}`}
                   openQuestions={t.openQuestions}
                   // A machine row is measured, not performed. Offering "Start with agent" on one
                   // hands the agent a task slug its own file does not define.
@@ -193,7 +193,7 @@ export default async function JobsPage(
                 action={
                   <a
                     className="btn btn-secondary"
-                    href={`/v2/e/${engagement}/jobs/${t.id}?role=${t.roleCode}`}
+                    href={`/e/${engagement}/jobs/${t.id}?role=${t.roleCode}`}
                   >
                     Open as{" "}
                     {roles.find((r) => r.code === t.roleCode)?.holder ??
@@ -215,7 +215,7 @@ export default async function JobsPage(
 
       <p className="jobs-footer text-muted">
         Every job above writes into the same shared content —{" "}
-        <a href={`/v2/e/${engagement}/content`}>see what&apos;s shared</a> and
+        <a href={`/e/${engagement}/content`}>see what&apos;s shared</a> and
         who may edit it.
       </p>
     </div>

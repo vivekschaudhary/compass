@@ -3,7 +3,7 @@
 // A separate, explicit act rather than something the app does on first render. It is a migration,
 // it is idempotent, and it should be visible when it happens.
 //
-//   POST /api/v2/content/adopt?engagementId=<id>
+//   POST /api/content/adopt?engagementId=<id>
 
 import { ok, refuse, fail } from "@/app/lib/http";
 import { adoptV1DocTree } from "@/app/lib/data/documents";

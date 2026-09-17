@@ -1,13 +1,14 @@
 /* Compass's additions to Organic — the ONE place any class of ours is defined.
  *
- * v2 has exactly TWO stylesheets and gains no more. `organic.css` is the design system, vendored
+ * The app's look comes from exactly TWO stylesheets and gains no more (globals.css only brings
+ * Tailwind, and defines no look). `organic.css` is the design system, vendored
  * verbatim and never edited, so it can be re-exported from the design project and dropped back in
  * without a merge. This file is everything else — every class the product uses, including the
  * design library's own. No page, component or feature gets a stylesheet of its own; that is how a
  * rule ends up defined twice with two slightly different values.
  *
- * The cost is honest: the design library's chrome ships on every v2 page rather than only on
- * /v2/design. It is under 2 KB, and one location is worth more than that.
+ * The cost is honest: the design library's chrome ships on every page rather than only on
+ * /design. It is under 2 KB, and one location is worth more than that.
  *
  * Rules:
  *
@@ -23,10 +24,10 @@
 /* ── ground ──────────────────────────────────────────────────────────────────
  * Set on a wrapper rather than on body. It began as a guard: v1's globals.css set body
  * background/colour/font from its Tailwind theme, and Organic won only by emission order. v1 and
- * that theme are gone, but the ground stays on `.v2` — the gutter, palette and radii below are all
+ * that theme are gone, but the ground stays on `.compass` — the gutter, palette and radii below are all
  * scoped to it, and a page's ground belongs with the tokens it is drawn from. */
 
-.v2 {
+.compass {
   /* The page gutter. Named because the top bar and the content below it must agree, and they did
      not: the bar hard-coded 22px while the content used --space-6, so the brand and the heading
      under it sat four pixels apart. A value used by two rules belongs in one place. */
@@ -49,23 +50,23 @@
  * Now `main` carries it, so nothing under an engagement can be flush by accident, and `.page` is
  * only what its name suggests: a reading width. */
 
-.v2 main {
+.compass main {
   padding: var(--space-8) var(--gutter) calc(var(--space-8) * 1.7);
 }
 
-/* Pages outside an engagement (/v2/new, /v2/design) have no <main> above them — the same gutter,
+/* Pages outside an engagement (/new, /design) have no <main> above them — the same gutter,
  * still stated once. */
-.v2 > .page {
+.compass > .page {
   padding: var(--space-8) var(--gutter) calc(var(--space-8) * 1.7);
 }
 
-.v2 .page {
+.compass .page {
   max-width: 880px;
   margin: 0 auto;
 }
 
 /* Inside main the gutter is already applied; a nested .page adds width, not padding. */
-.v2 main .page { padding: 0; }
+.compass main .page { padding: 0; }
 
 /* ── the palette ─────────────────────────────────────────────────────────────
  * Organic ships a cream ground with terracotta and sage accents. This overrides its colour tokens
@@ -86,7 +87,7 @@
  * information everyone else does — but it IS less loud. If the gates read flat, the fix is one
  * semantic hue for state only, not a return to a coloured chrome. */
 
-.v2 {
+.compass {
   --color-bg: #ffffff;
   --color-surface: #f4f4f5;
   --color-text: #18181b;
@@ -162,9 +163,9 @@
 
 /* ── scrollbars, so a scrolling pane does not import the OS grey into a warm page ── */
 
-.v2 ::-webkit-scrollbar { width: 9px; height: 9px; }
-.v2 ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: var(--radius-sm); }
-.v2 { scrollbar-color: var(--color-neutral-300) transparent; }
+.compass ::-webkit-scrollbar { width: 9px; height: 9px; }
+.compass ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: var(--radius-sm); }
+.compass { scrollbar-color: var(--color-neutral-300) transparent; }
 
 /* ── people ──────────────────────────────────────────────────────────────── */
 
@@ -261,7 +262,7 @@
 .context-row-detail { margin: 1px 0 0; font-size: 11.5px; color: var(--color-neutral-600); }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   The design library at /v2/design — swatches, ramps, spec rows.
+   The design library at /design — swatches, ramps, spec rows.
 
    Not product surface, but it lives here anyway: one location beats a
    correctly-scoped second file. Where a value varies per element (which ramp
@@ -708,8 +709,8 @@ textarea.verdict-reason {
  * mattered (who you are working as) was the hardest to find. */
 
 .shell { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); min-height: 100vh; }
-.v2 { --rail-w: 232px; }
-.v2:has(.rail-narrow) { --rail-w: 62px; }
+.compass { --rail-w: 232px; }
+.compass:has(.rail-narrow) { --rail-w: 62px; }
 
 .rail {
   display: flex; flex-direction: column; gap: var(--space-4);
@@ -811,20 +812,20 @@ textarea.verdict-reason {
  *
  * Still in compass.css, so organic.css remains byte-identical to the design project's export. */
 
-.v2 .btn,
-.v2 .tag,
-.v2 .seg,
-.v2 .seg-opt,
-.v2 .input,
-.v2 .card,
-.v2 .dialog {
+.compass .btn,
+.compass .tag,
+.compass .seg,
+.compass .seg-opt,
+.compass .input,
+.compass .card,
+.compass .dialog {
   border-radius: var(--radius-sm);
 }
 
 /* A dot is a dot and a radio is a radio — these are shapes, not decoration. */
-.v2 .status-dot,
-.v2 .radio .dot,
-.v2 .avatar {
+.compass .status-dot,
+.compass .radio .dot,
+.compass .avatar {
   border-radius: 50%;
 }
 

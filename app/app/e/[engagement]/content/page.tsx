@@ -10,7 +10,7 @@ import { Table, Tag, SectionLabel } from "../../../_ui/primitives";
 
 export const dynamic = "force-dynamic";
 
-export default async function ContentPage(props: PageProps<"/v2/e/[engagement]/content">) {
+export default async function ContentPage(props: PageProps<"/e/[engagement]/content">) {
   const { engagement } = await props.params;
   const search = await props.searchParams;
   const role = Array.isArray(search.role) ? search.role[0] : search.role;
