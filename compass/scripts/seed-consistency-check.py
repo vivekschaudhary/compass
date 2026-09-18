@@ -19,12 +19,21 @@ make their disagreement loud.
     python3 compass/scripts/seed-consistency-check.py            # report
     python3 compass/scripts/seed-consistency-check.py --check    # exit 1 on drift (CI, hooks)
 
+THE SEED IS A SUBSET, NOT A COPY. The framework ships a graph for every workflow it knows how to
+run; an engagement seeds the ones it actually runs. So a graph with no seed row is NORMAL — it is a
+workflow this installation has not taken up — and is reported below the fold rather than failed on.
+The reverse is not normal: a seed row with no graph is a workflow the app will run that the framework
+never declared, and that is drift.
+
 Drift classes, in the order they bite:
 
   missing-graph   seeded and runnable, but the framework never declared it
-  unseeded        declared by the framework, but the app cannot run it
   step-count      both sides know it, and disagree on how many steps it has
   step-shape      a step's kind, role or task differs between the two
+
+Reported, never failed on:
+
+  unseeded        declared by the framework and not taken up by this seed
 """
 import csv
 import re
@@ -217,10 +226,10 @@ def main() -> int:
             f"missing-graph  {code}: seeded and runnable by the app, but compass/workflows/{code}.md "
             f"does not exist — the framework never declared it")
 
-    for code in sorted(set(graphs) - set(seeded)):
-        problems.append(
-            f"unseeded       {code}: compass/workflows/{code}.md declares it, but no seed row — "
-            f"the app cannot run it")
+    # NOT a problem. The framework declares every workflow it can run; a seed takes up the ones this
+    # installation runs. Failing on the difference would mean a four-workflow seed could never be
+    # committed without first deleting thirteen dispatch graphs that are perfectly correct.
+    unseeded = sorted(set(graphs) - set(seeded))
 
     for code in sorted((set(seeded) & set(graphs)) - parked):
         g = graph_steps(graphs[code])
@@ -288,6 +297,14 @@ def main() -> int:
               f"compass/seed/known-drift.txt:")
         for r in resolved:
             print(f"    {r}")
+
+    # Below the fold, because it is the normal state and not a fault — but said out loud, because a
+    # graph nothing seeds is also how a workflow silently stops being run.
+    if unseeded:
+        print(f"\nNOT TAKEN UP — {len(unseeded)} workflow(s) have a dispatch graph and no seed row. "
+              f"The seed is a subset of the framework, so this is expected; it is listed so a "
+              f"workflow that quietly left the seed is still visible:")
+        print("    " + ", ".join(unseeded))
 
     # Said out loud, every run. A skipped comparison that nothing reports is how a check quietly
     # stops checking — the parked list is exactly where drift would hide if a phase were disabled

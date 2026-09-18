@@ -5,14 +5,6 @@
 #
 # The no-graph-steps entries are why open_workflow_run opens runs that create no task:
 # the .md is prose and the seed has zero steps, so nothing is ever dispatched.
-unseeded       advance
-unseeded       create-epics
-unseeded       dashboard
-unseeded       metrics
-unseeded       plan
-unseeded       retro
-unseeded       scan
-unseeded       status
 
 # `build` is TWO LAYERS and the counts differ on purpose. build.md is v1's dispatch graph — eight
 # steps the orchestrator executes — and the seed has five, each a gated row. Seed ord 1-4 map onto
@@ -30,7 +22,6 @@ step-count     build
 # `compass/workflows/ops.md` stays: v1's orchestrator still loads it, `_CODE_WORKFLOWS` still lists
 # it, and deleting the file breaks a workflow that still runs. Unseeded is the right state — the app does
 # not offer it, v1 still does — and that is exactly what the nine entries above record.
-unseeded       ops
 
 
 # The human review gates. `foundation-architecture`, `product-brief`, `tech-design` and `feature`
@@ -65,3 +56,6 @@ step-count     sprint-0
 step-count     sprint-plan
 step-shape     feature-architecture step 2
 
+# The `unseeded` entries that used to sit here are gone with the class itself: a dispatch
+# graph with no seed row is now NORMAL — the seed is a subset of the framework — and is
+# reported under NOT TAKEN UP rather than failed on. A seed row with no graph still fails.
