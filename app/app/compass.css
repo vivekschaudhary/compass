@@ -533,6 +533,9 @@
   padding: 0 var(--space-4) var(--space-4);
 }
 .ctx-detail h6 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600); }
+/* The Ready gate and the control that refreshes it. `align-items: start` so the button sits with
+   the first criterion rather than stretching down a column of them. */
+.ctx-gate { display: flex; align-items: start; gap: var(--space-2); }
 
 /* the conversation */
 .chat-col { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }

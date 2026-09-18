@@ -5,6 +5,7 @@ import { Tag } from "../../../../_ui/primitives";
 import type { PinnedInput } from "@/app/lib/agent/context";
 import type { StoredStatus } from "@/app/lib/data/gates";
 import { Gate } from "../Gate";
+import { RecheckButton } from "../RecheckButton";
 
 /**
  * What the agent read and what it is measured against — one line, openable.
@@ -14,8 +15,12 @@ import { Gate } from "../Gate";
  * into a third of the screen. The summary line keeps the one fact that changes — how many inputs
  * were missing — and the rest is a click away.
  */
-export function ContextStrip({ inputs, doneCriteria, statuses, produces }: {
+export function ContextStrip({
+  inputs, doneCriteria, statuses, produces, engagement, role, taskId,
+}: {
   inputs: PinnedInput[]; doneCriteria: string[]; statuses: StoredStatus[]; produces: string | null;
+  /** For the re-check control — a verdict you can read is a verdict you must be able to refresh. */
+  engagement: string; role: string; taskId: string;
 }) {
   const [open, setOpen] = useState(false);
   const missing = inputs.filter((i) => !i.body).length;
@@ -53,7 +58,13 @@ export function ContextStrip({ inputs, doneCriteria, statuses, produces }: {
               {doneCriteria.map((c, i) => <li key={i}>{c}</li>)}
             </ul>
           </div>
-          <div><Gate statuses={statuses} kind="ready" /></div>
+          {/* The gate carries the time it was measured, so it can be visibly out of date — a row
+              gated on a document published an hour ago still reads "No document at sow" until
+              something re-measures it. The control belongs beside the verdict it refreshes. */}
+          <div className="ctx-gate">
+            <Gate statuses={statuses} kind="ready" />
+            <RecheckButton engagement={engagement} role={role} taskId={taskId} />
+          </div>
         </div>
       )}
     </div>

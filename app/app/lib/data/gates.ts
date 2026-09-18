@@ -477,6 +477,53 @@ export async function measureTask(actor: Actor, taskId: string): Promise<Criteri
   return out;
 }
 
+/**
+ * Re-measure every row of a run that is still open.
+ *
+ * THE MEASUREMENT IS THE GATE, and it is only as current as the last thing that wrote it. Nothing
+ * re-measured a row when the thing it waited on landed: the SOW was filed and published at 19:19,
+ * and `Timeline & Milestones` went on showing "No document at sow" from a measurement taken at
+ * 16:41 — a correct reading of a world that no longer existed. That is not cosmetic. `start_task`
+ * refuses on `m.id is null or not m.satisfied`, so a stale unsatisfied row genuinely blocks work,
+ * and the only cure was a person finding the `re-check` button on the queue.
+ *
+ * `storedStatusFor` stays read-only and a page render still writes nothing. The fix is to re-measure
+ * on the EVENTS that can change a verdict — a row closing, a run opening — rather than on every
+ * look.
+ *
+ * CLOSED ROWS ARE SKIPPED. Re-measuring one would delete the human attestations that closed it
+ * (`measureTask` clears a measurement it can no longer evaluate), and a finished row would start
+ * reading unfinished.
+ */
+export async function remeasureRun(actor: Actor, runId: string): Promise<void> {
+  const sb = supabaseAdmin();
+  if (!sb) return;
+
+  const open = must("read the run's rows to re-measure them", await sb.from("work_task")
+    .select("id, state").eq("workflow_run_id", runId).neq("state", "closed"));
+
+  for (const t of open ?? []) await measureTask(actor, t.id as string);
+}
+
+/**
+ * The run that holds the task a nested run hangs off — one hop up, or null at the top.
+ *
+ * Two joins, not one: `workflow_run.parent_task_id` names a TASK, and what has to be re-measured is
+ * that task's siblings as well as the task itself.
+ */
+async function parentRunOf(runId: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const { data: run } = await sb.from("workflow_run")
+    .select("parent_task_id").eq("id", runId).maybeSingle();
+  if (!run?.parent_task_id) return null;
+
+  const { data: parent } = await sb.from("work_task")
+    .select("workflow_run_id").eq("id", run.parent_task_id).maybeSingle();
+  return (parent?.workflow_run_id as string | null) ?? null;
+}
+
 /** Ready / Done, counted honestly. */
 export function tally(statuses: CriterionStatus[], kind: "ready" | "done") {
   const mine = statuses.filter((s) => s.kind === kind);
@@ -581,9 +628,14 @@ export async function approve(
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
+  // The run comes back with the task because the close has to re-measure the rows it unblocks, and
+  // asking again afterwards would be a second round-trip for something already in hand.
   const { data: task } = await sb.from("work_task")
-    .select("id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+    .select("id, workflow_run_id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
   if (!task) return { ok: false, error: "That task is not in your engagement." };
+
+  const runId = task.workflow_run_id as string | null;
+  const parentRunId = runId ? await parentRunOf(runId) : null;
 
   const who = actor.holder ?? actor.roleCode;
   const criteria = await criteriaForTask(taskId);
@@ -688,6 +740,29 @@ export async function approve(
         created: materialised.created,
         updated: materialised.updated,
       },
+    });
+  }
+
+  // THE ROWS THIS CLOSE JUST UNBLOCKED. Closing the row that produced `sow` is exactly the moment
+  // every row waiting on `sow` becomes startable, and until now nothing told them so — see
+  // `remeasureRun`. One hop upward as well: when the last row of a nested run closes, the nesting
+  // row's Done gate can now see the child's output.
+  //
+  // NON-FATAL, NEVER SILENT, for the same reason as `materialiseFrom` above. These are network
+  // calls — connector criteria probe Confluence, ticket criteria probe Jira — and a slow or broken
+  // provider must not undo a close the human already made. The worst case is what happened before
+  // this existed: a stale gate somebody re-checks by hand.
+  try {
+    if (runId) await remeasureRun(actor, runId);
+    if (parentRunId) await remeasureRun(actor, parentRunId);
+  } catch (e) {
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task", subjectId: taskId,
+      verb: "task.remeasure_incomplete",
+      actorRoleCode: actor.roleCode, actorUserId: who,
+      reason: e instanceof Error ? e.message : String(e),
+      payload: { runId, parentRunId },
     });
   }
 

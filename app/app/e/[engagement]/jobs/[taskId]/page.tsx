@@ -74,6 +74,7 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
       <ContextStrip
         inputs={ctx.inputs} doneCriteria={ctx.doneCriteria} statuses={statuses}
         produces={ctx.produces}
+        engagement={engagement} role={roleCode} taskId={taskId}
       />
 
       {/* A nesting row whose nested run finished while this row's gate did not pass. The trigger

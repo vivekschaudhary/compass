@@ -23,6 +23,7 @@ import { orgIdFor, emit, emitRefusal } from "./events";
 import { sortByStep } from "./steps";
 import {
   measureTask,
+  remeasureRun,
   storedStatusFor,
   evaluate,
   type CriterionRow,
@@ -379,6 +380,13 @@ export async function openNested(
   if (!moved.ok && moved.reason !== "no-tracker" && moved.reason !== "no-ticket") {
     mirrored.problems.push(`The parent row's ticket did not move: ${moved.note}`);
   }
+
+  // Measure the child's rows, exactly as `initiatePhase` does for a phase's. Without it a nested
+  // run opens with no measurements at all, and `start_task` refuses its first row as "Not ready"
+  // even when the document it reads has been published for hours — the child-run half of the
+  // staleness `remeasureRun` exists for.
+  await remeasureRun(actor, runId as string);
+
   return { ok: true, runId: runId as string, mirrored };
 }
 

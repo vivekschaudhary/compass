@@ -179,5 +179,8 @@ export async function recheckAction(
     return { ok: false, error: "That role does not exist on this engagement." };
   await measureTask(actor, taskId);
   revalidatePath(`/e/${engagement}/jobs`);
+  // The task page reads the same measurements and is now where the control lives. Revalidating only
+  // the queue meant the page you pressed it on kept showing the verdict you had just replaced.
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   return { ok: true };
 }

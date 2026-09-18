@@ -22,6 +22,8 @@ const state: {
 
 /** Every open_nested_run call the code under test made, in order. */
 const opened: { taskId: string; subject: string | null }[] = [];
+/** Every run whose gates were measured on the way out. */
+const remeasured: string[] = [];
 
 const rowsFor = (table: string): Row[] =>
   table === "work_task" ? state.tasks
@@ -67,7 +69,11 @@ vi.mock("../supabase", () => ({
 }));
 
 vi.mock("./events", () => ({ orgIdFor: async () => "org-1", emit: async () => {}, emitRefusal: async () => {} }));
-vi.mock("./gates", () => ({ measureTask: async () => [], storedStatusFor: async () => null }));
+vi.mock("./gates", () => ({
+  measureTask: async () => [],
+  remeasureRun: async (_a: unknown, runId: string) => { remeasured.push(runId); },
+  storedStatusFor: async () => null,
+}));
 vi.mock("./tracker", () => ({
   mirrorPhase: async () => ({ epic: null, stories: [], expected: 0, problems: [] }),
   mirrorNested: async () => ({ epic: null, stories: [], expected: 0, problems: [] }),
@@ -102,7 +108,7 @@ function seed(opts: { perEpic: boolean; epics: string[] }) {
   }));
 }
 
-beforeEach(() => { opened.length = 0; });
+beforeEach(() => { opened.length = 0; remeasured.length = 0; });
 
 describe("a nesting row that fans out", () => {
   it("opens one run per epic, each carrying its own subject", async () => {
@@ -113,6 +119,16 @@ describe("a nesting row that fans out", () => {
     expect(opened.map((o) => o.subject)).toEqual(["E1", "E2", "E3"]);
     // Distinct runs, not one run reported three times — the whole point of the subject.
     expect(new Set((r as { runs: { runId: string }[] }).runs.map((x) => x.runId)).size).toBe(3);
+  });
+
+  // A child run opened with no measurements at all is a run whose first row `start_task` refuses as
+  // "Not ready" — even when the document it reads was published hours ago. `initiatePhase` has
+  // always measured a phase's rows on the way out; `openNested` did not, which made every nested
+  // workflow unstartable until someone pressed re-check on it.
+  it("measures the rows of every run it opens", async () => {
+    seed({ perEpic: true, epics: ["E1", "E2", "E3"] });
+    await openNestedFanOut(ACTOR, "t-nest");
+    expect(remeasured).toEqual(opened.map((_, i) => `run-${i + 1}`));
   });
 
   // THE ZERO-ROW CASE. Not an empty success.

@@ -6,7 +6,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "../../../_ui/primitives";
-import { startTaskAction, recheckAction } from "./actions";
+import { startTaskAction } from "./actions";
+import { RecheckButton } from "./RecheckButton";
 
 export function StartButton({
   taskId, engagement, role, state, executor, href, openQuestions = 0, machine = false,
@@ -32,13 +33,7 @@ export function StartButton({
   if (machine) {
     return (
       <div className="task-state-row">
-        <button
-          className="btn btn-ghost recheck" disabled={pending}
-          onClick={() => startTransition(async () => { setError(null); await recheckAction(engagement, role, taskId); })}
-        >
-          re-check
-        </button>
-        {error && <span className="start-error">{error}</span>}
+        <RecheckButton engagement={engagement} role={role} taskId={taskId} />
       </div>
     );
   }
@@ -77,13 +72,7 @@ export function StartButton({
       >
         {pending ? "Starting…" : "Start with agent"}
       </Button>
-      <button
-        className="btn btn-ghost recheck"
-        disabled={pending}
-        onClick={() => startTransition(async () => { setError(null); await recheckAction(engagement, role, taskId); })}
-      >
-        re-check
-      </button>
+      <RecheckButton engagement={engagement} role={role} taskId={taskId} />
       {/* A refusal is worth showing in full. The routine raises rather than no-opping precisely so
           a second click does not look like a first one that worked — and the message names which
           criterion, and whether it failed or was never checked. */}
