@@ -1,103 +1,12 @@
 workflow,ord,kind,role,task,produces,output,reads,conditional,nests,title,depends_on
 onboarding,1,machine,,validate-connections,,,,,,Validate the connections,
-sprint-0,0,agent,delivery-manager,file-sow,SOW,,,,,File the SOW,
-sprint-0,1,agent,delivery-manager,file-requirements,Requirements,,,,,File the Requirements,file-sow
-sprint-0,2,workflow,product-owner,draft-product-brief,,,,,product-brief,Product brief,"file-sow,file-requirements"
-sprint-0,3,agent,delivery-manager,draft-timeline,Milestones and timeline,,,,,Milestones and timeline,file-sow
-sprint-0,4,hitl,delivery-manager,review-timeline,,,,,,Review the timeline,draft-timeline
-sprint-0,5,hitl,product-manager,approve-timeline,,,,,,Review and approve the timeline,review-timeline
-sprint-0,6,agent,delivery-manager,propose-staffing,Staffing plan,roster,,,,Staffing plan and resources,"draft-timeline,approve-timeline,file-sow"
-sprint-0,7,hitl,delivery-manager,review-staffing,,,,,,Review the staffing plan,propose-staffing
-sprint-0,8,hitl,product-manager,approve-staffing,,,,,,Review and approve the staffing plan,review-staffing
-sprint-0,9,agent,delivery-manager,draft-raci,RACI,,,,,Roles and responsibilities,"propose-staffing,approve-staffing"
-sprint-0,10,hitl,delivery-manager,review-raci,,,,,,Review the RACI,draft-raci
-sprint-0,11,hitl,product-manager,approve-raci,,,,,,Review and approve the RACI,review-raci
-sprint-0,12,agent,delivery-manager,draft-ways-of-working,ways-of-working,,,,,Team working agreement,"propose-staffing,approve-staffing,draft-raci,approve-raci"
-sprint-0,13,hitl,delivery-manager,review-ways-of-working,,,,,,Review the working agreement,draft-ways-of-working
-sprint-0,14,hitl,product-manager,approve-ways-of-working,,,,,,Review and approve the working agreement,review-ways-of-working
-sprint-0,15,workflow,product-owner,draft-features,,,,,feature,Features and how each is judged,"file-sow,file-requirements,draft-product-brief"
-sprint-0,16,workflow,staff-engineer,draft-foundation-architecture,,,,,foundation-architecture,Foundation architecture,"file-requirements,file-sow, draft-product-brief, draft-features"
-sprint-0,17,workflow,staff-engineer,draft-feature-architecture,,,,,feature-architecture,Feature architecture,"draft-product-brief,draft-foundation-architecture, draft-features"
-sprint-0,18,workflow,designer,build-design-library,,,,,design-library,Design library,"draft-product-brief, file-requirements"
-sprint-0,19,workflow,product-owner,draft-epics,,,,,epics,Epics from milestones and features,"file-requirements,draft-product-brief,draft-features,draft-timeline,approve-timeline"
-sprint-0,20,agent,delivery-manager,tailor-delivery-plan,delivery plan,,deliverables,,,Tailor the delivery plan,"draft-raci,approve-raci,draft-timeline,approve-timeline,draft-epics,propose-staffing,approve-staffing,file-sow,draft-features,draft-foundation-architecture,draft-feature-architecture"
-sprint-0,21,hitl,delivery-manager,review-delivery-plan,,,,,,Review the delivery plan,tailor-delivery-plan
-sprint-0,22,hitl,product-manager,approve-delivery-plan,,,,,,Review and approve the delivery plan,review-delivery-plan
-sprint-0,23,workflow,product-owner,draft-sprint-plan,,,deliverables,,sprint-plan,Sprint plan for sprint 1,"draft-epics,propose-staffing,approve-staffing,tailor-delivery-plan,approve-delivery-plan"
-sprint-0,24,agent,delivery-manager,kickoff,kickoff,,,,,Kickoff,"draft-sprint-plan,draft-ways-of-working,approve-ways-of-working,tailor-delivery-plan,approve-delivery-plan"
-foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,,,,Research the ground,
-foundation-architecture,2,hitl,staff-engineer,review-research,,,,,,Review the research,research-architecture
-foundation-architecture,3,hitl,principal-engineer,approve-research,,,,,,Accept the research,review-research
-foundation-architecture,4,agent,staff-engineer,derive-architecture,foundational-architecture,,,,,Foundation architecture,"research-architecture,approve-research"
-foundation-architecture,5,hitl,staff-engineer,review-architecture,,,,,,Review the architecture,derive-architecture
-foundation-architecture,6,hitl,principal-engineer,approve-architecture,,,,,,Accept the architecture,review-architecture
-foundation-architecture,7,agent,staff-engineer,scaffold-foundation,scaffold-record,,,,,Scaffold the foundation,"derive-architecture,approve-architecture"
-foundation-architecture,8,hitl,staff-engineer,review-scaffold,,,,,,Review the scaffold,scaffold-foundation
-foundation-architecture,9,hitl,principal-engineer,approve-scaffold,,,,,,Accept the scaffold,review-scaffold
-product-brief,1,agent,researcher,gather-evidence,brief-evidence,,,,,Evidence for the brief,
-product-brief,2,hitl,researcher,review-evidence,,,,,,Review the evidence,gather-evidence
-product-brief,3,hitl,product-owner,approve-evidence,,,,,,Review and approve the evidence,review-evidence
-product-brief,4,agent,product-owner,draft-brief,product-brief,,,,,Product brief,"gather-evidence,approve-evidence"
-product-brief,5,hitl,researcher,review-brief,,,,,,Review the brief,draft-brief
-product-brief,6,hitl,product-owner,answer-review,,,,,,Answer the review,review-brief
-product-brief,7,hitl,product-manager,approve-brief,,,,,,Review and approve the brief,answer-review
-build,1,agent,engineer,implement-story,{subject}@scm,code,,,,Implement the story,
-build,2,agent,automation,write-e2e-tests,{subject}@scm,code,,,,Automated tests for the story,implement-story
-build,3,agent,reviewer,review-pr,{subject}@scm,code,,,,Review the change,write-e2e-tests
-build,4,agent,engineer,respond-to-review,{subject}@scm,code,,,,Answer the review,review-pr
-build,5,hitl,principal-engineer,approve-build,,,,,,Accept the change,respond-to-review
-feature-architecture,1,agent,staff-engineer,draft-feature-architecture,03-architecture/features,,,,,Feature architecture,
-feature-architecture,2,hitl,staff-engineer,review-feature-architecture,,,,,,Review the feature architecture,draft-feature-architecture
-feature-architecture,3,hitl,principal-engineer,approve-feature-architecture,,,,,,Review and approve the feature architecture,review-feature-architecture
-story,1,agent,product-manager,decompose-epic-to-story,,,,,,,
-story,2,agent,designer,draft-design-spec,,,,,,,
-story,3,agent,ux-writer,write-copy,,,,,,,
-story,4,hitl,product-manager,approve,,,,,,,
-story,5,agent,delivery-manager,update-status,,,,,,,
-fix,1,agent,engineer,triage-and-fix,{subject}@scm,code,,,,Reproduce and fix,
-fix,2,agent,automation,write-e2e-tests,{subject}@scm,code,,,,Regression test,triage-and-fix
-fix,3,agent,reviewer,review-pr,{subject}@scm,code,,,,Review the fix,write-e2e-tests
-fix,4,agent,engineer,respond-to-review,{subject}@scm,code,,,,Answer the review,review-pr
-fix,5,hitl,principal-engineer,approve-fix,,,,,,Accept the fix,respond-to-review
-fix,6,agent,tech-writer,accumulate-changelog,{subject}@scm,code,,,,Record it in the changelog,approve-fix
-tech-design,1,agent,staff-engineer,draft-epic-tech-design,03-architecture/epic/{epic},,,,,Epic technical design,
-tech-design,2,hitl,staff-engineer,review-epic-tech-design,,,,,,Review the technical design,draft-epic-tech-design
-tech-design,3,hitl,principal-engineer,approve-epic-tech-design,,,,,,Accept the technical design,review-epic-tech-design
-triage,1,agent,support,classify-intake,,,,,,,
-triage,2,hitl,support,approve,,,,,,,
-triage,3,agent,support,triage-incident,,,,,,,
-triage,4,hitl,support,approve,,,,,,,
-triage,5,agent,engineer,triage-and-fix,,,,,,,
-triage,6,agent,reviewer,review-pr,,,,,,,
-triage,7,agent,support,write-postmortem,,,,,,,
-triage,8,hitl,support,approve,,,,,,,
-triage,9,agent,tech-writer,accumulate-changelog,,,,,,,
-sprint,1,workflow,product-owner,sprint-planning,,,"delivery plan,deliverables,Staffing plan",,sprint-plan,Sprint planning,
-sprint,2,agent,delivery-manager,sprint-review,05-cadence/sprint-reviews,,sprint-plans,,,Sprint review,sprint-planning
-sprint,3,hitl,delivery-manager,review-sprint-review,,,,,,Review the sprint review,sprint-review
-sprint,4,hitl,product-manager,approve-sprint-review,,,,,,Review and approve the sprint review,review-sprint-review
-sprint,5,agent,delivery-manager,sprint-retro,05-cadence/retros,,,,,Retro,"sprint-review,approve-sprint-review"
-sprint,6,hitl,delivery-manager,review-retro,,,,,,Review the retro,sprint-retro
-sprint,7,hitl,product-manager,approve-retro,,,,,,Review and approve the retro,review-retro
-feature,1,agent,product-owner,draft-feature,features,,,,,The feature and its targets,
-feature,2,hitl,product-owner,review-feature,,,,,,Review the feature,draft-feature
-feature,3,hitl,product-manager,approve-feature,,,,,,Accept the feature,review-feature
-design-library,1,agent,designer,research-design,design-research,,,,,Research the design ground,
-design-library,2,hitl,designer,review-design-research,,,,,,Review the research,research-design
-design-library,3,hitl,product-manager,approve-research,,,,,,Review and approve the research,review-design-research
-design-library,4,agent,designer,derive-library,design-library,,,,,The design library,"research-design,approve-research"
-design-library,5,hitl,designer,review-library,,,,,,Review the library,derive-library
-design-library,6,hitl,product-manager,approve-library,,,,,,Review and approve the library,review-library
-sprint-plan,1,agent,product-owner,research-capacity,capacity-research,,,,,What the team can take on,
-sprint-plan,2,hitl,product-owner,review-capacity,,,,,,Review the capacity picture,research-capacity
-sprint-plan,3,hitl,product-manager,approve-capacity,,,,,,Review and approve the capacity picture,review-capacity
-sprint-plan,4,agent,product-owner,draft-sprint-plan,sprint-plans,sprint,,,,The sprint plan,"research-capacity,approve-capacity"
-sprint-plan,5,hitl,product-owner,review-plan,,,,,,Review the plan,draft-sprint-plan
-sprint-plan,6,hitl,product-manager,approve-plan,,,,,,Review and approve the plan,review-plan
-epics,1,agent,product-owner,research-epics,epic-research,,,,,What the epics must cover,
-epics,2,hitl,product-owner,review-epic-research,,,,,,Review the coverage,research-epics
-epics,3,hitl,product-manager,approve-research,,,,,,Review and approve the coverage,review-epic-research
-epics,4,agent,product-owner,draft-epics,deliverables@tickets,backlog,,,,The epics,"research-epics,approve-research"
-epics,5,hitl,product-owner,review-epics,,,,,,Review the epics,draft-epics
-epics,6,hitl,product-manager,approve-epics,,,,,,Review and approve the epics,review-epics
-epics,7,workflow,staff-engineer,design-epics-tech,,,,,tech-design,Technical design per epic,approve-epics
+sprint-0,0,agent,pmo-analyst,file-sow,sow,,,,,File the SOW,
+sprint-0,1,agent,pmo-analyst,file-requirements,requirements,,,,,File the Requirements,file-sow
+sprint-0,3,workflow,delivery-manager,draft-timeline,timeline,,,,timeline,Timeline & Milestones,file-sow
+sprint-0,4,workflow,delivery-manager,draft-resources,resource- plan,roster,,,resources,Staffing plan and resources,"file-sow,file-requirements,draft-timeline"
+timeline,1,agent,delivery-manager,draft-timeline,timeline,,sow,,,Draft the timeline,
+timeline,2,hitl,delivery-manager,review-timeline,,,,,,Review the timeline,draft-timeline
+timeline,3,hitl,product-manager,approve-timeline,,,,,,Review and approve the timeline,review-timeline
+resources,1,agent,delivery-manager,propose-resource-plan,resource- plan,roster,"sow,requirements,timeline",,,Staffing plan and resources,
+resources,2,hitl,delivery-manager,review-resource-plan,,,,,,Review the staffing plan,propose-resource-plan
+resources,3,hitl,product-manager,approve-resource-plan,,,,,,Review and approve the staffing plan,review-resource-plan

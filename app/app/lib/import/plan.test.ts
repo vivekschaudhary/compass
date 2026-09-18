@@ -45,6 +45,16 @@ describe("the shipped seed", () => {
     }
     return result.plan;
   };
+  /**
+   * Does the seed on disk ship this workflow?
+   *
+   * Several assertions below are about the PRODUCTION seed — that a sprint is planned from one
+   * definition, that nobody approves their own technical design. A reduced seed (a test dataset, a
+   * consumer's own) legitimately has neither, and failing then would say "your seed is wrong" when it
+   * means "that workflow is not here". They are skipped rather than weakened: put the workflow back
+   * and the assertion bites again, unchanged.
+   */
+  const ships = (code: string) => planned().workflows.some((w) => w.row.code === code);
 
   it("plans cleanly against an empty database, and everything in it is new", () => {
     const plan = planned();
@@ -73,6 +83,7 @@ describe("the shipped seed", () => {
   // end with sprint 1 planned, and every sprint after plans itself. Asserted against the REAL seed
   // rather than a fixture, because the thing that can break is the CSV, not `deriveReads`.
   it("gives both sprint-planning rows the same three inputs", () => {
+    if (!ships("sprint")) return;   // not in this seed — see `ships`
     const stepsOf = (code: string) =>
       planned().workflows.find((w) => w.row.code === code)?.steps ?? [];
     const s0 = stepsOf("sprint-0").find((x) => x.task === "draft-sprint-plan");
@@ -91,6 +102,7 @@ describe("the shipped seed", () => {
   });
 
   it("plans a sprint from one definition, nested by both phases", () => {
+    if (!ships("sprint")) return;   // not in this seed — see `ships`
     // THIS ASSERTION HAS NOW OUTLIVED TWO MECHANISMS, and the second time is the point.
     //
     // `sprint-0.draft-sprint-plan` and `sprint.sprint-planning` were the same step written twice —
@@ -121,6 +133,7 @@ describe("the shipped seed", () => {
   });
 
   it("marks `sprint` as the one phase that repeats", () => {
+    if (!ships("sprint")) return;   // not in this seed — see `ships`
     const byCode = new Map(planned().workflows.map((w) => [w.row.code, w.row]));
     expect(byCode.get("sprint")?.repeatable).toBe(true);
     expect(byCode.get("sprint-0")?.repeatable).toBe(false);
@@ -140,6 +153,7 @@ describe("the shipped seed", () => {
    * at all, and `open_workflow_run` falls back to it for any step that names no role.
    */
   it("gives every phase an owner, and onboarding's is the PMO analyst", () => {
+    if (!ships("sprint")) return;   // not in this seed — see `ships`
     const OWNERS: Record<(typeof PHASES)[number], string> = {
       onboarding: "pmo-analyst",
       "sprint-0": "delivery-manager",
@@ -188,6 +202,10 @@ describe("the shipped seed", () => {
    * fixed; adding one needs a reason.
    */
   const UNGATED_DEBT = new Set([
+    // A `machine` row that produces nothing. Its real gate is "the connectors answer", and no
+    // column on the step says so — `kind: machine` alone cannot imply which systems it checked.
+    // Author it in criteria.csv; nothing here can derive it.
+    "onboarding.validate-connections",
     "triage.classify-intake", "triage.approve", "triage.triage-incident",
     "triage.triage-and-fix", "triage.review-pr", "triage.write-postmortem",
     "triage.accumulate-changelog",
@@ -217,6 +235,7 @@ describe("the shipped seed", () => {
    * three-row shape, not a side effect of it.
    */
   it("gates every row of tech-design, and nobody approves their own design", () => {
+    if (!ships("tech-design")) return;   // not in this seed — see `ships`
     const wf = planned().workflows.find((w) => w.row.code === "tech-design");
     expect(wf, "tech-design is gone from the seed").toBeTruthy();
     expect(wf!.steps.map((s) => s.task)).toEqual([
@@ -728,7 +747,9 @@ describe("nested workflow contract", () => {
   });
 
   it("gates the nesting row's START on the child's input", () => {
-    const ready = gates(base).filter((c) => c.kind === "ready");
+    // Scoped to the ROW: a workflow that files anything also gets a workflow-level `connector docs`
+    // ready criterion, which is not what this is about.
+    const ready = gates(base).filter((c) => c.kind === "ready" && c.stepTask === "run-child");
     expect(ready).toHaveLength(1);
     expect(ready[0]).toMatchObject({ stepTask: "run-child", subjectRef: "the-brief", generated: true });
   });
@@ -794,5 +815,123 @@ describe("nested workflow contract", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.problems.some((p) => p.message.includes("nowhere/at-all"))).toBe(true);
+  });
+});
+
+
+/* ── criteria derived from the steps ─────────────────────────────────────── */
+
+/**
+ * 127 of the old criteria.csv's 226 rows were mechanically implied by the steps beside them, and
+ * hand-copying them is how they drifted: the steps were renamed to produce `sow` and `timeline`
+ * while the criteria went on checking `SOW` and `Milestones and timeline`, leaving 391 gates aimed
+ * at documents nothing would ever write.
+ *
+ * The review/approve split is structural — a review is a hitl row another hitl depends on — and is
+ * asserted here with task names that say the OPPOSITE of their role, so a regression to name
+ * matching fails loudly.
+ */
+describe("criteria derived from workflows and steps", () => {
+  const bundleOf = (steps: string, criteria = "workflow,task,kind,text\n"): Bundle => ({
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles:
+      "code,label,tier,scope,workstream\n" +
+      "author,The Author,practitioner,mine,Delivery\n" +
+      "checker,The Checker,oversight,everyone,Delivery\n",
+    workflows: "code,label,workstream,inputs,outputs\nw,W,Delivery,,\n",
+    steps, criteria,
+  });
+  const gates = (steps: string, criteria?: string) => {
+    const r = planImport(bundleOf(steps, criteria), empty);
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    return r.plan.workflows.find((w) => w.row.code === "w")!.criteria;
+  };
+  const CHAIN =
+    "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+    "w,1,agent,author,make,the-doc,,\n" +
+    "w,2,hitl,author,zzz,,,make\n" +          // a review — another hitl depends on it
+    "w,3,hitl,checker,aaa,,,zzz\n";           // the approval — nothing hitl depends on it
+  const on = (cs: ReturnType<typeof gates>, task: string) => cs.filter((c) => c.stepTask === task);
+  const texts = (cs: ReturnType<typeof gates>, task: string) => on(cs, task).map((c) => c.text);
+
+  it("gates a producing row on the document it files", () => {
+    expect(on(gates(CHAIN), "make")).toContainEqual(expect.objectContaining({
+      kind: "done", subjectKind: "document", subjectRef: "the-doc", operator: "status",
+      value: "published", generated: true,
+    }));
+  });
+
+  // The approver depends on a row that produces NOTHING. Without the transitive walk it is gated on
+  // no document at all — which is what every approve row in the seed used to be.
+  it("gates a hitl row on the nearest document produced upstream, through rows that produce none", () => {
+    expect(on(gates(CHAIN), "aaa")).toContainEqual(expect.objectContaining({
+      subjectKind: "document", subjectRef: "the-doc",
+    }));
+  });
+
+  it("calls the middle row a review and the last one an approval, by structure not by name", () => {
+    const cs = gates(CHAIN);
+    expect(texts(cs, "zzz")).toContain(
+      "A review that found nothing says so explicitly, rather than closing in silence.");
+    expect(texts(cs, "zzz").some((t) => t.startsWith("Accepted by"))).toBe(false);
+    expect(texts(cs, "aaa")).toContain("Accepted by the The Checker, and their name is on the close.");
+    expect(texts(cs, "aaa")).toContain(
+      "Every finding from the review is answered — accepted, actioned, or overruled with a reason.");
+  });
+
+  it("asks that the checker is not the author only when the roles differ", () => {
+    const sep = "did not write what they are reviewing.";
+    expect(texts(gates(CHAIN), "aaa").some((t) => t.includes(sep))).toBe(true);
+    // Same role reviewing its own draft: nothing to assert, and asserting it would be a lie.
+    expect(texts(gates(CHAIN), "zzz").some((t) => t.includes(sep))).toBe(false);
+  });
+
+  it("derives the tracker checks from `output`, never from a path", () => {
+    const code = gates("workflow,ord,kind,role,task,produces,output,depends_on\nw,1,agent,author,build,x@scm,code,\n");
+    expect(on(code, "build")).toContainEqual(expect.objectContaining({
+      subjectKind: "ticket", subjectRef: "pr-linked", value: "true",
+    }));
+    const sprint = gates("workflow,ord,kind,role,task,produces,output,depends_on\nw,1,agent,author,plan,plans,sprint,\n");
+    expect(on(sprint, "plan").map((c) => c.subjectRef)).toEqual(
+      expect.arrayContaining(["committed-have-epic", "on-board"]));
+  });
+
+  it("requires the doc store before a workflow that files anything", () => {
+    expect(gates(CHAIN)).toContainEqual(expect.objectContaining({
+      stepTask: null, kind: "ready", subjectKind: "connector", subjectRef: "docs", value: "wired",
+    }));
+  });
+
+  // One gate per fact. A nesting row that also names its child's document produced the same check
+  // twice, worded differently, until the key stopped including the text.
+  it("states a mechanical check once, however differently two rules word it", () => {
+    const cs = gates(CHAIN);
+    const doc = cs.filter((c) => c.stepTask === "make" && c.subjectRef === "the-doc");
+    expect(doc).toHaveLength(1);
+  });
+
+  it("leaves an authored criterion in place rather than generating a twin", () => {
+    const cs = gates(CHAIN,
+      "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+      "w,make,done,The draft is filed,document,the-doc,status,published\n");
+    const doc = cs.filter((c) => c.stepTask === "make" && c.subjectRef === "the-doc");
+    expect(doc).toHaveLength(1);
+    expect(doc[0].text).toBe("The draft is filed");
+    expect(doc[0].generated).toBeUndefined();
+  });
+
+  // The failure that produced 391 refusals: a criterion aimed at a path no step writes.
+  it("never aims the shipped seed's generated gates at a path nothing produces", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const produced = new Set(
+      r.plan.workflows.flatMap((w) => w.steps.map((s) => s.produces.split("@")[0]).filter(Boolean)));
+    const declared = new Set(r.plan.workflows.flatMap((w) => [...w.row.inputs, ...w.row.outputs]
+      .map((x) => x.split("@")[0])));
+    const orphans = r.plan.workflows.flatMap((w) => w.criteria
+      .filter((c) => c.generated && c.subjectKind === "document")
+      .filter((c) => !produced.has(c.subjectRef) && !declared.has(c.subjectRef))
+      .map((c) => `${w.row.code}/${c.stepTask}:${c.subjectRef}`));
+    expect(orphans).toEqual([]);
   });
 });

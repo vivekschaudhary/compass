@@ -37,7 +37,7 @@ export type WorkflowRow = {
    *
    * Declared once here rather than restated on every row that nests it. It was restated, and it
    * drifted: three of nine nesting rows ended up with no gate at all, so they closed on whatever
-   * the child happened to do. `contractCriteria` turns these into that row's gates instead.
+   * the child happened to do. `deriveCriteria` turns these into that row's gates instead.
    *
    * Same document vocabulary as `produces` and the criteria — `SOW`, `product-brief`,
    * `deliverables@tickets` — so `destinationOf` strips the slot and the document evaluator
@@ -583,7 +583,7 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   // Authored criteria, then the gates each nesting row inherits from the workflow it nests. Built
   // here rather than at write time so the dry run shows them, and so `describeChanges` counts them
   // — a contract that changes is a new version of the workflow, exactly like an edited step.
-  const allCriteria = [...criteria, ...contractCriteria(workflows, steps, criteria)];
+  const allCriteria = [...criteria, ...deriveCriteria(workflows, roles, steps, criteria)];
 
   const plan: Plan = {
     workstreams: workstreams.map((row) => ({
@@ -632,76 +632,214 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
 
 /** A human-readable diff, for the confirmation screen. Silence means nothing changed. */
 /**
- * The gates a nesting row inherits from the workflow it nests.
+ * The nearest documents produced upstream of a row, walking THROUGH rows that produce nothing.
  *
- * A `kind: workflow` row has no agent and produces nothing itself — its whole job is that the child
- * run happened and yielded something. That was left to hand-written criteria, which is how
- * `draft-epics`, `draft-feature-architecture` and `design-epics-tech` ended up with none: the child's
- * own last step already gated the document, so restating it on the parent looked redundant right up
- * until somebody didn't.
+ * `deriveReads` stops at the direct dependency, so a review → approve chain resolves to nothing: the
+ * reviewer's row produces no document, and the approver is left with no idea what it is approving.
+ * Walking on through non-producing rows reaches the draft that started the chain.
  *
- * Three kinds come out of one declaration:
- *   ready  — one per child input.  The row cannot START until what the child reads is published.
- *   done   — one per child output. The row cannot CLOSE until what the child promised exists.
- *   done   — one `nested` check.   The row cannot close until every run it opened has closed.
- *
- * That last one is what a per-document check cannot express. `openNestedFanOut` opens one child run
- * per epic against ONE parent task, and the close trigger fires on each child closing — so with no
- * gate the parent closed on the FIRST epic and left the rest running behind a finished row.
- *
- * An authored criterion stating the same check wins: generation skips it rather than doubling it, so
- * the six rows that already carry `document … status published` are unchanged by this.
+ * Stops at the FIRST producer on each path, never accumulating the whole upstream set — a row
+ * depending on eleven others must not be gated on everything the workflow ever wrote.
  */
-function contractCriteria(
-  workflows: WorkflowRow[], steps: StepRow[], authored: CriterionRow[],
+function nearestProduced(
+  steps: StepRow[], workflow: string, task: string,
+): { path: string; by: StepRow }[] {
+  const byTask = new Map(steps.filter((s) => s.workflow === workflow).map((s) => [s.task, s]));
+  const out = new Map<string, StepRow>();
+  const seen = new Set<string>();
+
+  const walk = (t: string) => {
+    if (seen.has(t)) return;                        // a cycle is refused elsewhere; do not hang here
+    seen.add(t);
+    for (const d of byTask.get(t)?.dependsOn ?? []) {
+      const up = byTask.get(d);
+      if (!up) continue;
+      const path = destinationOf(up.produces)?.path;
+      if (path) { if (!out.has(path)) out.set(path, up); continue; }   // stop at the producer
+      walk(d);                                                          // produces nothing: keep going
+    }
+  };
+  walk(task);
+  return [...out].map(([path, by]) => ({ path, by }));
+}
+
+/**
+ * Every gate the workflows and their steps already imply.
+ *
+ * `criteria.csv` used to restate all of this by hand, and 127 of its 226 rows were mechanically
+ * implied by the steps beside them. Hand-copying is how they drifted: the steps were renamed to
+ * produce `sow` and `timeline` while the criteria went on checking `SOW` and `Milestones and
+ * timeline`, and 391 gates pointed at documents nothing would ever write.
+ *
+ * What is NOT here is the point of the file that remains: "Every milestone has a date and something
+ * it delivers" is the content of a review, and no step implies it. Those are authored in
+ * criteria.csv and an authored row always wins — generation skips anything already stated.
+ *
+ * A REVIEW row is a `hitl` row another `hitl` depends on; an APPROVE row is a `hitl` row no `hitl`
+ * depends on. That split is structural, not a match on task names, and it reproduces the old corpus
+ * exactly: all 23 "accepted by" rows were approve rows, all 6 "found nothing" rows were review rows.
+ */
+function deriveCriteria(
+  workflows: WorkflowRow[], roles: RoleRow[], steps: StepRow[], authored: CriterionRow[],
 ): CriterionRow[] {
   const byCode = new Map(workflows.map((w) => [w.code, w]));
-  // The path, not the raw value: `deliverables@tickets` is filed at `deliverables`, which is what
-  // the document evaluator compares against and what `produces` resolves to.
+  const labelOf = new Map(roles.map((r) => [r.code, r.label || r.code]));
+  // The path, not the raw value: `deliverables@tickets` is filed at `deliverables`, which is what the
+  // document evaluator compares against and what `produces` resolves to.
   const pathOf = (ref: string) => destinationOf(ref)?.path ?? ref;
-  const seen = new Set(
-    authored.map((c) => `${c.workflow}:${c.stepTask ?? "-"}:${c.kind}:${c.subjectKind}:${c.subjectRef}`),
-  );
+
+  // A criterion is identified by what it CHECKS. For a MECHANICAL one that is the subject alone —
+  // two rows checking `document timeline status published` are one gate however differently they are
+  // worded, and a nesting row that also produces its child's document would otherwise be gated twice
+  // on the same fact. A JUDGMENT criterion has no subject, so its words are all it is, and two
+  // different sentences are two different things to confirm.
+  const key = (c: CriterionRow) =>
+    c.subjectKind
+      ? `${c.workflow}:${c.stepTask ?? "-"}:${c.kind}:${c.subjectKind}:${c.subjectRef}`
+      : `${c.workflow}:${c.stepTask ?? "-"}:${c.kind}::${c.text}`;
+  const seen = new Set(authored.map(key));
   const out: CriterionRow[] = [];
   const emit = (c: CriterionRow) => {
-    const k = `${c.workflow}:${c.stepTask ?? "-"}:${c.kind}:${c.subjectKind}:${c.subjectRef}`;
-    if (seen.has(k)) return;
-    seen.add(k);
+    if (seen.has(key(c))) return;
+    seen.add(key(c));
     out.push(c);
   };
+  const published = (workflow: string, task: string | null, path: string, why: string) => emit({
+    workflow, stepTask: task, kind: "done", text: why,
+    subjectKind: "document", subjectRef: path, operator: "status", value: "published",
+    generated: true,
+  });
 
-  for (const s of steps) {
-    if (s.kind !== "workflow" || !s.nests) continue;
-    const child = byCode.get(s.nests);
-    if (!child) continue;                       // already refused by name, above
+  /** The ticket checks a produced KIND implies — keyed on `output`, never on a path an author renames. */
+  const TICKETS: Record<string, { ref: string; why: string }[]> = {
+    code:   [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
+    sprint: [
+      { ref: "committed-have-epic", why: "Every committed story belongs to an epic." },
+      { ref: "on-board", why: "Every committed story is on the board with an owner." },
+    ],
+  };
+  const ticketsFor = (workflow: string, task: string, output: string) =>
+    (TICKETS[output] ?? []).forEach((t) => emit({
+      workflow, stepTask: task, kind: "done", text: t.why,
+      subjectKind: "ticket", subjectRef: t.ref, operator: "is", value: "true", generated: true,
+    }));
 
-    for (const input of child.inputs) {
+  for (const wf of workflows) {
+    const mine = steps.filter((s) => s.workflow === wf.code);
+    // A hitl row that another hitl depends on is a review; the last one in the chain approves.
+    const hitlDependedOn = new Set(
+      mine.filter((s) => s.kind === "hitl").flatMap((s) => s.dependsOn),
+    );
+
+    for (const s of mine) {
+      /* 1 — a row is gated on the document it files. */
+      const own = destinationOf(s.produces)?.path;
+      if (own && !own.includes("{")) {
+        published(wf.code, s.task, own, `${own} is published.`);
+      }
+
+      /* 3 — what a produced KIND implies on the tracker. */
+      if (s.output) ticketsFor(wf.code, s.task, s.output);
+
+      /* 8 — a nesting row inherits the child's contract. */
+      if (s.kind === "workflow" && s.nests) {
+        const child = byCode.get(s.nests);
+        if (child) {
+          for (const input of child.inputs) {
+            emit({
+              workflow: wf.code, stepTask: s.task, kind: "ready",
+              text: `${pathOf(input)} is published — ${s.nests} reads it.`,
+              subjectKind: "document", subjectRef: pathOf(input),
+              operator: "status", value: "published", generated: true,
+            });
+          }
+          for (const output of child.outputs) {
+            // A PER-SUBJECT output — `03-architecture/epic/{epic}` — is deliberately not gated on the
+            // parent. The placeholder resolves against the task's own subject, and a fan-out row has
+            // none: the criterion would be permanently unmeasurable and the row could never close.
+            // Each child run gates its own document, and the `nested` check below covers that they ran.
+            if (output.includes("{")) continue;
+            published(wf.code, s.task, pathOf(output),
+              `${pathOf(output)} is published — ${s.nests} produces it.`);
+          }
+          // What the child's own steps promise the tracker travels up with the deliverable.
+          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output)) {
+            ticketsFor(wf.code, s.task, cs.output);
+          }
+          emit({
+            workflow: wf.code, stepTask: s.task, kind: "done",
+            text: `Every ${s.nests} run this row opened has closed.`,
+            subjectKind: "nested", subjectRef: s.nests, operator: "is", value: "closed",
+            generated: true,
+          });
+        }
+      }
+
+      if (s.kind !== "hitl") continue;
+
+      const upstream = nearestProduced(steps, wf.code, s.task);
+      const isReview = hitlDependedOn.has(s.task);
+      const role = labelOf.get(s.role) ?? s.role;
+
+      /* 2 — a person checks a document, so say which one. */
+      for (const { path } of upstream) {
+        if (path.includes("{")) continue;
+        published(wf.code, s.task, path, `${path} is published.`);
+      }
+
+      /* 7 — the reviewer is not the author. Only sayable when there IS an author to differ from. */
+      for (const { by } of upstream) {
+        if (by.role && s.role && by.role !== s.role) {
+          emit({
+            workflow: wf.code, stepTask: s.task, kind: "done",
+            text: `The ${role} did not write what they are reviewing.`,
+            subjectKind: "", subjectRef: "", operator: "", value: "", generated: true,
+          });
+          break;
+        }
+      }
+
+      if (isReview) {
+        /* 4 — silence is not a review. */
+        emit({
+          workflow: wf.code, stepTask: s.task, kind: "done",
+          text: "A review that found nothing says so explicitly, rather than closing in silence.",
+          subjectKind: "", subjectRef: "", operator: "", value: "", generated: true,
+        });
+      } else {
+        /* 6 — an approval answers the review it follows. */
+        if (s.dependsOn.some((d) => mine.find((x) => x.task === d)?.kind === "hitl")) {
+          emit({
+            workflow: wf.code, stepTask: s.task, kind: "done",
+            text: "Every finding from the review is answered — accepted, actioned, or overruled with a reason.",
+            subjectKind: "", subjectRef: "", operator: "", value: "", generated: true,
+          });
+        }
+        /* 5 — an approval has a name on it. */
+        emit({
+          workflow: wf.code, stepTask: s.task, kind: "done",
+          text: `Accepted by the ${role}, and their name is on the close.`,
+          subjectKind: "", subjectRef: "", operator: "", value: "", generated: true,
+        });
+      }
+    }
+
+    /* 9 — the systems of record have to answer before the workflow can start. */
+    const reach = [wf.code, ...mine.filter((s) => s.nests).map((s) => s.nests)];
+    const touched = steps.filter((s) => reach.includes(s.workflow));
+    if (touched.some((s) => destinationOf(s.produces)?.path)) {
       emit({
-        workflow: s.workflow, stepTask: s.task, kind: "ready",
-        text: `${pathOf(input)} is published — ${s.nests} reads it.`,
-        subjectKind: "document", subjectRef: pathOf(input), operator: "status", value: "published",
-        generated: true,
+        workflow: wf.code, stepTask: null, kind: "ready", text: "The doc store answers.",
+        subjectKind: "connector", subjectRef: "docs", operator: "is", value: "wired", generated: true,
       });
     }
-    for (const output of child.outputs) {
-      // A PER-SUBJECT output — `03-architecture/epic/{epic}` — is deliberately not gated on the
-      // parent. The placeholder resolves against the task's own subject, and a fan-out row has
-      // none: the criterion would be permanently unmeasurable and the row could never close. Each
-      // child run gates its own document, and the `nested` check below covers that they all ran.
-      if (output.includes("{")) continue;
+    if (touched.some((s) => destinationOf(s.produces)?.slot === "tickets"
+                         || s.output === "backlog" || s.output === "sprint")) {
       emit({
-        workflow: s.workflow, stepTask: s.task, kind: "done",
-        text: `${pathOf(output)} is published — ${s.nests} produces it.`,
-        subjectKind: "document", subjectRef: pathOf(output), operator: "status", value: "published",
-        generated: true,
+        workflow: wf.code, stepTask: null, kind: "ready", text: "The tracker answers.",
+        subjectKind: "connector", subjectRef: "tickets", operator: "is", value: "wired", generated: true,
       });
     }
-    emit({
-      workflow: s.workflow, stepTask: s.task, kind: "done",
-      text: `Every ${s.nests} run this row opened has closed.`,
-      subjectKind: "nested", subjectRef: s.nests, operator: "is", value: "closed",
-      generated: true,
-    });
   }
   return out;
 }
