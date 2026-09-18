@@ -225,6 +225,31 @@ export async function settledQuestions(taskId: string): Promise<PastQuestion[]> 
 }
 
 /** Where the task is, for deciding what the job view should offer. */
+/**
+ * Why a nesting row is still open after its nested run finished.
+ *
+ * `close_parent_task_when_child_run_closes` calls `close_task`, and when a Done criterion is unmet
+ * it catches the exception — it has to, because raising inside an AFTER trigger would roll back the
+ * CHILD's close too, and finishing nested work would appear to do nothing. The reason went into a
+ * `task.child_run_closed_gate_not_met` event and no further: the row simply sat open, looking stuck,
+ * with the explanation only in the log.
+ *
+ * Newest event only, and just its reason. Null is the ordinary case — most rows never blocked.
+ */
+export async function childRunBlock(actor: Actor, taskId: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("event")
+    .select("payload, occurred_at")
+    .eq("engagement_id", actor.engagementId)
+    .eq("subject_type", "task").eq("subject_id", taskId)
+    .eq("verb", "task.child_run_closed_gate_not_met")
+    .order("occurred_at", { ascending: false }).limit(1).maybeSingle();
+
+  const reason = (data?.payload as { reason?: string } | null)?.reason;
+  return reason?.trim() || null;
+}
+
 export async function taskState(actor: Actor, taskId: string): Promise<string | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;

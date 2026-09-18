@@ -32,6 +32,19 @@ export type RoleRow = {
 export type WorkflowRow = {
   code: string; label: string; workstream: string; phase: string;
   ownerRole: string; trigger: string; enabled: boolean; repeatable: boolean;
+  /**
+   * The workflow's INTERFACE — what it must be given, and what it promises back.
+   *
+   * Declared once here rather than restated on every row that nests it. It was restated, and it
+   * drifted: three of nine nesting rows ended up with no gate at all, so they closed on whatever
+   * the child happened to do. `contractCriteria` turns these into that row's gates instead.
+   *
+   * Same document vocabulary as `produces` and the criteria — `SOW`, `product-brief`,
+   * `deliverables@tickets` — so `destinationOf` strips the slot and the document evaluator
+   * resolves `{epic}` exactly as it does everywhere else.
+   */
+  inputs: string[];
+  outputs: string[];
 };
 export type StepRow = {
   workflow: string; ord: number; kind: string; role: string; task: string;
@@ -79,6 +92,13 @@ export type CriterionRow = {
   stepTask: string | null;
   kind: string; text: string;
   subjectKind: string; subjectRef: string; operator: string; value: string;
+  /**
+   * Derived from the nested workflow's interface rather than written in criteria.csv.
+   *
+   * Kept apart so a re-import can replace what it generated without touching a hand-written row,
+   * and so the task page can say where a gate came from. Absent means authored.
+   */
+  generated?: boolean;
 };
 
 /** What the database already holds, so the plan can tell new from changed. */
@@ -169,6 +189,7 @@ function readWorkflows(csv: string): WorkflowRow[] {
     // to be the safe direction — a phase wrongly marked repeatable offers to start a second run of
     // work that is already done.
     repeatable: parseBool(r.repeatable),
+    inputs: parseList(r.inputs), outputs: parseList(r.outputs),
   }));
 }
 
@@ -302,6 +323,22 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     if (w.ownerRole && !knownRoles.has(w.ownerRole))
       add("workflows.csv", row, `Workflow '${w.code}' is owned by role '${w.ownerRole}', which does not exist.`,
         "Add it to roles.csv, or correct the spelling.");
+
+    // A promise the steps do not keep. `outputs` becomes the gate on every row that nests this
+    // workflow, so an output nothing produces is a gate that can never pass — and one that is
+    // produced but not declared is a gate the parent never gets.
+    const producedBy = new Set(
+      steps.filter((s) => s.workflow === w.code && s.produces)
+        .map((s) => destinationOf(s.produces)?.path ?? s.produces),
+    );
+    w.outputs.forEach((o) => {
+      const path = destinationOf(o)?.path ?? o;
+      if (!producedBy.has(path))
+        add("workflows.csv", row,
+          `Workflow '${w.code}' declares output '${o}', which none of its steps produces.`,
+          `Produce it from a step, or remove it. Every row that nests '${w.code}' is gated on this ` +
+          `document existing, and no step writes it.`);
+    });
   });
   dupes(workflows.map((w) => w.code)).forEach((c) =>
     add("workflows.csv", null, `Workflow '${c}' appears more than once.`, "Remove the duplicate row."));
@@ -461,7 +498,28 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
           `Step ${s.workflow}/${s.ord} reads '${r}', which is not a document on this engagement and is not produced by any workflow here.`,
           "Correct the path, or add the workflow that produces it. An agent pointed at a document that will never exist fails when someone clicks the card."));
     });
+
+    // The same check for a workflow's declared inputs. An input becomes a READY criterion on every
+    // row that nests it, so one naming a document nothing will ever create is a row that can never
+    // start — and the person sees that when they click it, not here.
+    workflows.forEach((w, i) => {
+      w.inputs.filter((r) => !known.has(destinationOf(r)?.path ?? r)).forEach((r) =>
+        add("workflows.csv", i + 2,
+          `Workflow '${w.code}' declares input '${r}', which is not a document on this engagement and is not produced by any workflow here.`,
+          "Correct the path, or add the workflow that produces it. Every row nesting this one is gated on it."));
+    });
   }
+
+  // A nested workflow with no declared outputs. The row that nests it would close on nothing but
+  // the child run ending — which is exactly the state three rows were in before this column existed.
+  const nested = new Set(steps.filter((s) => s.kind === "workflow" && s.nests).map((s) => s.nests));
+  workflows.forEach((w, i) => {
+    if (nested.has(w.code) && !w.outputs.length)
+      add("workflows.csv", i + 2,
+        `Workflow '${w.code}' is nested by another workflow but declares no outputs.`,
+        "List what it produces for its caller, e.g. outputs=product-brief. Without it the row that " +
+        "nests it closes whenever the child run ends, whatever the child actually produced.");
+  });
 
   /* criteria */
   criteria.forEach((c, i) => {
@@ -522,6 +580,11 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
 
   /* ── nothing is wrong; work out what changes ───────────────────────────── */
 
+  // Authored criteria, then the gates each nesting row inherits from the workflow it nests. Built
+  // here rather than at write time so the dry run shows them, and so `describeChanges` counts them
+  // — a contract that changes is a new version of the workflow, exactly like an edited step.
+  const allCriteria = [...criteria, ...contractCriteria(workflows, steps, criteria)];
+
   const plan: Plan = {
     workstreams: workstreams.map((row) => ({
       action: existing.workstreams.includes(row.code) ? "unchanged" : "create", row,
@@ -531,7 +594,7 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     })),
     workflows: workflows.map((row) => {
       const mine = steps.filter((s) => s.workflow === row.code).sort((a, b) => a.ord - b.ord);
-      const mineC = criteria.filter((c) => c.workflow === row.code);
+      const mineC = allCriteria.filter((c) => c.workflow === row.code);
       const before = existing.workflows.find((w) => w.code === row.code);
       if (!before) return { action: "create" as const, row, steps: mine, criteria: mineC, changes: [] };
       const changes = describeChanges(before, mine, mineC);
@@ -568,6 +631,81 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
 }
 
 /** A human-readable diff, for the confirmation screen. Silence means nothing changed. */
+/**
+ * The gates a nesting row inherits from the workflow it nests.
+ *
+ * A `kind: workflow` row has no agent and produces nothing itself — its whole job is that the child
+ * run happened and yielded something. That was left to hand-written criteria, which is how
+ * `draft-epics`, `draft-feature-architecture` and `design-epics-tech` ended up with none: the child's
+ * own last step already gated the document, so restating it on the parent looked redundant right up
+ * until somebody didn't.
+ *
+ * Three kinds come out of one declaration:
+ *   ready  — one per child input.  The row cannot START until what the child reads is published.
+ *   done   — one per child output. The row cannot CLOSE until what the child promised exists.
+ *   done   — one `nested` check.   The row cannot close until every run it opened has closed.
+ *
+ * That last one is what a per-document check cannot express. `openNestedFanOut` opens one child run
+ * per epic against ONE parent task, and the close trigger fires on each child closing — so with no
+ * gate the parent closed on the FIRST epic and left the rest running behind a finished row.
+ *
+ * An authored criterion stating the same check wins: generation skips it rather than doubling it, so
+ * the six rows that already carry `document … status published` are unchanged by this.
+ */
+function contractCriteria(
+  workflows: WorkflowRow[], steps: StepRow[], authored: CriterionRow[],
+): CriterionRow[] {
+  const byCode = new Map(workflows.map((w) => [w.code, w]));
+  // The path, not the raw value: `deliverables@tickets` is filed at `deliverables`, which is what
+  // the document evaluator compares against and what `produces` resolves to.
+  const pathOf = (ref: string) => destinationOf(ref)?.path ?? ref;
+  const seen = new Set(
+    authored.map((c) => `${c.workflow}:${c.stepTask ?? "-"}:${c.kind}:${c.subjectKind}:${c.subjectRef}`),
+  );
+  const out: CriterionRow[] = [];
+  const emit = (c: CriterionRow) => {
+    const k = `${c.workflow}:${c.stepTask ?? "-"}:${c.kind}:${c.subjectKind}:${c.subjectRef}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(c);
+  };
+
+  for (const s of steps) {
+    if (s.kind !== "workflow" || !s.nests) continue;
+    const child = byCode.get(s.nests);
+    if (!child) continue;                       // already refused by name, above
+
+    for (const input of child.inputs) {
+      emit({
+        workflow: s.workflow, stepTask: s.task, kind: "ready",
+        text: `${pathOf(input)} is published — ${s.nests} reads it.`,
+        subjectKind: "document", subjectRef: pathOf(input), operator: "status", value: "published",
+        generated: true,
+      });
+    }
+    for (const output of child.outputs) {
+      // A PER-SUBJECT output — `03-architecture/epic/{epic}` — is deliberately not gated on the
+      // parent. The placeholder resolves against the task's own subject, and a fan-out row has
+      // none: the criterion would be permanently unmeasurable and the row could never close. Each
+      // child run gates its own document, and the `nested` check below covers that they all ran.
+      if (output.includes("{")) continue;
+      emit({
+        workflow: s.workflow, stepTask: s.task, kind: "done",
+        text: `${pathOf(output)} is published — ${s.nests} produces it.`,
+        subjectKind: "document", subjectRef: pathOf(output), operator: "status", value: "published",
+        generated: true,
+      });
+    }
+    emit({
+      workflow: s.workflow, stepTask: s.task, kind: "done",
+      text: `Every ${s.nests} run this row opened has closed.`,
+      subjectKind: "nested", subjectRef: s.nests, operator: "is", value: "closed",
+      generated: true,
+    });
+  }
+  return out;
+}
+
 function describeChanges(
   before: { steps: StepRow[]; criteria: CriterionRow[] },
   steps: StepRow[],

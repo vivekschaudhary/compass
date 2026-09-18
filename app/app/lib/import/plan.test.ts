@@ -177,21 +177,17 @@ describe("the shipped seed", () => {
    * delivery phases and knew nothing about recorded debt, so it was a strict subset of this and
    * the only one that could not express a deferred row.
    *
-   * `sprint-0.draft-epics` is the HIGH PRIORITY one and it is different in kind from the rest. It is
-   * a NESTING row: its five criteria moved to the `epics` workflow along with the work, which is
-   * right, and left the row that opens that work with no bar of its own. Every nesting row has the
-   * same hole — this is simply the first one that ever had criteria to lose, which is why the test
-   * caught it here and nowhere else. What a nesting row's gate should assert is a real question
-   * ("the child run closed" is not something the criteria vocabulary can express today), and it is
-   * deferred deliberately rather than by accident.
+   * The three NESTING rows that used to sit here — `sprint-0.draft-epics`,
+   * `sprint-0.draft-feature-architecture`, `epics.design-epics-tech` — are gone, and the reason they
+   * were deferred is the thing that changed. This note said "the child run closed" was not something
+   * the criteria vocabulary could express; it is now. A nested workflow declares `inputs` and
+   * `outputs` in workflows.csv, and the importer turns them into the nesting row's gates plus a
+   * `nested` criterion asserting every child run it opened has closed.
    *
-   * The rest are v1-era workflows that have never had gates. Deleting a name here is how one gets
+   * What remains is v1-era workflows that have never had gates. Deleting a name here is how one gets
    * fixed; adding one needs a reason.
    */
   const UNGATED_DEBT = new Set([
-    "sprint-0.draft-epics",                          // nesting row — issue #173, see above
-    "epics.design-epics-tech",                       // nesting row — same hole as draft-epics, #173
-    "sprint-0.draft-feature-architecture",           // nesting row — same hole, #173
     "triage.classify-intake", "triage.approve", "triage.triage-incident",
     "triage.triage-and-fix", "triage.review-pr", "triage.write-postmortem",
     "triage.accumulate-changelog",
@@ -690,5 +686,113 @@ describe("criteria survive their steps being renumbered", () => {
     // It refuses outright — file-sow produces the SOW, so the moved criterion now checks another
     // row's document. Refusing is a stronger answer than reporting it as a change.
     expect(r.ok).toBe(false);
+  });
+});
+
+/* ── a nested workflow's contract ────────────────────────────────────────── */
+
+/**
+ * `inputs` and `outputs` on the child, turned into the nesting row's gates.
+ *
+ * The defect they replace: the contract was restated by hand on each nesting row, and three of the
+ * seed's nine — `draft-epics`, `draft-feature-architecture`, `design-epics-tech` — ended up with no
+ * criteria at all, so they closed on whatever the child happened to do.
+ */
+describe("nested workflow contract", () => {
+  const base: Bundle = {
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles: "code,label,tier,scope,workstream\npo,PO,practitioner,mine,Delivery\n",
+    workflows:
+      "code,label,workstream,inputs,outputs\n" +
+      "parent,Parent,Delivery,,\n" +
+      'child,Child,Delivery,"the-brief","the-epics"\n',
+    steps:
+      "workflow,ord,kind,role,task,produces,nests\n" +
+      "parent,1,workflow,po,run-child,,child\n" +
+      "child,1,agent,po,draft,the-epics,\n",
+    criteria: "workflow,task,kind,text\nchild,draft,done,the epics read well\n",
+  };
+  const gates = (b: Bundle, code = "parent") => {
+    const r = planImport(b, empty);
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    return r.plan.workflows.find((w) => w.row.code === code)!.criteria;
+  };
+
+  it("gates the nesting row on the child's output", () => {
+    const done = gates(base).filter((c) => c.kind === "done" && c.subjectKind === "document");
+    expect(done).toHaveLength(1);
+    expect(done[0]).toMatchObject({
+      stepTask: "run-child", subjectRef: "the-epics", operator: "status", value: "published",
+      generated: true,
+    });
+  });
+
+  it("gates the nesting row's START on the child's input", () => {
+    const ready = gates(base).filter((c) => c.kind === "ready");
+    expect(ready).toHaveLength(1);
+    expect(ready[0]).toMatchObject({ stepTask: "run-child", subjectRef: "the-brief", generated: true });
+  });
+
+  // The fan-out defect: one parent task, N child runs, and a trigger that fires on each close.
+  it("always adds a check that every child run closed", () => {
+    const nested = gates(base).filter((c) => c.subjectKind === "nested");
+    expect(nested).toHaveLength(1);
+    expect(nested[0]).toMatchObject({ kind: "done", subjectRef: "child", value: "closed", generated: true });
+  });
+
+  // `03-architecture/epic/{epic}` resolves against the task's own subject, and a fan-out row has
+  // none — gating the parent on it would make the row permanently unclosable.
+  it("does not gate the parent on a per-subject output", () => {
+    const perSubject: Bundle = {
+      ...base,
+      workflows:
+        "code,label,workstream,inputs,outputs\n" +
+        "parent,Parent,Delivery,,\n" +
+        "child,Child,Delivery,the-brief,03-architecture/epic/{epic}\n",
+      steps:
+        "workflow,ord,kind,role,task,produces,nests\n" +
+        "parent,1,workflow,po,run-child,,child\n" +
+        "child,1,agent,po,draft,03-architecture/epic/{epic},\n",
+    };
+    const all = gates(perSubject);
+    expect(all.filter((c) => c.subjectKind === "document" && c.kind === "done")).toHaveLength(0);
+    expect(all.filter((c) => c.subjectKind === "nested")).toHaveLength(1);
+  });
+
+  it("leaves an authored criterion alone rather than doubling it", () => {
+    const b = {
+      ...base,
+      criteria:
+        "workflow,task,kind,text,subject_kind,subject_ref,operator,value\n" +
+        "parent,run-child,done,The epics are published,document,the-epics,status,published\n",
+    };
+    const done = gates(b).filter((c) => c.subjectKind === "document" && c.subjectRef === "the-epics");
+    expect(done).toHaveLength(1);
+    expect(done[0].generated).toBeUndefined();          // the authored one survived
+  });
+
+  it("refuses an output no step of that workflow produces", () => {
+    const r = planImport(
+      { ...base, workflows: base.workflows!.replace('"the-epics"', '"the-epics,a-ghost"') }, empty);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.problems[0].message).toContain("a-ghost");
+    expect(r.problems[0].fix).toContain("no step writes it");
+  });
+
+  it("refuses a nested workflow that promises nothing", () => {
+    const r = planImport({ ...base, workflows: base.workflows!.replace('"the-epics"', "") }, empty);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.problems.some((p) => p.message.includes("declares no outputs"))).toBe(true);
+  });
+
+  it("refuses an input that nothing will ever create", () => {
+    const withDocs: Existing = { ...empty, documents: ["the-brief"] };
+    const bad = { ...base, workflows: base.workflows!.replace('"the-brief"', '"nowhere/at-all"') };
+    const r = planImport(bad, withDocs);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.problems.some((p) => p.message.includes("nowhere/at-all"))).toBe(true);
   });
 });

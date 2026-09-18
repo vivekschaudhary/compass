@@ -12,7 +12,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { buildContext } from "@/app/lib/agent/context";
-import { conversation, openQuestions, draftOf, taskState } from "@/app/lib/data/job";
+import { conversation, openQuestions, draftOf, taskState, childRunBlock } from "@/app/lib/data/job";
 import { storedStatusFor } from "@/app/lib/data/gates";
 import { describeCriterion } from "../../../../_ui/criterion";
 import { Tag } from "../../../../_ui/primitives";
@@ -49,9 +49,9 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
   const ctx = await buildContext(actor, taskId);
   if (!ctx) notFound();
 
-  const [turns, questions, draft, gates, state] = await Promise.all([
+  const [turns, questions, draft, gates, state, blocked] = await Promise.all([
     conversation(taskId), openQuestions(taskId), draftOf(actor, ctx.produces),
-    storedStatusFor([taskId]), taskState(actor, taskId),
+    storedStatusFor([taskId]), taskState(actor, taskId), childRunBlock(actor, taskId),
   ]);
 
   const statuses = gates.get(taskId) ?? [];
@@ -75,6 +75,15 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
         inputs={ctx.inputs} doneCriteria={ctx.doneCriteria} statuses={statuses}
         produces={ctx.produces}
       />
+
+      {/* A nesting row whose nested run finished while this row's gate did not pass. The trigger
+          has to swallow that exception — raising would roll back the child's close — so without
+          this the row just sits open and the reason lives only in the event log. */}
+      {blocked && state !== "closed" && (
+        <p className="jobs-note">
+          The nested run finished, but this row&apos;s gate is not met: {blocked}
+        </p>
+      )}
 
       <div className="job-body">
         <section className="chat-col">

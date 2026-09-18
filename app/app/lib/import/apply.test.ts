@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { applyPlan, describeReport, type ConfigStore } from "./apply";
+import { applyPlan, describeReport, versioningEnabled, type ConfigStore } from "./apply";
 import { planImport, type Bundle, type Existing } from "./plan";
 
 /** A store that records what it was asked to do, in order. The ordering is the thing worth
  *  testing — a role written before its workstream leaves a dangling reference for as long as the
  *  import takes. */
-function fakeStore() {
+function fakeStore({ published = null as string | null } = {}) {
   const calls: string[] = [];
   let version = 0;
   const store: ConfigStore = {
@@ -19,6 +19,9 @@ function fakeStore() {
     async addSteps(vid, steps) { calls.push(`steps:${vid}:${steps.length}`); },
     async addCriteria(vid, cs) { calls.push(`criteria:${vid}:${cs.length}`); },
     async retire(_o, _e, kind, code) { calls.push(`retire:${kind}:${code}`); },
+    async publishedVersion(id) { calls.push(`published?:${id}`); return published; },
+    async syncSteps(vid, steps) { calls.push(`syncSteps:${vid}:${steps.length}`); },
+    async syncCriteria(vid, cs) { calls.push(`syncCriteria:${vid}:${cs.length}`); },
   };
   return { store, calls, setVersion: (v: number) => { version = v; } };
 }
@@ -187,5 +190,76 @@ describe("describeReport", () => {
     expect(line).toContain("1 workstream(s)");
     expect(line).toContain("1 new workflow(s)");
     expect(line).toContain("1 version(s) published");
+  });
+});
+
+/* ── versions are off until go-live ──────────────────────────────────────── */
+
+/**
+ * Pre-live an import AMENDS what is published instead of publishing a new version.
+ *
+ * Versioning exists so a run in flight keeps the gates someone approved. While the process itself
+ * is still being written that buys nothing and costs something real: an open run stays pinned to
+ * the version it started on, so a corrected gate never reaches the board and the import still
+ * reports success.
+ */
+describe("amending in place while versioning is off", () => {
+  const plan = () => {
+    const r = planImport(bundle, {
+      ...empty, workstreams: ["Engineering"], roles: ["engineer"],
+      workflows: [{ code: "build", steps: [], criteria: [] }],   // exists, so the plan is a change
+    });
+    if (!r.ok) throw new Error("fixture should plan");
+    return r.plan;
+  };
+
+  it("amends the published version and never supersedes it", async () => {
+    const { store, calls } = fakeStore({ published: "ver-live" });
+    const report = await applyPlan(plan(), { orgCode: "default", engagementId: null }, store,
+      "import", { versioning: false });
+
+    expect(calls).toContain("syncSteps:ver-live:2");
+    expect(calls).toContain("syncCriteria:ver-live:1");
+    expect(calls.some((c) => c.startsWith("supersede:"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("version:"))).toBe(false);
+    expect(report.versionsUpdated).toEqual([{ workflow: "build", because: expect.anything() }]);
+    expect(report.versionsCreated).toEqual([]);
+  });
+
+  // A workflow nobody has published yet still needs a first version to hang its rows on.
+  it("still creates the first version when nothing is published", async () => {
+    const { store, calls } = fakeStore({ published: null });
+    const report = await applyPlan(plan(), { orgCode: "default", engagementId: null }, store,
+      "import", { versioning: false });
+
+    expect(calls.some((c) => c.startsWith("version:"))).toBe(true);
+    expect(report.versionsCreated).toHaveLength(1);
+    expect(report.versionsUpdated).toEqual([]);
+  });
+
+  it("publishes a new version when versioning is on, exactly as before", async () => {
+    const { store, calls } = fakeStore({ published: "ver-live" });
+    const report = await applyPlan(plan(), { orgCode: "default", engagementId: null }, store,
+      "import", { versioning: true });
+
+    expect(calls.some((c) => c.startsWith("supersede:"))).toBe(true);
+    expect(calls.some((c) => c.startsWith("version:"))).toBe(true);
+    expect(calls.some((c) => c.startsWith("syncSteps:"))).toBe(false);
+    expect(report.versionsCreated).toHaveLength(1);
+    expect(report.versionsUpdated).toEqual([]);
+  });
+});
+
+describe("versioningEnabled", () => {
+  it("is off when unset — the pre-live default", () => {
+    expect(versioningEnabled({})).toBe(false);
+    expect(versioningEnabled({ COMPASS_WORKFLOW_VERSIONS: "" })).toBe(false);
+    expect(versioningEnabled({ COMPASS_WORKFLOW_VERSIONS: "0" })).toBe(false);
+  });
+
+  it("is on for the spellings an operator would reach for", () => {
+    for (const v of ["1", "true", "on", "yes", "ON", " true "]) {
+      expect(versioningEnabled({ COMPASS_WORKFLOW_VERSIONS: v }), v).toBe(true);
+    }
   });
 });

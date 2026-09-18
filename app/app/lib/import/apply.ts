@@ -38,6 +38,21 @@ export interface ConfigStore {
   addSteps(versionId: string, steps: StepRow[]): Promise<void>;
   addCriteria(versionId: string, criteria: CriterionRow[]): Promise<void>;
 
+  /** The version currently published for this workflow, or null. Used only in-place. */
+  publishedVersion(workflowId: string): Promise<string | null>;
+
+  /**
+   * Bring a published version's contents to match the seed WITHOUT replacing the version row.
+   *
+   * Reconciles rather than deletes and re-inserts, because both of those cascades are live:
+   * `work_task.workflow_step_id` has no `on delete` rule, so removing a step a running task points
+   * at fails outright; and `measurement.criterion_id` is `on delete cascade`, so removing a
+   * criterion takes the human confirmations recorded against it with it. Rows that still exist keep
+   * their ids, and only what genuinely went away is deleted.
+   */
+  syncSteps(versionId: string, steps: StepRow[]): Promise<void>;
+  syncCriteria(versionId: string, criteria: CriterionRow[]): Promise<void>;
+
   /**
    * Take a role or workflow out of service without deleting it.
    *
@@ -53,17 +68,40 @@ export type ApplyReport = {
   roles: number;
   workflowsCreated: string[];
   versionsCreated: { workflow: string; version: number; because: string[] }[];
+  /** Amended in place rather than versioned — see `versioningEnabled`. */
+  versionsUpdated: { workflow: string; because: string[] }[];
   skipped: string[];
   /** What was taken out of service, so the report says it rather than the roster quietly shrinking. */
   retired: string[];
 };
 
-export async function applyPlan(plan: Plan, scope: Scope, store: ConfigStore, actor = "import"): Promise<ApplyReport> {
+/**
+ * Does an import publish a NEW workflow version, or amend the one that is published?
+ *
+ * Off until go-live, deliberately. Versioning exists so a run in flight keeps the gates someone
+ * approved — which matters when real work is running and does nothing but accumulate rows while the
+ * process itself is being written. Worse, it strands: an open run stays pinned to the version it
+ * started on, so a corrected gate does not reach the board and the import reports success anyway.
+ *
+ * `COMPASS_WORKFLOW_VERSIONS=1` turns it back on, one edit, when the first engagement goes live.
+ * Env-injected and pure so a test can pin it without touching process.env — same shape as
+ * `requestedHost` in lib/agent/hosts/select.ts.
+ */
+export function versioningEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  const raw = (env.COMPASS_WORKFLOW_VERSIONS ?? "").trim().toLowerCase();
+  return ["1", "true", "on", "yes"].includes(raw);
+}
+
+export async function applyPlan(
+  plan: Plan, scope: Scope, store: ConfigStore, actor = "import",
+  { versioning = versioningEnabled() }: { versioning?: boolean } = {},
+): Promise<ApplyReport> {
   const orgId = await store.orgId(scope.orgCode);
   const eng = scope.engagementId;
 
   const report: ApplyReport = {
-    workstreams: 0, roles: 0, workflowsCreated: [], versionsCreated: [], skipped: [], retired: [],
+    workstreams: 0, roles: 0, workflowsCreated: [], versionsCreated: [], versionsUpdated: [],
+    skipped: [], retired: [],
   };
 
   // Order matters and is not incidental: a role names a workstream, a workflow names both. Writing
@@ -90,10 +128,25 @@ export async function applyPlan(plan: Plan, scope: Scope, store: ConfigStore, ac
     }
     if (wf.action === "create") report.workflowsCreated.push(wf.row.code);
 
+    const because = wf.changes.length ? wf.changes : ["first version"];
+
+    // Pre-live: amend what is published. Runs in flight are pinned to a version row, so leaving that
+    // row in place is exactly what lets a corrected gate reach a board that is already running —
+    // the thing a new version cannot do. With versioning on, this branch is skipped entirely.
+    if (!versioning) {
+      const published = await store.publishedVersion(workflowId);
+      if (published) {
+        await store.syncSteps(published, wf.steps);
+        await store.syncCriteria(published, wf.criteria);
+        report.versionsUpdated.push({ workflow: wf.row.code, because });
+        continue;
+      }
+      // No published version yet — fall through and create the first one.
+    }
+
     // A new version, never a mutation. Runs already in flight keep the version they pinned, which
     // is what makes "these twelve runs followed v1" a true statement rather than a hopeful one.
     const version = (await store.latestVersion(workflowId)) + 1;
-    const because = wf.changes.length ? wf.changes : ["first version"];
 
     await store.supersedePublished(workflowId);
     const versionId = await store.createVersion(workflowId, version, because.join("; "), actor);
@@ -121,6 +174,7 @@ export function describeReport(r: ApplyReport): string {
     `${r.roles} role(s)`,
     r.workflowsCreated.length ? `${r.workflowsCreated.length} new workflow(s)` : "",
     r.versionsCreated.length ? `${r.versionsCreated.length} version(s) published` : "",
+    r.versionsUpdated.length ? `${r.versionsUpdated.length} workflow(s) amended in place` : "",
     r.skipped.length ? `${r.skipped.length} unchanged` : "",
     // Named, not counted. "2 retired" is a number someone scrolls past; "retired role:pm,
     // role:scanner" is the line that makes them check whether they meant it.

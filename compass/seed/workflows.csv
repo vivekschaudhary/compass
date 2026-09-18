@@ -1,22 +1,22 @@
-code,label,workstream,phase,owner_role,trigger,enabled,repeatable
-onboarding,Onboarding engagement,Delivery,Onboarding,pmo-analyst,,true,false
-sprint-0,Discovery,Delivery,Discovery,delivery-manager,,true,false
-foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,staff-engineer,,true,false
-feature,Feature,Product,Build,product-owner,,true,true
-product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,true,false
-design-library,Design library,Design,Discovery,designer,,true,true
-sprint-plan,Sprint plan,Delivery,Build,product-owner,,true,true
-feature-architecture,Feature architecture,Engineering,Build,staff-engineer,,true,true
-build,Workflow: /build,Engineering,Build,engineer,,true,true
-tech-design,Technical design,Engineering,Build,staff-engineer,,true,true
-story,Workflow: /story,Product,Build,product-manager,,false,true
-sprint,Sprint,Delivery,Build,delivery-manager,,true,true
-release,Release,Delivery,Build,delivery-manager,,false,true
-fix,Workflow: /fix,Engineering,Build,engineer,,true,true
-triage,Workflow: /triage,Support,Operate,support,,true,true
-launch-readiness,Launch readiness,GTM,Build,gtm,,false,true
-release-comms,Release comms,GTM,Build,gtm,,false,true
-job-aids,Job aids and enablement,GTM,Build,tech-writer,,false,true
-measure,Measure,Product,Operate,researcher,,false,true
-learn,Learn,Product,Operate,product-manager,,false,true
-epics,Epics,Product,Discovery,product-owner,,true,true 
+code,label,workstream,phase,owner_role,trigger,enabled,repeatable,inputs,outputs
+onboarding,Onboarding engagement,Delivery,Onboarding,pmo-analyst,,true,false,,
+sprint-0,Discovery,Delivery,Discovery,delivery-manager,,true,false,,
+foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,staff-engineer,,true,false,"product-brief,features","foundational-architecture,scaffold-record"
+feature,Feature,Product,Build,product-owner,,true,true,product-brief,features
+product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,true,false,"SOW,Requirements",product-brief
+design-library,Design library,Design,Discovery,designer,,true,true,"Requirements,product-brief",design-library
+sprint-plan,Sprint plan,Delivery,Build,product-owner,,true,true,"deliverables,Staffing plan",sprint-plans
+feature-architecture,Feature architecture,Engineering,Build,staff-engineer,,true,true,"product-brief,features,foundational-architecture",03-architecture/features
+build,Workflow: /build,Engineering,Build,engineer,,true,true,,
+tech-design,Technical design,Engineering,Build,staff-engineer,,true,true,"deliverables,03-architecture/features",03-architecture/epic/{epic}
+story,Workflow: /story,Product,Build,product-manager,,false,true,,
+sprint,Sprint,Delivery,Build,delivery-manager,,true,true,,
+release,Release,Delivery,Build,delivery-manager,,false,true,,
+fix,Workflow: /fix,Engineering,Build,engineer,,true,true,,
+triage,Workflow: /triage,Support,Operate,support,,true,true,,
+launch-readiness,Launch readiness,GTM,Build,gtm,,false,true,,
+release-comms,Release comms,GTM,Build,gtm,,false,true,,
+job-aids,Job aids and enablement,GTM,Build,tech-writer,,false,true,,
+measure,Measure,Product,Operate,researcher,,false,true,,
+learn,Learn,Product,Operate,product-manager,,false,true,,
+epics,Epics,Product,Discovery,product-owner,,true,true,"product-brief,features,Milestones and timeline",deliverables@tickets

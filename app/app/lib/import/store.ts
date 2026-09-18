@@ -94,6 +94,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         label: row.label, workstream_code: row.workstream, phase_code: row.phase || null,
         owner_role_code: row.ownerRole || null, trigger: row.trigger || null,
         enabled: row.enabled, repeatable: row.repeatable,
+        inputs: row.inputs, outputs: row.outputs,
         updated_at: new Date().toISOString(),
       };
       const base = sb.from("workflow").select("id").eq("org_id", orgId).eq("code", row.code);
@@ -161,7 +162,93 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         statement: c.text,                                  // `statement` in the schema; `text` in the CSV
         subject_kind: c.subjectKind || null, subject_ref: c.subjectRef || null,
         operator: c.operator || null, value: c.value || null,
+        // Derived from the nested workflow's interface, not written in criteria.csv.
+        generated: c.generated === true,
       })))).error);
+    },
+
+    async publishedVersion(workflowId) {
+      const { data, error } = await sb.from("workflow_version")
+        .select("id").eq("workflow_id", workflowId).eq("status", "published").maybeSingle();
+      fail("read published version", error);
+      return (data?.id as string) ?? null;
+    },
+
+    // Matched on `ord`, which is the version's natural key for a step — `unique (workflow_version_id,
+    // ord)`. A row that still exists is UPDATED so it keeps its id: `work_task.workflow_step_id` has
+    // no `on delete` rule, so deleting a step a running task points at fails outright, and deleting
+    // one nothing points at would orphan nothing but churn ids for no reason.
+    async syncSteps(versionId, steps) {
+      const { data: before, error } = await sb.from("workflow_step")
+        .select("id, ord").eq("workflow_version_id", versionId);
+      fail("read steps", error);
+      const byOrd = new Map((before ?? []).map((r) => [r.ord as number, r.id as string]));
+
+      for (const s of steps) {
+        const patch = {
+          kind: s.kind,
+          role_code: s.kind === "machine" ? null : s.role,
+          task: s.task, produces: s.produces || null, reads: s.reads,
+          output: s.output || null,
+          conditional: s.conditional || null,
+          nests_workflow_code: s.kind === "workflow" ? s.nests : null,
+          title: s.title || null,
+          depends_on: s.dependsOn,
+        };
+        const id = byOrd.get(s.ord);
+        if (id) {
+          fail("update step", (await sb.from("workflow_step").update(patch).eq("id", id)).error);
+          byOrd.delete(s.ord);
+        } else {
+          fail("insert step", (await sb.from("workflow_step")
+            .insert({ workflow_version_id: versionId, ord: s.ord, ...patch })).error);
+        }
+      }
+
+      // Whatever the seed no longer has. A task still pointing at one makes this fail, loudly — the
+      // seed removed a row somebody is running, and that is a conflict for a person to resolve, not
+      // something an importer should decide.
+      for (const id of byOrd.values()) {
+        fail("remove step", (await sb.from("workflow_step").delete().eq("id", id)).error);
+      }
+    },
+
+    // Matched on CONTENT, because a criterion has no natural key. An unchanged criterion keeps its
+    // id, and with it every `measurement` written against it — `measurement.criterion_id` is
+    // `on delete cascade`, so replacing the set wholesale would erase the confirmations a person
+    // already gave. Only a criterion the seed no longer states is deleted, and losing its
+    // measurements is then correct: the thing they measured is gone.
+    async syncCriteria(versionId, criteria) {
+      const { data: before, error } = await sb.from("criterion")
+        .select("id, step_task, kind, statement, subject_kind, subject_ref, operator, value")
+        .eq("workflow_version_id", versionId);
+      fail("read criteria", error);
+
+      const key = (c: {
+        step_task: string | null; kind: string; statement: string | null;
+        subject_kind: string | null; subject_ref: string | null; operator: string | null; value: string | null;
+      }) => [c.step_task ?? "", c.kind, c.statement ?? "", c.subject_kind ?? "",
+             c.subject_ref ?? "", c.operator ?? "", c.value ?? ""].join("\u0000");
+
+      const keep = new Map((before ?? []).map((r) => [key(r), r.id as string]));
+      const add: CriterionRow[] = [];
+      const seen = new Set<string>();
+
+      for (const c of criteria) {
+        const k = key({
+          step_task: c.stepTask, kind: c.kind, statement: c.text,
+          subject_kind: c.subjectKind || null, subject_ref: c.subjectRef || null,
+          operator: c.operator || null, value: c.value || null,
+        });
+        if (keep.has(k)) { seen.add(k); continue; }
+        add.push(c);
+      }
+
+      for (const [k, id] of keep) {
+        if (seen.has(k)) continue;
+        fail("remove criterion", (await sb.from("criterion").delete().eq("id", id)).error);
+      }
+      await this.addCriteria(versionId, add);
     },
   };
 }
