@@ -1,8 +1,8 @@
 <!-- TECH-DESIGN — nested from epics, once per approved epic.
 
-     draft -> review -> approve. The author never accepts: an agent drafts in the staff engineer's
-     name, so a staff engineer closing this gate would approve its own design. The principal
-     engineer holds the close, which is the same pairing foundation-architecture uses.
+     draft -> approve. The author never accepts: an agent drafts in the staff engineer's name, so a
+     staff engineer closing this gate would approve its own design. The principal engineer holds
+     the close, which is the same pairing foundation-architecture uses.
 
      THIS FILE WAS STORY-SCOPED AND IS NOT ANY MORE. It described one run per Ready story, a
      `## Technical approach` spliced onto the Story description, and a `tech-ready` label that
@@ -49,8 +49,7 @@ edge twice.
 | # | task | dispatch | owner | produces | output | depends-on |
 |---|------|----------|-------|----------|--------|------------|
 | 1 | Epic technical design | `agent: staff-engineer.draft-epic-tech-design` | staff-engineer | `03-architecture/epic/{epic}` | — | — |
-| 2 | Review the technical design | `agent: reviewer.review-epic-tech-design` | reviewer | `03-architecture/epic/{epic}-review` | — | 1 |
-| 3 | Accept the technical design | `hitl` | principal-engineer | `—` | — | 2 |
+| 2 | Accept the technical design | `hitl` | principal-engineer | `—` | — | 1 |
 
 ## Why it is these rows
 
@@ -61,9 +60,9 @@ and a run with no subject **halts rather than filing at the literal path**: that
 produce real-looking documents and a green gate, which is worse than a crash because nothing about
 it looks wrong.
 
-**One row became three.** It was a single `staff-engineer` row, which meant the author held the
-close and approved their own design — the arrangement commit 75524da9 removed from every other
-workflow in the seed. The reviewer is independent and the principal engineer accepts.
+**One row became two.** It was a single `staff-engineer` row, which meant the author held the close
+and approved their own design — the arrangement commit 75524da9 removed from every other workflow
+in the seed. The principal engineer accepts.
 
 **The design is grounded in the code, and that is gated.** The architect reads the real repository,
 and every claim about it cites a file that was read. A design written from what the code is assumed

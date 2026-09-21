@@ -11,8 +11,8 @@ vi.mock("server-only", () => ({}));
 
 type Row = Record<string, unknown>;
 
-const state: { workflows: Row[]; runs: Row[]; unticketed: Row[] } = {
-  workflows: [], runs: [], unticketed: [],
+const state: { workflows: Row[]; runs: Row[]; unticketed: Row[]; steps: Row[] } = {
+  workflows: [], runs: [], unticketed: [], steps: [],
 };
 
 vi.mock("../supabase", () => ({
@@ -22,6 +22,12 @@ vi.mock("../supabase", () => ({
         select: () => chain,
         eq: () => chain,
         is: () => chain,
+        // `phasesFor` also asks which workflows an OPEN run nests, so the fake has to answer the
+        // shape of that query too — otherwise these tests fail on the query surface rather than on
+        // the repeat behaviour they are about.
+        neq: () => chain,
+        not: () => chain,
+        in: () => chain,
         // `phasesFor` orders runs newest-first; the fake returns them as given, so a test that
         // wants "newest first" must say so in its fixture — the same contract the query has.
         order: () => chain,
@@ -31,6 +37,7 @@ vi.mock("../supabase", () => ({
           res({
             data: table === "workflow" ? state.workflows
               : table === "workflow_run" ? state.runs
+              : table === "workflow_step" ? state.steps
               : state.unticketed,
           }),
       };
@@ -63,7 +70,7 @@ const wf = (id: string, code: string, repeatable: boolean) =>
 const run = (workflowId: string, s: string, openedAt: string, ticket = "KAN-1") =>
   ({ id: `r-${workflowId}-${openedAt}`, workflow_id: workflowId, state: s, ticket_key: ticket, opened_at: openedAt });
 
-beforeEach(() => { state.workflows = []; state.runs = []; state.unticketed = []; });
+beforeEach(() => { state.workflows = []; state.runs = []; state.unticketed = []; state.steps = []; });
 
 const stateOf = async (code: string) => (await phasesFor(ACTOR)).find((p) => p.code === code)?.state;
 

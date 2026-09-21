@@ -10,13 +10,21 @@
 
 import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
-import { tasksFor, startedCounts, queueNotices } from "@/app/lib/data/tasks";
+import {
+  tasksFor,
+  startedCounts,
+  queueNotices,
+  groupByParent,
+  type QueueGroup,
+  type TaskCard,
+} from "@/app/lib/data/tasks";
 import { storedStatusFor } from "@/app/lib/data/gates";
 import { phasesFor } from "@/app/lib/data/phases";
 import { PhaseStarter } from "./PhaseStarter";
 import { JobCard } from "../../../_ui/primitives";
 import { StartButton } from "./StartButton";
-import { Gate } from "./Gate";
+import { Gate, doneAllMet } from "./Gate";
+import { ChildRows } from "./ChildRows";
 
 export const dynamic = "force-dynamic";
 
@@ -62,23 +70,120 @@ export default async function JobsPage(
 
   const phases = await phasesFor(actor);
 
-  const mine = tasks.filter((t) => t.roleCode === actor.roleCode);
-  const others = tasks.filter((t) => t.roleCode !== actor.roleCode);
+  // Narrowed once. `groupCard` below is a function declaration, and TypeScript will not carry the
+  // `if (!actor) notFound()` narrowing into one.
+  const myRole = actor.roleCode;
+
+  // Every row inside the row that opened it. A nesting row's card IS its run — grouping before the
+  // split, because a group is placed by who is in it and that cannot be decided one row at a time.
+  const groups = groupByParent(tasks);
+  const isMine = (g: QueueGroup) =>
+    g.card.roleCode === myRole ||
+    // A staff engineer's `tech-design` rows hang off a product owner's `epics` row. Placing the
+    // group on the parent alone would file their own work under "not yours to do".
+    g.children.some((c) => c.roleCode === myRole);
+  const mine = groups.filter(isMine);
+  const others = groups.filter((g) => !isMine(g));
+
   // Read-only: rendering shows what was last measured, it does not re-measure. A refresh that
   // silently re-checked would make stale evidence look fresh.
   const gates = await storedStatusFor(tasks.map((t) => t.id));
   const firstName = (actor.holder ?? actor.roleLabel).split(" ")[0];
+  const holderOf = (code: string) =>
+    roles.find((r) => r.code === code)?.holder ??
+    roles.find((r) => r.code === code)?.label ??
+    code;
 
   // A SECOND read, deliberately. Both sentences below are claims about absence, and the queue is
   // the one set that cannot support them: it drops closed work, so once the SOW was accepted every
   // row left in it had a null started_at and the screen announced that nothing had ever run.
+  //
+  // Counted over ROWS, not groups. Grouping changed how the queue is drawn, not how much work is in
+  // it, and a notice that counted cards would start calling a run of six rows one piece of work.
   const started = await startedCounts(actor);
   const notice = queueNotices({
-    mineQueued: mine.length,
-    totalQueued: mine.length + others.length,
+    mineQueued: tasks.filter((t) => t.roleCode === actor.roleCode).length,
+    totalQueued: tasks.length,
     startedMine: started.mine,
     startedVisible: started.visible,
   });
+
+  /**
+   * One card, holding whatever run its row opened.
+   *
+   * One function for both lists, and the control is chosen by WHO OWNS THE ROW rather than by which
+   * list the card landed in. A group reaches "here's your work" when the actor owns the parent or
+   * any row inside it, so the two questions genuinely differ: a staff engineer sees the product
+   * owner's `epics` card in their own queue, because their technical designs are inside it, and
+   * that card still offers the product owner's way in rather than a control that is not theirs.
+   */
+  function groupCard(g: QueueGroup) {
+    const t = g.card;
+    const owned = t.roleCode === myRole;
+    const statuses = gates.get(t.id) ?? [];
+    const href = `/e/${engagement}/jobs/${t.id}?role=${t.roleCode}`;
+    return (
+      <JobCard
+        key={t.id}
+        glyph={GLYPH[t.kind] ?? "✎"}
+        title={t.title}
+        related={t.ticketKey ?? t.workflowCode ?? undefined}
+        // The owning role, on the card. Without it the queue claimed four jobs were John's.
+        meta={
+          owned
+            ? t.origin === "adhoc"
+              ? "ad-hoc"
+              : undefined
+            : holderOf(t.roleCode)
+        }
+        subtitle={t.subtitle || subtitleFor(t, g.children)}
+        reads={t.reads}
+        action={
+          owned ? (
+            <StartButton
+              taskId={t.id}
+              engagement={engagement}
+              role={myRole}
+              state={t.state}
+              executor={t.executor}
+              href={href}
+              openQuestions={t.openQuestions}
+              // A machine row is measured, not performed. Offering "Start with agent" on one
+              // hands the agent a task slug its own file does not define.
+              machine={t.stepKind === "machine"}
+              // Satisfied by a whole workflow. Pressing it opens that run — which is what it
+              // already did, without saying so.
+              nests={t.nests}
+              // A card reading "DONE 2 of 2 met" whose only control is "Open the job", on a job
+              // page with nothing to press, is the state `CT-151` sat in. What the card already
+              // shows decides what it offers.
+              doneMet={doneAllMet(statuses)}
+            />
+          ) : (
+            <a className="btn btn-secondary" href={href}>
+              Open as {holderOf(t.roleCode)}
+            </a>
+          )
+        }
+        agent={t.agentLabel ?? undefined}
+        footer={
+          <>
+            <Gate statuses={statuses} kind="ready" />
+            <Gate statuses={statuses} kind="done" />
+            {/* The work this row opened, where the row is — not as loose cards elsewhere in the
+                queue wearing, four times out of ten, the same name as this one. */}
+            <ChildRows
+              engagement={engagement}
+              actorRole={myRole}
+              rows={g.children}
+              gates={gates}
+              holderOf={holderOf}
+            />
+          </>
+        }
+      />
+    );
+  }
 
   return (
     <div className="page">
@@ -134,40 +239,7 @@ export default async function JobsPage(
           </p>
         </div>
       ) : (
-        <div className="jobs-list">
-          {mine.map((t) => (
-            <JobCard
-              key={t.id}
-              glyph={GLYPH[t.kind] ?? "✎"}
-              title={t.title}
-              related={t.ticketKey ?? t.workflowCode ?? undefined}
-              meta={t.origin === "adhoc" ? "ad-hoc" : undefined}
-              subtitle={t.subtitle || subtitleFor(t.state, t.reads.length)}
-              reads={t.reads}
-              action={
-                <StartButton
-                  taskId={t.id}
-                  engagement={engagement}
-                  role={actor.roleCode}
-                  state={t.state}
-                  executor={t.executor}
-                  href={`/e/${engagement}/jobs/${t.id}?role=${actor.roleCode}`}
-                  openQuestions={t.openQuestions}
-                  // A machine row is measured, not performed. Offering "Start with agent" on one
-                  // hands the agent a task slug its own file does not define.
-                  machine={t.stepKind === "machine"}
-                />
-              }
-              agent={t.agentLabel ?? undefined}
-              footer={
-                <>
-                  <Gate statuses={gates.get(t.id) ?? []} kind="ready" />
-                  <Gate statuses={gates.get(t.id) ?? []} kind="done" />
-                </>
-              }
-            />
-          ))}
-        </div>
+        <div className="jobs-list">{mine.map((g) => groupCard(g))}</div>
       )}
 
       {others.length > 0 && (
@@ -177,39 +249,7 @@ export default async function JobsPage(
             Not yours to do — {actor.roleLabel} sees the whole engagement. Each
             says who owns it.
           </p>
-          <div className="jobs-list">
-            {others.map((t) => (
-              <JobCard
-                key={t.id}
-                glyph={GLYPH[t.kind] ?? "✎"}
-                title={t.title}
-                related={t.ticketKey ?? t.workflowCode ?? undefined}
-                // The owning role, on the card. Without it the queue claimed four jobs were John's.
-                meta={
-                  roles.find((r) => r.code === t.roleCode)?.label ?? t.roleCode
-                }
-                subtitle={t.subtitle || subtitleFor(t.state, t.reads.length)}
-                reads={t.reads}
-                action={
-                  <a
-                    className="btn btn-secondary"
-                    href={`/e/${engagement}/jobs/${t.id}?role=${t.roleCode}`}
-                  >
-                    Open as{" "}
-                    {roles.find((r) => r.code === t.roleCode)?.holder ??
-                      t.roleCode}
-                  </a>
-                }
-                agent={t.agentLabel ?? undefined}
-                footer={
-                  <>
-                    <Gate statuses={gates.get(t.id) ?? []} kind="ready" />
-                    <Gate statuses={gates.get(t.id) ?? []} kind="done" />
-                  </>
-                }
-              />
-            ))}
-          </div>
+          <div className="jobs-list">{others.map((g) => groupCard(g))}</div>
         </section>
       )}
 
@@ -222,17 +262,37 @@ export default async function JobsPage(
   );
 }
 
-/** A card with no subtitle of its own still has to say something true. */
-function subtitleFor(state: string, readCount: number): string {
-  if (state === "idle") {
-    return readCount > 0
+/**
+ * A card with no subtitle of its own still has to say something true.
+ *
+ * A NESTING ROW IS ANSWERED FIRST, before anything is read off `state`. Deciding from state alone
+ * put "The agent is working" on a row that will never have an agent — directly above the line
+ * admitting "no agent attached yet" — and said it for the fifty minutes `CT-153` spent looking
+ * stuck while its actual work sat, unstarted, in the run it had opened.
+ */
+function subtitleFor(t: TaskCard, children: TaskCard[]): string {
+  if (t.nests) {
+    if (!children.length) {
+      // Either it has not been opened, or every row of it has closed and dropped out of the queue.
+      // The row's own state is what tells those apart — an idle row has opened nothing.
+      return t.state === "idle"
+        ? `Satisfied by the ${t.nests} workflow, not by an agent. Opening it creates its steps.`
+        : `The ${t.nests} run has finished. This row closes when its own Done criteria are met.`;
+    }
+    const open = children.filter((c) => c.state !== "closed").length;
+    return open
+      ? `The ${t.nests} run is open — ${open} of ${children.length} row${children.length === 1 ? "" : "s"} still to do, below.`
+      : `Every row of the ${t.nests} run is done. This row closes when its own Done criteria are met.`;
+  }
+  if (t.state === "idle") {
+    return t.reads.length > 0
       ? "Nothing drafted yet — the agent will read the documents below, then ask you what it can't infer."
       : "Nothing drafted yet. Starting this opens a conversation with the agent.";
   }
-  if (state === "running")
+  if (t.state === "running")
     return "The agent is working. It will stop and ask if it hits something it cannot infer.";
-  if (state === "awaiting")
+  if (t.state === "awaiting")
     return "Waiting on you — the agent asked a question it will not answer for you.";
-  if (state === "hitl") return "Drafted and waiting for approval.";
+  if (t.state === "hitl") return "Drafted and waiting for approval.";
   return "";
 }

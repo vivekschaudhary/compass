@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
 import { recordAnswers, addNote } from "@/app/lib/data/job";
 import { approve, reject } from "@/app/lib/data/gates";
+import { editSection } from "@/app/lib/data/document-edit";
 
 /** Answer the agent's questions. The write itself lives in lib/data, which owns the scope check. */
 export async function answerAction(
@@ -47,6 +48,25 @@ export async function rejectAction(
   revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
+}
+
+/**
+ * Rewrite one section of the draft, as a new version authored by this person.
+ *
+ * The point of offering this at all: the alternative is someone editing the Confluence page, where
+ * the change has no author, no version and no trail, and the next publish silently overwrites it.
+ */
+export async function editSectionAction(
+  engagement: string, role: string, taskId: string,
+  path: string, sectionId: string, body: string,
+): Promise<{ ok: boolean; error?: string; version?: string }> {
+  const actor = await resolveActor(engagement, role);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await editSection(actor, path, sectionId, body);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, version: result.version };
 }
 
 /** Add a message to the conversation. Never changes the task's state. */

@@ -4,6 +4,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
 import { expandLinks, type LinkRead } from "./links";
+import { publishToDocs } from "./publish";
 import type { Actor } from "./actor";
 
 export type Turn = {
@@ -40,7 +41,22 @@ export async function openQuestions(taskId: string): Promise<OpenQuestion[]> {
 
 export type Draft = {
   version: string; status: string;
-  sections: { id: string; heading: string; body: string; cites: { path: string; version: string }[] }[];
+  /** `human` when a person filed this version. `agent` for every version a run produced. */
+  authorKind: "agent" | "human";
+  /** Who filed it — the holder's name when a person did, null for an agent's draft. */
+  authoredBy: string | null;
+  sections: {
+    id: string; heading: string; body: string;
+    cites: { path: string; version: string }[];
+    /**
+     * A person rewrote this section's prose.
+     *
+     * Shown because the citations beneath it describe what the AGENT derived, and once a human has
+     * rewritten the text those sources no longer account for it. Provenance that reads as verified
+     * and is not is worse than none.
+     */
+    edited: boolean;
+  }[];
 };
 
 /** The live version of what this task produces, with each section's citations resolved. */
@@ -53,11 +69,11 @@ export async function draftOf(actor: Actor, path: string | null): Promise<Draft 
   if (!doc?.current_version_id) return null;
 
   const { data: v } = await sb.from("document_version")
-    .select("version, status").eq("id", doc.current_version_id).maybeSingle();
+    .select("version, status, author_kind, authored_by").eq("id", doc.current_version_id).maybeSingle();
   if (!v) return null;
 
   const { data: sections } = await sb.from("document_section")
-    .select("id, heading, body").eq("document_version_id", doc.current_version_id).order("ord");
+    .select("id, heading, body, edited").eq("document_version_id", doc.current_version_id).order("ord");
 
   const ids = (sections ?? []).map((s) => s.id);
   const { data: cites } = ids.length
@@ -75,8 +91,11 @@ export async function draftOf(actor: Actor, path: string | null): Promise<Draft 
 
   return {
     version: v.version, status: v.status,
+    authorKind: (v.author_kind as "agent" | "human") ?? "agent",
+    authoredBy: (v.authored_by as string | null) ?? null,
     sections: (sections ?? []).map((s) => ({
       id: s.id, heading: s.heading, body: s.body, cites: bySection.get(s.id) ?? [],
+      edited: s.edited === true,
     })),
   };
 }
@@ -352,11 +371,30 @@ async function fileAnswer(
 
   const { data: eng } = await sb.from("engagement").select("org_id").eq("id", actor.engagementId).maybeSingle();
 
+  // NAMED BY THE ROW, not by the question that asked for it.
+  //
+  // This used to title the document with the agent's prompt, which was the only thing to hand and
+  // harmless while nothing published. Once `fileAnswer` started publishing, a client's SOW appeared
+  // in Confluence titled "What's the Statement of Work for this engagement? Please paste the text
+  // or share a link…". The draft path has always used the row's title (`ctx.taskTitle` in
+  // `run.ts`); two filing paths had two sources for one fact and the wrong one reached the client.
+  //
+  // NULL WHEN THE DOCUMENT ALREADY EXISTS. `file_document` does `title = coalesce(p_title, title)`,
+  // so passing a title overwrites on every version — a re-supply would rename a page somebody had
+  // since titled properly. `editSection` passes the document's own title for the same reason.
+  const { data: held } = await sb.from("document")
+    .select("id").eq("engagement_id", actor.engagementId).eq("path", path).maybeSingle();
+  const { data: task } = held
+    ? { data: null }
+    : await sb.from("work_task").select("title").eq("id", taskId).maybeSingle();
+
   const { data: versionId, error } = await sb.rpc("file_document", {
     p_org_id: eng?.org_id ?? actor.orgId,
     p_engagement_id: actor.engagementId,
     p_path: path,
-    p_title: prompt.split("\n")[0].slice(0, 200),
+    // The prompt is not lost: it is on the `question` row and in the turn, which is where a
+    // question belongs. It was never the document's name.
+    p_title: held ? null : ((task?.title as string | undefined) ?? path),
     p_sections: [{ heading: "As supplied", body: text }],
     p_version: null,
     p_actor: who,
@@ -377,4 +415,26 @@ async function fileAnswer(
     actorRoleCode: actor.roleCode, actorUserId: who,
     payload: { taskId, path, source: "answer", chars: text.length, ...(source ? { url: source } : {}) },
   });
+
+  // AND PUBLISH IT. Filing puts the document in Compass; publishing is what makes it visible to
+  // everyone who does not open Compass, which `[docs-primary]` says is the point of having a doc
+  // store at all.
+  //
+  // This was missing, and the gap was invisible for a long time: only `runAgent`'s draft path
+  // published, and `fileAnswer` effectively never ran because `filesTo` rejects every bare path
+  // this seed uses (`sow`, `requirements`) — it demands `0X-folder/name`. The moment a supplied
+  // row filed a real document the hole appeared: a SOW correctly stored in Compass, its row closed,
+  // and nothing in Confluence. `published_to_docs_at` was null and `publish_error` was null too —
+  // not a failed publish, one nobody attempted.
+  //
+  // A failure is REPORTED, not thrown. The document is filed and good; what failed is the
+  // projection, and `publishToDocs` already records it on the version so it can be retried.
+  const published = await publishToDocs(actor.engagementId, versionId as string);
+  if (!published.ok) {
+    const msg =
+      `\`${path}\` is filed in Compass, but publishing it to the doc store failed: ` +
+      `${published.error}\n\nThe document is complete and versioned here; it is not yet visible ` +
+      `to anyone reading the doc store.`;
+    await writeNote(actor, taskId, msg, msg, []);
+  }
 }

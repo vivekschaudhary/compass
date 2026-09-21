@@ -1,6 +1,6 @@
 <!-- FEATURE — nested from sprint-0, and runnable on its own.
 
-     Author -> independent review -> approval by a different role. The rows below are the seed's;
+     Author -> approval by a different role. The rows below are the seed's;
      `compass/seed/workflow-steps.csv` is what executes and this is what declares it. -->
 ---
 name: feature
@@ -28,13 +28,12 @@ edge twice. See `deriveReads` in `app/app/lib/import/plan.ts`.
 | # | task | dispatch | owner | produces | depends-on |
 |---|------|----------|-------|----------|------------|
 | 1 | The feature and its targets | `agent: product-owner.draft-feature` | product-owner | `features` | — |
-| 2 | Review the feature | `agent: reviewer.review-feature` | reviewer | `feature-review` | 1 |
-| 3 | Accept the feature | `hitl` | product-manager | `—` | 2 |
+| 2 | Accept the feature | `hitl` | product-manager | `—` | 1 |
 
 ## Why it is these rows
 
-**The author does not accept it.** The product owner writes; a reviewer judges whether the targets
-could actually be measured, not whether they sound right; the product manager accepts. An agent
+**The author does not accept it.** The product owner writes; the product manager accepts, judging
+whether the targets could actually be measured rather than whether they sound right. An agent
 drafts in the product owner's name, so a product owner closing this gate would be approving its
 own work.
 
@@ -51,8 +50,8 @@ Metric is filled at authoring time — what is measured, the target, where the n
 time: both are post-launch, and requiring content would block row 1 forever. But letting them be
 absent is worse — a section that appears months later is one nobody reviewed or approved, and its
 absence at approval reads identically to a feature that was never going to be measured. So the bar
-is that they EXIST and say they are not yet due. Same rule the review row already carries: a review
-that found nothing says so explicitly rather than being an empty document.
+is that they EXIST and say they are not yet due. The same rule a review carries: finding nothing is
+said explicitly rather than left as an empty document.
 
 `measure` and `learn` (both parked, no rows) write into those sections when they are built.
 

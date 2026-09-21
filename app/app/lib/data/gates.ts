@@ -18,7 +18,13 @@ import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolvePath } from "../adapters";
 import { subjectOfRun } from "../agent/context";
-import { resolveJira, projectStatuses, searchIssues, remoteLinks, issueStatus } from "../jira";
+import {
+  resolveJira,
+  projectStatuses,
+  searchIssues,
+  remoteLinks,
+  issueStatus,
+} from "../jira";
 import { sprintJql, sprintNoOf } from "./sprint";
 import type { Actor } from "./actor";
 export { describeCriterion } from "@/app/_ui/criterion";
@@ -45,7 +51,11 @@ export type CriterionStatus = CriterionRow & { verdict: Verdict };
 
 /* ── the evaluators ──────────────────────────────────────────────────────── */
 
-async function evaluateDocument(actor: Actor, c: CriterionRow, taskId: string | null): Promise<Verdict> {
+async function evaluateDocument(
+  actor: Actor,
+  c: CriterionRow,
+  taskId: string | null,
+): Promise<Verdict> {
   const sb = supabaseAdmin();
   if (!sb) return { state: "unmeasurable", why: "no database" };
 
@@ -62,38 +72,68 @@ async function evaluateDocument(actor: Actor, c: CriterionRow, taskId: string | 
     const subject = taskId ? await subjectFor(taskId) : null;
     path = resolvePath(c.subjectRef, subject);
     if (!path) {
-      return { state: "unmeasurable", why: `${c.subjectRef} names a subject this run does not have` };
+      return {
+        state: "unmeasurable",
+        why: `${c.subjectRef} names a subject this run does not have`,
+      };
     }
   }
 
-  const { data: doc } = await sb.from("document")
+  const { data: doc } = await sb
+    .from("document")
     .select("id, current_version_id")
-    .eq("engagement_id", actor.engagementId).eq("path", path!).maybeSingle();
+    .eq("engagement_id", actor.engagementId)
+    .eq("path", path!)
+    .maybeSingle();
 
   if (!doc) {
     // A document that does not exist is genuinely not satisfied — this is a real answer, not a
     // missing one. The path was declared and nothing is there.
-    return { state: "unsatisfied", source: "compass", detail: `No document at ${path}.` };
+    return {
+      state: "unsatisfied",
+      source: "compass",
+      detail: `No document at ${path}.`,
+    };
   }
   if (!doc.current_version_id) {
-    return { state: "unsatisfied", source: "compass", detail: `${path} exists but has never been drafted.` };
+    return {
+      state: "unsatisfied",
+      source: "compass",
+      detail: `${path} exists but has never been drafted.`,
+    };
   }
 
-  const { data: v } = await sb.from("document_version")
-    .select("version, status").eq("id", doc.current_version_id).maybeSingle();
+  const { data: v } = await sb
+    .from("document_version")
+    .select("version, status")
+    .eq("id", doc.current_version_id)
+    .maybeSingle();
 
   const ok = v?.status === c.value;
   return ok
-    ? { state: "satisfied", source: "compass", detail: `${path} is ${v!.status} at v${v!.version}.` }
-    : { state: "unsatisfied", source: "compass", detail: `${path} is ${v?.status ?? "unknown"}, not ${c.value}.` };
+    ? {
+        state: "satisfied",
+        source: "compass",
+        detail: `${path} is ${v!.status} at v${v!.version}.`,
+      }
+    : {
+        state: "unsatisfied",
+        source: "compass",
+        detail: `${path} is ${v?.status ?? "unknown"}, not ${c.value}.`,
+      };
 }
 
 /** The subject of the run a task belongs to — what fills `{epic}` in that task's paths. */
-async function subjectFor(taskId: string): Promise<{ ref: string | null; key: string | null } | null> {
+async function subjectFor(
+  taskId: string,
+): Promise<{ ref: string | null; key: string | null } | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_run_id").eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select("workflow_run_id")
+    .eq("id", taskId)
+    .maybeSingle();
   return subjectOfRun((task?.workflow_run_id as string | null) ?? null);
 }
 
@@ -111,13 +151,20 @@ async function subjectFor(taskId: string): Promise<{ ref: string | null; key: st
  * The cost is that a gate check now makes a network call and can be slow or flaky. That is the
  * correct trade: a fast check that cannot fail is not a check.
  */
-async function evaluateConnector(actor: Actor, c: CriterionRow): Promise<Verdict> {
+async function evaluateConnector(
+  actor: Actor,
+  c: CriterionRow,
+): Promise<Verdict> {
   const sb = supabaseAdmin();
   if (!sb) return { state: "unmeasurable", why: "no database" };
 
-  const { data: e } = await sb.from("engagement")
-    .select("id, name, docs_provider, confluence_space, confluence_root_page_id, atlassian_base_url, atlassian_email, atlassian_api_token, teams_site, teams_root_item_id, graph_tenant_id, graph_client_id, graph_client_secret, jira_project, jira_board_id")
-    .eq("id", actor.engagementId).maybeSingle();
+  const { data: e } = await sb
+    .from("engagement")
+    .select(
+      "id, name, docs_provider, confluence_space, confluence_root_page_id, atlassian_base_url, atlassian_email, atlassian_api_token, teams_site, teams_root_item_id, graph_tenant_id, graph_client_id, graph_client_secret, jira_project, jira_board_id",
+    )
+    .eq("id", actor.engagementId)
+    .maybeSingle();
   if (!e) return { state: "unmeasurable", why: "engagement not found" };
 
   if (c.subjectRef === "docs") {
@@ -127,33 +174,66 @@ async function evaluateConnector(actor: Actor, c: CriterionRow): Promise<Verdict
     } catch (err) {
       // A network failure is not the same as a misconfigured space, and saying "not configured"
       // when the truth is "the office wifi dropped" sends someone to change settings that are fine.
-      return { state: "unmeasurable", why: `could not reach ${e.docs_provider ?? "the doc store"}: ${err instanceof Error ? err.message : String(err)}` };
+      return {
+        state: "unmeasurable",
+        why: `could not reach ${e.docs_provider ?? "the doc store"}: ${err instanceof Error ? err.message : String(err)}`,
+      };
     }
     return problem === null
-      ? { state: "satisfied", source: e.docs_provider ?? "docs", detail: `${e.docs_provider === "teams" ? "Teams site" : `Confluence space ${e.confluence_space}`} answered.` }
-      : { state: "unsatisfied", source: e.docs_provider ?? "docs", detail: problem };
+      ? {
+          state: "satisfied",
+          source: e.docs_provider ?? "docs",
+          detail: `${e.docs_provider === "teams" ? "Teams site" : `Confluence space ${e.confluence_space}`} answered.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: e.docs_provider ?? "docs",
+          detail: problem,
+        };
   }
 
   if (c.subjectRef === "tickets") {
     if (!e.jira_project) {
-      return { state: "unsatisfied", source: "compass", detail: "No tracker project is configured for this engagement." };
+      return {
+        state: "unsatisfied",
+        source: "compass",
+        detail: "No tracker project is configured for this engagement.",
+      };
     }
     const creds = resolveJira(e as Parameters<typeof resolveJira>[0]);
     if (!creds) {
-      return { state: "unsatisfied", source: "compass", detail: "No Jira credentials (base url / email / token)." };
+      return {
+        state: "unsatisfied",
+        source: "compass",
+        detail: "No Jira credentials (base url / email / token).",
+      };
     }
     let statuses: string[] | null;
     try {
       statuses = await projectStatuses(creds);
     } catch (err) {
-      return { state: "unmeasurable", why: `could not reach Jira: ${err instanceof Error ? err.message : String(err)}` };
+      return {
+        state: "unmeasurable",
+        why: `could not reach Jira: ${err instanceof Error ? err.message : String(err)}`,
+      };
     }
     return statuses
-      ? { state: "satisfied", source: "jira", detail: `Project ${e.jira_project} answered with ${statuses.length} statuses.` }
-      : { state: "unsatisfied", source: "jira", detail: `Jira did not return project ${e.jira_project} — check the key and the credentials' access to it.` };
+      ? {
+          state: "satisfied",
+          source: "jira",
+          detail: `Project ${e.jira_project} answered with ${statuses.length} statuses.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: "jira",
+          detail: `Jira did not return project ${e.jira_project} — check the key and the credentials' access to it.`,
+        };
   }
 
-  return { state: "unmeasurable", why: `no evaluator for connector '${c.subjectRef}'` };
+  return {
+    state: "unmeasurable",
+    why: `no evaluator for connector '${c.subjectRef}'`,
+  };
 }
 
 /**
@@ -170,29 +250,63 @@ async function evaluateConnector(actor: Actor, c: CriterionRow): Promise<Verdict
  * a role column; if it cannot find one, it returns UNMEASURABLE rather than passing. A parser that
  * silently finds nothing and reports success is worse than no parser at all.
  */
-async function evaluateBacklog(actor: Actor, c: CriterionRow, taskId: string | null): Promise<Verdict> {
+async function evaluateBacklog(
+  actor: Actor,
+  c: CriterionRow,
+  taskId: string | null,
+): Promise<Verdict> {
   const sb = supabaseAdmin();
-  if (!sb || !taskId) return { state: "unmeasurable", why: "no task to read a draft from" };
+  if (!sb || !taskId)
+    return { state: "unmeasurable", why: "no task to read a draft from" };
 
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id").eq("id", taskId).maybeSingle();
-  if (!task?.workflow_step_id) return { state: "unmeasurable", why: "this task produces nothing to check" };
+  const { data: task } = await sb
+    .from("work_task")
+    .select("workflow_step_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task?.workflow_step_id)
+    return {
+      state: "unmeasurable",
+      why: "this task produces nothing to check",
+    };
 
-  const { data: step } = await sb.from("workflow_step")
-    .select("produces").eq("id", task.workflow_step_id).maybeSingle();
-  if (!step?.produces) return { state: "unmeasurable", why: "this task's step declares no document" };
+  const { data: step } = await sb
+    .from("workflow_step")
+    .select("produces")
+    .eq("id", task.workflow_step_id)
+    .maybeSingle();
+  if (!step?.produces)
+    return {
+      state: "unmeasurable",
+      why: "this task's step declares no document",
+    };
 
-  const { data: doc } = await sb.from("document")
-    .select("current_version_id").eq("engagement_id", actor.engagementId).eq("path", step.produces).maybeSingle();
-  if (!doc?.current_version_id) return { state: "unmeasurable", why: "nothing has been drafted yet" };
+  const { data: doc } = await sb
+    .from("document")
+    .select("current_version_id")
+    .eq("engagement_id", actor.engagementId)
+    .eq("path", step.produces)
+    .maybeSingle();
+  if (!doc?.current_version_id)
+    return { state: "unmeasurable", why: "nothing has been drafted yet" };
 
-  const { data: sections } = await sb.from("document_section")
-    .select("heading, body").eq("document_version_id", doc.current_version_id).order("ord");
-  if (!sections?.length) return { state: "unmeasurable", why: "the draft has no sections" };
+  const { data: sections } = await sb
+    .from("document_section")
+    .select("heading, body")
+    .eq("document_version_id", doc.current_version_id)
+    .order("ord");
+  if (!sections?.length)
+    return { state: "unmeasurable", why: "the draft has no sections" };
 
   // What actually exists, to check the rows against.
-  const { data: wfs } = await sb.from("workflow").select("code").eq("org_id", actor.orgId);
-  const { data: roles } = await sb.from("role").select("code").eq("org_id", actor.orgId);
+  const { data: wfs } = await sb
+    .from("workflow")
+    .select("code")
+    .eq("org_id", actor.orgId);
+  const { data: roles } = await sb
+    .from("role")
+    .select("code")
+    .eq("org_id", actor.orgId);
   const knownWorkflows = new Set((wfs ?? []).map((w) => w.code as string));
   const knownRoles = new Set((roles ?? []).map((r) => r.code as string));
 
@@ -203,10 +317,19 @@ async function evaluateBacklog(actor: Actor, c: CriterionRow, taskId: string | n
     const lines = sec.body.split("\n");
     let cols: string[] | null = null;
     for (const line of lines) {
-      if (!line.trim().startsWith("|")) { cols = null; continue; }
-      const cells = line.split("|").slice(1, -1).map((x: string) => x.trim());
-      if (/^[\s|:-]+$/.test(line)) continue;                       // the ---|--- rule
-      if (!cols) { cols = cells.map((x: string) => x.toLowerCase()); continue; }  // header
+      if (!line.trim().startsWith("|")) {
+        cols = null;
+        continue;
+      }
+      const cells = line
+        .split("|")
+        .slice(1, -1)
+        .map((x: string) => x.trim());
+      if (/^[\s|:-]+$/.test(line)) continue; // the ---|--- rule
+      if (!cols) {
+        cols = cells.map((x: string) => x.toLowerCase());
+        continue;
+      } // header
 
       // A backlog table has BOTH a workflow column and a role column. The roster and the approval
       // block also have a role column, and matching on "either" pulled their rows in as backlog
@@ -221,7 +344,9 @@ async function evaluateBacklog(actor: Actor, c: CriterionRow, taskId: string | n
 
       rows.push({
         // `\`plan-kickoff\` (1 step)` or `create-epics — **STEPS UNSPECIFIED**`
-        workflow: (wfCell.match(/`([a-z0-9-]+)`/) ?? wfCell.match(/^([a-z0-9-]+)/))?.[1] ?? null,
+        workflow:
+          (wfCell.match(/`([a-z0-9-]+)`/) ??
+            wfCell.match(/^([a-z0-9-]+)/))?.[1] ?? null,
         // `delivery-manager — John`
         role: (roleCell.match(/^\**([a-z-]+)/) ?? [])[1] ?? null,
         stage: sec.heading,
@@ -230,38 +355,67 @@ async function evaluateBacklog(actor: Actor, c: CriterionRow, taskId: string | n
   }
 
   if (!rows.length) {
-    return { state: "unmeasurable", why: "no table with a workflow and role column was found in the draft" };
+    return {
+      state: "unmeasurable",
+      why: "no table with a workflow and role column was found in the draft",
+    };
   }
 
   if (c.subjectRef === "workflow") {
-    const bad = rows.filter((r) => !r.workflow || !knownWorkflows.has(r.workflow));
+    const bad = rows.filter(
+      (r) => !r.workflow || !knownWorkflows.has(r.workflow),
+    );
     return bad.length === 0
-      ? { state: "satisfied", source: "compass", detail: `All ${rows.length} rows name a workflow that exists.` }
-      : { state: "unsatisfied", source: "compass",
-          detail: `${bad.length} of ${rows.length} rows name no known workflow: ${[...new Set(bad.map((b) => b.workflow ?? "(blank)"))].join(", ")}.` };
+      ? {
+          state: "satisfied",
+          source: "compass",
+          detail: `All ${rows.length} rows name a workflow that exists.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: "compass",
+          detail: `${bad.length} of ${rows.length} rows name no known workflow: ${[...new Set(bad.map((b) => b.workflow ?? "(blank)"))].join(", ")}.`,
+        };
   }
 
   if (c.subjectRef === "owner") {
     const bad = rows.filter((r) => !r.role || !knownRoles.has(r.role));
     return bad.length === 0
-      ? { state: "satisfied", source: "compass", detail: `All ${rows.length} rows name a role that exists.` }
-      : { state: "unsatisfied", source: "compass",
-          detail: `${bad.length} of ${rows.length} rows name no known role: ${[...new Set(bad.map((b) => b.role ?? "(blank)"))].join(", ")}.` };
+      ? {
+          state: "satisfied",
+          source: "compass",
+          detail: `All ${rows.length} rows name a role that exists.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: "compass",
+          detail: `${bad.length} of ${rows.length} rows name no known role: ${[...new Set(bad.map((b) => b.role ?? "(blank)"))].join(", ")}.`,
+        };
   }
 
   if (c.subjectRef === "stage") {
     const staged = /pre-?sprint\s*0|sprint\s*0/i;
     const bad = rows.filter((r) => !staged.test(r.stage));
     return bad.length === 0
-      ? { state: "satisfied", source: "compass", detail: `All ${rows.length} rows sit under a Pre-Sprint 0 or Sprint 0 heading.` }
-      : { state: "unsatisfied", source: "compass",
-          detail: `${bad.length} rows are under headings that name neither stage: ${[...new Set(bad.map((b) => b.stage))].join("; ")}.` };
+      ? {
+          state: "satisfied",
+          source: "compass",
+          detail: `All ${rows.length} rows sit under a Pre-Sprint 0 or Sprint 0 heading.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: "compass",
+          detail: `${bad.length} rows are under headings that name neither stage: ${[...new Set(bad.map((b) => b.stage))].join("; ")}.`,
+        };
   }
 
   // "Uncovered scope is named" is deliberately NOT computed. A section that exists and says
   // "nothing uncovered" would pass a presence check while being false, and only someone who knows
   // the engagement can tell. That one stays a person's to confirm.
-  return { state: "unmeasurable", why: `judgment — a person decides '${c.subjectRef}'` };
+  return {
+    state: "unmeasurable",
+    why: `judgment — a person decides '${c.subjectRef}'`,
+  };
 }
 
 /**
@@ -270,18 +424,35 @@ async function evaluateBacklog(actor: Actor, c: CriterionRow, taskId: string | n
  * Anything without an evaluator is UNMEASURABLE, and says which subject it needed. That list is
  * itself useful: it is exactly what has to be wired next for a gate to stop being decorative.
  */
-export async function evaluate(actor: Actor, c: CriterionRow, taskId: string | null = null): Promise<Verdict> {
+export async function evaluate(
+  actor: Actor,
+  c: CriterionRow,
+  taskId: string | null = null,
+): Promise<Verdict> {
   if (!c.subjectKind) {
-    return { state: "unmeasurable", why: "judgment — a person decides this one" };
+    return {
+      state: "unmeasurable",
+      why: "judgment — a person decides this one",
+    };
   }
   switch (c.subjectKind) {
-    case "document": return evaluateDocument(actor, c, taskId);
-    case "connector": return evaluateConnector(actor, c);
-    case "ticket": return evaluateTicket(actor, c, taskId);
-    case "backlog": return evaluateBacklog(actor, c, taskId);
-    case "nested": return evaluateNested(c, taskId);
-    case "roster": return { state: "unmeasurable", why: "no roster evaluator yet" };
-    default: return { state: "unmeasurable", why: `no evaluator for '${c.subjectKind}'` };
+    case "document":
+      return evaluateDocument(actor, c, taskId);
+    case "connector":
+      return evaluateConnector(actor, c);
+    case "ticket":
+      return evaluateTicket(actor, c, taskId);
+    case "backlog":
+      return evaluateBacklog(actor, c, taskId);
+    case "nested":
+      return evaluateNested(c, taskId);
+    case "roster":
+      return { state: "unmeasurable", why: "no roster evaluator yet" };
+    default:
+      return {
+        state: "unmeasurable",
+        why: `no evaluator for '${c.subjectKind}'`,
+      };
   }
 }
 
@@ -298,8 +469,15 @@ export async function evaluate(actor: Actor, c: CriterionRow, taskId: string | n
  * useless — it is the aggregate-over-zero-rows trap, and it would let the row close before anyone
  * pressed Start.
  */
-async function evaluateNested(c: CriterionRow, taskId: string | null): Promise<Verdict> {
-  if (!taskId) return { state: "unmeasurable", why: "not a row of a run, so nothing nests under it" };
+async function evaluateNested(
+  c: CriterionRow,
+  taskId: string | null,
+): Promise<Verdict> {
+  if (!taskId)
+    return {
+      state: "unmeasurable",
+      why: "not a row of a run, so nothing nests under it",
+    };
   const sb = supabaseAdmin();
   if (!sb) return { state: "unmeasurable", why: "no database" };
 
@@ -308,15 +486,23 @@ async function evaluateNested(c: CriterionRow, taskId: string | null): Promise<V
     await sb.from("workflow_run").select("state").eq("parent_task_id", taskId),
   );
   if (!runs?.length) {
-    return { state: "unmeasurable", why: `no ${c.subjectRef ?? "nested"} run has been opened yet` };
+    return {
+      state: "unmeasurable",
+      why: `no ${c.subjectRef ?? "nested"} run has been opened yet`,
+    };
   }
 
   const open = runs.filter((r) => r.state !== "closed").length;
   const what = c.subjectRef ?? "nested";
   return open === 0
-    ? { state: "satisfied", source: "compass", detail: `All ${runs.length} ${what} run(s) closed.` }
+    ? {
+        state: "satisfied",
+        source: "compass",
+        detail: `All ${runs.length} ${what} run(s) closed.`,
+      }
     : {
-        state: "unsatisfied", source: "compass",
+        state: "unsatisfied",
+        source: "compass",
         detail: `${open} of ${runs.length} ${what} run(s) still open.`,
       };
 }
@@ -329,45 +515,81 @@ async function evaluateNested(c: CriterionRow, taskId: string | null): Promise<V
  * the checks ran and were green. Asking Jira what is on the issue rather than trusting the write
  * that put it there — a gate that reads back its own call is measuring itself.
  */
-async function evaluateStoryTicket(actor: Actor, c: CriterionRow, taskId: string): Promise<Verdict> {
+async function evaluateStoryTicket(
+  actor: Actor,
+  c: CriterionRow,
+  taskId: string,
+): Promise<Verdict> {
   const sb = supabaseAdmin();
   if (!sb) return { state: "unmeasurable", why: "no database" };
 
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_run_id").eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select("workflow_run_id")
+    .eq("id", taskId)
+    .maybeSingle();
   const { data: run } = task?.workflow_run_id
-    ? await sb.from("workflow_run").select("subject_key").eq("id", task.workflow_run_id).maybeSingle()
+    ? await sb
+        .from("workflow_run")
+        .select("subject_key")
+        .eq("id", task.workflow_run_id)
+        .maybeSingle()
     : { data: null };
   const key = (run?.subject_key as string | null) ?? null;
   if (!key) {
     // Not unsatisfied: a run with no story is misconfigured, not a build that failed. Blaming the
     // engineer for it would send someone to read a diff that was never produced.
-    return { state: "unmeasurable", why: "this run has no story on the tracker to read" };
+    return {
+      state: "unmeasurable",
+      why: "this run has no story on the tracker to read",
+    };
   }
 
-  const { data: eng } = await sb.from("engagement")
-    .select("jira_project, atlassian_base_url, atlassian_email, atlassian_api_token")
-    .eq("id", actor.engagementId).maybeSingle();
+  const { data: eng } = await sb
+    .from("engagement")
+    .select(
+      "jira_project, atlassian_base_url, atlassian_email, atlassian_api_token",
+    )
+    .eq("id", actor.engagementId)
+    .maybeSingle();
   const creds = eng ? resolveJira(eng) : null;
-  if (!creds) return { state: "unmeasurable", why: "no Jira is configured for this engagement" };
+  if (!creds)
+    return {
+      state: "unmeasurable",
+      why: "no Jira is configured for this engagement",
+    };
 
   if (c.subjectRef === "pr-linked") {
     const links = await remoteLinks(creds, key);
     // Null is "could not look", which is not "found none". Collapsing them would report a missing
     // pull request during an outage.
-    if (links === null) return { state: "unmeasurable", why: `${key} could not be read` };
+    if (links === null)
+      return { state: "unmeasurable", why: `${key} could not be read` };
     const prs = links.filter((l) => /\/pull\/\d+/.test(l.url));
     return prs.length
-      ? { state: "satisfied", source: "tracker", detail: `${key} links ${prs.length} pull request(s): ${prs.map((p) => p.url).join(", ")}.` }
-      : { state: "unsatisfied", source: "tracker", detail: `${key} has no pull request linked — nothing shipped.` };
+      ? {
+          state: "satisfied",
+          source: "tracker",
+          detail: `${key} links ${prs.length} pull request(s): ${prs.map((p) => p.url).join(", ")}.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: "tracker",
+          detail: `${key} has no pull request linked — nothing shipped.`,
+        };
   }
 
   const status = await issueStatus(creds, key);
-  if (status === null) return { state: "unmeasurable", why: `${key} could not be read` };
+  if (status === null)
+    return { state: "unmeasurable", why: `${key} could not be read` };
   const want = (c.value ?? "Done").toLowerCase();
   return status.toLowerCase() === want
     ? { state: "satisfied", source: "tracker", detail: `${key} is ${status}.` }
-    : { state: "unsatisfied", source: "tracker", detail: `${key} is ${status}, not ${c.value ?? "Done"}.` };
+    : {
+        state: "unsatisfied",
+        source: "tracker",
+        detail: `${key} is ${status}, not ${c.value ?? "Done"}.`,
+      };
 }
 
 /* ── reading the criteria that apply to a task ───────────────────────────── */
@@ -384,30 +606,53 @@ export async function criteriaForTask(taskId: string): Promise<CriterionRow[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
 
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)")
-    .eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select(
+      "workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)",
+    )
+    .eq("id", taskId)
+    .maybeSingle();
   if (!task) return [];
 
-  const run = task.workflow_run as unknown as { workflow_version_id: string } | { workflow_version_id: string }[] | null;
-  const versionId = Array.isArray(run) ? run[0]?.workflow_version_id : run?.workflow_version_id;
+  const run = task.workflow_run as unknown as
+    | { workflow_version_id: string }
+    | { workflow_version_id: string }[]
+    | null;
+  const versionId = Array.isArray(run)
+    ? run[0]?.workflow_version_id
+    : run?.workflow_version_id;
   if (!versionId) return [];
 
   let stepTask: string | null = null;
   if (task.workflow_step_id) {
-    const { data: step } = await sb.from("workflow_step").select("task").eq("id", task.workflow_step_id).maybeSingle();
+    const { data: step } = await sb
+      .from("workflow_step")
+      .select("task")
+      .eq("id", task.workflow_step_id)
+      .maybeSingle();
     stepTask = step?.task ?? null;
   }
 
-  const { data } = await sb.from("criterion")
-    .select("id, kind, step_task, statement, subject_kind, subject_ref, operator, value")
-    .eq("workflow_version_id", versionId).order("ord");
+  const { data } = await sb
+    .from("criterion")
+    .select(
+      "id, kind, step_task, statement, subject_kind, subject_ref, operator, value",
+    )
+    .eq("workflow_version_id", versionId)
+    .order("ord");
 
   return (data ?? [])
     .filter((c) => c.step_task === null || c.step_task === stepTask)
     .map((c) => ({
-      id: c.id, kind: c.kind, stepTask: c.step_task, statement: c.statement,
-      subjectKind: c.subject_kind, subjectRef: c.subject_ref, operator: c.operator, value: c.value,
+      id: c.id,
+      kind: c.kind,
+      stepTask: c.step_task,
+      statement: c.statement,
+      subjectKind: c.subject_kind,
+      subjectRef: c.subject_ref,
+      operator: c.operator,
+      value: c.value,
     }));
 }
 
@@ -419,19 +664,27 @@ export async function criteriaForTask(taskId: string): Promise<CriterionRow[]> {
  * instead of implying live truth. Unmeasurable criteria write nothing: the absence of a row IS
  * the unknown.
  */
-export async function measureTask(actor: Actor, taskId: string): Promise<CriterionStatus[]> {
+export async function measureTask(
+  actor: Actor,
+  taskId: string,
+): Promise<CriterionStatus[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
-
   const criteria = await criteriaForTask(taskId);
   const out: CriterionStatus[] = [];
-
   // What the log already believes. This runs on every page render, so emitting a line per criterion
   // per look would bury the record in polling noise — an audit log records CHANGES, not checks that
   // came back the same. Only a verdict that moved is news.
-  const { data: before } = await sb.from("measurement")
-    .select("criterion_id, satisfied").eq("task_id", taskId);
-  const previously = new Map((before ?? []).map((m) => [m.criterion_id as string, m.satisfied as boolean]));
+  const { data: before } = await sb
+    .from("measurement")
+    .select("criterion_id, satisfied")
+    .eq("task_id", taskId);
+  const previously = new Map(
+    (before ?? []).map((m) => [
+      m.criterion_id as string,
+      m.satisfied as boolean,
+    ]),
+  );
 
   for (const c of criteria) {
     const verdict = await evaluate(actor, c, taskId);
@@ -440,34 +693,59 @@ export async function measureTask(actor: Actor, taskId: string): Promise<Criteri
 
     if (verdict.state === "unmeasurable") {
       // Clear any stale measurement rather than leaving yesterday's answer standing.
-      await sb.from("measurement").delete().eq("task_id", taskId).eq("criterion_id", c.id);
+      await sb
+        .from("measurement")
+        .delete()
+        .eq("task_id", taskId)
+        .eq("criterion_id", c.id);
       // Losing the ability to check something IS news — "we could no longer verify this" must
       // never read the same as "we never tried".
       if (was !== undefined) {
         await emit({
-          engagementId: actor.engagementId, subjectType: "criterion", subjectId: c.id,
-          verb: "criterion.unmeasurable", actorKind: "system", actorRoleCode: actor.roleCode,
-          payload: { taskId, statement: c.statement, kind: c.kind, why: verdict.why, previously: was },
+          engagementId: actor.engagementId,
+          subjectType: "criterion",
+          subjectId: c.id,
+          verb: "criterion.unmeasurable",
+          actorKind: "system",
+          actorRoleCode: actor.roleCode,
+          payload: {
+            taskId,
+            statement: c.statement,
+            kind: c.kind,
+            why: verdict.why,
+            previously: was,
+          },
         });
       }
       continue;
     }
-    await sb.from("measurement").upsert({
-      task_id: taskId, criterion_id: c.id,
-      satisfied: verdict.state === "satisfied",
-      measured_at: new Date().toISOString(),
-      source: verdict.source, detail: verdict.detail,
-    }, { onConflict: "task_id,criterion_id" });
+    await sb.from("measurement").upsert(
+      {
+        task_id: taskId,
+        criterion_id: c.id,
+        satisfied: verdict.state === "satisfied",
+        measured_at: new Date().toISOString(),
+        source: verdict.source,
+        detail: verdict.detail,
+      },
+      { onConflict: "task_id,criterion_id" },
+    );
 
     const now = verdict.state === "satisfied";
     if (was !== now) {
       await emit({
-        engagementId: actor.engagementId, subjectType: "criterion", subjectId: c.id,
+        engagementId: actor.engagementId,
+        subjectType: "criterion",
+        subjectId: c.id,
         verb: now ? "criterion.met" : "criterion.unmet",
-        actorKind: "system", actorRoleCode: actor.roleCode,
+        actorKind: "system",
+        actorRoleCode: actor.roleCode,
         payload: {
-          taskId, statement: c.statement, kind: c.kind,
-          source: verdict.source, detail: verdict.detail,
+          taskId,
+          statement: c.statement,
+          kind: c.kind,
+          source: verdict.source,
+          detail: verdict.detail,
           previously: was ?? null,
         },
       });
@@ -495,14 +773,201 @@ export async function measureTask(actor: Actor, taskId: string): Promise<Criteri
  * (`measureTask` clears a measurement it can no longer evaluate), and a finished row would start
  * reading unfinished.
  */
-export async function remeasureRun(actor: Actor, runId: string): Promise<void> {
+export async function remeasureRun(
+  actor: Actor,
+  runId: string,
+  depth = 0,
+): Promise<void> {
   const sb = supabaseAdmin();
   if (!sb) return;
 
-  const open = must("read the run's rows to re-measure them", await sb.from("work_task")
-    .select("id, state").eq("workflow_run_id", runId).neq("state", "closed"));
+  const open = must(
+    "read the run's rows to re-measure them",
+    await sb
+      .from("work_task")
+      .select("id, state")
+      .eq("workflow_run_id", runId)
+      .neq("state", "closed"),
+  );
 
-  for (const t of open ?? []) await measureTask(actor, t.id as string);
+  for (const t of open ?? []) {
+    await measureTask(actor, t.id as string);
+
+    // THE RETRY. Measuring is not the end of the story for a nesting row: the database already
+    // tried to close it when its child run closed, and could only have failed. See
+    // `closeNestingRowIfSatisfied` — the attempt happens inside the child's transaction, before the
+    // measurements this very loop is writing exist.
+    const closed = await closeNestingRowIfSatisfied(actor, t.id as string);
+    if (!closed.closed) continue;
+
+    // One hop up, and only up. Closing this row may have closed the run that holds it, which fires
+    // the same trigger on ITS parent with the same stale measurements — so the cascade has to be
+    // walked here or it stops one level short.
+    if (depth >= MAX_CASCADE) {
+      // A halt with a name on it. Deeper than this and something is wrong with the shape of the
+      // nesting, not with the timing, and a silent stop would leave a row open with no record of
+      // why nobody tried to close it.
+      await emitRefusal({
+        engagementId: actor.engagementId,
+        subjectType: "task",
+        subjectId: t.id as string,
+        verb: "task.close_cascade_capped",
+        actorRoleCode: actor.roleCode,
+        reason: `Stopped walking up after ${MAX_CASCADE} levels of nesting.`,
+        payload: { runId, depth },
+      });
+      continue;
+    }
+    const up = await parentRunOf(runId);
+    if (up) await remeasureRun(actor, up, depth + 1);
+  }
+}
+
+/** How far a close may cascade upward. Nesting is two or three deep; ten is a cycle, not a graph. */
+const MAX_CASCADE = 5;
+
+/**
+ * Close a row that a finished child run has satisfied — the retry the database cannot do itself.
+ *
+ * `close_parent_task_when_child_run_closes` calls `close_task` from inside the CHILD's transaction,
+ * and `close_task` does not measure anything: it reads `measurement` rows. Those are written here,
+ * in Node, by connectors that talk to Confluence and Jira — and they run AFTER the close returns.
+ * So the trigger can only ever see measurements taken before the child closed, which for a row
+ * whose Done gate depends on what the child produced is guaranteed to be the stale answer. On the
+ * live engagement the trigger refused at 18:57:55 with "timeline is published (not met: No document
+ * at timeline)" and the re-measure wrote "timeline is published at v1.0" five seconds later. The
+ * trigger's attempt is the optimistic first try; this is the one that can actually see the world.
+ *
+ * ONLY NESTING ROWS. An ordinary row's Done gate going green is not permission to close it — that
+ * is the HITL gate, and a person presses it. A nesting row is different in kind: it has no draft of
+ * its own and no reviewer, because every row of its child run carried its own gate and its own
+ * approval. Nobody is being bypassed; there was never anybody there.
+ *
+ * Returns whether it closed anything — so `remeasureRun` knows whether to look further up, and so
+ * the button a person presses can say what stopped it rather than going quiet.
+ */
+export type NestedClose = { closed: true } | { closed: false; why: string };
+
+export async function closeNestingRowIfSatisfied(
+  actor: Actor,
+  taskId: string,
+): Promise<NestedClose> {
+  const no = (why: string): NestedClose => ({ closed: false, why });
+
+  const sb = supabaseAdmin();
+  if (!sb) return no("Supabase is not configured.");
+
+  const { data: task } = await sb
+    .from("work_task")
+    .select("id, state, role_code, workflow_step_id, workflow_run_id")
+    .eq("id", taskId)
+    .eq("engagement_id", actor.engagementId)
+    .maybeSingle();
+  if (!task) return no("That task is not in your engagement.");
+  if (task.state === "closed") return no("That row is already closed.");
+  // `idle` is not a candidate: `close_task` refuses a row that never started, and rightly — there
+  // is nothing to approve. Only a row someone opened a run from can be finished by one closing.
+  if (task.state === "idle")
+    return no("That row has not been started, so there is nothing to finish.");
+
+  if (!task.workflow_step_id)
+    return no("That row is ad-hoc — it nests no workflow.");
+  const { data: step } = await sb
+    .from("workflow_step")
+    .select("nests_workflow_code")
+    .eq("id", task.workflow_step_id)
+    .maybeSingle();
+  const nests = (step?.nests_workflow_code as string | null) ?? null;
+  if (!nests)
+    return no("That row is not satisfied by a nested workflow — approve it.");
+
+  // The child run has to exist AND be finished. An aggregate over zero rows is the classic false
+  // green: with no runs at all "every run has closed" is vacuously true, and this would close a
+  // nesting row whose work had never been opened.
+  const { data: runs } = await sb
+    .from("workflow_run")
+    .select("id, state")
+    .eq("parent_task_id", taskId);
+  const children = runs ?? [];
+  if (!children.length) return no(`No ${nests} run has been opened yet.`);
+  if (children.some((r) => r.state !== "closed"))
+    return no(`The ${nests} run is still open.`);
+
+  // Every Done criterion, measured and satisfied. Same set `close_task` will check — asking here
+  // first is what keeps a doomed attempt out of the log and off the tracker.
+  const done = (await criteriaForTask(taskId)).filter((c) => c.kind === "done");
+  if (done.length) {
+    const { data: ms } = await sb
+      .from("measurement")
+      .select("criterion_id, satisfied")
+      .eq("task_id", taskId);
+    const met = new Set(
+      (ms ?? []).filter((m) => m.satisfied).map((m) => m.criterion_id as string),
+    );
+    const unmet = done.filter((c) => !met.has(c.id));
+    // Named, not counted. "2 criteria are not met" sends someone hunting for which two.
+    if (unmet.length)
+      return no(
+        `Not done:\n  ${unmet.map((c) => c.statement).join("\n  ")}`,
+      );
+  }
+
+  // The board closes first, for the reason `approve` states: the tracker holds the status of
+  // record, and closing here while Jira still reads In Progress gives two answers with no arbiter.
+  const moved = await mirrorState(
+    actor.engagementId,
+    taskId,
+    "closed",
+    actor.roleCode,
+  );
+  if (moveFailed(moved)) {
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task",
+      subjectId: taskId,
+      verb: "task.close_blocked_by_tracker",
+      actorRoleCode: actor.roleCode,
+      reason: moved.note ?? "The tracker refused to close this.",
+      payload: { ticket: moved.key ?? null, nests },
+    });
+    return no(moved.note ?? "The tracker refused to close this.");
+  }
+
+  const { error } = await sb.rpc("close_task", {
+    p_task_id: taskId,
+    p_actor: "system",
+    p_actor_role: (task.role_code as string) ?? actor.roleCode,
+  });
+  if (error) {
+    // The gate said no after the ticket moved. Put it back, exactly as `approve` does — the board
+    // must not read Done for a row Compass will not close.
+    if (moved.ok)
+      await mirrorState(actor.engagementId, taskId, "hitl", actor.roleCode);
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task",
+      subjectId: taskId,
+      verb: "task.child_run_closed_gate_not_met",
+      actorRoleCode: actor.roleCode,
+      reason: error.message,
+      payload: { nests, retried: true, ticketReturned: moved.ok },
+    });
+    return no(error.message);
+  }
+
+  // The verb the trigger uses when it succeeds. Same fact, later — and `actorKind: "system"` is the
+  // honest part: `close_task` writes its own `task.closed` as a human because its actor kind is
+  // hardcoded, and nobody pressed anything here.
+  await emit({
+    engagementId: actor.engagementId,
+    subjectType: "task",
+    subjectId: taskId,
+    verb: "task.satisfied_by_child_run",
+    actorKind: "system",
+    actorRoleCode: actor.roleCode,
+    payload: { nests, runs: children.map((r) => r.id), retried: true },
+  });
+  return { closed: true };
 }
 
 /**
@@ -515,12 +980,18 @@ async function parentRunOf(runId: string): Promise<string | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
 
-  const { data: run } = await sb.from("workflow_run")
-    .select("parent_task_id").eq("id", runId).maybeSingle();
+  const { data: run } = await sb
+    .from("workflow_run")
+    .select("parent_task_id")
+    .eq("id", runId)
+    .maybeSingle();
   if (!run?.parent_task_id) return null;
 
-  const { data: parent } = await sb.from("work_task")
-    .select("workflow_run_id").eq("id", run.parent_task_id).maybeSingle();
+  const { data: parent } = await sb
+    .from("work_task")
+    .select("workflow_run_id")
+    .eq("id", run.parent_task_id)
+    .maybeSingle();
   return (parent?.workflow_run_id as string | null) ?? null;
 }
 
@@ -533,14 +1004,15 @@ export function tally(statuses: CriterionStatus[], kind: "ready" | "done") {
     unsatisfied: mine.filter((s) => s.verdict.state === "unsatisfied").length,
     unmeasurable: mine.filter((s) => s.verdict.state === "unmeasurable").length,
     /** Only true when every one of them was actually checked and passed. */
-    passes: mine.length > 0 && mine.every((s) => s.verdict.state === "satisfied"),
+    passes:
+      mine.length > 0 && mine.every((s) => s.verdict.state === "satisfied"),
   };
 }
 
 /* ── reading what was already measured ───────────────────────────────────── */
 
 export type StoredStatus = CriterionRow & {
-  satisfied: boolean | null;          // null = never checked
+  satisfied: boolean | null; // null = never checked
   measuredAt: string | null;
   source: string | null;
   detail: string | null;
@@ -556,37 +1028,69 @@ export type StoredStatus = CriterionRow & {
  *
  * Batched across tasks: a card list would otherwise be two queries per card.
  */
-export async function storedStatusFor(taskIds: string[]): Promise<Map<string, StoredStatus[]>> {
+export async function storedStatusFor(
+  taskIds: string[],
+): Promise<Map<string, StoredStatus[]>> {
   const out = new Map<string, StoredStatus[]>();
   const sb = supabaseAdmin();
   if (!sb || taskIds.length === 0) return out;
 
-  const { data: tasks } = await sb.from("work_task")
-    .select("id, workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)").in("id", taskIds);
+  const { data: tasks } = await sb
+    .from("work_task")
+    .select(
+      "id, workflow_step_id, workflow_run!work_task_workflow_run_id_fkey(workflow_version_id)",
+    )
+    .in("id", taskIds);
 
   const { data: steps } = await sb.from("workflow_step").select("id, task");
   const taskOf = new Map((steps ?? []).map((s) => [s.id, s.task as string]));
 
-  const versionIds = [...new Set((tasks ?? []).map((t) => {
-    const r = t.workflow_run as unknown as { workflow_version_id: string } | { workflow_version_id: string }[] | null;
-    return Array.isArray(r) ? r[0]?.workflow_version_id : r?.workflow_version_id;
-  }).filter(Boolean))] as string[];
+  const versionIds = [
+    ...new Set(
+      (tasks ?? [])
+        .map((t) => {
+          const r = t.workflow_run as unknown as
+            | { workflow_version_id: string }
+            | { workflow_version_id: string }[]
+            | null;
+          return Array.isArray(r)
+            ? r[0]?.workflow_version_id
+            : r?.workflow_version_id;
+        })
+        .filter(Boolean),
+    ),
+  ] as string[];
 
   const { data: criteria } = versionIds.length
-    ? await sb.from("criterion")
-        .select("id, workflow_version_id, kind, step_task, statement, subject_kind, subject_ref, operator, value, ord")
-        .in("workflow_version_id", versionIds).order("ord")
+    ? await sb
+        .from("criterion")
+        .select(
+          "id, workflow_version_id, kind, step_task, statement, subject_kind, subject_ref, operator, value, ord",
+        )
+        .in("workflow_version_id", versionIds)
+        .order("ord")
     : { data: [] };
 
-  const { data: measurements } = await sb.from("measurement")
-    .select("task_id, criterion_id, satisfied, measured_at, source, detail").in("task_id", taskIds);
+  const { data: measurements } = await sb
+    .from("measurement")
+    .select("task_id, criterion_id, satisfied, measured_at, source, detail")
+    .in("task_id", taskIds);
   const key = (t: string, c: string) => `${t}:${c}`;
-  const measured = new Map((measurements ?? []).map((m) => [key(m.task_id, m.criterion_id), m]));
+  const measured = new Map(
+    (measurements ?? []).map((m) => [key(m.task_id, m.criterion_id), m]),
+  );
 
   for (const t of tasks ?? []) {
-    const r = t.workflow_run as unknown as { workflow_version_id: string } | { workflow_version_id: string }[] | null;
-    const versionId = Array.isArray(r) ? r[0]?.workflow_version_id : r?.workflow_version_id;
-    const stepTask = t.workflow_step_id ? taskOf.get(t.workflow_step_id) ?? null : null;
+    const r = t.workflow_run as unknown as
+      | { workflow_version_id: string }
+      | { workflow_version_id: string }[]
+      | null;
+    const versionId = Array.isArray(r)
+      ? r[0]?.workflow_version_id
+      : r?.workflow_version_id;
+    const stepTask = t.workflow_step_id
+      ? (taskOf.get(t.workflow_step_id) ?? null)
+      : null;
 
     const mine = (criteria ?? [])
       .filter((c) => c.workflow_version_id === versionId)
@@ -594,10 +1098,18 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
       .map((c): StoredStatus => {
         const m = measured.get(key(t.id, c.id));
         return {
-          id: c.id, kind: c.kind, stepTask: c.step_task, statement: c.statement,
-          subjectKind: c.subject_kind, subjectRef: c.subject_ref, operator: c.operator, value: c.value,
+          id: c.id,
+          kind: c.kind,
+          stepTask: c.step_task,
+          statement: c.statement,
+          subjectKind: c.subject_kind,
+          subjectRef: c.subject_ref,
+          operator: c.operator,
+          value: c.value,
           satisfied: m ? m.satisfied : null,
-          measuredAt: m?.measured_at ?? null, source: m?.source ?? null, detail: m?.detail ?? null,
+          measuredAt: m?.measured_at ?? null,
+          source: m?.source ?? null,
+          detail: m?.detail ?? null,
         };
       });
 
@@ -605,7 +1117,6 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
   }
   return out;
 }
-
 
 /* ── approving: a person as the evaluator ────────────────────────────────── */
 
@@ -623,16 +1134,23 @@ export async function storedStatusFor(taskIds: string[]): Promise<Map<string, St
  * database refuses the close — the person does not have to remember what they skipped.
  */
 export async function approve(
-  actor: Actor, taskId: string, confirmed: string[],
+  actor: Actor,
+  taskId: string,
+  confirmed: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
   // The run comes back with the task because the close has to re-measure the rows it unblocks, and
   // asking again afterwards would be a second round-trip for something already in hand.
-  const { data: task } = await sb.from("work_task")
-    .select("id, workflow_run_id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
-  if (!task) return { ok: false, error: "That task is not in your engagement." };
+  const { data: task } = await sb
+    .from("work_task")
+    .select("id, workflow_run_id")
+    .eq("id", taskId)
+    .eq("engagement_id", actor.engagementId)
+    .maybeSingle();
+  if (!task)
+    return { ok: false, error: "That task is not in your engagement." };
 
   const runId = task.workflow_run_id as string | null;
   const parentRunId = runId ? await parentRunOf(runId) : null;
@@ -644,32 +1162,50 @@ export async function approve(
   // What a CHECK established stays the check's. Overwriting it with "Confirmed by <name>" put a
   // person's signature on seventeen rows a script verified — the record then says they personally
   // checked something they never looked at, which is worse than no record.
-  const { data: existing } = await sb.from("measurement")
-    .select("criterion_id, source, satisfied").eq("task_id", taskId);
-  const machineMet = new Set((existing ?? [])
-    .filter((m) => m.satisfied && m.source !== "human")
-    .map((m) => m.criterion_id as string));
+  const { data: existing } = await sb
+    .from("measurement")
+    .select("criterion_id, source, satisfied")
+    .eq("task_id", taskId);
+  const machineMet = new Set(
+    (existing ?? [])
+      .filter((m) => m.satisfied && m.source !== "human")
+      .map((m) => m.criterion_id as string),
+  );
 
   for (const c of done) {
     if (machineMet.has(c.id)) continue;
     if (!confirmed.includes(c.id)) {
       // Not confirmed is not "failed" — it is unmeasured, and the gate treats it as such. Writing
       // satisfied:false here would say the person checked and rejected it, which they did not.
-      await sb.from("measurement").delete().eq("task_id", taskId).eq("criterion_id", c.id);
+      await sb
+        .from("measurement")
+        .delete()
+        .eq("task_id", taskId)
+        .eq("criterion_id", c.id);
       continue;
     }
-    await sb.from("measurement").upsert({
-      task_id: taskId, criterion_id: c.id, satisfied: true,
-      measured_at: new Date().toISOString(),
-      source: "human", detail: `Confirmed by ${who}.`,
-    }, { onConflict: "task_id,criterion_id" });
+    await sb.from("measurement").upsert(
+      {
+        task_id: taskId,
+        criterion_id: c.id,
+        satisfied: true,
+        measured_at: new Date().toISOString(),
+        source: "human",
+        detail: `Confirmed by ${who}.`,
+      },
+      { onConflict: "task_id,criterion_id" },
+    );
 
     // A person putting their name to something a machine could not check is the single most
     // consequential act in the system. It was previously invisible in the log.
     await emit({
-      engagementId: actor.engagementId, subjectType: "criterion", subjectId: c.id,
-      verb: "criterion.attested", actorKind: "human",
-      actorRoleCode: actor.roleCode, actorUserId: who,
+      engagementId: actor.engagementId,
+      subjectType: "criterion",
+      subjectId: c.id,
+      verb: "criterion.attested",
+      actorKind: "human",
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
       payload: { taskId, statement: c.statement, satisfied: true },
     });
   }
@@ -683,35 +1219,54 @@ export async function approve(
   //
   // "Nothing to move" is not a failure: an engagement with no tracker, or a task with no ticket
   // (phase 1 configures the tracker, so its own rows predate it), closes exactly as before.
-  const moved = await mirrorState(actor.engagementId, taskId, "closed", actor.roleCode);
+  const moved = await mirrorState(
+    actor.engagementId,
+    taskId,
+    "closed",
+    actor.roleCode,
+  );
   if (moveFailed(moved)) {
     // Distinct from a gate refusing: the work was accepted and the BOARD would not take it. Someone
     // reading the record needs to tell "the criteria were not met" from "the board has no Done
     // status", because they are different problems with different fixes.
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "task", subjectId: taskId,
+      subjectType: "task",
+      subjectId: taskId,
       verb: "task.close_blocked_by_tracker",
-      actorRoleCode: actor.roleCode, actorUserId: who,
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
       reason: moved.note ?? "The tracker refused to close this.",
-      payload: { ticket: moved.key ?? null, status: moved.status ?? null, kind: moved.reason ?? null },
+      payload: {
+        ticket: moved.key ?? null,
+        status: moved.status ?? null,
+        kind: moved.reason ?? null,
+      },
     });
-    return { ok: false, error: moved.note ?? "The tracker refused to close this." };
+    return {
+      ok: false,
+      error: moved.note ?? "The tracker refused to close this.",
+    };
   }
 
   const { error } = await sb.rpc("close_task", {
-    p_task_id: taskId, p_actor: who, p_actor_role: actor.roleCode,
+    p_task_id: taskId,
+    p_actor: who,
+    p_actor_role: actor.roleCode,
   });
   if (error) {
     // The gate refused AFTER the ticket moved. Put the ticket back rather than leave the board
     // reading Done for work Compass will not close — best effort, and the failure the caller sees
     // is the gate's, which is the one that explains what to fix.
-    if (moved.ok) await mirrorState(actor.engagementId, taskId, "hitl", actor.roleCode);
+    if (moved.ok)
+      await mirrorState(actor.engagementId, taskId, "hitl", actor.roleCode);
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "task", subjectId: taskId,
+      subjectType: "task",
+      subjectId: taskId,
       verb: "task.close_refused",
-      actorRoleCode: actor.roleCode, actorUserId: who,
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
       reason: error.message,
       payload: { confirmed: confirmed.length, ticketReturned: moved.ok },
     });
@@ -731,9 +1286,11 @@ export async function approve(
   if (materialised?.problems.length) {
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "task", subjectId: taskId,
+      subjectType: "task",
+      subjectId: taskId,
       verb: "task.materialise_incomplete",
-      actorRoleCode: actor.roleCode, actorUserId: who,
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
       reason: materialised.problems.join(" · "),
       payload: {
         path: materialised.path,
@@ -758,9 +1315,11 @@ export async function approve(
   } catch (e) {
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "task", subjectId: taskId,
+      subjectType: "task",
+      subjectId: taskId,
       verb: "task.remeasure_incomplete",
-      actorRoleCode: actor.roleCode, actorUserId: who,
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
       reason: e instanceof Error ? e.message : String(e),
       payload: { runId, parentRunId },
     });
@@ -785,20 +1344,30 @@ export async function approve(
  * except by leaving a box unticked, which is indistinguishable from not having got to it.
  */
 export async function reject(
-  actor: Actor, taskId: string, rejections: { criterionId: string; reason: string }[],
+  actor: Actor,
+  taskId: string,
+  rejections: { criterionId: string; reason: string }[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
-  const { data: task } = await sb.from("work_task")
-    .select("id, state").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
-  if (!task) return { ok: false, error: "That task is not in your engagement." };
+  const { data: task } = await sb
+    .from("work_task")
+    .select("id, state")
+    .eq("id", taskId)
+    .eq("engagement_id", actor.engagementId)
+    .maybeSingle();
+  if (!task)
+    return { ok: false, error: "That task is not in your engagement." };
 
   const given = rejections.filter((r) => r.reason.trim().length > 0);
   if (!given.length) {
     // A rejection with no reason is not a rejection, it is a refusal to explain. The agent cannot
     // act on it and the next reviewer cannot tell what was wrong.
-    return { ok: false, error: "A rejection needs a reason — the agent has to act on it." };
+    return {
+      ok: false,
+      error: "A rejection needs a reason — the agent has to act on it.",
+    };
   }
 
   // Links in the reasons are read before anything is written. "Doesn't follow <link to the
@@ -811,17 +1380,31 @@ export async function reject(
   const who = actor.holder ?? actor.roleCode;
   for (const r of given) {
     // The short reason as typed: this is what the gate and the next reviewer read.
-    await sb.from("measurement").upsert({
-      task_id: taskId, criterion_id: r.criterionId, satisfied: false,
-      measured_at: new Date().toISOString(),
-      source: "human", detail: `Rejected by ${who}: ${r.reason.trim()}`,
-    }, { onConflict: "task_id,criterion_id" });
+    await sb.from("measurement").upsert(
+      {
+        task_id: taskId,
+        criterion_id: r.criterionId,
+        satisfied: false,
+        measured_at: new Date().toISOString(),
+        source: "human",
+        detail: `Rejected by ${who}: ${r.reason.trim()}`,
+      },
+      { onConflict: "task_id,criterion_id" },
+    );
 
     await emit({
-      engagementId: actor.engagementId, subjectType: "criterion", subjectId: r.criterionId,
-      verb: "criterion.rejected", actorKind: "human",
-      actorRoleCode: actor.roleCode, actorUserId: who,
-      payload: { taskId, reason: r.reason.trim(), links: read.links.filter((l) => r.reason.includes(l.url)) },
+      engagementId: actor.engagementId,
+      subjectType: "criterion",
+      subjectId: r.criterionId,
+      verb: "criterion.rejected",
+      actorKind: "human",
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
+      payload: {
+        taskId,
+        reason: r.reason.trim(),
+        links: read.links.filter((l) => r.reason.includes(l.url)),
+      },
     });
   }
 
@@ -829,11 +1412,18 @@ export async function reject(
   // it is still waiting on a human when the human has just answered.
   await sb.from("work_task").update({ state: "running" }).eq("id", taskId);
 
-  const { data: last } = await sb.from("turn").select("ord").eq("task_id", taskId)
-    .order("ord", { ascending: false }).limit(1);
+  const { data: last } = await sb
+    .from("turn")
+    .select("ord")
+    .eq("task_id", taskId)
+    .order("ord", { ascending: false })
+    .limit(1);
   await sb.from("turn").insert({
-    task_id: taskId, ord: (last?.[0]?.ord ?? -1) + 1,
-    author_kind: "human", author_role_code: actor.roleCode, author_user_id: who,
+    task_id: taskId,
+    ord: (last?.[0]?.ord ?? -1) + 1,
+    author_kind: "human",
+    author_role_code: actor.roleCode,
+    author_user_id: who,
     // With every linked page attached — this turn is what the agent replays on its revision run.
     body: read.text,
   });
@@ -847,13 +1437,24 @@ export async function reject(
  * The same evaluators the gate uses, callable on their own — for a setup screen, and for answering
  * "can Compass actually reach Confluence" without having to find a task whose gate happens to ask.
  */
-export async function checkConnectors(actor: Actor): Promise<{ connector: string; verdict: Verdict }[]> {
+export async function checkConnectors(
+  actor: Actor,
+): Promise<{ connector: string; verdict: Verdict }[]> {
   const shape = (ref: string): CriterionRow => ({
-    id: "", kind: "ready", stepTask: null, statement: "",
-    subjectKind: "connector", subjectRef: ref, operator: "is", value: "wired",
+    id: "",
+    kind: "ready",
+    stepTask: null,
+    statement: "",
+    subjectKind: "connector",
+    subjectRef: ref,
+    operator: "is",
+    value: "wired",
   });
   return Promise.all(
-    ["docs", "tickets"].map(async (connector) => ({ connector, verdict: await evaluate(actor, shape(connector)) })),
+    ["docs", "tickets"].map(async (connector) => ({
+      connector,
+      verdict: await evaluate(actor, shape(connector)),
+    })),
   );
 }
 
@@ -877,9 +1478,14 @@ export async function checkConnectors(actor: Actor): Promise<{ connector: string
  *   unsatisfied rather than unmeasurable: "nothing reached the board" is a real, checkable answer,
  *   and calling it unmeasurable would let it read as a tooling gap rather than as work not done.
  */
-async function evaluateTicket(actor: Actor, c: CriterionRow, taskId: string | null): Promise<Verdict> {
+async function evaluateTicket(
+  actor: Actor,
+  c: CriterionRow,
+  taskId: string | null,
+): Promise<Verdict> {
   const sb = supabaseAdmin();
-  if (!sb || !taskId) return { state: "unmeasurable", why: "no task to read a sprint from" };
+  if (!sb || !taskId)
+    return { state: "unmeasurable", why: "no task to read a sprint from" };
 
   // STORY-SCOPED FIRST. The refs below are about ONE issue — the story this run is about — and
   // everything after them is about a sprint's worth of them. They were separated rather than folded
@@ -892,56 +1498,98 @@ async function evaluateTicket(actor: Actor, c: CriterionRow, taskId: string | nu
   const n = await sprintNoOf(taskId);
   if (!n) {
     return {
-      state: "unsatisfied", source: "compass",
-      detail: "This plan has no sprint number, so no story was ever labelled or assigned. " +
-              "Nothing reached the board.",
+      state: "unsatisfied",
+      source: "compass",
+      detail:
+        "This plan has no sprint number, so no story was ever labelled or assigned. " +
+        "Nothing reached the board.",
     };
   }
 
-  const { data: eng } = await sb.from("engagement")
-    .select("jira_project, atlassian_base_url, atlassian_email, atlassian_api_token")
-    .eq("id", actor.engagementId).maybeSingle();
+  const { data: eng } = await sb
+    .from("engagement")
+    .select(
+      "jira_project, atlassian_base_url, atlassian_email, atlassian_api_token",
+    )
+    .eq("id", actor.engagementId)
+    .maybeSingle();
   const creds = eng ? resolveJira(eng) : null;
-  if (!creds) return { state: "unmeasurable", why: "no Jira is configured for this engagement" };
+  if (!creds)
+    return {
+      state: "unmeasurable",
+      why: "no Jira is configured for this engagement",
+    };
 
-  const issues = await searchIssues(creds, sprintJql(creds.project, n), ["assignee", "labels", "parent"]);
+  const issues = await searchIssues(creds, sprintJql(creds.project, n), [
+    "assignee",
+    "labels",
+    "parent",
+  ]);
   if (issues === null) {
-    return { state: "unmeasurable", why: `the board could not be read for sprint ${n}` };
+    return {
+      state: "unmeasurable",
+      why: `the board could not be read for sprint ${n}`,
+    };
   }
   if (!issues.length) {
     // The zero-row trap, said out loud. `every()` over nothing is true.
-    return { state: "unmeasurable", why: `no issue on the board carries sprint ${n} — there is nothing to check` };
+    return {
+      state: "unmeasurable",
+      why: `no issue on the board carries sprint ${n} — there is nothing to check`,
+    };
   }
 
-  const { data: roleRows } = await sb.from("role").select("code").eq("org_id", actor.orgId);
+  const { data: roleRows } = await sb
+    .from("role")
+    .select("code")
+    .eq("org_id", actor.orgId);
   const knownRoles = new Set((roleRows ?? []).map((r) => r.code as string));
 
   if (c.subjectRef === "committed-have-epic") {
     const orphans = issues.filter((i) => !i.fields.parent);
     return orphans.length === 0
-      ? { state: "satisfied", source: "tracker",
-          detail: `All ${issues.length} stories in sprint ${n} sit under an epic.` }
-      : { state: "unsatisfied", source: "tracker",
-          detail: `${orphans.length} of ${issues.length} have no epic: ${orphans.map((o) => o.key).join(", ")}.` };
+      ? {
+          state: "satisfied",
+          source: "tracker",
+          detail: `All ${issues.length} stories in sprint ${n} sit under an epic.`,
+        }
+      : {
+          state: "unsatisfied",
+          source: "tracker",
+          detail: `${orphans.length} of ${issues.length} have no epic: ${orphans.map((o) => o.key).join(", ")}.`,
+        };
   }
 
   if (c.subjectRef === "on-board") {
     const unassigned = issues.filter((i) => !i.fields.assignee);
     const unowned = issues.filter((i) => {
-      const labels = Array.isArray(i.fields.labels) ? (i.fields.labels as string[]) : [];
+      const labels = Array.isArray(i.fields.labels)
+        ? (i.fields.labels as string[])
+        : [];
       return !labels.some((l) => knownRoles.has(l));
     });
     if (!unassigned.length && !unowned.length) {
-      return { state: "satisfied", source: "tracker",
-               detail: `All ${issues.length} stories in sprint ${n} have an owning role and an assignee.` };
+      return {
+        state: "satisfied",
+        source: "tracker",
+        detail: `All ${issues.length} stories in sprint ${n} have an owning role and an assignee.`,
+      };
     }
     // Named, not counted. "KAN-14, KAN-19" sends someone somewhere; "2 of 11" sends them hunting.
     const parts: string[] = [];
-    if (unassigned.length) parts.push(`unassigned: ${unassigned.map((i) => i.key).join(", ")}`);
-    if (unowned.length) parts.push(`no owning role: ${unowned.map((i) => i.key).join(", ")}`);
-    return { state: "unsatisfied", source: "tracker",
-             detail: `Of ${issues.length} stories in sprint ${n} — ${parts.join("; ")}.` };
+    if (unassigned.length)
+      parts.push(`unassigned: ${unassigned.map((i) => i.key).join(", ")}`);
+    if (unowned.length)
+      parts.push(`no owning role: ${unowned.map((i) => i.key).join(", ")}`);
+    return {
+      state: "unsatisfied",
+      source: "tracker",
+      detail: `Of ${issues.length} stories in sprint ${n} — ${parts.join("; ")}.`,
+    };
   }
 
-  return { state: "unmeasurable", why: `judgment — a person decides '${c.subjectRef}'` };
+  return {
+    state: "unmeasurable",
+    why: `judgment — a person decides '${c.subjectRef}'`,
+  };
 }

@@ -29,6 +29,14 @@ export type TaskCard = {
   reads: string[];
   /** `machine` dispatches nothing — offering "Start with agent" on one is offering a dead end. */
   stepKind: string | null;
+  /**
+   * The workflow this row NESTS, if any — its work happens in a child run's steps, not here.
+   *
+   * The card's button already behaves correctly on such a row (`startTaskAction` opens the child
+   * run), but said "Start with agent", promising an agent that does not exist for it. The label
+   * needs the same fact the action has.
+   */
+  nests: string | null;
   origin: "defined" | "adhoc";
   rationale: string | null;
   workflowCode: string | null;
@@ -38,6 +46,19 @@ export type TaskCard = {
   openQuestions: number;
   startedAt: string | null;
   startedBy: string | null;
+  /** The run this row belongs to. */
+  runId: string | null;
+  /**
+   * The task whose row opened that run — null at the top level.
+   *
+   * This is what makes a nesting row's work findable. Without it the rows a nesting row opened are
+   * loose cards with nothing saying where they came from, and when a child's title repeats its
+   * parent's — four of the seed's ten nesting rows do — the queue shows two cards with one name.
+   */
+  parentTaskId: string | null;
+  runState: string | null;
+  /** The `{epic}` a fan-out run is the subject of, so sibling runs are tellable apart. */
+  runSubject: string | null;
 };
 
 type Row = {
@@ -45,8 +66,15 @@ type Row = {
   role_code: string; ticket_key: string | null; origin: "defined" | "adhoc";
   rationale: string | null; executor: string | null; started_at: string | null; started_by: string | null;
   // `ord` and `opened_at` are here to ORDER the queue, not to render it — see `queueOrder`.
-  workflow_step: { reads: string[] | null; kind: string | null; ord: number } | null;
-  workflow_run: { opened_at: string | null; workflow: { code: string } | null } | null;
+  workflow_step: {
+    reads: string[] | null; kind: string | null; ord: number;
+    nests_workflow_code: string | null;
+  } | null;
+  workflow_run: {
+    id: string; opened_at: string | null; state: string | null;
+    parent_task_id: string | null; subject_key: string | null;
+    workflow: { code: string } | null;
+  } | null;
 };
 
 /** PostgREST types a to-one relation as an array. Normalise rather than casting a lie. */
@@ -83,9 +111,78 @@ export function queueOrder(a: Row, b: Row): number {
   return ordA - ordB;
 }
 
+/** A card and the rows the run it opened is made of. */
+export type QueueGroup = { card: TaskCard; children: TaskCard[] };
+
+/**
+ * Put every row inside the row that opened it.
+ *
+ * A row that nests a workflow does no work itself: it opens a run, and that run's steps are where
+ * the work happens. The queue rendered those steps as loose top-level cards, which made a nesting
+ * row's card the one thing on screen that could not be acted on while looking exactly like one that
+ * could — and when a child's title repeats its parent's, which four of the seed's ten nesting rows
+ * do, two cards carried one name and the work looked stuck. It was one click away, on the other
+ * card.
+ *
+ * PURE, and separate from the query, for the same reason `queueOrder` is: this is where the decision
+ * lives, so this is what has to be testable without a database.
+ */
+export function groupByParent(cards: TaskCard[]): QueueGroup[] {
+  const byId = new Map(cards.map((c) => [c.id, c]));
+
+  /**
+   * The TOPMOST visible ancestor — the card this row will be rendered inside.
+   *
+   * Not the immediate parent. Nesting goes two deep in the seed: `sprint-0`'s `Epics` row nests
+   * `epics`, whose row 7 nests `tech-design` once per epic. Attaching each row to its immediate
+   * parent would put the tech-design rows inside a card that is itself only rendered as a child,
+   * and rows that are inside nothing are rows nobody sees. They belong in the outermost card, where
+   * the run labels say which run each came from.
+   *
+   * A row whose parent is not on screen at all — closed, or outside this role's scope — hosts
+   * nowhere and stays top-level. Out of context beats invisible.
+   */
+  const hostOf = (card: TaskCard): TaskCard | null => {
+    // A cycle in `parent_task_id` must not hang a page render. `open_nested_run` cannot make one,
+    // which is precisely why nothing would notice if something else did.
+    const seen = new Set<string>([card.id]);
+    let host: TaskCard | null = null;
+    let at = card.parentTaskId;
+    while (at) {
+      // A cycle hosts nowhere — and the row goes back to the top level rather than into a group
+      // that is itself inside it. Dropping it instead would be the worst outcome available: a row
+      // that exists, is open, and appears on no screen.
+      if (seen.has(at)) return null;
+      seen.add(at);
+      const up = byId.get(at);
+      if (!up) break;
+      host = up;
+      at = up.parentTaskId;
+    }
+    return host;
+  };
+
+  const children = new Map<string, TaskCard[]>();
+  const tops: TaskCard[] = [];
+  for (const card of cards) {
+    const host = hostOf(card);
+    if (!host) {
+      tops.push(card);
+      continue;
+    }
+    const list = children.get(host.id) ?? [];
+    list.push(card);
+    children.set(host.id, list);
+  }
+
+  return tops.map((card) => ({ card, children: children.get(card.id) ?? [] }));
+}
+
 const SELECT =
   "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
-  "workflow_step(reads,kind,ord),workflow_run!work_task_workflow_run_id_fkey(opened_at,workflow(code))";
+  "workflow_step(reads,kind,ord,nests_workflow_code)," +
+  // `parent_task_id` rides on the join that was already here. Grouping the queue costs no query.
+  "workflow_run!work_task_workflow_run_id_fkey(id,opened_at,state,parent_task_id,subject_key,workflow(code))";
 
 /**
  * The role's queue.
@@ -132,6 +229,7 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
     ticketKey: r.ticket_key,
     reads: r.workflow_step?.reads ?? [],
     stepKind: r.workflow_step?.kind ?? null,
+    nests: r.workflow_step?.nests_workflow_code ?? null,
     origin: r.origin,
     rationale: r.rationale,
     workflowCode: r.workflow_run?.workflow?.code ?? null,
@@ -139,6 +237,13 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
     openQuestions: openByTask.get(r.id) ?? 0,
     startedAt: r.started_at,
     startedBy: r.started_by,
+    // Through `one` for the reason it exists: PostgREST types a to-one relation as an array, and
+    // reading `.parent_task_id` off an array is `undefined` — a nesting row whose children silently
+    // stop grouping, which looks exactly like the bug this fixes.
+    runId: one(r.workflow_run)?.id ?? null,
+    parentTaskId: one(r.workflow_run)?.parent_task_id ?? null,
+    runState: one(r.workflow_run)?.state ?? null,
+    runSubject: one(r.workflow_run)?.subject_key ?? null,
   }));
 }
 

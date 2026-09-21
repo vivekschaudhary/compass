@@ -9,7 +9,10 @@
 import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
 import { startTask } from "@/app/lib/data/tasks";
-import { measureTask } from "@/app/lib/data/gates";
+import {
+  measureTask,
+  closeNestingRowIfSatisfied,
+} from "@/app/lib/data/gates";
 import {
   initiatePhase,
   openNestedFanOut,
@@ -34,7 +37,12 @@ type Board = {
    * `stories: 11` used to be the whole answer, and it stayed 11 whether every ticket read as the
    * product or every one of them still carried its placeholder. `written` is how many say something.
    */
-  bodies?: { written: number; expected: number; problems: string[]; incomplete: boolean };
+  bodies?: {
+    written: number;
+    expected: number;
+    problems: string[];
+    incomplete: boolean;
+  };
 };
 
 function board(m: BoardResult): Board {
@@ -67,10 +75,15 @@ export async function startTaskAction(
   engagement: string,
   role: string,
   taskId: string,
-): Promise<{ ok: boolean; error?: string; openedWorkflow?: string;
-            /** How many child runs opened — more than one when the row fans out per epic. */
-            openedRuns?: number;
-            mirrored?: Mirrored; problems?: string[] }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  openedWorkflow?: string;
+  /** How many child runs opened — more than one when the row fans out per epic. */
+  openedRuns?: number;
+  mirrored?: Mirrored;
+  problems?: string[];
+}> {
   const actor = await resolveActor(engagement, role);
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
@@ -94,11 +107,20 @@ export async function startTaskAction(
     const child = await openNestedFanOut(actor, taskId);
     revalidatePath(`/e/${engagement}/jobs`);
     if (!child.ok) return { ok: false, error: child.error };
+
+    // MEASURE AGAIN, now that the run exists. The measure above this ran before it did, so
+    // `evaluateNested` was asked "has every resources run this row opened closed?" when the answer
+    // was "no such run" — unmeasurable, which writes nothing and deletes any stale row. The card
+    // then read "not checked" about a criterion that had become perfectly knowable one line later,
+    // and nothing re-measured it until someone pressed re-check. "Not checked" reading the same as
+    // "nothing to see" is exactly how the nesting close defect stayed invisible for an hour.
+    await measureTask(actor, taskId);
     // The board result is RETURNED, not dropped. The run opened either way — but a nested run whose
     // sub-tasks never reached Jira is invisible to everyone outside Compass, and saying nothing
     // about it is how that goes unnoticed until somebody asks where the work went.
     const problems = child.runs.flatMap((r) =>
-      r.mirrored.problems.map((p) => (r.subject ? `${r.subject}: ${p}` : p)));
+      r.mirrored.problems.map((p) => (r.subject ? `${r.subject}: ${p}` : p)),
+    );
     return {
       ok: true,
       openedWorkflow: nests,
@@ -139,7 +161,11 @@ export async function initiatePhaseAction(
   if (!result.ok) return { ok: false, error: result.error };
 
   const m = result.mirrored;
-  return { ok: true, tasks: result.tasks.length, board: m ? board(m) : undefined };
+  return {
+    ok: true,
+    tasks: result.tasks.length,
+    board: m ? board(m) : undefined,
+  };
 }
 
 /**
@@ -182,5 +208,39 @@ export async function recheckAction(
   // The task page reads the same measurements and is now where the control lives. Revalidating only
   // the queue meant the page you pressed it on kept showing the verdict you had just replaced.
   revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  return { ok: true };
+}
+
+/**
+ * Finish a nesting row by hand, once its nested run has closed.
+ *
+ * The escape hatch, not the normal path — `remeasureRun` retries the close on its own whenever
+ * something re-measures the row. But "whenever something re-measures it" is not "always": a Done
+ * criterion can turn true because of a Confluence page someone published or a ticket someone moved,
+ * and nothing in Compass observes either. Without this, such a row has no control anywhere in the
+ * app that can close it: the queue card offers "Open the job", and the job page offers a list of
+ * child rows, because `ApprovePanel` renders only on `hitl` with a draft. That is how `CT-151` sat
+ * open for an hour with a fully green Done gate.
+ *
+ * Re-measures FIRST. Pressing it should decide on today's evidence, not on whatever verdict the
+ * card happens to be showing.
+ */
+export async function closeNestedAction(
+  engagement: string,
+  role: string,
+  taskId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role);
+  if (!actor)
+    return { ok: false, error: "That role does not exist on this engagement." };
+
+  await measureTask(actor, taskId);
+  const result = await closeNestingRowIfSatisfied(actor, taskId);
+
+  revalidatePath(`/e/${engagement}/jobs`);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  // The refusal is the useful half. It names the criterion that is not met, which is the thing the
+  // person has to go and fix.
+  if (!result.closed) return { ok: false, error: result.why };
   return { ok: true };
 }

@@ -11,6 +11,12 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // The `scripts/*.mts` tools run under `node --experimental-strip-types`, which resolves at
+    // RUNTIME and therefore requires the real `.ts` extension on their imports. `**/*.mts` is in
+    // `include`, so without this the build type-checks them and rejects the only spelling that
+    // actually runs. Safe with `noEmit`: nothing here emits JavaScript that would carry the
+    // extension into a bundle.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [

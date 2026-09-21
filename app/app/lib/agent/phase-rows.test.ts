@@ -25,6 +25,7 @@ const ctx = (phaseRows: PhaseRow[]): AgentContext => ({
   taskId: "t1", engagementId: "e1", taskTitle: "File the SOW", taskSubtitle: "",
   roleCode: "delivery-manager", agentFile: "# Agent: DM", produces: "SOW", unresolvedProduces: null, destination: "docs",
   output: null, inputs: [], doneCriteria: ["The SOW is filed"], inventory: [], phaseRows,
+  template: null, templateName: null,
   priorDraft: null, rejections: [], sprint: null,
 });
 

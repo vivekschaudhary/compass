@@ -147,6 +147,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         conditional: s.conditional || null,
         nests_workflow_code: s.kind === "workflow" ? s.nests : null,
         title: s.title || null,
+        template: s.template || null,
         // Checked at COMMIT, not per row — the backward-only rule is a deferred constraint trigger
         // precisely because these arrive in one insert and cannot see each other before then.
         depends_on: s.dependsOn,
@@ -193,6 +194,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
           conditional: s.conditional || null,
           nests_workflow_code: s.kind === "workflow" ? s.nests : null,
           title: s.title || null,
+          template: s.template || null,
           depends_on: s.dependsOn,
         };
         const id = byOrd.get(s.ord);
@@ -346,7 +348,7 @@ export async function readExisting(
     // makes the comparison read `undefined` against a real value, so every row reports changed —
     // the mirror image of the bug where a field is compared on neither side and nothing ever does.
     const { data: steps } = await sb.from("workflow_step")
-      .select("ord, kind, role_code, task, produces, output, reads, conditional, nests_workflow_code, title, depends_on")
+      .select("ord, kind, role_code, task, produces, output, reads, conditional, nests_workflow_code, title, template, depends_on")
       .eq("workflow_version_id", ver.id).order("ord");
     const { data: crits } = await sb.from("criterion")
       .select("step_task, kind, statement, subject_kind, subject_ref, operator, value")
@@ -359,6 +361,7 @@ export async function readExisting(
         produces: s.produces ?? "", output: s.output ?? "",
         reads: s.reads ?? [], conditional: s.conditional ?? "",
         nests: s.nests_workflow_code ?? "", title: s.title ?? "",
+        template: s.template ?? "",
         dependsOn: s.depends_on ?? [],
       })),
       criteria: (crits ?? []).map((c): CriterionRow => ({

@@ -1,6 +1,6 @@
 <!-- SPRINT PLAN — nested from a phase, and runnable on its own.
 
-     research -> approve -> derive -> review -> approve. The author never accepts: an agent drafts in
+     research -> approve -> derive -> approve. The author never accepts: an agent drafts in
      a role's name, so a role that also closes the gate has approved its own work. -->
 ---
 name: sprint-plan
@@ -30,8 +30,7 @@ edge twice.
 | 1 | What the team can take on | `agent: product-owner.research-capacity` | product-owner | `capacity-research` | — | — |
 | 2 | Accept the capacity picture | `hitl` | product-manager | `—` | — | 1 |
 | 3 | The sprint plan | `agent: product-owner.draft-sprint-plan` | product-owner | `sprint-plans` | sprint | 2 |
-| 4 | Review the plan | `agent: reviewer.review-plan` | reviewer | `sprint-plan-review` | — | 3 |
-| 5 | Accept the plan | `hitl` | product-manager | `—` | — | 4 |
+| 4 | Review and approve the plan | `hitl` | product-manager | `—` | — | 3 |
 
 ## Why it is these rows
 

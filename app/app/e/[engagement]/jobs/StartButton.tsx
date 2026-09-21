@@ -8,11 +8,24 @@ import { useRouter } from "next/navigation";
 import { Button } from "../../../_ui/primitives";
 import { startTaskAction } from "./actions";
 import { RecheckButton } from "./RecheckButton";
+import { CloseNestedButton } from "./CloseNestedButton";
 
 export function StartButton({
-  taskId, engagement, role, state, executor, href, openQuestions = 0, machine = false,
+  taskId,
+  engagement,
+  role,
+  state,
+  executor,
+  href,
+  openQuestions = 0,
+  machine = false,
+  nests = null,
+  doneMet = false,
 }: {
-  taskId: string; engagement: string; role: string; state: string;
+  taskId: string;
+  engagement: string;
+  role: string;
+  state: string;
   /** Which engine has the task. NULL means nothing has picked it up. */
   executor?: string | null;
   /** Where the job lives. A card that says "waiting on you" must give you somewhere to go. */
@@ -20,36 +33,76 @@ export function StartButton({
   openQuestions?: number;
   /** The row dispatches nothing — it is satisfied by a check, so there is nobody to start. */
   machine?: boolean;
+  /**
+   * The workflow this row nests. Starting it opens that run; no agent is involved.
+   *
+   * The action has always branched on this — `startTaskAction` calls `openNestedFanOut` — but the
+   * label said "Start with agent", which is the one thing that will not happen. A comment in
+   * `run.ts` claimed the queue already knew this; it did not, and the job page inherited the same
+   * blindness with a button that returned a 500.
+   */
+  nests?: string | null;
+  /** Every Done criterion on this card measured and satisfied — see `doneAllMet` on the page. */
+  doneMet?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  if (state !== "idle") {
-    // A state alone is a dead end. When there is something for a person to do, the card carries
-    // the way to do it — the label told you the task was waiting and then offered nothing to press.
-    if (href && (state === "awaiting" || state === "hitl" || state === "running")) {
-      // Measured, not performed. The only useful control is re-checking the evidence.
-  if (machine) {
+  // An open nesting row whose Done gate is green. The work finished somewhere else and this row is
+  // the only thing still holding it open. `remeasureRun` normally closes it before anyone looks;
+  // when it has not, the card is where that is visible, so the card is where the control belongs —
+  // it read "DONE 2 of 2 met" and offered a job page holding nothing but a list of closed child
+  // rows, which is how CT-151 sat open with nothing anywhere able to finish it.
+  if (state !== "idle" && state !== "closed" && nests && doneMet) {
     return (
       <div className="task-state-row">
-        <RecheckButton engagement={engagement} role={role} taskId={taskId} />
+        <CloseNestedButton engagement={engagement} role={role} taskId={taskId} />
+        <span className="task-state text-muted">
+          {labelFor(state, executor)}
+        </span>
       </div>
     );
   }
 
-  return (
+  if (state !== "idle") {
+    // A state alone is a dead end. When there is something for a person to do, the card carries
+    // the way to do it — the label told you the task was waiting and then offered nothing to press.
+    if (
+      href &&
+      (state === "awaiting" || state === "hitl" || state === "running")
+    ) {
+      // Measured, not performed. The only useful control is re-checking the evidence.
+      if (machine) {
+        return (
+          <div className="task-state-row">
+            <RecheckButton
+              engagement={engagement}
+              role={role}
+              taskId={taskId}
+            />
+          </div>
+        );
+      }
+
+      return (
         <div className="task-state-row">
           <a href={href} className="btn btn-primary">
             {openQuestions > 0
               ? `Answer ${openQuestions} question${openQuestions === 1 ? "" : "s"}`
-              : state === "hitl" ? "Review the draft" : "Open the job"}
+              : state === "hitl"
+                ? "Review the draft"
+                : "Open the job"}
           </a>
-          <span className="task-state text-muted">{labelFor(state, executor)}</span>
+          <span className="task-state text-muted">
+            {labelFor(state, executor)}
+          </span>
         </div>
       );
     }
-    return <span className="task-state text-muted">{labelFor(state, executor)}</span>;
+    return (
+      <span className="task-state text-muted">{labelFor(state, executor)}</span>
+    );
   }
 
   return (
@@ -62,7 +115,10 @@ export function StartButton({
           startTransition(async () => {
             setError(null);
             const r = await startTaskAction(engagement, role, taskId);
-            if (!r.ok) { setError(r.error ?? "Could not start it."); return; }
+            if (!r.ok) {
+              setError(r.error ?? "Could not start it.");
+              return;
+            }
             // Starting claims the task and passes its gate; it does not run anything. Leaving the
             // person on the queue made "Start with agent" a lie — the task read `started`, no agent
             // had been invoked, and the next action was on a page they had not been taken to.
@@ -70,7 +126,13 @@ export function StartButton({
           })
         }
       >
-        {pending ? "Starting…" : "Start with agent"}
+        {pending
+          ? nests
+            ? "Opening…"
+            : "Starting…"
+          : nests
+            ? `Open the ${nests} run`
+            : "Start with agent"}
       </Button>
       <RecheckButton engagement={engagement} role={role} taskId={taskId} />
       {/* A refusal is worth showing in full. The routine raises rather than no-opping precisely so
@@ -91,10 +153,15 @@ export function StartButton({
  */
 function labelFor(state: string, executor?: string | null): string {
   switch (state) {
-    case "running": return executor ? "agent working…" : "started · no agent attached yet";
-    case "awaiting": return "waiting on you";
-    case "hitl": return "awaiting approval";
-    case "closed": return "done";
-    default: return state;
+    case "running":
+      return executor ? "agent working…" : "started · no agent attached yet";
+    case "awaiting":
+      return "waiting on you";
+    case "hitl":
+      return "awaiting approval";
+    case "closed":
+      return "done";
+    default:
+      return state;
   }
 }

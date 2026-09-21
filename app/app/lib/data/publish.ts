@@ -13,37 +13,13 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
 import { writeProviderDoc, type DocEng } from "../docstore";
+// Shared with the app's own document view. Two renderers of the same bytes is how a preview
+// starts lying about the page that ships.
+import { documentHtml } from "../render/document";
 
 export type PublishResult =
   | { ok: true; url: string; id: string }
   | { ok: false; error: string };
-
-/** Sections → HTML. Kept minimal on purpose: the structured copy lives in Compass. */
-function toHtml(title: string, sections: { heading: string; body: string }[], version: string): string {
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  // Markdown tables are the bulk of what agents write, so they are converted; the rest is
-  // paragraphs. Anything richer belongs in Compass, and the page says where to find it.
-  const block = (body: string) => body.split(/\n{2,}/).map((para) => {
-    const lines = para.trim().split("\n");
-    const isTable = lines.length > 1 && lines[0].includes("|") && /^[\s|:-]+$/.test(lines[1] ?? "");
-    if (isTable) {
-      const cells = (l: string) => l.split("|").slice(1, -1).map((c) => esc(c.trim()));
-      const head = `<tr>${cells(lines[0]).map((c) => `<th>${c}</th>`).join("")}</tr>`;
-      const rows = lines.slice(2).map((l) => `<tr>${cells(l).map((c) => `<td>${c}</td>`).join("")}</tr>`).join("");
-      return `<table>${head}${rows}</table>`;
-    }
-    if (/^[-*]\s/.test(lines[0])) {
-      return `<ul>${lines.map((l) => `<li>${esc(l.replace(/^[-*]\s/, ""))}</li>`).join("")}</ul>`;
-    }
-    return `<p>${esc(para.trim()).replace(/\n/g, "<br/>")}</p>`;
-  }).join("");
-
-  return [
-    `<p><em>Authored by Compass · ${esc(title)} · v${esc(version)}</em></p>`,
-    ...sections.map((s) => `<h2>${esc(s.heading)}</h2>${block(s.body)}`),
-  ].join("");
-}
 
 /**
  * Publish a version to the engagement's doc store, and record the outcome either way.
@@ -76,7 +52,7 @@ export async function publishToDocs(
   if (!sections?.length) return { ok: false, error: "Nothing to publish — the version has no sections." };
 
   const title = `${doc.title} — ${doc.path}`;
-  const html = toHtml(doc.title, sections, version.version);
+  const html = documentHtml(doc.title, sections, version.version);
 
   let result: { id: string; url: string } | null = null;
   let failure: string | null = null;

@@ -7,7 +7,7 @@ import { planImport, deriveReads, type StepRow } from "./plan";
 
 const step = (over: Partial<StepRow>): StepRow => ({
   workflow: "sprint-0", ord: 1, kind: "agent", role: "delivery-manager", task: "t",
-  produces: "", output: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [],
+  produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [],
   ...over,
 });
 
@@ -96,13 +96,33 @@ describe("the dependency graph is checked before the database sees it", () => {
     expect(out.some((m) => /depends on 'b' at ord 2, which is not above it/.test(m))).toBe(true);
   });
 
-  it("refuses a read of something the same workflow produces", () => {
-    // Stating it in both columns is exactly how they drifted. The fix names the edge to write.
-    const out = problems(
-      "sprint-0,1,agent,delivery-manager,a,doc/a,,,,A,\n" +
-      "sprint-0,2,agent,delivery-manager,b,doc/b,doc/a,,,B,a\n",
+  it("allows a read of something the same workflow produces, without a dependency on it", () => {
+    // `reads` is ADDITIVE on top of what `depends_on` derives. A dependency is an ordering and a
+    // read is an input, and a row may need a document without waiting on the row that files it —
+    // so naming `doc/a` here is a statement the author is allowed to make, not a contradiction.
+    const r = planImport(
+      BUNDLE(
+        "sprint-0,1,agent,delivery-manager,a,doc/a,,,,A,\n" +
+        "sprint-0,2,agent,delivery-manager,b,doc/b,doc/a,,,B,\n",
+      ),
+      EXISTING,
     );
-    expect(out.some((m) => /reads 'doc\/a', which 'a' produces in the same workflow/.test(m))).toBe(true);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.plan.workflows[0].steps[1].reads).toEqual(["doc/a"]);
+  });
+
+  it("does not list a path twice when the dependency already supplies it", () => {
+    // Stating both is redundant rather than wrong. It used to be refused; now it dedupes, so an
+    // author who names the input AND the edge gets one read, not two.
+    const r = planImport(
+      BUNDLE(
+        "sprint-0,1,agent,delivery-manager,a,doc/a,,,,A,\n" +
+        "sprint-0,2,agent,delivery-manager,b,doc/b,doc/a,,,B,a\n",
+      ),
+      EXISTING,
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.plan.workflows[0].steps[1].reads).toEqual(["doc/a"]);
   });
 
   it("accepts a graph that states each fact once", () => {

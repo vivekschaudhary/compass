@@ -336,6 +336,12 @@ export const TOOL_FOR: Record<string, string> = {
   backlog: "backlog",
   sprint: "sprint",
   code: "code",
+  // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
+  // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
+  // by a person must not be able to write it, and the reliable way to stop a model doing something
+  // is to not give it the tool. Telling it not to is advice, and advice is what failed: two rows of
+  // the same shape, one ord apart, made opposite choices about whether to draft.
+  supplied: "ask",
 };
 
 /** Every tool that is not gated behind a produced path. */

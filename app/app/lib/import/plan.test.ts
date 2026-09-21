@@ -230,16 +230,26 @@ describe("the shipped seed", () => {
    * assertion above.
    *
    * The generic test passes when a row is exempt AND when it is gated, so on its own it cannot
-   * tell "we fixed this" from "we removed the row". This one fails if the workflow shrinks back to
-   * a single unreviewed step, or if the author regains the close — which is the whole point of the
-   * three-row shape, not a side effect of it.
+   * tell "we fixed this" from "we removed the row". This one fails if the workflow shrinks to a
+   * single unreviewed step, or if the author regains the close.
+   *
+   * TWO ROWS, not three. It asserted draft → review → approve until the process dropped the
+   * separate review row: an epic technical design is drafted by the staff engineer and accepted by
+   * the principal engineer, and the acceptance IS the review. What the test is really here to hold
+   * is unchanged and is the reason it was not simply deleted when it went red — every row gated,
+   * and the approver not the author. Only the row count moved.
+   *
+   * `draft-epic-tech-design` is the case that makes the gate assertion worth having: it produces
+   * `epic/{epic}`, and `deriveCriteria` used to skip generating a Done gate for any path holding a
+   * placeholder — so this row closed over an aggregate of nothing. The gate it has now comes from
+   * that skip being narrowed to the parent fan-out row, where it belongs.
    */
   it("gates every row of tech-design, and nobody approves their own design", () => {
     if (!ships("tech-design")) return;   // not in this seed — see `ships`
     const wf = planned().workflows.find((w) => w.row.code === "tech-design");
     expect(wf, "tech-design is gone from the seed").toBeTruthy();
     expect(wf!.steps.map((s) => s.task)).toEqual([
-      "draft-epic-tech-design", "review-epic-tech-design", "approve-epic-tech-design",
+      "draft-epic-tech-design", "approve-epic-tech-design",
     ]);
     for (const step of wf!.steps) {
       const gates = wf!.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
@@ -375,6 +385,43 @@ describe("reads must resolve", () => {
 
 /* ── the constraints that stop a false green ─────────────────────────────── */
 
+describe("output: supplied", () => {
+  const base: Bundle = {
+    workstreams: "code,label\nEngineering,Engineering\n",
+    roles: "code,label,tier,scope,workstream\nengineer,Engineer,practitioner,mine,Engineering\n",
+    workflows: "code,label,workstream\nintake,Intake,Engineering\n",
+    criteria: "workflow,task,kind,text\nintake,file-sow,done,filed\n",
+  };
+
+  it("accepts a supplied row with no template", () => {
+    const r = planImport({ ...base,
+      steps: "workflow,ord,kind,role,task,produces,output,template\nintake,1,agent,engineer,file-sow,sow,supplied,\n" },
+      { ...empty, agents: ["engineer"] });
+    expect(r.ok).toBe(true);
+  });
+
+  it("refuses a row that is both supplied and templated", () => {
+    // A floor is a shape for something you AUTHOR. A supplied row has no `draft` tool at all, so a
+    // template on one is configuration that reads as meaningful and can never do anything.
+    const r = planImport({ ...base,
+      steps: "workflow,ord,kind,role,task,produces,output,template\nintake,1,agent,engineer,file-sow,sow,supplied,sow\n" },
+      { ...empty, agents: ["engineer"] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      const said = r.problems.map((x) => `${x.message} ${x.fix}`).join(" ");
+      expect(said).toContain("supplied");
+    }
+  });
+
+  it("still refuses an output the app has no behaviour for", () => {
+    // Widening the set must not turn it into a free-text column.
+    const r = planImport({ ...base,
+      steps: "workflow,ord,kind,role,task,produces,output\nintake,1,agent,engineer,file-sow,sow,uploaded\n" },
+      { ...empty, agents: ["engineer"] });
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe("guards against checks that never evaluate", () => {
   const base: Bundle = {
     workstreams: "code,label\nEngineering,Engineering\n",
@@ -455,7 +502,7 @@ describe("import is versioning", () => {
     workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] }],
       criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
@@ -498,7 +545,7 @@ describe("import is versioning", () => {
           steps: [
             already.workflows[0].steps[0],
             { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "write-tests",
-              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", dependsOn: [] },
+              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] },
           ],
         }],
       },
@@ -778,6 +825,20 @@ describe("nested workflow contract", () => {
     const all = gates(perSubject);
     expect(all.filter((c) => c.subjectKind === "document" && c.kind === "done")).toHaveLength(0);
     expect(all.filter((c) => c.subjectKind === "nested")).toHaveLength(1);
+
+    // …but the CHILD's own row is gated on it, which is the other half of the same rule and the
+    // half that was missing. `draft` runs inside the run that HAS the subject, so the placeholder
+    // resolves; skipping it here left the row closing over an aggregate of nothing. Asserted
+    // alongside the parent so the two cases can never be conflated again — they differ only in
+    // whose subject fills the path, and that difference is the whole rule.
+    const child = gates(perSubject, "child").filter(
+      (c) => c.kind === "done" && c.subjectKind === "document",
+    );
+    expect(child).toHaveLength(1);
+    expect(child[0]).toMatchObject({
+      stepTask: "draft", subjectRef: "03-architecture/epic/{epic}",
+      operator: "status", value: "published", generated: true,
+    });
   });
 
   it("leaves an authored criterion alone rather than doubling it", () => {

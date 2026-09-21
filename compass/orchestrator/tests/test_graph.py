@@ -148,36 +148,52 @@ class TestRealWorkflows(unittest.TestCase):
         step2 = next(s for s in steps if s.number == 2)
         self.assertEqual((step2.agent, step2.task), ("automation", "write-e2e-tests"))
 
+    def assert_author_never_closes(self, steps):
+        """No gate is held by the role that drafted the row in front of it.
+
+        The durable half of these three tests. They used to pin HITL POSITIONS, which said the same
+        thing only for as long as the shape held — and when the seed dropped the independent
+        `agent: reviewer` row and these graphs were rewritten to match, all three failed for the
+        right reason and every position in them moved. A position list cannot tell "the gate moved
+        because a row was removed" from "the gate moved onto the author", and the second is the
+        only one that matters.
+        """
+        for gate, before in zip(steps[1:], steps):
+            if gate.is_hitl and not before.is_hitl:
+                self.assertNotEqual(
+                    gate.agent, before.agent,
+                    f"step {gate.number} is held by {gate.agent}, who drafted step {before.number}")
+
     def test_product_brief(self):
-        # Was `create-brief`, and was three rows with the researcher approving the PM's draft.
-        # Rewritten so the author does not accept its own work: researcher gathers evidence,
-        # product owner drafts, reviewer reviews, product manager approves at row 4.
+        # Was `create-brief`, three rows with the researcher approving the PM's draft. Now: the
+        # researcher gathers evidence, the product owner ACCEPTS that evidence before writing on it,
+        # drafts the brief, and the product manager approves. Two gates, because the evidence is a
+        # deliverable in its own right — a brief drafted on unread evidence inherits its gaps.
         steps = load_workflow(WORKFLOWS / "product-brief.md")
         self.assertEqual(len(steps), 4)
-        self.assertEqual([s.number for s in steps if s.is_hitl], [4])
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 4])
+        self.assert_author_never_closes(steps)
 
     def test_feature_architecture(self):
         # Was `create-bet-architecture`, three rows with the gate at 2 — and that gate was held by
         # the `staff-engineer` who authored row 1, i.e. the author approving their own architecture.
-        # Rewritten for the feature tier: staff engineer drafts, reviewer reviews, principal
-        # engineer accepts at row 3. The position IS the assertion, for the same reason it is in
-        # `test_foundation_architecture` below — a gate that moves back to row 2 has put the author
-        # in charge of the close again.
+        # Two rows now: the staff engineer drafts, the principal engineer accepts.
         steps = load_workflow(WORKFLOWS / "feature-architecture.md")
-        self.assertEqual(len(steps), 3)
-        self.assertEqual([s.number for s in steps if s.is_hitl], [3])
+        self.assertEqual(len(steps), 2)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2])
+        self.assert_author_never_closes(steps)
 
     def test_foundation_architecture(self):
         # Was `setup-foundation-architecture`: eight rows, gates at 2, 4 and 7, and the same role
-        # authoring and approving. Now nine — research, architecture and scaffold, each written by
-        # the staff engineer, reviewed independently, and accepted by the principal engineer.
+        # authoring and approving. Six now — research, architecture and scaffold, each written by
+        # the staff engineer and accepted by the principal engineer.
         #
-        # The HITL positions are the point of the rewrite, so they are asserted rather than the
-        # count alone: an agent drafts in a role's name, and a role that also closes the gate has
-        # approved its own work.
+        # THREE GATES, NOT ONE, is what the count is guarding: each deliverable is accepted before
+        # the next is drafted on it, rather than one approval at the end standing for all three.
         steps = load_workflow(WORKFLOWS / "foundation-architecture.md")
-        self.assertEqual(len(steps), 9)
-        self.assertEqual([s.number for s in steps if s.is_hitl], [3, 6, 9])
+        self.assertEqual(len(steps), 6)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 4, 6])
+        self.assert_author_never_closes(steps)
 
     def test_create_story(self):
         steps = load_workflow(WORKFLOWS / "story.md")

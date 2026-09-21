@@ -24,37 +24,23 @@ step-count     build
 # not offer it, v1 still does — and that is exactly what the nine entries above record.
 
 
-# The human review gates. `foundation-architecture`, `product-brief`, `tech-design` and `feature`
-# each gained a review held by a PERSON where the .md dispatch graph has an `agent: reviewer` step,
-# and product-brief gained rows besides. The seed is the procedural memory; these .md files are v1's
-# dispatch graphs and go when v1 does, so they are not being rewritten to match.
+# The human review gates. Eleven entries stood here, covering `feature`, `feature-architecture`,
+# `foundation-architecture`, `tech-design`, `product-brief`, `design-library`, `epics`,
+# `sprint-plan` and `sprint` — .md dispatch graphs that disagreed with the seed about who reviews
+# what. They are gone because the graphs were rewritten to match rather than baselined a second
+# time: the seed dropped both the author's own review row and the independent reviewer step those
+# graphs still carried, and each of those ten files now describes the rows that actually run.
 #
-# What changed and why: a document is not approved because its author says so. Each deliverable now
-# carries two human gates — the author reviews their own work, then the next role reviews and
-# approves it — and the machine criteria stay on the agent row while the judgment moved onto the
-# hitl rows where a named role owns them.
-step-shape     feature step 2
-step-shape     foundation-architecture step 2
-step-shape     foundation-architecture step 5
-step-shape     foundation-architecture step 8
-step-shape     tech-design step 2
-step-count     product-brief
+# What the seed does now: one human gate per deliverable, held by a role that did not write it.
+# `product-brief` has two, because its evidence is accepted before the brief is written on it.
 
-# The human review gates, second wave. `design-library`, `epics`, `sprint-plan`, `sprint`,
-# `sprint-0` and `feature-architecture` gained the same shape the six above already carry: each
-# authored deliverable is reviewed by its author and then reviewed and approved by an oversight
-# role, so the seed's step counts run ahead of the .md dispatch graphs. Those graphs are v1's and
-# are not being rewritten — the seed is what executes.
-#
-# `sprint-0` is the largest gap (15 -> 25) and the most consequential: `propose-staffing` carries
-# `output: roster`, so approving it writes `member` rows, and until now no human gate stood in front
-# of that at all.
-step-count     design-library
-step-count     epics
-step-count     sprint
+# `sprint-0` is NOT that class, which is why it is still here. Its graph is 15 rows against the
+# seed's 11, and the difference is not review steps: the graph carries a RACI, a ways-of-working, a
+# tailored delivery plan and a kickoff that the seed has never had, files the SOW under a different
+# role, and dispatches the timeline and the staffing plan as agent rows where the seed nests whole
+# workflows. Trimming it is a decision about which of those rows are dropped and which are pending,
+# not a transcription — so it stays debt until someone makes that call.
 step-count     sprint-0
-step-count     sprint-plan
-step-shape     feature-architecture step 2
 
 # The `unseeded` entries that used to sit here are gone with the class itself: a dispatch
 # graph with no seed row is now NORMAL — the seed is a subset of the framework — and is

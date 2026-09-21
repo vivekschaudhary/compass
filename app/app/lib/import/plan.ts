@@ -76,6 +76,33 @@ export type StepRow = {
   /** What a person calls this row. The queue showed `propose-kickoff-backlog` without it. */
   title: string;
   /**
+   * The shape the deliverable must arrive in — a `document_template` NAME, or empty for free-form.
+   *
+   * A NAME, not a path and not the body. The templates are 140–293 lines of markdown with tables,
+   * which inside a CSV cell would make this file unreadable and churn a step row on every template
+   * edit; and `produces` cannot find the file by convention, since `product-brief` lives in
+   * `brief.md` and `foundational-architecture` in `foundation-architecture.md`.
+   *
+   * Empty is legitimate — not every deliverable has a house shape. A name that resolves to nothing
+   * is not: `run.ts` halts rather than letting the model invent a structure, because a document
+   * that looks finished and is not the deliverable asked for is indistinguishable from success.
+   *
+   * ONLY ROWS THAT AUTHOR. A row that RECEIVES a document must leave this empty — `file-sow` and
+   * `file-requirements`, sprint-0's first two rows, are both of that kind and both have it blank.
+   * They are the case that makes the distinction: the client's SOW and their requirements are
+   * pasted or linked as an answer, filed verbatim by `fileAnswer` as a single "As supplied"
+   * section. Two things follow. The floor would
+   * never run on it — `fileAnswer` calls `file_document` directly and never passes through
+   * `runAgent` — so the row would advertise a shape its own path cannot produce. And on the runs
+   * where the agent drafts instead of asking, the floor WOULD run, and would push a signed contract
+   * into Compass's section list, which is rewriting a document that is not ours to rewrite.
+   *
+   * A template still has a use for such a row, but a different one: read the supplied document
+   * against it and report what is missing. That is a checklist, not a floor, and it is not this
+   * column.
+   */
+  template: string;
+  /**
    * Task slugs of rows this one derives from, in the same workflow — by SLUG, not ord, so a
    * delivery manager reordering rows while reviewing the plan does not silently re-point every
    * edge. The database enforces that each names a row ABOVE this one, which makes a cycle
@@ -158,7 +185,10 @@ const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
  * what stops a typo falling through to "ordinary document", which is how the old path-matching
  * failed and said nothing.
  */
-const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code"];
+// Moves in the SAME commit as the database's `workflow_step_output_known`. Adding `code` to only
+// one of these made the dry run green and the apply a 500, after `applyPlan` had already published
+// the new version — leaving `build` with zero steps. See migration 060's header.
+const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied"];
 const CRITERION_KINDS = ["ready", "done"];
 
 /* ── parsing ─────────────────────────────────────────────────────────────── */
@@ -199,6 +229,7 @@ function readSteps(csv: string): StepRow[] {
     task: r.task ?? "", produces: r.produces ?? "", output: (r.output ?? "").trim(),
     reads: parseList(r.reads),
     conditional: r.conditional ?? "", nests: r.nests ?? "", title: r.title ?? "",
+    template: (r.template ?? "").trim(),
     dependsOn: parseList(r.depends_on),
   }));
 }
@@ -211,12 +242,20 @@ function readSteps(csv: string): StepRow[] {
  * matter. If a row needs the SOW as well as the brief, it declares both — and then the edge and
  * the input are the same statement, which is the whole point.
  *
- * The authored `reads` survives alongside, holding only paths no step here produces. Those are
- * real: `sprint` reads the delivery plan and the deliverables from `sprint-0`, and no dependency
- * inside `sprint` could ever supply them.
+ * The authored `reads` survives alongside, and it is ADDITIVE — whatever the author lists is kept,
+ * whether or not a step in this workflow also produces it. Deriving covers the common case so the
+ * edge and the input stay one statement; the column is how an author says "this row also needs X"
+ * without inventing a dependency that does not exist.
  *
- * Order is dependency order, then the external ones, so a prompt's inputs read the way the graph
- * runs rather than the way the CSV happened to be typed.
+ * It did not always work that way: a read naming something a sibling produced was refused, on the
+ * grounds that `depends_on` should carry it instead. That conflated two different things. A
+ * dependency is an ORDERING — this row waits for that one — and a read is an INPUT. A row may
+ * legitimately need a document without waiting on the row that files it, and forcing the author to
+ * state the ordering to get the input made the graph say something it did not mean.
+ *
+ * Order is dependency order first, then anything additional the author listed, so a prompt's inputs
+ * read the way the graph runs rather than the way the CSV happened to be typed. Deduped, so listing
+ * a path the dependency already supplies is harmless rather than an error.
  */
 export function deriveReads(steps: StepRow[]): StepRow[] {
   // The PATH a step produces, never the decorated `produces` string. A step may name where its
@@ -234,13 +273,12 @@ export function deriveReads(steps: StepRow[]): StepRow[] {
 
   return steps.map((s) => {
     const mine = producerOf.get(s.workflow) ?? new Map<string, string>();
-    const produced = new Set(mine.values());
     const fromDeps = s.dependsOn.map((d) => mine.get(d)).filter((p): p is string => Boolean(p));
-    // Anything the author listed that no step here produces — the genuinely external input. A
-    // listed path that IS produced here is not silently dropped; `problems` rejects it, because
-    // it means the author stated an edge in the column that no longer carries one.
-    const external = s.reads.filter((r) => !produced.has(r));
-    return { ...s, reads: [...new Set([...fromDeps, ...external])] };
+    // Everything the author listed, kept as a PATH for the same reason `fromDeps` is one: a read
+    // decorated with its routing slot (`deliverables@tickets`) names a path no document ever has,
+    // and the agent would be told it reads something that does not exist.
+    const authored = s.reads.map((r) => destinationOf(r)?.path ?? r);
+    return { ...s, reads: [...new Set([...fromDeps, ...authored])] };
   });
 }
 
@@ -376,6 +414,14 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} declares output '${s.output}'.`,
         `Use one of: ${STEP_OUTPUTS.join(", ")} — or leave it empty for an ordinary document. A value ` +
         `the app has no behaviour for is a row that promises something nothing does.`);
+    // A floor is a shape for something you AUTHOR. A supplied row receives its deliverable and
+    // cannot draft at all, so a template on one is a promise nothing can keep — and it would sit
+    // there looking like configuration that does something.
+    if (s.output === "supplied" && s.template)
+      add("workflow-steps.csv", row,
+        `Step ${s.workflow}/${s.ord} is \`output: supplied\` and also declares template '${s.template}'.`,
+        "A supplied deliverable is filed verbatim as it was given, so there is no drafting for a " +
+        "template to shape. Drop the template, or drop `supplied` if this row really does author.");
     if (s.role && !knownRoles.has(s.role))
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} names role '${s.role}', which does not exist.`,
         "Add it to roles.csv, or correct the spelling.");
@@ -460,21 +506,13 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     }
   });
 
-  // `reads` is derived from `depends_on` for anything produced inside the workflow, so listing
-  // such a path in the column states an edge that the column no longer carries. Refused rather
-  // than ignored: silently dropping it would leave the author believing the input is pinned.
-  authored.forEach((s, i) => {
-    const producedHere = new Map(
-      authored.filter((x) => x.workflow === s.workflow && x.produces).map((x) => [x.produces, x.task]),
-    );
-    s.reads.forEach((r) => {
-      const by = producedHere.get(r);
-      if (by && by !== s.task)
-        add("workflow-steps.csv", i + 2,
-          `Step ${s.workflow}/${s.ord} reads '${r}', which '${by}' produces in the same workflow.`,
-          `Remove it from \`reads\` and put \`${by}\` in \`depends_on\`. A row reads what it depends on — stating both is how the two drifted apart.`);
-    });
-  });
+  // NO CHECK HERE that a read names something no sibling produces. `reads` is additive on top of
+  // what `depends_on` derives — see `deriveReads`. Reading a document a sibling files, without
+  // waiting on that sibling, is a thing an author is allowed to say.
+  //
+  // What still polices reads is the existence check below: the path has to be one some workflow
+  // produces or one the engagement already has. That is the check that catches a typo, and it is
+  // the one worth keeping.
 
   // A step can only read a document that exists, or one an earlier workflow produces. Anything
   // else is a job whose agent is pointed at nothing — and it fails at RUN time, in front of
@@ -733,8 +771,22 @@ function deriveCriteria(
 
     for (const s of mine) {
       /* 1 — a row is gated on the document it files. */
+      //
+      // A PER-SUBJECT path is gated here too, unlike on the parent at 8 below. The distinction is
+      // WHOSE subject fills the placeholder: this row runs inside the run that has one, so
+      // `evaluateDocument` resolves `{epic}` through `subjectFor(taskId)` and measures the document
+      // that was actually filed. It returns UNMEASURABLE when it cannot resolve, which still
+      // refuses the close — so the worst case of gating here is a row that will not close, never a
+      // row that closes wrongly. The parent's fan-out row has no subject of its own, which is why
+      // that case still skips.
+      //
+      // Skipping it here was a false green of the exact shape rule 11 names. `tech-design`'s author
+      // row produced `03-architecture/epic/{epic}` and got no Done gate at all — it closed over an
+      // aggregate of nothing. criteria.csv carried that gate by hand; when the gates became derived
+      // the row silently lost it, and `build` and `fix` have been in the same state ever since,
+      // every one of their `{subject}@scm` rows ungated.
       const own = destinationOf(s.produces)?.path;
-      if (own && !own.includes("{")) {
+      if (own) {
         published(wf.code, s.task, own, `${own} is published.`);
       }
 
@@ -782,8 +834,11 @@ function deriveCriteria(
       const role = labelOf.get(s.role) ?? s.role;
 
       /* 2 — a person checks a document, so say which one. */
+      //
+      // Per-subject paths included, for the reason given at 1: `nearestProduced` never leaves this
+      // workflow, so every path it returns was filed by a sibling row of the SAME run and resolves
+      // against the same subject. A reviewer whose document is per-epic is reviewing an epic.
       for (const { path } of upstream) {
-        if (path.includes("{")) continue;
         published(wf.code, s.task, path, `${path} is published.`);
       }
 
@@ -854,7 +909,7 @@ function describeChanges(
   // could change which workflow it nests and the importer would report "unchanged" — a diff that
   // does not compare everything is a diff that lies. Adding a column means adding it here.
   const key = (s: StepRow) =>
-    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.output}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.dependsOn.join("|")}`;
+    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.output}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.template}:${s.dependsOn.join("|")}`;
   const ckey = (c: CriterionRow) =>
     `${c.stepTask ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
 

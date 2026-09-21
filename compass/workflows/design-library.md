@@ -1,6 +1,6 @@
 <!-- DESIGN LIBRARY — nested from a phase, and runnable on its own.
 
-     research -> approve -> derive -> review -> approve. The author never accepts: an agent drafts in
+     research -> approve -> derive -> approve. The author never accepts: an agent drafts in
      a role's name, so a role that also closes the gate has approved its own work. -->
 ---
 name: design-library
@@ -30,8 +30,7 @@ edge twice.
 | 1 | Research the design ground | `agent: designer.research-design` | designer | `design-research` | — |
 | 2 | Accept the research | `hitl` | product-manager | `—` | 1 |
 | 3 | The design library | `agent: designer.derive-library` | designer | `design-library` | 2 |
-| 4 | Review the library | `agent: reviewer.review-library` | reviewer | `design-review` | 3 |
-| 5 | Accept the library | `hitl` | product-manager | `—` | 4 |
+| 4 | Review and approve the library | `hitl` | product-manager | `—` | 3 |
 
 ## Why it is these rows
 
@@ -39,4 +38,4 @@ edge twice.
 component library; a page restating it is a copy that goes stale. The gate says so.
 
 **Design has no oversight role of its own** — `designer` and `ux-writer` are both practitioner —
-so the product manager accepts. The reviewer supplies the independent judgement in between.
+so the product manager accepts, and the independent judgement is theirs.

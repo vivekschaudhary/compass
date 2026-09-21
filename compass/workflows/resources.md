@@ -1,8 +1,8 @@
 <!-- RESOURCES — nested from a phase, and runnable on its own.
 
-     propose -> review -> accept. The author never accepts: an agent drafts in the delivery manager's
-     name, so the delivery manager reviewing AND closing would be approving their own work. The
-     product manager holds the last gate, because accepting a roster commits named people. -->
+     propose -> accept. The author never accepts: an agent drafts in the delivery manager's name, so
+     the delivery manager reviewing AND closing would be approving their own work. The product
+     manager holds the gate, because accepting a roster commits named people. -->
 ---
 name: resources
 title: Resources
@@ -29,8 +29,7 @@ edge twice.
 | # | task | dispatch | owner | produces | output | depends-on |
 |---|------|----------|-------|----------|--------|------------|
 | 1 | Staffing plan and resources | `agent: delivery-manager.propose-resource-plan` | delivery-manager | `resource- plan` | roster | — |
-| 2 | Review the staffing plan | `hitl` | delivery-manager | `—` | — | 1 |
-| 3 | Review and approve the staffing plan | `hitl` | product-manager | `—` | — | 2 |
+| 2 | Review and approve the staffing plan | `hitl` | product-manager | `—` | — | 1 |
 
 ## Why it is these rows
 
@@ -42,6 +41,6 @@ becomes the roster the app staffs work from. A staffing plan filed as prose staf
 by when — so this runs after the timeline rather than beside it. The phase row that nests this
 depends on the timeline row for exactly that reason.
 
-**Approval commits real people.** Row 3 is the product manager confirming that every named holder is
+**Approval commits real people.** Row 2 is the product manager confirming that every named holder is
 a person who has agreed to the role, which is why the gate is theirs rather than the delivery
 manager's. The roster is the one deliverable here whose approval changes who is on the engagement.

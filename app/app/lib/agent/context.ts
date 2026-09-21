@@ -12,6 +12,9 @@
 
 import "server-only";
 import { resolveSpec } from "../specs";
+import { templateFor } from "../data/templates";
+import { describeTemplate } from "../render/template";
+import type { ResolvedTemplate } from "../data/templates";
 import { destinationOf, resolvePath } from "../adapters";
 import { supabaseAdmin, must } from "../supabase";
 import { resolveJira, searchIssues } from "../jira";
@@ -101,6 +104,18 @@ export type AgentContext = {
    * provenance, the pinned version, and a bounded prompt, for a problem this solves more cheaply.
    */
   phaseRows: PhaseRow[];
+  /**
+   * The shape the deliverable must arrive in, resolved for this engagement.
+   *
+   * Null in two very different cases, which is why `templateName` travels beside it: the step
+   * declared no template at all (free-form, and most rows are), or it declared one that resolved to
+   * nothing. `runAgent` halts on the second and proceeds on the first — a model left to invent its
+   * own structure produces a document that looks finished and is not the deliverable the process
+   * asked for, and nothing downstream can tell the difference.
+   */
+  template: ResolvedTemplate | null;
+  /** What the step asked for by name, whether or not it resolved. */
+  templateName: string | null;
   /** What it produced last time, and what a reviewer said about it. Null on the first run. */
   priorDraft: { version: string; sections: { heading: string; body: string }[] } | null;
   rejections: { criterion: string; reason: string; by: string }[];
@@ -588,9 +603,11 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   let output: string | null = null;
   let doneCriteria: string[] = [];
   let ownOrd = Number.MAX_SAFE_INTEGER;
+  let template: ResolvedTemplate | null = null;
+  let templateName: string | null = null;
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
-      .select("ord, produces, output").eq("id", task.workflow_step_id).maybeSingle();
+      .select("ord, produces, output, template").eq("id", task.workflow_step_id).maybeSingle();
     const dest = destinationOf(step?.produces);
     // A per-subject path (`03-architecture/epic/{epic}`) is filled from the run this task belongs
     // to. Resolved HERE and nowhere else on the write side: `ctx.produces` is what gets filed, what
@@ -604,6 +621,13 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     output = (step?.output as string | null) ?? null;
     ownOrd = (step?.ord as number | null) ?? Number.MAX_SAFE_INTEGER;
     doneCriteria = await doneCriteriaFor(task.workflow_step_id);
+    templateName = ((step?.template as string | null) ?? "").trim() || null;
+    // Resolved here so `runAgent` gets a template already scoped to this engagement, and so a
+    // declared name that finds nothing is visible as `templateName && !template` rather than as a
+    // silent free-form draft.
+    template = templateName
+      ? await templateFor(templateName, actor.engagementId, actor.orgId)
+      : null;
   }
 
   return {
@@ -621,6 +645,8 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     doneCriteria,
     inventory: await loadInventory(actor.orgId),
     phaseRows: await loadPhaseRows(task.id, task.workflow_run_id as string | null, ownOrd),
+    template,
+    templateName,
     priorDraft: await loadPriorDraft(actor.engagementId, produces),
     rejections: await loadRejections(taskId),
     sprint: produces === SPRINT_PLAN_PATH
@@ -808,6 +834,13 @@ system exists to prevent.`.trim());
 export function revisionPrompt(ctx: AgentContext): string | null {
   if (!ctx.priorDraft) return null;
 
+  // NOT FOR A SUPPLIED ROW. On one of those `priorDraft` is the CLIENT'S document — pasted by a
+  // person — and everything below says "you already produced this, revise it". Handed that
+  // alongside the supplied instruction ("you do not write it, never restructure it"), the model
+  // resolved the contradiction the only way it could: it asked the person for a revised version,
+  // and `file-requirements` looped. It never produced this, and must not be told that it did.
+  if (ctx.output === "supplied") return null;
+
   const parts = [
     `You already produced \`${ctx.produces}\` at v${ctx.priorDraft.version}. Here it is:`,
     ctx.priorDraft.sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n"),
@@ -832,18 +865,23 @@ export function revisionPrompt(ctx: AgentContext): string | null {
 
 /** The user turn: the pinned material, with absences stated rather than omitted. */
 export function inputPrompt(ctx: AgentContext): string {
-  if (!ctx.inputs.length) {
-    // True only when the STEP declares no reads. It used to be said whenever pinning had not
-    // happened, which told an agent it had no inputs while its step declared one — and it went and
-    // asked the human for a document already filed and published.
-    return "This task declares no input documents. Say so before doing anything else.";
-  }
-
   const present = ctx.inputs.filter((i) => i.body);
   const missing = ctx.inputs.filter((i) => !i.body);
 
   const parts = present.map((i) =>
     `<document path="${i.path}" version="${i.version}" title="${i.title ?? ""}">\n${i.body}\n</document>`);
+
+  if (!ctx.inputs.length) {
+    // True only when the STEP declares no reads. It used to be said whenever pinning had not
+    // happened, which told an agent it had no inputs while its step declared one — and it went and
+    // asked the human for a document already filed and published.
+    //
+    // A PART, not an early return. Returning here skipped everything appended below — so a row with
+    // no reads got no template, no sprint block and, once supplied rows existed, no supplied
+    // instruction at all. `file-sow` was told only "this task declares no input documents" and
+    // behaved correctly by luck: it had no `draft` tool, so asking was the only thing left.
+    parts.push("This task declares no input documents. Say so before doing anything else.");
+  }
 
   if (missing.length) {
     parts.push(
@@ -853,8 +891,111 @@ export function inputPrompt(ctx: AgentContext): string {
   }
 
   if (ctx.sprint) parts.push(sprintPrompt(ctx.sprint));
+  if (ctx.template) parts.push(templatePrompt(ctx.template));
+  if (ctx.output === "supplied") parts.push(suppliedPrompt(ctx));
 
   return parts.join("\n\n");
+}
+
+/**
+ * This deliverable is handed over, not written.
+ *
+ * The TOOLS already enforce it — a supplied row is given `ask` and nothing else, so there is no
+ * way to author the document. This block exists so the model does not spend a turn discovering
+ * that, and so the question it asks is the right shape: the answer IS the deliverable.
+ *
+ * It also says what to do on the run AFTER the document is filed, which is the only interesting
+ * case: with something to compare against, report the comparison and stop. Without that sentence a
+ * model handed a filed document and a source tends to try to improve one of them.
+ */
+function suppliedPrompt(ctx: AgentContext): string {
+  const path = ctx.produces ?? "the path this row produces";
+  const head = [
+    `<supplied path="${ctx.produces ?? ""}">`,
+    `This deliverable is SUPPLIED BY A PERSON. You do not write it.`,
+    ``,
+  ];
+
+  // NOT SUPPLIED YET.
+  if (!ctx.priorDraft) {
+    return [
+      ...head,
+      `It has not been supplied yet. Ask for it, in ONE question, and say what it is for. What you`,
+      `are given is filed verbatim at \`${path}\` — do not summarise it, restructure it, correct it`,
+      `or improve it. It is the client's document and it is the record.`,
+      ``,
+      `If you need anything else, ask for it in a SEPARATE question — never in the one that carries`,
+      `the document, because that answer is filed as the document itself.`,
+      `</supplied>`,
+    ].join("\n");
+  }
+
+  // ALREADY SUPPLIED. Shown here, as the supplied document, and nowhere else.
+  //
+  // It used to reach the model only through `revisionPrompt`, labelled "you already produced this".
+  // So the instruction to compare it had nothing to point at, and the one thing the model could see
+  // told it to revise a document it had also been told it must never revise.
+  const filed = [
+    `<supplied-document path="${ctx.produces ?? ""}" version="${ctx.priorDraft.version}">`,
+    ctx.priorDraft.sections.map((x) => `## ${x.heading}\n\n${x.body}`).join("\n\n"),
+    `</supplied-document>`,
+  ].join("\n");
+
+  const next = ctx.inputs.length
+    ? `Compare it against the document(s) above and say plainly where they agree and where they do ` +
+      `not — dates, scope, deliverables, anything one states and the other contradicts. Report that ` +
+      `in your reply. There is nothing to file and nothing to ask. Then stop.`
+    : `There is nothing to compare it against, so this row is finished. Say so and stop.`;
+
+  return [
+    ...head,
+    `It HAS been supplied and is already filed at \`${path}\` as v${ctx.priorDraft.version}. Here it is:`,
+    ``,
+    filed,
+    ``,
+    next,
+    ``,
+    // The exact move the model made when it had nowhere else to go: it asked for "the revised
+    // requirements text". Ruled out by name, because a general instruction did not cover it.
+    `Do NOT ask for it again, and do NOT ask for a revised version. If it needs revising, the`,
+    `person will supply one and this row will run again with it.`,
+    `</supplied>`,
+  ].join("\n");
+}
+
+/**
+ * The shape the deliverable must arrive in.
+ *
+ * LAST in the prompt, after the documents and any sprint block, because it governs what to WRITE
+ * rather than what to read — and the instruction closest to the output is the one a model follows
+ * most reliably.
+ *
+ * Stated as a floor, in both directions, because both halves are load-bearing. Omitting a section
+ * is refused at filing time, so a model that quietly drops one wastes a whole run; and a model told
+ * only "use these headings" will faithfully produce those and nothing else, dropping material the
+ * deliverable actually needed because the template did not anticipate it.
+ *
+ * The headings are given with the template's own numbering and the filing check strips it, so a
+ * draft that writes `## Scope of Work` for `## 2. Scope of Work` is accepted. Saying "copy them
+ * exactly" would be asking for a precision that is neither needed nor enforced, and instructions
+ * the system does not enforce are how a model learns which ones to ignore.
+ */
+function templatePrompt(t: ResolvedTemplate): string {
+  return [
+    `<template name="${t.name}">`,
+    `This deliverable has a required shape. Produce a section for EVERY heading below, in this`,
+    `order, using these headings.`,
+    ``,
+    `You may ADD sections the deliverable needs — the template is a floor, not a cast, and extra`,
+    `sections are kept. You may not omit one: a draft missing any of these is refused and nothing`,
+    `is filed. A section that genuinely does not apply still gets its heading, and says so.`,
+    ``,
+    `The prose under each heading is guidance for what belongs there, written for whoever fills`,
+    `the template in. Do not copy it into your draft.`,
+    ``,
+    describeTemplate(t),
+    `</template>`,
+  ].join("\n");
 }
 
 /**

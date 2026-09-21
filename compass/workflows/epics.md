@@ -1,6 +1,6 @@
 <!-- EPICS — nested from sprint-0, and runnable on its own.
 
-     research -> approve -> derive -> review -> approve. The author never accepts: an agent drafts in
+     research -> approve -> derive -> approve. The author never accepts: an agent drafts in
      the product owner's name, so a product owner closing this gate would approve its own work. -->
 ---
 name: epics
@@ -30,9 +30,8 @@ edge twice.
 | 1 | What the epics must cover | `agent: product-owner.research-epics` | product-owner | `epic-research` | — | — |
 | 2 | Accept the coverage | `hitl` | product-manager | `—` | — | 1 |
 | 3 | The epics | `agent: product-owner.draft-epics` | product-owner | `deliverables@tickets` | backlog | 2 |
-| 4 | Review the epics | `agent: reviewer.review-epics` | reviewer | `epic-review` | — | 3 |
-| 5 | Accept the epics | `hitl` | product-manager | `—` | — | 4 |
-| 6 | Technical design per epic | `workflow: tech-design` | staff-engineer | `—` | — | 5 |
+| 4 | Review and approve the epics | `hitl` | product-manager | `—` | — | 3 |
+| 5 | Technical design per epic | `workflow: tech-design` | staff-engineer | `—` | — | 4 |
 
 ## Why it is these rows
 

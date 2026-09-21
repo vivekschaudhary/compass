@@ -14,6 +14,16 @@ vi.mock("./events", () => ({ emit: async (e: unknown) => { emitted.push(e as Emi
 vi.mock("./tracker", () => ({ mirrorState: async () => ({}), moveFailed: () => false }));
 vi.mock("./materialise", () => ({ materialiseFrom: async () => null }));
 vi.mock("../docstore", () => ({ probeDocs: async () => ({}) }));
+// Filing a document now publishes it too. These tests are about what a person's words put in the
+// DATABASE, not about the doc store, so the projection is stubbed — and recorded, because "was it
+// published at all" is the question that went unasked for months.
+const publishes: string[] = [];
+vi.mock("./publish", () => ({
+  publishToDocs: async (_e: string, versionId: string) => {
+    publishes.push(versionId);
+    return { ok: true, url: "http://docs/x", id: "x" };
+  },
+}));
 vi.mock("../agent/context", () => ({ subjectOfRun: async () => null }));
 vi.mock("../jira", () => ({}));
 vi.mock("./sprint", () => ({ sprintJql: () => "", sprintNoOf: () => null }));
@@ -25,6 +35,8 @@ const emitted: Emitted[] = [];
 const writes: { table: string; op: string; row: Record<string, unknown> }[] = [];
 const rpcs: { fn: string; args: Record<string, unknown> }[] = [];
 let openQuestions: Record<string, unknown>[] = [];
+/** Does a `document` already exist at the filed path? Decides whether a title is passed. */
+let documentExists = false;
 
 vi.mock("../supabase", () => ({
   supabaseAdmin: () => ({
@@ -32,7 +44,11 @@ vi.mock("../supabase", () => ({
       const chain: Record<string, unknown> = {
         select: () => chain, eq: () => chain, is: () => chain, order: () => chain, limit: () => chain,
         maybeSingle: async () => ({
-          data: table === "work_task" ? { id: "t1", state: "hitl" } : table === "engagement" ? { org_id: "org-1" } : null,
+          data:
+            table === "work_task" ? { id: "t1", state: "hitl", title: "File the SOW" }
+            : table === "engagement" ? { org_id: "org-1" }
+            : table === "document" ? (documentExists ? { id: "d1" } : null)
+            : null,
         }),
         then: (res: (v: { data: unknown[] }) => unknown) =>
           res({ data: table === "question" ? openQuestions : table === "turn" ? [{ ord: 3 }] : [] }),
@@ -72,8 +88,8 @@ function stubFetch(pages: Record<string, { status?: number; type?: string; body?
 const turns = () => writes.filter((w) => w.table === "turn" && w.op === "insert").map((w) => String(w.row.body));
 
 beforeEach(() => {
-  writes.length = 0; rpcs.length = 0; emitted.length = 0;
-  openQuestions = [];
+  writes.length = 0; rpcs.length = 0; emitted.length = 0; publishes.length = 0;
+  openQuestions = []; documentExists = false;
   vi.unstubAllGlobals();
 });
 
@@ -91,9 +107,40 @@ describe("answering a question with a link", () => {
     // The question keeps the link as typed — that is the provenance.
     expect(writes.find((w) => w.table === "question" && w.op === "update")?.row.answer).toBe(SOW_LINK);
     // The contract is the agent's pinned input; it is not repeated in the conversation.
+    // Filed AND published. `fileAnswer` stored the document and stopped, so a SOW pasted by a
+    // person was correctly versioned in Compass and never appeared in Confluence — `[docs-primary]`
+    // says the page is the record for everyone who does not open Compass, and there was no page.
+    expect(publishes).toHaveLength(1);
+    // Named by the ROW. It used to be titled with the agent's question, which then became the
+    // Confluence page title a client reads.
+    expect(filed?.args.p_title).toBe("File the SOW");
     expect(turns()[0]).toContain("filed them at `SOW`");
     expect(turns()[0]).not.toContain("Kindtree");
     expect(emitted.find((e) => e.verb === "document.filed")?.payload.url).toBe(`${SOW_LINK}/export?format=md`);
+  });
+
+  it("keeps the existing name when the document is already there", async () => {
+    // `file_document` coalesces, so a non-null title overwrites on EVERY version — a re-supply
+    // would rename a page somebody had since titled properly.
+    documentExists = true;
+    stubFetch({ [`${SOW_LINK}/export?format=md`]: { type: "text/x-markdown", body: SOW_MD } });
+    openQuestions = [{ id: "q1", prompt: "The SOW?", optional: false, files_to: "SOW" }];
+
+    await recordAnswers(ACTOR, "t1", { q1: SOW_LINK });
+
+    expect(rpcs.find((c) => c.fn === "file_document")?.args.p_title).toBeNull();
+  });
+
+  it("never titles a document with the question", async () => {
+    stubFetch({ [`${SOW_LINK}/export?format=md`]: { type: "text/x-markdown", body: SOW_MD } });
+    openQuestions = [{ id: "q1", prompt: "What's the Statement of Work? Please paste it.", optional: false, files_to: "SOW" }];
+
+    await recordAnswers(ACTOR, "t1", { q1: SOW_LINK });
+
+    const title = String(rpcs.find((c) => c.fn === "file_document")?.args.p_title ?? "");
+    expect(title).not.toContain("Please paste");
+    // …and the question is still on the record, where a question belongs.
+    expect(writes.find((w) => w.table === "question" && w.op === "update")).toBeTruthy();
   });
 
   it("puts the linked text into the conversation when the question files nothing", async () => {

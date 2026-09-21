@@ -1,5 +1,14 @@
 code,label,workstream,phase,owner_role,trigger,enabled,repeatable,inputs,outputs
 onboarding,New Project,Delivery,New,pmo-analyst,,TRUE,FALSE,,
-sprint-0,Discovery,Delivery,Discovery,delivery-manager,,TRUE,FALSE,,"sow, requirements, timeline, resource- plan"
+sprint-0,Discovery,Delivery,Discovery,delivery-manager,,TRUE,FALSE,,"sow, requirements, timeline, resource-plan, product-brief"
 timeline,Timeline & Milestones,Delivery,Discovery,delivery-manager,,TRUE,TRUE,sow,timeline
-resources,Resources,Delivery,Discovery,delivery-manager,,TRUE,TRUE,"sow, requirements",resource- plan
+resources,Resources,Delivery,Discovery,delivery-manager,,TRUE,TRUE,"sow, requirements",resource-plan
+feature-architecture,Feature architecture,Engineering,Build,staff-engineer,,TRUE,TRUE,"product-brief,features,foundational-architecture",feature-architecture
+foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,staff-engineer,,TRUE,FALSE,"product-brief,features","foundational-architecture,scaffold-record"
+feature,Feature,Product,Build,product-owner,,TRUE,TRUE,product-brief,features
+product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,TRUE,FALSE,"sow, requirements",product-brief
+build,Workflow: /build,Engineering,Build,engineer,,TRUE,TRUE,,
+design-library,Design library,Design,Discovery,designer,,TRUE,TRUE,"requirements,product-brief",design-library
+sprint-plan,Sprint plan,Delivery,Build,product-owner,,TRUE,TRUE,"deliverables,resource-plan",sprint-plans
+epics,Epics,Product,Discovery,product-owner,,TRUE,TRUE,"product-brief,features,timeline",deliverables@tickets
+tech-design,Technical design,Engineering,Build,staff-engineer,,TRUE,TRUE,"deliverables,features",epic/{epic}

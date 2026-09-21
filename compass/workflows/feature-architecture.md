@@ -1,8 +1,8 @@
 <!-- FEATURE-ARCHITECTURE — nested from feature, once the feature is accepted.
 
-     draft -> review -> approve. The author never accepts: an agent drafts in the staff engineer's
-     name, so a staff engineer closing this gate would approve its own architecture. The principal
-     engineer holds the close, which is foundation-architecture's pairing and tech-design's.
+     draft -> approve. The author never accepts: an agent drafts in the staff engineer's name, so a
+     staff engineer closing this gate would approve its own architecture. The principal engineer
+     holds the close, which is foundation-architecture's pairing and tech-design's.
 
      THIS FILE WAS `/create-epic-architecture` AND IS NOT ANY MORE. It described a bet-level
      artifact at `docs/epics/<epic-id>/architecture.md`, a repo-file `requires_approved` gate, and
@@ -49,8 +49,7 @@ edge twice.
 | # | task | dispatch | owner | produces | depends-on |
 |---|------|----------|-------|----------|------------|
 | 1 | Feature architecture | `agent: staff-engineer.draft-feature-architecture` | staff-engineer | `03-architecture/features` | — |
-| 2 | Review the feature architecture | `agent: reviewer.review-feature-architecture` | reviewer | `03-architecture/features-review` | 1 |
-| 3 | Accept the feature architecture | `hitl` | principal-engineer | `—` | 2 |
+| 2 | Review and approve the feature architecture | `hitl` | principal-engineer | `—` | 1 |
 
 ## Why it is these rows
 
@@ -67,9 +66,9 @@ Migration 059 dropped the `feature` tables that were built on the assumption it 
 So a per-feature fan-out is not deferred, it is off. Re-opening it would mean deciding a feature is
 a row after all, and that is a bigger change than adding a `{feature}` path.
 
-**The author does not accept it.** It used to: row 2 was `hitl` held by the same `staff-engineer`
-who drafted row 1. A reviewer judges it against the foundation architecture rather than against
-preference, and the principal engineer accepts.
+**The author does not accept it.** It used to: the closing gate was `hitl` held by the same
+`staff-engineer` who drafted row 1. The principal engineer holds it now, judging the page against
+the foundation architecture rather than against preference.
 
 **Departures are named.** The foundation architecture is the bar. An option not considered is not a
 decision, and a stack widening that nobody wrote down is the one that surfaces at build.

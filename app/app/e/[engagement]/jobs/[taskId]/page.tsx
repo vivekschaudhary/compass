@@ -13,6 +13,7 @@ import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { buildContext } from "@/app/lib/agent/context";
 import { conversation, openQuestions, draftOf, taskState, childRunBlock } from "@/app/lib/data/job";
+import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
 import { describeCriterion } from "../../../../_ui/criterion";
 import { Tag } from "../../../../_ui/primitives";
@@ -23,6 +24,7 @@ import { AnswerForm } from "./AnswerForm";
 import { RunButton } from "./RunButton";
 import { NoteBox } from "./NoteBox";
 import { ApprovePanel } from "./ApprovePanel";
+import { NestedRunPanel } from "./NestedRunPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +51,10 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
   const ctx = await buildContext(actor, taskId);
   if (!ctx) notFound();
 
-  const [turns, questions, draft, gates, state, blocked] = await Promise.all([
+  const [turns, questions, draft, gates, state, blocked, nests, childRuns] = await Promise.all([
     conversation(taskId), openQuestions(taskId), draftOf(actor, ctx.produces),
     storedStatusFor([taskId]), taskState(actor, taskId), childRunBlock(actor, taskId),
+    nestedWorkflowOf(taskId), childRunsOf(actor, taskId),
   ]);
 
   const statuses = gates.get(taskId) ?? [];
@@ -107,6 +110,14 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
 
           {state === "closed" ? (
             <p className="closed-note">Closed. Approved and published.</p>
+          ) : nests ? (
+            /* No agent to run. The Run button was offered here anyway, and pressing it returned a
+               500 carrying the refusal from `runAgent` — the only act the page offered was the one
+               act that could not work. */
+            <NestedRunPanel
+              engagement={engagement} role={roleCode} taskId={taskId}
+              nests={nests} runs={childRuns}
+            />
           ) : (
             <RunButton
               engagement={engagement} role={roleCode} taskId={taskId}
@@ -115,7 +126,11 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
           )}
         </section>
 
-        <DraftPanel path={ctx.produces} draft={draft} engagement={engagement} role={roleCode} />
+        <DraftPanel
+          path={ctx.produces} draft={draft}
+          engagement={engagement} role={roleCode} taskId={taskId}
+          closed={state === "closed"}
+        />
       </div>
     </div>
   );

@@ -42,7 +42,14 @@ export default async function ContentPage(props: PageProps<"/e/[engagement]/cont
         <div className="doc-tree">
           {tree.map((n) => (
             <div key={n.id} className="doc-row" style={{ paddingLeft: `${n.depth * 22}px` }}>
-              <span className={n.kind === "folder" ? "doc-name doc-name-folder" : "doc-name"}>{n.title}</span>
+              {n.kind === "folder" || !n.status ? (
+                <span className={n.kind === "folder" ? "doc-name doc-name-folder" : "doc-name"}>{n.title}</span>
+              ) : (
+                // Only a document that HAS a version is a link. Linking one that was never drafted
+                // would offer a page that 404s, which reads as a broken app rather than as work
+                // nobody has done yet.
+                <a className="doc-name" href={`/e/${engagement}/content/${n.path}?role=${roleCode}`}>{n.title}</a>
+              )}
               <span className="doc-path">{n.path}</span>
               {n.status === "published" && <Tag tone="accent-2">v{n.version}</Tag>}
               {n.status === "draft" && <Tag tone="outline">draft v{n.version}</Tag>}

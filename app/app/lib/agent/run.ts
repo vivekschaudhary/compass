@@ -32,6 +32,8 @@ import { mirrorState } from "../data/tracker";
 import { runCode, storyFor } from "./code-run";
 import { jiraForEngagement, addRemoteLink, addComment } from "../jira";
 import { nestedWorkflowOf } from "../data/phases";
+import { approve, measureTask } from "../data/gates";
+import { missingSections, describeTemplate } from "../render/template";
 import { selectHost, MODEL } from "./hosts/select";
 import { toolsFor } from "./hosts/tools";
 import type { HostResult } from "./hosts/types";
@@ -305,6 +307,87 @@ async function finished(
   });
 }
 
+/**
+ * Hand the row to a person.
+ *
+ * Every terminal path that leaves work for a human does the same four things, and the reason this
+ * function exists is that one of them forgot: the supplied-row skip returned its outcome without
+ * setting `hitl` or clearing `executor`, so `file-sow` filed its document correctly and then sat at
+ * "agent working…" for ever, with no ApprovePanel — that renders only on `hitl`.
+ *
+ * Copying four lines a fourth time is how that happens again. Called from one place, it cannot.
+ *
+ * `mirrorState` is included because the board is where everyone who does not open Compass is
+ * looking; a queue that says "awaiting approval" over a ticket still marked in-progress is two
+ * answers to one question.
+ */
+async function handOver(
+  actor: Actor,
+  taskId: string,
+  ctx: AgentContext,
+  outcome: string,
+  message: HostResult | null,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  const sb = supabaseAdmin();
+  if (sb) {
+    await sb
+      .from("work_task")
+      .update({ state: "hitl", executor: null })
+      .eq("id", taskId);
+  }
+  await mirrorState(actor.engagementId, taskId, "hitl", ctx.roleCode);
+  await finished(ctx.engagementId, taskId, ctx.roleCode, outcome, message, extra);
+}
+
+/**
+ * A SUPPLIED row closes itself. Nobody approves their own paste.
+ *
+ * The HITL gate exists so a person checks what a MODEL produced. On a supplied row the person IS
+ * the author — they pasted the document — and asking them to then approve it is ceremony that
+ * records nothing. Worse, the gate is usually entirely machine-checked ("sow is published"), so
+ * `ApprovePanel` has nothing for them to sign and its confirm button greys out with no way forward.
+ *
+ * `approve(actor, taskId, [])` rather than a second closing path. Passing no confirmations means:
+ * leave every machine-established measurement exactly as the check wrote it, and clear anything a
+ * person would have had to attest. Then the BOARD closes first and `close_task` enforces the real
+ * gate. So this does not bypass anything — if such a row ever carries a judgment criterion, the
+ * close is refused and the row correctly goes to a human instead.
+ *
+ * Re-measured first, because the document was filed moments ago and the gate reads stored
+ * measurements, not the world.
+ */
+async function settleSupplied(
+  actor: Actor,
+  taskId: string,
+  ctx: AgentContext,
+  outcome: string,
+  message: HostResult | null,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  await measureTask(actor, taskId);
+  const closed = await approve(actor, taskId, []);
+
+  if (closed.ok) {
+    const sb = supabaseAdmin();
+    if (sb) await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    await finished(ctx.engagementId, taskId, ctx.roleCode, outcome, message, {
+      ...extra,
+      closed: true,
+    });
+    return;
+  }
+
+  // The gate said no, or the board would not take it. Never leave the row mid-flight: hand it to a
+  // person with the reason, which is the case the plain hand-over exists for.
+  await recordTurn(
+    taskId,
+    `The document is filed, but this row could not close itself: ${closed.error}`,
+    ctx,
+  );
+  await handOver(actor, taskId, ctx, outcome, message, { ...extra, closed: false });
+}
+
 export async function runAgent(
   actor: Actor,
   taskId: string,
@@ -318,15 +401,27 @@ export async function runAgent(
     };
   }
 
+  // Timed, because the gap between a person pressing the button and the model starting was 12.6s
+  // on a real run and nobody could say which part of it was which. `buildContext` is ~a dozen
+  // queries plus the agent file; `mirrorState` is an HTTP round trip to Jira. Attributing it in the
+  // event rather than a log line means the answer is in the same place as everything else that
+  // happened, and is still there tomorrow.
+  const tContext = Date.now();
   const ctx = await buildContext(actor, taskId);
+  const contextMs = Date.now() - tContext;
   if (!ctx)
     return { kind: "error", message: "That task is not in your engagement." };
 
   // A row that NESTS a workflow has no agent to run. Its work happens in the child run's own steps,
-  // each with its own agent and its own gates. The queue knows this and offers "open" instead of
-  // "start", but the job page's Run button did not — so an agent was invoked on a `kind: workflow`
-  // row, given the row's task slug (`define-product-foundation`) that no agent file defines, and
+  // each with its own agent and its own gates. An agent was invoked on a `kind: workflow` row,
+  // given the row's task slug (`define-product-foundation`) that no agent file defines, and it
   // produced eight questions from a blank context. Refused here, where every call passes.
+  //
+  // For a long time this was the ONLY thing that knew. Neither surface did: the queue's button did
+  // the right thing while labelled "Start with agent", and the job page offered a Run button whose
+  // every press came back as a 500 carrying the sentence below. Both now read
+  // `nests_workflow_code` and offer the child run instead — so this refusal should no longer be
+  // reachable from the UI, and stays as the backstop for every other caller.
   const nests = await nestedWorkflowOf(taskId);
   if (nests) {
     return {
@@ -337,10 +432,66 @@ export async function runAgent(
     };
   }
 
+  // A declared template that resolves to nothing HALTS — before the model call, not after.
+  //
+  // The alternative is drafting free-form, and that is the worst available outcome: the document
+  // comes back looking finished, is not the deliverable the process asked for, and nothing
+  // downstream can tell the difference. Its Done criterion asks whether a document is published,
+  // not whether it is the right shape.
+  //
+  // Checked here rather than at filing so a misconfigured row costs nothing. A run is minutes of
+  // model time and a person waiting on it; discovering the missing template afterwards wastes both
+  // and still files nothing.
+  if (ctx.templateName && !ctx.template) {
+    return {
+      kind: "error",
+      message:
+        `This row drafts into the \`${ctx.templateName}\` template, and no such template exists ` +
+        `for this engagement, its organisation, or the default. Nothing was run — add the ` +
+        `template, or clear the row's \`template\` column if this deliverable has no house shape.`,
+    };
+  }
+
+  // A supplied row with nothing to compare against is FINISHED once its document is filed.
+  //
+  // Answering the last question auto-triggers a run. For `file-sow` — which reads nothing — that is
+  // minutes of model time and a Jira round trip to arrive at "the document is filed, there is
+  // nothing else to do". Stopping here is not an optimisation so much as declining to bill someone
+  // for a foregone conclusion.
+  //
+  // DERIVED, not a flag: a row that reads something (`file-requirements` reads the SOW) has a
+  // comparison to make and proceeds. `openQuestions` is checked too, because an unanswered question
+  // means the conversation is genuinely still going.
+  if (ctx.output === "supplied" && ctx.priorDraft && !ctx.inputs.length) {
+    const still = await openQuestions(taskId);
+    if (!still.length) {
+      // Said in the conversation, not only in the return value. Without this the thread ends on the
+      // human's paste with nothing acknowledging it, which reads as though the click was lost —
+      // and phrased so the record does not suggest an agent wrote the document. It did not.
+      const summary =
+        `Filed \`${ctx.produces}\` as supplied (v${ctx.priorDraft.version}) — your text, verbatim, ` +
+        `unchanged. This row receives its deliverable rather than writing one, and has nothing to ` +
+        `compare it against, so there is nothing further to do. Closing it.`;
+      await recordTurn(taskId, summary, ctx);
+      await settleSupplied(actor, taskId, ctx, "filed-as-supplied", null, {
+        path: ctx.produces,
+        sections: ctx.priorDraft.sections.length,
+      });
+      return {
+        kind: "drafted",
+        summary,
+        sections: ctx.priorDraft.sections.length,
+        path: ctx.produces,
+      };
+    }
+  }
+
   // Mark who is executing BEFORE the call, so a run that dies mid-flight is visibly attributed
   // rather than looking like a task nobody ever picked up.
   await sb.from("work_task").update({ executor: "app" }).eq("id", taskId);
+  const tMirror = Date.now();
   await mirrorState(actor.engagementId, taskId, "running", ctx.roleCode);
+  const mirrorMs = Date.now() - tMirror;
 
   await emit({
     engagementId: actor.engagementId,
@@ -351,6 +502,9 @@ export async function runAgent(
     actorRoleCode: ctx.roleCode,
     payload: {
       model: MODEL,
+      // What the wait before the model was actually spent on.
+      contextMs,
+      mirrorMs,
       agentFile: ctx.agentFile,
       produces: ctx.produces,
       // What it was allowed to read, pinned. A run is only reproducible if this is on the record.
@@ -415,6 +569,32 @@ export async function runAgent(
     // and leave the task running — the human can read it and decide.
     await recordTurn(taskId, text || "(no output)", ctx);
     await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+
+    // For a SUPPLIED row this is the expected ending, not a failure.
+    //
+    // Such a row has `ask` and nothing else — there is no `draft` to call. Once its document has
+    // been filed, a run whose job is to say how that document compares with what it was given has
+    // nothing to file and nothing to ask, and prose is the only thing it can produce. Treating it
+    // as an error would mark a completed comparison as a failed run.
+    //
+    // SCOPED TO `supplied` deliberately. On an authoring row, prose means the model ignored its
+    // tools and produced nothing durable, which is a real failure and must keep saying so.
+    if (ctx.output === "supplied") {
+      // Closes itself, like the skip path. The document was supplied by a person and the
+      // comparison is information for them to read, not a draft for them to approve — the report
+      // is in the conversation either way.
+      //
+      // This branch previously only cleared the executor and left the row at `running`, the same
+      // defect that stranded `file-sow`.
+      await settleSupplied(actor, taskId, ctx, "reported", message, { path: ctx.produces });
+      return {
+        kind: "drafted",
+        summary: text || "(no output)",
+        sections: 0,
+        path: ctx.produces,
+      };
+    }
+
     await finished(ctx.engagementId, taskId, ctx.roleCode, "no-tool", message);
     return {
       kind: "error",
@@ -463,6 +643,37 @@ export async function runAgent(
     if (!input.questions.length) {
       const { leaked, buried } = emptyAskDiagnosis(input.preamble ?? "");
 
+      // …unless the row has nothing left to ask, and no other way to say so.
+      //
+      // A SUPPLIED row is given `ask` and nothing else. Once its document is filed and the
+      // comparison is reported, "nothing further is needed" is the only thing left to say and an
+      // empty ask is the only shape it has to say it in. Twice live, `file-requirements` reported
+      // the comparison exactly as instructed and was recorded as a failed run:
+      //
+      //     outcome: ask-empty, questions: 0, leaked: false, buried: 0
+      //
+      // This is the SOW defect at its third site. A supplied row ends in three ways — the skip
+      // path, prose with no tool call, and here — and `settleSupplied` was wired into the first
+      // two. The row sat at `running` with its executor cleared and its ticket In Progress, while
+      // its Done criterion carried a measurement taken a minute BEFORE the document was filed.
+      //
+      // The guards are what keep this from swallowing the failure above. `priorDraft` means a
+      // document actually exists, so a supplied row given nothing and asking nothing still halts
+      // loudly. And the diagnosis still wins: swallowed questions can happen on a supplied row
+      // too, and leave exactly this evidence.
+      if (ctx.output === "supplied" && ctx.priorDraft && !leaked && !buried) {
+        await settleSupplied(actor, taskId, ctx, "reported", message, {
+          path: ctx.produces,
+          via: "ask-empty",
+        });
+        return {
+          kind: "drafted",
+          summary: body || "(no output)",
+          sections: 0,
+          path: ctx.produces,
+        };
+      }
+
       await sb.from("work_task").update({ executor: null }).eq("id", taskId);
       await finished(
         ctx.engagementId,
@@ -486,6 +697,29 @@ export async function runAgent(
       };
     }
 
+    // A SUPPLIED row whose deliverable does not exist yet, asking nothing that carries it, is a
+    // DEAD END — and this is exactly what happened live: three questions, every `files_to` null.
+    //
+    // Such a row has no `draft` tool, so the document can only ever arrive as an answer. If no
+    // question carries it, the person answers, nothing is filed, the Done gate stays unsatisfiable,
+    // and the row sits open with nothing on screen explaining why. Refusing costs one cheap re-run;
+    // the alternative costs somebody an afternoon of wondering.
+    //
+    // Only before the document exists. Once it is filed, follow-up questions are ordinary.
+    if (ctx.output === "supplied" && !ctx.priorDraft && !put.some((q) => q.files_to)) {
+      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await finished(ctx.engagementId, taskId, ctx.roleCode, "ask-unfilable", message, {
+        questions: put.length,
+      });
+      return {
+        kind: "error",
+        message:
+          `This row receives \`${ctx.produces}\` rather than writing it, so the document can only ` +
+          `arrive as an answer — but none of its ${put.length} question(s) asks for one. Nothing ` +
+          `was filed. Run it again; its message is in the conversation.`,
+      };
+    }
+
     {
       const { data: asked } = await sb
         .from("question")
@@ -502,7 +736,22 @@ export async function runAgent(
             // Only a path the app is allowed to write. An agent naming `agents/pm.md` here would
             // otherwise turn a human's pasted answer into a framework file, and the check belongs
             // where the value ENTERS rather than where it is later used.
-            files_to: filesTo(q.files_to),
+            //
+            // On a SUPPLIED row the app chooses the path rather than the model. There is exactly
+            // one destination — what the row produces — so letting a model name it is a decision
+            // with one right answer and many wrong ones.
+            //
+            // NOT passed through `filesTo`, deliberately. That guard exists for MODEL OUTPUT: it
+            // stops an agent naming `agents/pm.md` and turning a pasted answer into a framework
+            // file. `ctx.produces` is not model output — it is the row's own `produces`, resolved
+            // in `buildContext` — so checking it is a category error, and a damaging one: FILEABLE
+            // demands `0X-folder/name` while this seed's documents are bare names (`sow`,
+            // `requirements`), so the guard would null every one of them and nothing would ever be
+            // filed. Trust the row; guard the model.
+            files_to:
+              ctx.output === "supplied" && q.files_to
+                ? ctx.produces
+                : filesTo(q.files_to),
           })),
         )
         .select("id, prompt");
@@ -607,8 +856,11 @@ export async function runAgent(
 
     // hitl either way. A failed build still needs a person to look — silently returning it to the
     // agent would let it retry forever against a repo that cannot build.
-    await sb.from("work_task").update({ state: "hitl", executor: null }).eq("id", taskId);
-    await mirrorState(actor.engagementId, taskId, "hitl", ctx.roleCode);
+    await handOver(actor, taskId, ctx, built.ok ? "built" : "build-failed", message, {
+      branch: built.branch ?? null,
+      pr: built.prUrl ?? null,
+      exit: built.exit,
+    });
 
     return built.ok
       ? { kind: "drafted", summary: outcome, sections: files.length, path: built.prUrl ?? null }
@@ -754,6 +1006,44 @@ export async function runAgent(
       };
     }
 
+    // THE TEMPLATE IS A FLOOR. Every section it declares must be present; anything beyond it is
+    // the agent's to add, and extras are kept in the order they arrived.
+    //
+    // Checked BEFORE `file_document`, which is the whole point. Filing first and complaining after
+    // would leave a document that is missing "Scope of Work" sitting at its path, published, with
+    // the row marked drafted — and its Done criterion asks whether a document exists, so the gate
+    // would pass on it. A half-written deliverable that reads as finished is the exact false green
+    // this app is built to refuse.
+    //
+    // Not exempted for backlog and sprint rows even though their sections are generated from the
+    // tool's structure rather than written by the model. If such a row declares a template and the
+    // sections do not satisfy it, that is a misconfiguration worth seeing; a silent exemption is a
+    // rule with a hole nobody can find.
+    if (ctx.template) {
+      const missing = missingSections(ctx.template.sections, sections.map((s) => s.heading));
+      if (missing.length) {
+        // The list goes into the TURN, so the model reads it on the next run and the human can see
+        // why nothing was filed. Naming them in the template's own spelling is what makes it
+        // actionable — "2. Scope of Work" says where to look in a way "scope of work" does not.
+        await recordTurn(
+          taskId,
+          `**Not filed — the draft is missing ${missing.length} section(s) the ` +
+            `\`${ctx.templateName}\` template requires:**\n` +
+            missing.map((m) => `- ${m}`).join("\n") +
+            `\n\nEverything else was kept. Run again and include them; extra sections beyond the ` +
+            `template are welcome.`,
+          ctx,
+        );
+        await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+        return {
+          kind: "error",
+          message:
+            `The draft is missing ${missing.length} required section(s): ${missing.join(", ")}. ` +
+            `Nothing was filed.`,
+        };
+      }
+    }
+
     const { data: org } = await sb
       .from("engagement")
       .select("org_id")
@@ -875,12 +1165,7 @@ export async function runAgent(
 
     // Drafted, not done. A human still approves it — that is the HITL gate, and skipping it here
     // would make the agent both maker and checker.
-    await sb
-      .from("work_task")
-      .update({ state: "hitl", executor: null })
-      .eq("id", taskId);
-    await mirrorState(actor.engagementId, taskId, "hitl", ctx.roleCode);
-    await finished(ctx.engagementId, taskId, ctx.roleCode, "drafted", message, {
+    await handOver(actor, taskId, ctx, "drafted", message, {
       path: ctx.produces,
       sections: sections.length,
       published: published.ok,

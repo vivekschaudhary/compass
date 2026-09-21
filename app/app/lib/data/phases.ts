@@ -28,7 +28,12 @@ import {
   evaluate,
   type CriterionRow,
 } from "./gates";
-import { mirrorPhase, mirrorNested, mirrorState, type Mirrored } from "./tracker";
+import {
+  mirrorPhase,
+  mirrorNested,
+  mirrorState,
+  type Mirrored,
+} from "./tracker";
 import { composeTicketBodies, type Composed } from "./ticket-body";
 
 /**
@@ -58,7 +63,9 @@ export type Initiated =
  * happened whether or not a ticket reads well.
  */
 async function putOnBoard(
-  engagementId: string, runId: string, roleCode: string,
+  engagementId: string,
+  runId: string,
+  roleCode: string,
 ): Promise<BoardResult> {
   const mirrored = await mirrorPhase(engagementId, runId, roleCode);
   // Nothing on the board is nothing to write on. Composing here would spend a model call producing
@@ -66,13 +73,20 @@ async function putOnBoard(
   if (!mirrored.epic) return mirrored;
 
   try {
-    return { ...mirrored, composed: await composeTicketBodies(engagementId, runId, roleCode) };
+    return {
+      ...mirrored,
+      composed: await composeTicketBodies(engagementId, runId, roleCode),
+    };
   } catch (e) {
     return {
       ...mirrored,
       composed: {
-        written: [], expected: 0, reason: "no-host",
-        problems: [`Composing ticket bodies failed: ${e instanceof Error ? e.message : String(e)}`],
+        written: [],
+        expected: 0,
+        reason: "no-host",
+        problems: [
+          `Composing ticket bodies failed: ${e instanceof Error ? e.message : String(e)}`,
+        ],
       },
     };
   }
@@ -164,7 +178,11 @@ export async function initiatePhase(
     // subsequent initiate short-circuited here, so a phase opened during an outage could never be
     // put on the board at all. `mirrorPhase` is idempotent — a run that already has its epic and
     // stories re-reads their keys and writes nothing.
-    const mirrored = await putOnBoard(actor.engagementId, open.id, actor.roleCode);
+    const mirrored = await putOnBoard(
+      actor.engagementId,
+      open.id,
+      actor.roleCode,
+    );
     return { ok: true, runId: open.id, tasks, mirrored };
   }
 
@@ -280,7 +298,11 @@ export async function initiatePhase(
   //
   // Machine rows above closed with no ticket yet, which is why they close locally without the
   // board: mirrorPhase creates their story and moves it to match, a few lines from here.
-  const mirrored = await putOnBoard(actor.engagementId, runId as string, actor.roleCode);
+  const mirrored = await putOnBoard(
+    actor.engagementId,
+    runId as string,
+    actor.roleCode,
+  );
 
   return { ok: true, runId: runId as string, tasks, mirrored };
 }
@@ -352,7 +374,9 @@ export async function openNested(
   actor: Actor,
   taskId: string,
   subjectRef: string | null = null,
-): Promise<{ ok: true; runId: string; mirrored: Mirrored } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; runId: string; mirrored: Mirrored } | { ok: false; error: string }
+> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
@@ -373,12 +397,27 @@ export async function openNested(
   });
   if (error) return { ok: false, error: error.message };
 
-  const mirrored = await mirrorNested(actor.engagementId, runId as string, actor.roleCode);
+  const mirrored = await mirrorNested(
+    actor.engagementId,
+    runId as string,
+    actor.roleCode,
+  );
   // The row itself is now in progress: its work is the child run. Reported through `mirrored`
   // rather than failing the open — the run exists whether or not the board heard about it.
-  const moved = await mirrorState(actor.engagementId, taskId, "running", actor.roleCode);
-  if (!moved.ok && moved.reason !== "no-tracker" && moved.reason !== "no-ticket") {
-    mirrored.problems.push(`The parent row's ticket did not move: ${moved.note}`);
+  const moved = await mirrorState(
+    actor.engagementId,
+    taskId,
+    "running",
+    actor.roleCode,
+  );
+  if (
+    !moved.ok &&
+    moved.reason !== "no-tracker" &&
+    moved.reason !== "no-ticket"
+  ) {
+    mirrored.problems.push(
+      `The parent row's ticket did not move: ${moved.note}`,
+    );
   }
 
   // Measure the child's rows, exactly as `initiatePhase` does for a phase's. Without it a nested
@@ -409,14 +448,23 @@ export async function openNested(
 export async function openNestedFanOut(
   actor: Actor,
   taskId: string,
-): Promise<{ ok: true; runs: { runId: string; subject: string | null; mirrored: Mirrored }[] } | { ok: false; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      runs: { runId: string; subject: string | null; mirrored: Mirrored }[];
+    }
+  | { ok: false; error: string }
+> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
   if (!(await nestedIsPerEpic(taskId))) {
     const one = await openNested(actor, taskId);
     return one.ok
-      ? { ok: true, runs: [{ runId: one.runId, subject: null, mirrored: one.mirrored }] }
+      ? {
+          ok: true,
+          runs: [{ runId: one.runId, subject: null, mirrored: one.mirrored }],
+        }
       : one;
   }
 
@@ -424,18 +472,24 @@ export async function openNestedFanOut(
   if (!epics.length) {
     return {
       ok: false,
-      error: "This row opens one technical design per epic, and this run has no epics. " +
-             "Nothing was opened — draft and approve the epics first.",
+      error:
+        "This row opens one technical design per epic, and this run has no epics. " +
+        "Nothing was opened — draft and approve the epics first.",
     };
   }
 
-  const runs: { runId: string; subject: string | null; mirrored: Mirrored }[] = [];
+  const runs: { runId: string; subject: string | null; mirrored: Mirrored }[] =
+    [];
   for (const epic of epics) {
     const child = await openNested(actor, taskId, epic.ref);
     // One epic failing does not silently drop the rest: the others still open, and the failure is
     // returned rather than logged nowhere. A partial fan-out is honest; a quiet one is not.
     if (!child.ok) return { ok: false, error: `${epic.ref}: ${child.error}` };
-    runs.push({ runId: child.runId, subject: epic.ref, mirrored: child.mirrored });
+    runs.push({
+      runId: child.runId,
+      subject: epic.ref,
+      mirrored: child.mirrored,
+    });
   }
   return { ok: true, runs };
 }
@@ -445,51 +499,84 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
   const sb = supabaseAdmin();
   if (!sb) return false;
 
-  const { data: task } = await sb.from("work_task")
-    .select("org_id, engagement_id, workflow_step_id").eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select("org_id, engagement_id, workflow_step_id")
+    .eq("id", taskId)
+    .maybeSingle();
   if (!task?.workflow_step_id) return false;
 
-  const { data: step } = await sb.from("workflow_step")
-    .select("nests_workflow_code").eq("id", task.workflow_step_id).maybeSingle();
+  const { data: step } = await sb
+    .from("workflow_step")
+    .select("nests_workflow_code")
+    .eq("id", task.workflow_step_id)
+    .maybeSingle();
   const code = step?.nests_workflow_code as string | null;
   if (!code) return false;
 
   // The engagement's override wins over the org default, exactly as `open_workflow_run` resolves it
   // — reading the org copy here would answer for a workflow this run is not using.
-  const { data: wf } = await sb.from("workflow")
-    .select("id").eq("org_id", task.org_id).eq("code", code)
+  const { data: wf } = await sb
+    .from("workflow")
+    .select("id")
+    .eq("org_id", task.org_id)
+    .eq("code", code)
     .or(`engagement_id.eq.${task.engagement_id},engagement_id.is.null`)
-    .order("engagement_id", { nullsFirst: false }).limit(1).maybeSingle();
+    .order("engagement_id", { nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
   if (!wf) return false;
 
-  const { data: ver } = await sb.from("workflow_version")
-    .select("id").eq("workflow_id", wf.id).eq("status", "published").maybeSingle();
+  const { data: ver } = await sb
+    .from("workflow_version")
+    .select("id")
+    .eq("workflow_id", wf.id)
+    .eq("status", "published")
+    .maybeSingle();
   if (!ver) return false;
 
-  const { data: steps } = await sb.from("workflow_step")
-    .select("produces").eq("workflow_version_id", ver.id);
-  return (steps ?? []).some((s) => (s.produces as string | null)?.includes("{epic}"));
+  const { data: steps } = await sb
+    .from("workflow_step")
+    .select("produces")
+    .eq("workflow_version_id", ver.id);
+  return (steps ?? []).some((s) =>
+    (s.produces as string | null)?.includes("{epic}"),
+  );
 }
 
 /** The epics drafted in this task's own run — what the fan-out opens a design for. */
-async function epicsOfRun(taskId: string): Promise<{ ref: string; key: string | null }[]> {
+async function epicsOfRun(
+  taskId: string,
+): Promise<{ ref: string; key: string | null }[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
 
-  const { data: task } = await sb.from("work_task")
-    .select("workflow_run_id").eq("id", taskId).maybeSingle();
+  const { data: task } = await sb
+    .from("work_task")
+    .select("workflow_run_id")
+    .eq("id", taskId)
+    .maybeSingle();
   if (!task?.workflow_run_id) return [];
 
   // Every task of this run, because the epics belong to whichever row drafted them — this row only
   // knows it comes after.
-  const { data: siblings } = await sb.from("work_task")
-    .select("id").eq("workflow_run_id", task.workflow_run_id);
+  const { data: siblings } = await sb
+    .from("work_task")
+    .select("id")
+    .eq("workflow_run_id", task.workflow_run_id);
   const ids = (siblings ?? []).map((s) => s.id as string);
   if (!ids.length) return [];
 
-  const { data: items } = await sb.from("backlog_item")
-    .select("ref, ticket_key").in("task_id", ids).eq("kind", "epic").order("ord");
-  return (items ?? []).map((i) => ({ ref: i.ref as string, key: (i.ticket_key as string | null) ?? null }));
+  const { data: items } = await sb
+    .from("backlog_item")
+    .select("ref, ticket_key")
+    .in("task_id", ids)
+    .eq("kind", "epic")
+    .order("ord");
+  return (items ?? []).map((i) => ({
+    ref: i.ref as string,
+    key: (i.ticket_key as string | null) ?? null,
+  }));
 }
 
 /** Is this task's row a machine check — something measured rather than performed? */
@@ -529,6 +616,76 @@ export async function nestedWorkflowOf(taskId: string): Promise<string | null> {
 }
 
 /**
+ * The child runs a nesting row has opened, and the rows inside each.
+ *
+ * `nestedWorkflowOf` says the row is satisfied by a workflow; this says what happened when someone
+ * started it. Both are needed by the same surface, because "you started it and these five rows
+ * opened" and "you have not started it yet" are different screens, and until now the job page
+ * showed neither — it offered a Run button that could only ever be refused.
+ *
+ * `evaluateNested` already makes the run half of this query to decide whether the row's gate is
+ * met. This widens it to carry the tasks, because a person needs to SEE the work, not be told a
+ * count of it. The gate stays the authority on whether the row is done; this is for reading.
+ *
+ * Ordered by `ord`, the same order the child run's own queue uses, so the list here and the list
+ * there cannot disagree about which row comes first.
+ */
+export async function childRunsOf(
+  actor: Actor,
+  taskId: string,
+): Promise<
+  {
+    runId: string;
+    state: string;
+    subject: string | null;
+    tasks: {
+      id: string;
+      title: string;
+      roleCode: string;
+      state: string;
+      ticketKey: string | null;
+    }[];
+  }[]
+> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { data: runs } = await sb
+    .from("workflow_run")
+    .select("id, state, subject_key, opened_at")
+    .eq("engagement_id", actor.engagementId)
+    .eq("parent_task_id", taskId)
+    .order("opened_at");
+  if (!runs?.length) return [];
+
+  // One query for every child's rows rather than one per run — a fan-out opens one run per epic,
+  // and a per-run query would grow with the backlog.
+  const { data: tasks } = await sb
+    .from("work_task")
+    .select("id, title, role_code, state, ticket_key, ord, workflow_run_id")
+    .in(
+      "workflow_run_id",
+      runs.map((r) => r.id as string),
+    )
+    .order("ord");
+
+  return runs.map((r) => ({
+    runId: r.id as string,
+    state: r.state as string,
+    subject: (r.subject_key as string | null) ?? null,
+    tasks: (tasks ?? [])
+      .filter((t) => t.workflow_run_id === r.id)
+      .map((t) => ({
+        id: t.id as string,
+        title: t.title as string,
+        roleCode: t.role_code as string,
+        state: t.state as string,
+        ticketKey: (t.ticket_key as string | null) ?? null,
+      })),
+  }));
+}
+
+/**
  * Which phases exist for this engagement, and whether each has a run.
  *
  * It does NOT evaluate entry gates — `available` means "no run yet", not "ready to start". The
@@ -562,6 +719,9 @@ export async function phasesFor(actor: Actor): Promise<
     .eq("org_id", orgId)
     .eq("owner_role_code", actor.roleCode)
     .eq("enabled", true);
+
+  const nested = await nestedByOpenRun(actor.engagementId);
+
   const { data: runs } = await sb
     .from("workflow_run")
     .select("id, workflow_id, state, ticket_key, opened_at")
@@ -575,7 +735,8 @@ export async function phasesFor(actor: Actor): Promise<
   type Run = NonNullable<typeof runs>[number];
   const runOf = new Map<string, Run>();
   for (const r of runs ?? []) {
-    if (!runOf.has(r.workflow_id as string)) runOf.set(r.workflow_id as string, r);
+    if (!runOf.has(r.workflow_id as string))
+      runOf.set(r.workflow_id as string, r);
   }
 
   // One query for every run's ticketless tasks rather than one per phase.
@@ -588,7 +749,23 @@ export async function phasesFor(actor: Actor): Promise<
     (unticketed ?? []).map((t) => t.workflow_run_id as string),
   );
 
-  return (wfs ?? []).map((w) => {
+  return (wfs ?? []).filter((w) => {
+    // A workflow some OTHER workflow's open row nests is not a phase anyone starts on its own. It
+    // starts when its parent row does, and its run belongs to that row.
+    //
+    // Without this, `timeline` read "available" the whole time sprint 0's Timeline & Milestones row
+    // had it open — because the state below is read from TOP-LEVEL runs only, and a nested run has
+    // a parent. It was started a second time from the workflow list, producing a duplicate run that
+    // could never satisfy the parent row: one deliverable, three tickets, two of them orphans.
+    //
+    // Only while the parent run is open. Once sprint 0 closes, the workflow is a phase again.
+    //
+    // A workflow that ALREADY has a top-level run is never hidden, whatever nests it. Hiding one
+    // would take an open run off the only screen that shows it — invisible, and with no way to
+    // close it. Filtering the list must not make existing work disappear.
+    const hidden = nested.has(w.code as string);
+    return !hidden || Boolean(runOf.get(w.id));
+  }).map((w) => {
     const run = runOf.get(w.id);
     return {
       code: w.code,
@@ -599,13 +776,53 @@ export async function phasesFor(actor: Actor): Promise<
       // it is policing is a mistake this repo has already made once.
       state: run
         ? run.state === "closed"
-          ? (w.repeatable ? ("available" as const) : ("closed" as const))
+          ? w.repeatable
+            ? ("available" as const)
+            : ("closed" as const)
           : ("open" as const)
         : ("available" as const),
       runId: run?.id ?? null,
       onBoard: run ? Boolean(run.ticket_key) && !missing.has(run.id) : null,
     };
   });
+}
+
+/**
+ * Workflow codes that a currently open run's steps nest.
+ *
+ * Derived from the steps rather than a column on `workflow` or a list of names here: nesting is
+ * already stated once, in `workflow_step.nests_workflow_code`, and a second place saying the same
+ * thing is a second thing to keep true. This repo has made the carry-the-literal mistake before.
+ *
+ * FAILS OPEN, deliberately. An unreadable step table yields an empty set and the phase list is
+ * whatever it was before — offering too much, which a person can refuse, rather than hiding a
+ * phase with no way to find out why. The direction is chosen; it is not an accident.
+ */
+async function nestedByOpenRun(engagementId: string): Promise<Set<string>> {
+  const sb = supabaseAdmin();
+  if (!sb) return new Set();
+
+  const { data: runs } = await sb
+    .from("workflow_run")
+    .select("workflow_version_id")
+    .eq("engagement_id", engagementId)
+    .neq("state", "closed");
+  const versions = [
+    ...new Set(
+      (runs ?? []).map((r) => r.workflow_version_id as string).filter(Boolean),
+    ),
+  ];
+  if (!versions.length) return new Set();
+
+  const { data: steps } = await sb
+    .from("workflow_step")
+    .select("nests_workflow_code")
+    .in("workflow_version_id", versions)
+    .not("nests_workflow_code", "is", null);
+
+  return new Set(
+    (steps ?? []).map((s) => s.nests_workflow_code as string).filter(Boolean),
+  );
 }
 
 export { storedStatusFor };
