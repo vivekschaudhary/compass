@@ -6,7 +6,7 @@ sprint-0,2,workflow,delivery-manager,draft-timeline,timeline,,sow,,timeline,Time
 sprint-0,3,workflow,product-owner,draft-product-brief,product-brief,,"sow,requirements",,product-brief,Product brief,,"file-sow,file-requirements"
 sprint-0,4,workflow,delivery-manager,draft-resources,resource-plan,roster,"sow,requirements, timeline",,resources,Staffing plan and resources,,"file-sow, draft-timeline"
 sprint-0,5,workflow,product-manager,draft-features,features,,,,feature,Features and how each is judged,,"file-sow,file-requirements,draft-product-brief"
-sprint-0,6,workflow,staff-engineer,draft-foundation-architecture,"architecture-research, foundational-architecture,scaffold-record",,,,foundation-architecture,Foundation architecture,,"file-requirements,file-sow, draft-product-brief, draft-features"
+sprint-0,6,workflow,staff-engineer,draft-foundation-architecture,foundational-architecture,,,,foundation-architecture,Foundation architecture,,"file-requirements,file-sow, draft-product-brief, draft-features"
 sprint-0,7,workflow,staff-engineer,draft-feature-architecture,feature-architecture,,,,feature-architecture,Feature architecture,,"draft-product-brief,draft-foundation-architecture, draft-features"
 sprint-0,8,workflow,designer,build-design-library,"design-research,design-library",,,,design-library,Design library,,"draft-product-brief, file-requirements, draft-features"
 sprint-0,9,workflow,product-owner,draft-epics,"epic-research,  deliverables@tickets",,,,epics,Epics from milestones and features,,"file-requirements,draft-product-brief,draft-features, draft-foundation-architecture, draft-feature-architecture"
@@ -15,34 +15,34 @@ timeline,1,agent,delivery-manager,draft-timeline,timeline,,sow,,,Draft the timel
 timeline,3,hitl,product-manager,approve-timeline,,,,,,Review and approve the timeline,,draft-timeline
 resources,1,agent,delivery-manager,propose-resource-plan,resource-plan,roster,"sow,requirements,timeline",,,Staffing plan and resources,,
 resources,3,hitl,product-manager,approve-resource-plan,,,,,,Review and approve the staffing plan,,propose-resource-plan
-feature,1,agent,product-owner,draft-feature,features,,,,,The feature and its targets,,
+feature,1,agent,product-owner,draft-feature,features,,product-brief,,,The feature and its targets,,
 feature,3,hitl,product-manager,approve-feature,,,,,,Accept the feature,,draft-feature
-product-brief,1,agent,researcher,gather-evidence,brief-evidence,,,,,Evidence for the brief,research-findings,
+product-brief,1,agent,researcher,gather-evidence,brief-evidence,,"sow,requirements",,,Evidence for the brief,research-findings,
 product-brief,2,hitl,product-owner,approve-evidence,,,,,,Review and approve the evidence,,gather-evidence
-product-brief,3,agent,product-owner,draft-brief,product-brief,,,,,Product brief,brief,approve-evidence
+product-brief,3,agent,product-owner,draft-brief,product-brief,,"sow,requirements,brief-evidence",,,Product brief,brief,approve-evidence
 product-brief,4,hitl,product-manager,approve-brief,,,,,,Review and approve the brief,,draft-brief
-foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,,,,Research the ground,research-findings,
+foundation-architecture,1,agent,staff-engineer,research-architecture,architecture-research,,"product-brief,features",,,Research the ground,research-findings,
 foundation-architecture,2,hitl,principal-engineer,approve-research,,,,,,Accept the research,,research-architecture
-foundation-architecture,3,agent,staff-engineer,derive-architecture,foundational-architecture,,,,,Foundation architecture,foundation-architecture,
+foundation-architecture,3,agent,staff-engineer,derive-architecture,foundational-architecture,,"product-brief,features,architecture-research",,,Foundation architecture,foundation-architecture,approve-research
 foundation-architecture,4,hitl,principal-engineer,approve-architecture,,,,,,Accept the architecture,,derive-architecture
-foundation-architecture,5,agent,staff-engineer,scaffold-foundation,scaffold-record,,,,,Scaffold the foundation,,
+foundation-architecture,5,agent,staff-engineer,scaffold-foundation,scaffold-record,,foundational-architecture,,,Scaffold the foundation,,approve-architecture
 foundation-architecture,6,hitl,principal-engineer,approve-scaffold,,,,,,Accept the scaffold,,scaffold-foundation
-feature-architecture,1,agent,staff-engineer,draft-feature-architecture,feature-architecture,,,,,Feature architecture,architecture,
+feature-architecture,1,agent,staff-engineer,draft-feature-architecture,feature-architecture,,"product-brief,features,foundational-architecture",,,Feature architecture,architecture,
 feature-architecture,2,hitl,principal-engineer,approve-feature-architecture,,,,,,Review and approve the feature architecture,,draft-feature-architecture
-design-library,1,agent,designer,research-design,design-research,,,,,Research the design ground,research-findings,
+design-library,1,agent,designer,research-design,design-research,,"requirements,product-brief",,,Research the design ground,research-findings,
 design-library,2,hitl,product-manager,approve-research,,,,,,Review and approve the research,,research-design
-design-library,3,agent,designer,derive-library,design-library,,,,,The design library,,
+design-library,3,agent,designer,derive-library,design-library,,"product-brief,design-research",,,The design library,,approve-research
 design-library,4,hitl,product-manager,approve-library,,,,,,Review and approve the library,,derive-library
-sprint-plan,1,agent,product-owner,research-capacity,capacity-research,,,,,What the team can take on,research-findings,
+sprint-plan,1,agent,product-owner,research-capacity,capacity-research,,"deliverables,resource-plan",,,What the team can take on,research-findings,
 sprint-plan,2,hitl,product-manager,approve-capacity,,,,,,Review and approve the capacity picture,,research-capacity
-sprint-plan,3,agent,product-owner,draft-sprint-plan,sprint-plans,sprint,,,,The sprint plan,,
+sprint-plan,3,agent,product-owner,draft-sprint-plan,sprint-plans,sprint,"deliverables,resource-plan,capacity-research",,,The sprint plan,,approve-capacity
 sprint-plan,4,hitl,product-manager,approve-plan,,,,,,Review and approve the plan,,draft-sprint-plan
-epics,1,agent,product-owner,research-epics,epic-research,,,,,What the epics must cover,research-findings,
+epics,1,agent,product-owner,research-epics,epic-research,,"product-brief,features,timeline",,,What the epics must cover,research-findings,
 epics,3,hitl,product-manager,approve-research,,,,,,Review and approve the coverage,,research-epics
-epics,4,agent,product-owner,draft-epics,deliverables@tickets,backlog,,,,The epics,,approve-research
+epics,4,agent,product-owner,draft-epics,deliverables@tickets,backlog,"product-brief,features,timeline,epic-research",,,The epics,,approve-research
 epics,6,hitl,product-manager,approve-epics,,,,,,Review and approve the epics,,draft-epics
-epics,7,workflow,staff-engineer,design-epics-tech,,,,,tech-design,Technical design per epic,,
-tech-design,1,agent,staff-engineer,draft-epic-tech-design,epic/{epic},,,,,Epic technical design,architecture,
+epics,7,workflow,staff-engineer,design-epics-tech,,,deliverables,,tech-design,Technical design per epic,,approve-epics
+tech-design,1,agent,staff-engineer,draft-epic-tech-design,epic/{epic},,"deliverables,features",,,Epic technical design,architecture,
 tech-design,2,hitl,principal-engineer,approve-epic-tech-design,,,,,,Accept the technical design,,draft-epic-tech-design
 build,1,agent,engineer,implement-story,{subject}@scm,code,,,,Implement the story,,
 build,2,agent,automation,write-e2e-tests,{subject}@scm,code,,,,Automated tests for the story,,implement-story
