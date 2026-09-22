@@ -68,9 +68,11 @@ export const TOOLS: Anthropic.Tool[] = [
                   "A document path when the ANSWER IS ITSELF A DOCUMENT — a BRD, a policy, a " +
                   "client's existing backlog. The text is filed verbatim at that path and you read " +
                   "it as an input; it is not yours to rewrite. Omit for an ordinary question. " +
-                  "The human may answer with a link instead of pasting: Compass opens it and files " +
-                  "what it says, or tells them it could not — so never ask them to paste something " +
-                  "they have given you as a link. When you ask for a document, always set this.",
+                  "The human has three ways to answer it and you should offer all three: paste the " +
+                  "text, give a link, or UPLOAD THE FILE (PDF, Word, Excel). Compass reads a link " +
+                  "or a file itself and files what it says, or tells them it could not — so never " +
+                  "ask them to paste something they can hand over whole. When you ask for a " +
+                  "document, always set this.",
               },
             },
             required: ["prompt", "type", "why"],
@@ -311,6 +313,70 @@ export const TOOLS: Anthropic.Tool[] = [
     },
     strict: true,
   },
+  {
+    name: "roster",
+    description:
+      "Say who does the work: one row per role, and who holds it. Use this instead of `draft` when " +
+      "the deliverable IS a staffing plan — a name that only exists as a sentence in a page is a " +
+      "name the app cannot act on, so it has to come back as rows rather than prose someone would " +
+      "have to re-read to find it. Write a role you were not given a name for anyway, with its " +
+      "holder as `Vacant` or `TBD` — a role missing from the table entirely reads as a role nobody " +
+      "considered.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "What you produced and what it is based on. Note any input that was missing and what it cost.",
+        },
+        rows: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              role: {
+                type: "string",
+                description:
+                  "The role's title, in the engagement's own vocabulary — e.g. `Delivery Manager`.",
+              },
+              holder: {
+                type: "string",
+                description:
+                  "The person's name. Where the role is not yet filled, write `Vacant` or `TBD` " +
+                  "rather than leaving the row out.",
+              },
+            },
+            required: ["role", "holder"],
+            additionalProperties: false,
+          },
+        },
+        sections: {
+          type: "array",
+          description:
+            "Anything besides the table itself — capacity notes, how the roster was reasoned about, " +
+            "risks in relying on it. The roster table is appended for you; do not write it.",
+          items: {
+            type: "object",
+            properties: {
+              heading: { type: "string" },
+              body: { type: "string", description: "Markdown." },
+              cites: {
+                type: "array",
+                items: { type: "string" },
+                description: "Document paths this section was derived from.",
+              },
+            },
+            required: ["heading", "body", "cites"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["summary", "rows", "sections"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
 ];
 
 /**
@@ -335,6 +401,7 @@ export const TOOLS: Anthropic.Tool[] = [
 export const TOOL_FOR: Record<string, string> = {
   backlog: "backlog",
   sprint: "sprint",
+  roster: "roster",
   code: "code",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over

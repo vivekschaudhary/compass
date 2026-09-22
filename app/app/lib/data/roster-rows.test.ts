@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRoster } from "./roster-rows";
+import { normaliseRosterRows, parseRoster, rosterSection } from "./roster-rows";
 
 // The real table the delivery-manager agent wrote for dhcs-n5aq, verbatim — bold names, a vacancy,
 // three people in one role, and a fourth column the parser must ignore.
@@ -48,5 +48,86 @@ describe("parseRoster", () => {
 
   it("returns nothing for a table that is not a roster", () => {
     expect(parseRoster("| Parameter | Value |\n|---|---|\n| Cost | $1.5m |")).toEqual([]);
+  });
+});
+
+// The render side, and why it exists: `output: roster` was the one output that must become state
+// and had NO tool, so the agent got plain `draft` and the names it was given reached the page as
+// whatever prose it chose — or not at all. The live symptom was a delivery manager answering three
+// questions with real names and `member` staying empty. The tool returns rows; this renders them
+// into the exact table the parser above already reads, so the round trip is mechanical rather than
+// a hope about formatting.
+
+describe("rosterSection", () => {
+  it("round-trips the rows the tool returned", () => {
+    const given = [
+      { role: "Delivery Manager", holder: "John" },
+      { role: "Product Manager", holder: "Jill" },
+    ];
+    expect(parseRoster(rosterSection(given).body)).toEqual([
+      { roleLabel: "Delivery Manager", holder: "John" },
+      { roleLabel: "Product Manager", holder: "Jill" },
+    ]);
+  });
+
+  it("renders an unfilled role as a vacancy the parser reads back as one", () => {
+    // Both directions matter: the row must survive (a role nobody considered is different from a
+    // role nobody has yet), and it must not staff a person called "TBD".
+    const back = parseRoster(rosterSection([{ role: "Support", holder: "TBD" }]).body);
+    expect(back).toEqual([{ roleLabel: "Support", holder: null }]);
+  });
+
+  it("renders a blank holder as a vacancy rather than an empty cell", () => {
+    // An empty cell would make the row narrower than the header, and `parseRoster` drops those —
+    // the role would vanish silently, which is the failure this whole change is about.
+    const body = rosterSection([{ role: "Researcher", holder: "" }]).body;
+    expect(body).toContain("| Researcher | — |");
+    expect(parseRoster(body)).toEqual([{ roleLabel: "Researcher", holder: null }]);
+  });
+
+  it("survives a pipe in a name", () => {
+    // `parseRoster` splits on every pipe and has no escaping to undo, so a stray one would shift
+    // the Holder column and staff the wrong text. Stripped at render rather than escaped.
+    const back = parseRoster(rosterSection([{ role: "Engineer | Lead", holder: "A | B" }]).body);
+    expect(back).toEqual([{ roleLabel: "Engineer / Lead", holder: "A / B" }]);
+  });
+
+  it("keeps two people in one role", () => {
+    const back = parseRoster(rosterSection([
+      { role: "Engineer", holder: "Jay" },
+      { role: "Engineer", holder: "Jackie" },
+    ]).body);
+    expect(back.map((r) => r.holder)).toEqual(["Jay", "Jackie"]);
+  });
+});
+
+describe("normaliseRosterRows", () => {
+  it("keeps what the tool returned", () => {
+    expect(normaliseRosterRows([{ role: "Engineer", holder: "Jay" }])).toEqual({
+      rows: [{ role: "Engineer", holder: "Jay" }],
+      problems: [],
+    });
+  });
+
+  it("drops a row with no role and SAYS so", () => {
+    // Reported, not silently shortened — the approver is saying yes to a roster on the strength of
+    // it being complete. Same posture as `normaliseBacklog`'s dropped epics.
+    const { rows, problems } = normaliseRosterRows([
+      { role: "", holder: "Nobody" },
+      { role: "Engineer", holder: "Jay" },
+    ]);
+    expect(rows).toEqual([{ role: "Engineer", holder: "Jay" }]);
+    expect(problems).toEqual(["Dropped row 1 with no role."]);
+  });
+
+  it("keeps a row whose holder is missing — an open role is an answer", () => {
+    expect(normaliseRosterRows([{ role: "Support" }]).rows).toEqual([
+      { role: "Support", holder: "" },
+    ]);
+  });
+
+  it("treats a shape that is not a list as nothing, without throwing", () => {
+    expect(normaliseRosterRows(undefined)).toEqual({ rows: [], problems: [] });
+    expect(normaliseRosterRows("not a list")).toEqual({ rows: [], problems: [] });
   });
 });

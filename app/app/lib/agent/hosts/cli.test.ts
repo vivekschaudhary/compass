@@ -228,10 +228,17 @@ describe("toolsFor", () => {
   const names = (output: string | null) => toolsFor(output).map((t) => t.name).sort();
 
   it("gives an ordinary step ask and draft", () => {
-    // `roster` is a materialiser, not a tool: the roster is DRAFTED as an ordinary document and
-    // only its approval is special. So it takes the same tools as a step declaring nothing.
-    expect(names("roster")).toEqual(["ask", "draft"]);
     expect(names(null)).toEqual(["ask", "draft"]);
+  });
+
+  // This test used to assert the opposite, on the reasoning that "`roster` is a materialiser, not a
+  // tool: the roster is DRAFTED as an ordinary document and only its approval is special." That was
+  // the defect, written down. `output: roster` must become `member` rows, and leaving the agent on
+  // `draft` meant the names a delivery manager gave in answers reached the page as whatever prose
+  // the model chose — or not at all, which is what happened: three questions answered and `member`
+  // still empty. An outcome that has to become rows arrives as structure.
+  it("gives the staffing step the roster tool", () => {
+    expect(names("roster")).toEqual(["ask", "roster"]);
   });
 
   it("gives both sprint-planning rows the same tool, because both declare the same output", () => {
@@ -248,6 +255,7 @@ describe("toolsFor", () => {
   it("does not leave draft available beside a specialised tool", () => {
     expect(names("sprint")).not.toContain("draft");
     expect(names("backlog")).not.toContain("draft");
+    expect(names("roster")).not.toContain("draft");
   });
 
   it("never withholds ask — every step can still say what it does not know", () => {

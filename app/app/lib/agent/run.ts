@@ -26,6 +26,7 @@ import { conversation, openQuestions } from "../data/job";
 import { publishToDocs } from "../data/publish";
 import { normaliseBacklog, sectionsOf, recordBacklog } from "../data/backlog";
 import { commitmentsSection, overviewSection } from "../data/sprint-rows";
+import { normaliseRosterRows, rosterSection } from "../data/roster-rows";
 import { resolveCommitments } from "../data/sprint";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
@@ -867,12 +868,13 @@ export async function runAgent(
       : { kind: "error", message: `The build produced no pull request (exit ${built.exit}).` };
   }
 
-  if (call.name === "draft" || call.name === "backlog" || call.name === "sprint") {
+  if (call.name === "draft" || call.name === "backlog" || call.name === "sprint" || call.name === "roster") {
     const isBacklog = call.name === "backlog";
     const isSprint = call.name === "sprint";
+    const isRoster = call.name === "roster";
     const input = call.input as {
       summary?: string; sections?: unknown; epics?: unknown;
-      goal?: string; starts?: string; ends?: string; commitments?: unknown;
+      goal?: string; starts?: string; ends?: string; commitments?: unknown; rows?: unknown;
     };
 
     // The backlog arrives as structure and is turned into sections HERE, so everything downstream —
@@ -890,11 +892,19 @@ export async function runAgent(
       ? await resolveCommitments(actor.engagementId, input.commitments)
       : { commitments: [], problems: [] as string[] };
 
-    // The commitments table is APPENDED to what the agent wrote, so the plan reads as a page and
-    // still carries the structure approval needs. Guarded on `commitments.length`: appending
-    // unconditionally would mean a sprint that committed to nothing still produced a section, and
-    // the "no document was produced" check below — which counts sections — would never fire on the
-    // one outcome that most needs to halt. An empty sprint is not a plan.
+    // The roster arrives as rows for the same reason the backlog does: a name that exists only as
+    // a sentence in a page is a name the app cannot act on. Rendered into the exact table
+    // `parseRoster`/`materialiseRoster` already read, so nothing downstream of the document changes
+    // — the tool is the whole fix.
+    const { rows: rosterRows, problems: rosterProblems } = isRoster
+      ? normaliseRosterRows(input.rows)
+      : { rows: [], problems: [] as string[] };
+
+    // The commitments/roster table is APPENDED to what the agent wrote, so the plan reads as a page
+    // and still carries the structure approval needs. Guarded on length: appending unconditionally
+    // would mean a plan that committed or staffed nothing still produced a section, and the "no
+    // document was produced" check below — which counts sections — would never fire on the one
+    // outcome that most needs to halt.
     const sections = isBacklog
       ? sectionsOf(epics)
       : isSprint
@@ -913,7 +923,11 @@ export async function runAgent(
                 commitmentsSection(commitments),
               ]
             : [])
-        : asSections(input.sections);
+        : isRoster
+          ? (rosterRows.length
+              ? [...asSections(input.sections), rosterSection(rosterRows)]
+              : [])
+          : asSections(input.sections);
 
     // The conversation gets the SUMMARY, not the document. Writing the whole draft into the turn
     // made it render twice — once in the chat and again in the document pane — and turned a
@@ -931,6 +945,8 @@ export async function runAgent(
         ? `_Reading the backlog:_\n${backlogProblems.map((p) => `- ${p}`).join("\n")}`
         : "", sprintProblems.length
         ? `_Committing to the sprint:_\n${sprintProblems.map((p) => `- ${p}`).join("\n")}`
+        : "", rosterProblems.length
+        ? `_Reading the roster:_\n${rosterProblems.map((p) => `- ${p}`).join("\n")}`
         : ""].filter(Boolean).join("\n\n"),
       ctx,
     );
@@ -939,8 +955,8 @@ export async function runAgent(
       // An EMPTY array is not unreadable output — it parsed perfectly and contained nothing. Saying
       // "could not be read" sends someone to debug a parser when the actual cause is usually that
       // the model ran out of room after writing its summary. Name which one it was.
-      const returned = isBacklog ? input.epics : isSprint ? input.commitments : input.sections;
-      const noun = isBacklog ? "epics" : isSprint ? "commitments" : "sections";
+      const returned = isBacklog ? input.epics : isSprint ? input.commitments : isRoster ? input.rows : input.sections;
+      const noun = isBacklog ? "epics" : isSprint ? "commitments" : isRoster ? "rows" : "sections";
       const why = truncated
         ? "It hit the token limit after writing its summary, so the document itself never came. Run it again — the budget is larger now."
         : Array.isArray(returned)
