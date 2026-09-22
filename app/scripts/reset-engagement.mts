@@ -16,110 +16,53 @@
 // created in Jira, stay where they are — the report says how many, so that is a decision rather
 // than a surprise.
 
-import { supabaseAdmin } from "../app/lib/supabase.ts";
-import { planReset, describeReset, type ResetSnapshot } from "../app/lib/data/reset.ts";
+import { describeReset } from "../app/lib/data/reset.ts";
+import { engagementsToReset, resetEngagement } from "../app/lib/data/reset-apply.ts";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const only = args.find((a) => !a.startsWith("--")) ?? null;
 
-const sb = supabaseAdmin();
-if (!sb) { console.error("Supabase is not configured. Check .env.local."); process.exit(1); }
-
-const die = (what: string, error: { message: string } | null) => {
-  if (error) { console.error(`✗ ${what}: ${error.message}`); process.exit(1); }
-};
-
-/* ── which engagements ────────────────────────────────────────────────────── */
-
-const { data: engagements, error: engErr } = await sb.from("engagement").select("id, name");
-die("read engagements", engErr);
-
-const targets = only ? (engagements ?? []).filter((e) => e.id === only) : (engagements ?? []);
-
-if (only && !targets.length) {
-  console.error(`✗ No engagement '${only}'. Known: ${(engagements ?? []).map((e) => e.id).join(", ") || "none"}`);
-  process.exit(1);
-}
-if (!targets.length) { console.log("No engagements."); process.exit(0); }
-
-/* ── report, then optionally write ────────────────────────────────────────── */
-
-// Deletes go in chunks: PostgREST puts `in.(…)` in the URL, and a few thousand uuids exceeds what
-// the server will accept. Failing at 8k characters rather than at a row count is the kind of limit
-// that shows up only on the one engagement big enough to hit it.
-const CHUNK = 200;
-const chunked = async (table: string, ids: string[]) => {
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    die(`delete ${table}`, (await sb.from(table).delete().in("id", ids.slice(i, i + CHUNK))).error);
-  }
-};
+// THE SAME CODE THE ROUTE RUNS. Reading the engagement, planning the deletes and carrying them out
+// all live in `reset-apply.ts` now that `POST /api/cleanup` calls them too — two copies of "clear
+// an engagement" is how a CLI and a route come to mean different things by the word.
+const found = await engagementsToReset(only);
+if (!found.ok) { console.error(`\u2717 ${found.error}`); process.exit(1); }
+if (!found.targets.length) { console.log("No engagements."); process.exit(0); }
 
 let refused = 0, cleared = 0;
 
-for (const eng of targets) {
-  const id = eng.id as string;
+for (const target of found.targets) {
+  console.log(`\n${target.id}  \u2014  ${target.name ?? ""}`);
 
-  const [tasks, runs, documents, events] = await Promise.all([
-    sb.from("work_task").select("id, workflow_run_id").eq("engagement_id", id),
-    sb.from("workflow_run").select("id").eq("engagement_id", id),
-    sb.from("document").select("id, path, external_url").eq("engagement_id", id),
-    sb.from("event").select("id, verb").eq("engagement_id", id),
-  ]);
-  die("read work_task", tasks.error);
-  die("read workflow_run", runs.error);
-  die("read document", documents.error);
-  die("read event", events.error);
+  let result;
+  try {
+    result = await resetEngagement(target.id, target.name, { apply });
+  } catch (e) {
+    console.error(`\u2717 ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
 
-  const snap: ResetSnapshot = {
-    engagementId: id,
-    tasks: (tasks.data ?? []).map((t) => ({ id: t.id as string, workflowRunId: t.workflow_run_id as string | null })),
-    runs: (runs.data ?? []).map((r) => ({ id: r.id as string })),
-    documents: (documents.data ?? []).map((d) => ({
-      id: d.id as string, path: d.path as string, externalUrl: d.external_url as string | null,
-    })),
-    events: (events.data ?? []).map((e) => ({ id: e.id as string, verb: e.verb as string })),
-  };
-
-  const planned = planReset(snap);
-  console.log(`\n${id}  —  ${eng.name ?? ""}`);
-
-  if (!planned.ok) {
-    for (const r of planned.refusals) console.log(`  · ${r.message}\n    → ${r.fix}`);
+  if (!result.ok) {
+    for (const r of result.refusals) console.log(`  \u00b7 ${r.message}\n    \u2192 ${r.fix}`);
     refused++;
     continue;
   }
 
-  for (const line of describeReset(planned.plan)) console.log(line);
-  if (planned.plan.publishedElsewhere > 0) {
+  for (const line of describeReset(result.plan)) console.log(line);
+  if (result.plan.publishedElsewhere > 0) {
     console.log(
-      `\n  NOTE  ${planned.plan.publishedElsewhere} document(s) are published to the doc store. ` +
-      `Those pages are NOT deleted — this clears Compass's side only.`,
+      `\n  NOTE  ${result.plan.publishedElsewhere} document(s) are published to the doc store. ` +
+      `Those pages are NOT deleted \u2014 this clears Compass's side only.`,
     );
   }
 
-  if (!apply) { cleared++; continue; }
-
-  // `document.current_version_id` references `document_version` with no `on delete` rule. Nulling
-  // it first makes the cascade unambiguous instead of depending on how Postgres orders a delete
-  // that takes the parent and the row it points at in one statement.
-  const docIds = planned.plan.deletes.find((d) => d.table === "document")!.ids;
-  for (let i = 0; i < docIds.length; i += CHUNK) {
-    die("clear current_version_id", (await sb.from("document")
-      .update({ current_version_id: null }).in("id", docIds.slice(i, i + CHUNK))).error);
-  }
-
-  // In the planned order. No transaction is available through PostgREST, so this is re-runnable
-  // rather than atomic: every step is a delete by id, so running it twice removes nothing extra.
-  for (const d of planned.plan.deletes) {
-    await chunked(d.table, d.ids);
-  }
   cleared++;
-  console.log("  ✓ cleared");
+  if (result.cleared) console.log("  \u2713 cleared");
 }
 
 console.log(
-  `\n${targets.length} engagement(s): ${cleared} ${apply ? "cleared" : "to clear"}` +
-  (refused ? ` · ${refused} refused` : "") +
+  `\n${found.targets.length} engagement(s): ${cleared} ${apply ? "cleared" : "to clear"}` +
+  (refused ? ` \u00b7 ${refused} refused` : "") +
   (apply ? "" : "\n\nReport only. Re-run with --apply to write."),
 );
