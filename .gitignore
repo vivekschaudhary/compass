@@ -16,3 +16,6 @@ app/supabase/.branches/
 
 # npm creates this at the root when a command is run with --prefix from here
 node_modules/
+
+# macOS
+.DS_Store
