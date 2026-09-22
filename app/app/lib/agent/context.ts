@@ -920,9 +920,11 @@ function suppliedPrompt(ctx: AgentContext): string {
   if (!ctx.priorDraft) {
     return [
       ...head,
-      `It has not been supplied yet. Ask for it, in ONE question, and say what it is for. What you`,
-      `are given is filed verbatim at \`${path}\` — do not summarise it, restructure it, correct it`,
-      `or improve it. It is the client's document and it is the record.`,
+      `It has not been supplied yet. Ask for it, in ONE question, and say what it is for. Say that`,
+      `they can paste the text, give a link, or upload the file itself — a PDF, a Word document or`,
+      `a spreadsheet — because Compass reads all three. What you are given is filed verbatim at`,
+      `\`${path}\` — do not summarise it, restructure it, correct it or improve it. It is the`,
+      `client's document and it is the record.`,
       ``,
       `If you need anything else, ask for it in a SEPARATE question — never in the one that carries`,
       `the document, because that answer is filed as the document itself.`,

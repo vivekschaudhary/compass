@@ -26,17 +26,46 @@ export async function conversation(taskId: string): Promise<Turn[]> {
   }));
 }
 
-export type OpenQuestion = { id: string; prompt: string; type: string; options: string[] | null };
+/**
+ * `filesTo` is the path this question's answer BECOMES a document at.
+ *
+ * It has always been on the row and read inside `recordAnswers`; the UI simply never saw it, so the
+ * one question that wants a contract looked exactly like the one asking how many engineers there
+ * are — and the only way to answer it was to paste, which is how a Word table becomes a column of
+ * words. The form needs this to know where to offer an upload.
+ */
+export type OpenQuestion = {
+  id: string; prompt: string; type: string; options: string[] | null; filesTo: string | null;
+};
 
 export type PastQuestion = { id: string; prompt: string; answer: string | null; state: string; reason: string | null };
+
+/**
+ * A document this answer filed, and where it was published.
+ *
+ * Returned so the caller can act on the page that now exists — attaching the uploaded original to
+ * it, in the upload path. `fileAnswer` used to swallow all of this, which is why nothing could.
+ */
+export type FiledAnswer = {
+  questionId: string;
+  path: string;
+  versionId: string;
+  /** The doc-store page id and URL, when publishing succeeded. Null when it did not. */
+  externalId: string | null;
+  externalUrl: string | null;
+};
 
 /** Questions still blocking the task. There is no decline — an unanswered question stays. */
 export async function openQuestions(taskId: string): Promise<OpenQuestion[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
   const { data } = await sb.from("question")
-    .select("id, prompt, type, options").eq("task_id", taskId).eq("state", "open").order("created_at");
-  return (data ?? []).map((q) => ({ id: q.id, prompt: q.prompt, type: q.type, options: q.options }));
+    .select("id, prompt, type, options, files_to")
+    .eq("task_id", taskId).eq("state", "open").order("created_at");
+  return (data ?? []).map((q) => ({
+    id: q.id, prompt: q.prompt, type: q.type, options: q.options,
+    filesTo: (q.files_to as string | null) ?? null,
+  }));
 }
 
 export type Draft = {
@@ -112,7 +141,20 @@ export async function draftOf(actor: Actor, path: string | null): Promise<Draft 
  */
 export async function recordAnswers(
   actor: Actor, taskId: string, answers: Record<string, string>,
-): Promise<{ ok: true; remaining: number } | { ok: false; error: string }> {
+  /**
+   * Answers whose document came from an uploaded FILE rather than from what was typed.
+   *
+   * Two texts, not one, and that is the whole reason this argument exists. `text` is the document —
+   * a contract, filed verbatim at the question's `files_to`. `answers[id]` is the short reference
+   * that goes on the record and into the conversation the agent replays. Collapsing them would put
+   * a forty-page SOW in the turn AND pin it as an input, handing the agent the same contract twice;
+   * the sole-link case already takes exactly this shape for exactly this reason.
+   */
+  uploads: Record<string, { filename: string; bytes: number; text: string }> = {},
+): Promise<
+  | { ok: true; remaining: number; filed: FiledAnswer[] }
+  | { ok: false; error: string }
+> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
@@ -168,6 +210,8 @@ export async function recordAnswers(
 
   // What each answer contributes to the conversation turn.
   const turnText = new Map<string, string>();
+  /** The documents these answers filed, for a caller that has to act on the published page. */
+  const filed: FiledAnswer[] = [];
 
   for (const [id, answer] of given) {
     // The answer stays as typed: the link is the provenance, and the record shows what was given.
@@ -189,18 +233,25 @@ export async function recordAnswers(
     // cannot open.
     const path = filesToOf.get(id);
     const soleLink = read.reads.length === 1 && answer.trim() === read.reads[0].url ? read.reads[0] : null;
+    // An UPLOAD is a third source for the same document, beside typed text and a link that was
+    // read. Its text never passes through `answer`, so it is taken from here.
+    const upload = uploads[id];
     if (path) {
-      await fileAnswer(
+      const result = await fileAnswer(
         actor, taskId, path, promptOf.get(id) ?? "Supplied material",
-        soleLink ? soleLink.text : answer, who, soleLink?.finalUrl ?? null,
+        upload ? upload.text : soleLink ? soleLink.text : answer,
+        who, soleLink?.finalUrl ?? null,
       );
+      if (result) filed.push({ questionId: id, path, ...result });
     }
 
-    // A document filed from a link is already the agent's input, pinned at `path`; repeating its
-    // text in the conversation would hand the agent the same contract twice.
-    turnText.set(id, path && soleLink
-      ? `${answer}\n\n_Read ${soleLink.text.length.toLocaleString()} characters from the link and filed them at \`${path}\`._`
-      : read.text);
+    // A document filed from a link or a file is already the agent's input, pinned at `path`;
+    // repeating its text in the conversation would hand the agent the same contract twice.
+    turnText.set(id, path && upload
+      ? `${answer}\n\n_Read ${upload.text.length.toLocaleString()} characters from \`${upload.filename}\` and filed them at \`${path}\`._`
+      : path && soleLink
+        ? `${answer}\n\n_Read ${soleLink.text.length.toLocaleString()} characters from the link and filed them at \`${path}\`._`
+        : read.text);
 
     await emit({
       engagementId: actor.engagementId, subjectType: "question", subjectId: id,
@@ -224,7 +275,7 @@ export async function recordAnswers(
 
   const remaining = Math.max(0, (open ?? []).length - given.length - declined.length);
   if (remaining === 0) await sb.from("work_task").update({ state: "running" }).eq("id", taskId);
-  return { ok: true, remaining };
+  return { ok: true, remaining, filed };
 }
 
 /**
@@ -315,6 +366,19 @@ export async function addNote(
  * Separate so Compass's own notes — "filing your answer failed" — go straight in. A system message
  * that happened to quote a URL must never be refused because that URL did not open.
  */
+/**
+ * Compass saying something on the task in its own name.
+ *
+ * The exported face of `writeNote`, for the failures that are not the caller's to explain away — a
+ * publish that did not land, an original that did not attach. No link reading: a system message
+ * that happens to quote a URL must never be refused because that URL did not open.
+ */
+export async function noteFromCompass(
+  actor: Actor, taskId: string, message: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return writeNote(actor, taskId, message, message, []);
+}
+
 async function writeNote(
   actor: Actor, taskId: string, typed: string, body: string, links: LinkRead[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -365,9 +429,9 @@ async function fileAnswer(
   actor: Actor, taskId: string, path: string, prompt: string, text: string, who: string,
   /** The URL the text was read from, when the answer was a link. */
   source: string | null = null,
-): Promise<void> {
+): Promise<Omit<FiledAnswer, "questionId" | "path"> | null> {
   const sb = supabaseAdmin();
-  if (!sb) return;
+  if (!sb) return null;
 
   const { data: eng } = await sb.from("engagement").select("org_id").eq("id", actor.engagementId).maybeSingle();
 
@@ -406,7 +470,7 @@ async function fileAnswer(
   if (error) {
     const msg = `Your answer was recorded, but filing it at \`${path}\` failed: ${error.message}`;
     await writeNote(actor, taskId, msg, msg, []);
-    return;
+    return null;
   }
 
   await emit({
@@ -437,4 +501,12 @@ async function fileAnswer(
       `to anyone reading the doc store.`;
     await writeNote(actor, taskId, msg, msg, []);
   }
+
+  // The page the caller may still have something to put ON — an uploaded original, in the upload
+  // path. Null on the publish failure above, so a caller cannot attach to a page that is not there.
+  return {
+    versionId: versionId as string,
+    externalId: published.ok ? published.id ?? null : null,
+    externalUrl: published.ok ? published.url ?? null : null,
+  };
 }

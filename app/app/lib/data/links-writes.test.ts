@@ -100,7 +100,15 @@ describe("answering a question with a link", () => {
 
     const r = await recordAnswers(ACTOR, "t1", { q1: SOW_LINK });
 
-    expect(r).toEqual({ ok: true, remaining: 0 });
+    // `filed` says WHERE the answer landed and on which page it was published. It is returned
+    // because the upload path has to attach the original file to that page, and `fileAnswer` used
+    // to swallow the version and the page id — so nothing downstream of an answer could act on the
+    // document it had just created.
+    expect(r).toEqual({
+      ok: true,
+      remaining: 0,
+      filed: [{ questionId: "q1", path: "SOW", versionId: "v1", externalId: "x", externalUrl: "http://docs/x" }],
+    });
     const filed = rpcs.find((c) => c.fn === "file_document");
     expect(filed?.args.p_path).toBe("SOW");
     expect(filed?.args.p_sections).toEqual([{ heading: "As supplied", body: SOW_MD }]);

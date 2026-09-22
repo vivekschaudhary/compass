@@ -263,6 +263,82 @@ export async function writeProviderDoc(eng: DocEng, title: string, html: string)
   return eng.docs_provider === "teams" ? teamsWrite(eng, title, html) : cfWrite(eng, title, html);
 }
 
+export type AttachResult = { ok: true; filename: string } | { ok: false; error: string };
+
+/**
+ * Put the file a person uploaded on the page its text was published to.
+ *
+ * The text IS the document — it is what gates read, what the next row's `reads` gets, and what
+ * every citation points at. The original is the provenance: whoever approves a SOW can open the
+ * PDF the client actually sent, next to the page derived from it, without Compass keeping a second
+ * store of its own.
+ */
+export async function attachToProviderDoc(
+  eng: DocEng, pageId: string, file: { name: string; type?: string | null; bytes: ArrayBuffer },
+): Promise<AttachResult> {
+  if ((eng.docs_provider ?? "confluence") === "teams") {
+    // Honest rather than silent. A no-op here would mean a Teams engagement quietly losing every
+    // original while the upload reported success.
+    return { ok: false, error: "Attaching the original file is not supported on Teams yet." };
+  }
+  return cfAttach(eng, pageId, file);
+}
+
+async function cfAttach(
+  eng: DocEng, pageId: string, file: { name: string; type?: string | null; bytes: ArrayBuffer },
+): Promise<AttachResult> {
+  const a = cfAuth(eng);
+  if (!a) return { ok: false, error: "Confluence is not configured for this engagement." };
+
+  // NOT `a.headers`. It carries `Content-Type: application/json`, and setting any Content-Type on a
+  // multipart request means `fetch` cannot add the boundary it just generated — Confluence then
+  // reads the body as JSON and refuses it. Only the credential is reused.
+  //
+  // `X-Atlassian-Token: nocheck` is required on every attachment write; without it the request is
+  // rejected as cross-site.
+  const headers = {
+    Authorization: a.headers.Authorization,
+    Accept: "application/json",
+    "X-Atlassian-Token": "nocheck",
+  };
+
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([file.bytes], { type: file.type || "application/octet-stream" }),
+    file.name,
+  );
+  form.append("comment", "The original supplied to Compass.");
+  form.append("minorEdit", "true");
+
+  try {
+    // An attachment with this name may already be here — a corrected contract re-uploaded over the
+    // first. Confluence needs the UPDATE endpoint for that; a second POST to `/child/attachment`
+    // is refused, and `Discovery.pdf` would otherwise silently become two documents.
+    const q = await fetch(
+      `${a.base}/wiki/rest/api/content/${pageId}/child/attachment?filename=${encodeURIComponent(file.name)}&limit=1`,
+      { headers: a.headers },
+    );
+    const existing = q.ok ? (await q.json()).results?.[0] : null;
+
+    const url = existing
+      ? `${a.base}/wiki/rest/api/content/${pageId}/child/attachment/${existing.id}/data`
+      : `${a.base}/wiki/rest/api/content/${pageId}/child/attachment`;
+
+    const res = await fetch(url, { method: "POST", headers, body: form });
+    if (res.ok) return { ok: true, filename: file.name };
+
+    // Confluence's own words, as `cfWrite` keeps them: its 4xx bodies name the field that is wrong,
+    // and swallowing them turns a ten-second fix into an evening.
+    const body = await res.text().catch(() => "");
+    let detail = body.slice(0, 300);
+    try { detail = JSON.parse(body).message ?? detail; } catch { /* not json — keep the raw text */ }
+    return { ok: false, error: `Confluence refused the attachment (${res.status}): ${detail}` };
+  } catch (e) {
+    return { ok: false, error: `Could not reach Confluence: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 export async function readProviderDoc(eng: DocEng, docRow: { provider?: string | null; external_id?: string | null }): Promise<string | null> {
   if (!docRow?.external_id) return null;
   const provider = docRow.provider || eng.docs_provider || "confluence";

@@ -743,6 +743,16 @@ textarea.verdict-reason {
 .asks-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .asks-note { font-size: 12px; }
 
+/* Answering with a file, offered only where the answer becomes a document. The input itself is
+ * `.sr-only` and the label carries the button, because a bare file input cannot be styled and
+ * reads "No file chosen" next to a question about a contract. */
+.ask-upload { display: flex; align-items: center; gap: var(--space-3); margin-top: 8px; flex-wrap: wrap; }
+.ask-upload-label { cursor: pointer; }
+.ask-upload-label:has(input:disabled) { cursor: default; opacity: 0.6; }
+.ask-upload-note { font-size: 11.5px; }
+.ask-upload-note code { font-size: 11px; }
+.ask-upload-done { font-size: 11.5px; color: var(--color-neutral-700); max-width: 48ch; }
+
 /* A choice, as a chip. Organic's `.seg` owns the segmented control; this is the standalone form. */
 .seg-opt {
   font-size: 12.5px; padding: 7px 14px; border-radius: var(--radius-sm);
