@@ -35,6 +35,7 @@ import {
   type Mirrored,
 } from "./tracker";
 import { composeTicketBodies, type Composed } from "./ticket-body";
+import { startTask } from "./tasks";
 
 /**
  * The board, in both halves: the tickets exist, and they say something.
@@ -102,6 +103,15 @@ async function putOnBoard(
 export async function initiatePhase(
   actor: Actor,
   workflowCode: string,
+  /**
+   * Which reporting bucket this run belongs to (discovery/build/hypercare/support, or whatever an
+   * org's reference data ends up naming) — a label for status/dashboard rollups, written onto the
+   * run once it opens. Only meaningful for a repeating phase like `sprint`; `setup` and `discovery`
+   * are already unambiguous from `workflowCode` alone, so callers pass this for `sprint` and omit
+   * it elsewhere. Applied only when a NEW run is created below — a click that finds an already-open
+   * run (the idempotent branch just above) does not retroactively reclassify it.
+   */
+  phaseTag?: string,
 ): Promise<Initiated> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
@@ -120,13 +130,6 @@ export async function initiatePhase(
       error: `No workflow '${workflowCode}' in this organisation.`,
     };
 
-  // The entry gate, BEFORE anything is created.
-  //
-  // `requires:` in the phase file is not documentation. The phase that then filled this slot
-  // demanded an approved backlog and an approved roster, and the first version of this function
-  // initiated it on an engagement that had neither — five tasks materialised against foundations
-  // that did not exist. A phase that starts without its gate is a false green with a queue
-  // attached.
   const blocked = await unmetEntryGate(actor, wf.id);
   if (blocked.length) {
     // A phase that could not start is the most useful record this product keeps: it is where the
@@ -148,17 +151,6 @@ export async function initiatePhase(
     };
   }
 
-  // OPEN runs only, and the newest of them.
-  //
-  // This used to match ANY run of the workflow regardless of state, which made a repeating phase
-  // impossible: once sprint 1 closed, every attempt to start sprint 2 short-circuited and returned
-  // sprint 1's finished run, and the queue looked like the sprint had simply stopped. Worse, the
-  // moment two runs existed `.maybeSingle()` errored, so the failure would have changed shape
-  // rather than becoming visible.
-  //
-  // `state = 'open'` is what makes "one sprint at a time" true: a sprint in flight blocks another,
-  // a closed one does not. `order` + `limit(1)` keeps `.maybeSingle()` safe against the history
-  // that now accumulates.
   const { data: open } = await sb
     .from("workflow_run")
     .select("id")
@@ -169,15 +161,11 @@ export async function initiatePhase(
     .order("opened_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  console.log(" in InitiatePhase check open runs ", open);
+
   if (open) {
     const tasks = await tasksOfRun(open.id);
-    // Mirror on the way out, even though the run already exists — ESPECIALLY then.
-    //
-    // `tracker.ts` promises that a phase which could not reach Jira keeps its rows locally and gets
-    // its tickets "on the next attempt". This early return was where that promise died: every
-    // subsequent initiate short-circuited here, so a phase opened during an outage could never be
-    // put on the board at all. `mirrorPhase` is idempotent — a run that already has its epic and
-    // stories re-reads their keys and writes nothing.
+
     const mirrored = await putOnBoard(
       actor.engagementId,
       open.id,
@@ -186,7 +174,11 @@ export async function initiatePhase(
     return { ok: true, runId: open.id, tasks, mirrored };
   }
 
-  const { data: runId, error } = await sb.rpc("open_phase_run", {
+  // `open_workflow_run` now materializes every one of the workflow's steps, not just the first —
+  // see `20260924220000_open_workflow_run_all_steps.sql`. `open_phase_run` was a thin wrapper doing
+  // exactly that for a phase specifically; it is gone, and this is the same call every other opener
+  // (`open_nested_run`) already makes.
+  const { data: runId, error } = await sb.rpc("open_workflow_run", {
     p_org_id: orgId,
     p_engagement_id: actor.engagementId,
     p_workflow_code: workflowCode,
@@ -207,15 +199,12 @@ export async function initiatePhase(
     return { ok: false, error: error.message };
   }
 
-  // Measure every task's gate immediately. A phase opens with rows whose Ready state is already
-  // knowable — "Connect systems of record" is satisfied by intake and should show as done on the
-  // first screen, not after someone clicks re-check on it.
+  if (phaseTag) {
+    await sb.from("workflow_run").update({ phase_tag: phaseTag }).eq("id", runId as string);
+  }
+
   const tasks = await tasksOfRun(runId as string);
 
-  // The counterpart to phase.refused. `open_phase_run` emits `workflow.opened` for the run, which
-  // says a run exists; this says a PERSON committed an engagement to a phase and to how many rows —
-  // the decision, not its mechanism. Without both, the record shows refusals with nothing to
-  // compare them against.
   await emit({
     engagementId: actor.engagementId,
     subjectType: "workflow_run",
@@ -224,20 +213,12 @@ export async function initiatePhase(
     actorKind: "human",
     actorRoleCode: actor.roleCode,
     actorUserId: actor.holder ?? null,
-    payload: { workflow: workflowCode, rows: tasks.length },
+    payload: { workflow: workflowCode, rows: tasks.length, phaseTag: phaseTag ?? null },
   });
 
   for (const t of tasks) {
     const statuses = await measureTask(actor, t.id);
 
-    // A machine row dispatches nothing, so there is nobody to start it and nothing to approve —
-    // its evidence is the probe. The connector-check row — `setup.md`'s "Validate the connections"
-    // — is meant to close on creation, and it did not: it sat idle offering "Start with agent",
-    // which would have handed the delivery manager agent a task slug its own file does not define.
-    //
-    // close_task still enforces the gate. If a connector stops answering, the criteria are
-    // unsatisfied, the close is refused, and the row stays open — which is the point of it being a
-    // row rather than an assumption.
     const done = statuses.filter((s) => s.kind === "done");
     const machine = await isMachineStep(t.id);
     if (
@@ -246,30 +227,15 @@ export async function initiatePhase(
       done.every((s) => s.verdict.state === "satisfied")
     ) {
       const who = actor.holder ?? actor.roleCode;
-      // START, then close. close_task refuses an idle task — "never started, there is nothing to
-      // approve" — and a machine row is never started because nothing dispatches it, so the close
-      // failed silently on every phase until a live run tripped over it. Starting it is truthful:
-      // the system did pick it up, ran the checks, and finished. Both routines still enforce their
-      // gates, so a connector that stops answering leaves the row open rather than closing it.
-      const started = await sb.rpc("start_task", {
-        p_task_id: t.id,
-        p_actor: who,
-        p_actor_role: actor.roleCode,
-      });
-      if (started.error) {
-        // This one used to fail in silence — the `if (!started.error)` below simply skipped the
-        // close and the row sat idle with no explanation anywhere.
-        await emitRefusal({
-          engagementId: actor.engagementId,
-          subjectType: "task",
-          subjectId: t.id,
-          verb: "task.start_refused",
-          actorRoleCode: actor.roleCode,
-          actorUserId: who,
-          reason: started.error.message,
-          payload: { title: t.title, at: "phase-open machine row" },
-        });
-      } else {
+      // The SAME function a human's own Start click calls — not the raw RPC. It carries the
+      // Ready/depends_on gate (see `start-gate.ts`) and its own refusal emission, so a machine row
+      // auto-started at phase-open time is held to the same standard a person starting it would be,
+      // and there is exactly one place in the codebase that calls `start_task`.
+      // A refusal here used to fail in silence — the row just sat idle with no explanation
+      // anywhere. `startTask` now emits that refusal itself, so there is nothing further to record
+      // on this branch; only a successful start goes on to close.
+      const started = await startTask(actor, t.id);
+      if (started.ok) {
         const closed = await sb.rpc("close_task", {
           p_task_id: t.id,
           p_actor: who,
@@ -341,10 +307,7 @@ export async function remirrorPhase(
 async function tasksOfRun(runId: string) {
   const sb = supabaseAdmin();
   if (!sb) return [];
-  // Ordered by the STEP's ord, not created_at. A phase creates every task in one transaction, so
-  // their timestamps are identical and created_at ordering is arbitrary — it put step 2 before
-  // step 1 on the first real run, which numbered the epic's stories backwards and would show a
-  // queue in the wrong dependency order.
+
   const { data } = await sb
     .from("work_task")
     .select("id, title, role_code, workflow_step_id, workflow_step(ord)")
@@ -375,7 +338,13 @@ export async function openNested(
   taskId: string,
   subjectRef: string | null = null,
 ): Promise<
-  { ok: true; runId: string; mirrored: Mirrored } | { ok: false; error: string }
+  | {
+      ok: true;
+      runId: string;
+      mirrored: Mirrored;
+      startedTaskId: string | null;
+    }
+  | { ok: false; error: string }
 > {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
@@ -426,48 +395,95 @@ export async function openNested(
   // staleness `remeasureRun` exists for.
   await remeasureRun(actor, runId as string);
 
-  return { ok: true, runId: runId as string, mirrored };
+  // Same role, continuing its own work, gets the same promise a plain task's click already makes:
+  // the click IS the start. `start_task` carries no role check of its own — nothing in the
+  // database stops starting a row owned by someone else — so this only fires when the child run's
+  // first task belongs to the SAME role that just opened it. A different role's task is left
+  // `idle` in ITS OWN queue, same as `initiatePhase` leaves every phase row idle for its owner —
+  // starting someone else's task on their behalf, even though nothing would stop it, is not this
+  // click's to do.
+  //
+  // Best-effort: the Ready gate can still refuse right after `remeasureRun`, and that must not
+  // turn a successful open into a failure — the run DID open, only its first row could not start
+  // yet. Left idle, exactly as if this block did not run at all.
+  //
+  // ORDERED BY STEP, NOT `created_at`. `open_workflow_run` now creates every step in one loop, so
+  // their `created_at` values are identical to the millisecond — the exact "a phase writes every
+  // row in one transaction" trap this repo already learned from (see `steps.ts`). Before this
+  // child runs only ever had one row, so the bug was latent; it stops being latent the moment a
+  // nested workflow has more than one step.
+  const { data: runTasks } = await sb
+    .from("work_task")
+    .select("id, role_code, workflow_step(ord)")
+    .eq("workflow_run_id", runId as string);
+  const firstTask = sortByStep(runTasks ?? [])[0] ?? null;
+  // Reported back so the CALLER can decide whether there is somewhere better to send the person
+  // than the parent row's own page — see `startedTaskId` on `FanOutResult`. `openNested` itself
+  // only starts it; routing there is a decision the click handler makes, not this function.
+  let startedTaskId: string | null = null;
+  if (firstTask?.role_code === actor.roleCode) {
+    const started = await startTask(actor, firstTask.id as string).catch(
+      () => null,
+    );
+    if (started?.ok) startedTaskId = firstTask.id as string;
+  }
+
+  return { ok: true, runId: runId as string, mirrored, startedTaskId };
+}
+
+type FanOutResult =
+  | {
+      ok: true;
+      runs: {
+        runId: string;
+        subject: string | null;
+        mirrored: Mirrored;
+        /** Set when this run's first task was auto-started for the actor who opened it. */
+        startedTaskId: string | null;
+      }[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Open the single child run a nesting row gets by default.
+ *
+ * Most nesting rows are this shape: `sprint-0.draft-features` opens one `feature` run, and every
+ * feature lands in one `features` document. `subject: null` because there is nothing to key the run
+ * on — the row and its child are 1:1.
+ */
+async function openNestedSingle(
+  actor: Actor,
+  taskId: string,
+): Promise<FanOutResult> {
+  const one = await openNested(actor, taskId);
+  return one.ok
+    ? {
+        ok: true,
+        runs: [
+          {
+            runId: one.runId,
+            subject: null,
+            mirrored: one.mirrored,
+            startedTaskId: one.startedTaskId,
+          },
+        ],
+      }
+    : one;
 }
 
 /**
- * Open the child run(s) for a nesting row — one, or one per epic.
- *
- * Most nesting rows open a single child: `sprint-0.draft-features` opens one `feature` run, and
- * every feature lands in one `features` document. Epic technical design is the first that does not
- * — a design is authored per epic, as its own page, reviewed and approved on its own.
- *
- * WHICH IT IS, IS DERIVED, NOT CONFIGURED. A workflow declares itself per-epic by producing a
- * per-epic path (`03-architecture/epic/{epic}`), which it must do anyway or its documents would
- * collide. A separate flag saying the same thing is a second source of truth, and the two would
- * eventually disagree — one of them silently.
+ * Open one child run per epic, for a nesting row whose nested workflow authors a per-epic document.
+ * Epic technical design is the first of these — a design is authored per epic, as its own page,
+ * reviewed and approved on its own.
  *
  * FANNING OUT OVER ZERO EPICS REFUSES. `for (const e of [])` completes, the row closes, and a
  * technical design phase that designed nothing looks exactly like one that designed everything.
  * That is the aggregate-over-no-rows failure this repo keeps re-learning, so it is an error.
  */
-export async function openNestedFanOut(
+async function openNestedPerEpic(
   actor: Actor,
   taskId: string,
-): Promise<
-  | {
-      ok: true;
-      runs: { runId: string; subject: string | null; mirrored: Mirrored }[];
-    }
-  | { ok: false; error: string }
-> {
-  const sb = supabaseAdmin();
-  if (!sb) return { ok: false, error: "Supabase is not configured." };
-
-  if (!(await nestedIsPerEpic(taskId))) {
-    const one = await openNested(actor, taskId);
-    return one.ok
-      ? {
-          ok: true,
-          runs: [{ runId: one.runId, subject: null, mirrored: one.mirrored }],
-        }
-      : one;
-  }
-
+): Promise<FanOutResult> {
   const epics = await epicsOfRun(taskId);
   if (!epics.length) {
     return {
@@ -478,8 +494,12 @@ export async function openNestedFanOut(
     };
   }
 
-  const runs: { runId: string; subject: string | null; mirrored: Mirrored }[] =
-    [];
+  const runs: {
+    runId: string;
+    subject: string | null;
+    mirrored: Mirrored;
+    startedTaskId: string | null;
+  }[] = [];
   for (const epic of epics) {
     const child = await openNested(actor, taskId, epic.ref);
     // One epic failing does not silently drop the rest: the others still open, and the failure is
@@ -489,9 +509,32 @@ export async function openNestedFanOut(
       runId: child.runId,
       subject: epic.ref,
       mirrored: child.mirrored,
+      startedTaskId: child.startedTaskId,
     });
   }
   return { ok: true, runs };
+}
+
+/**
+ * Open the child run(s) for a nesting row — one, or one per epic.
+ *
+ * The only caller of `nestedIsPerEpic`. WHICH SHAPE APPLIES IS DERIVED, NOT CONFIGURED — a workflow
+ * declares itself per-epic by producing a per-epic path (`03-architecture/epic/{epic}`), which it
+ * must do anyway or its documents would collide. A separate flag saying the same thing is a second
+ * source of truth, and the two would eventually disagree — one of them silently. This function is
+ * a router over that derived answer, not a home for either procedure's own logic — see
+ * `openNestedSingle`/`openNestedPerEpic` for what each shape actually does.
+ */
+export async function openNestedFanOut(
+  actor: Actor,
+  taskId: string,
+): Promise<FanOutResult> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  return (await nestedIsPerEpic(taskId))
+    ? openNestedPerEpic(actor, taskId)
+    : openNestedSingle(actor, taskId);
 }
 
 /** Does the workflow this row nests author one document per epic? */
@@ -650,24 +693,43 @@ export async function childRunsOf(
   const sb = supabaseAdmin();
   if (!sb) return [];
 
-  const { data: runs } = await sb
+  const { data: runs, error: runsError } = await sb
     .from("workflow_run")
     .select("id, state, subject_key, opened_at")
     .eq("engagement_id", actor.engagementId)
     .eq("parent_task_id", taskId)
     .order("opened_at");
+  if (runsError) throw new Error(`read child runs: ${runsError.message}`);
   if (!runs?.length) return [];
 
   // One query for every child's rows rather than one per run — a fan-out opens one run per epic,
   // and a per-run query would grow with the backlog.
-  const { data: tasks } = await sb
+  //
+  // `ord` lives on `workflow_step`, not `work_task` — there is no such column here to select or
+  // order by directly. Embedding the step (the same to-one join `tasksFor`'s own SELECT already
+  // uses) and sorting on the embedded value is the fix; selecting a nonexistent column failed the
+  // whole query, and `tasks ?? []` below turned that failure into a silent "no rows", which is what
+  // made every open nesting run report itself as empty.
+  const { data: tasks, error: tasksError } = await sb
     .from("work_task")
-    .select("id, title, role_code, state, ticket_key, ord, workflow_run_id")
+    .select(
+      "id, title, role_code, state, ticket_key, workflow_run_id, workflow_step(ord)",
+    )
     .in(
       "workflow_run_id",
       runs.map((r) => r.id as string),
-    )
-    .order("ord");
+    );
+  if (tasksError)
+    throw new Error(`read child run tasks: ${tasksError.message}`);
+  const ordOf = (t: {
+    workflow_step: { ord: number | null }[] | { ord: number | null } | null;
+  }) => {
+    const step = Array.isArray(t.workflow_step)
+      ? t.workflow_step[0]
+      : t.workflow_step;
+    return step?.ord ?? 0;
+  };
+  tasks?.sort((a, b) => ordOf(a) - ordOf(b));
 
   return runs.map((r) => ({
     runId: r.id as string,
@@ -699,13 +761,6 @@ export async function phasesFor(actor: Actor): Promise<
     label: string;
     state: "open" | "closed" | "available";
     runId: string | null;
-    /**
-     * Is this phase fully on the board?
-     *
-     * Read without asking Jira: the keys Compass stores ARE the record of what was created, so a
-     * run missing its epic key, or holding a task with no story key, is a phase the board does not
-     * have. Null when the phase has not started — nothing is owed yet.
-     */
     onBoard: boolean | null;
   }[]
 > {
@@ -745,46 +800,33 @@ export async function phasesFor(actor: Actor): Promise<
     .select("workflow_run_id")
     .eq("engagement_id", actor.engagementId)
     .is("ticket_key", null);
+
   const missing = new Set(
     (unticketed ?? []).map((t) => t.workflow_run_id as string),
   );
 
-  return (wfs ?? []).filter((w) => {
-    // A workflow some OTHER workflow's open row nests is not a phase anyone starts on its own. It
-    // starts when its parent row does, and its run belongs to that row.
-    //
-    // Without this, `timeline` read "available" the whole time sprint 0's Timeline & Milestones row
-    // had it open — because the state below is read from TOP-LEVEL runs only, and a nested run has
-    // a parent. It was started a second time from the workflow list, producing a duplicate run that
-    // could never satisfy the parent row: one deliverable, three tickets, two of them orphans.
-    //
-    // Only while the parent run is open. Once sprint 0 closes, the workflow is a phase again.
-    //
-    // A workflow that ALREADY has a top-level run is never hidden, whatever nests it. Hiding one
-    // would take an open run off the only screen that shows it — invisible, and with no way to
-    // close it. Filtering the list must not make existing work disappear.
-    const hidden = nested.has(w.code as string);
-    return !hidden || Boolean(runOf.get(w.id));
-  }).map((w) => {
-    const run = runOf.get(w.id);
-    return {
-      code: w.code,
-      label: w.label,
-      // A REPEATABLE phase whose latest run has closed is available again — that is what makes
-      // "one sprint at a time" a cycle rather than a single pass. Read from the workflow's own
-      // column rather than tested against `code === "sprint"`: a checker that carries the literal
-      // it is policing is a mistake this repo has already made once.
-      state: run
-        ? run.state === "closed"
-          ? w.repeatable
-            ? ("available" as const)
-            : ("closed" as const)
-          : ("open" as const)
-        : ("available" as const),
-      runId: run?.id ?? null,
-      onBoard: run ? Boolean(run.ticket_key) && !missing.has(run.id) : null,
-    };
-  });
+  return (wfs ?? [])
+    .filter((w) => {
+      const hidden = nested.has(w.code as string);
+      return !hidden || Boolean(runOf.get(w.id));
+    })
+    .map((w) => {
+      const run = runOf.get(w.id);
+      return {
+        code: w.code,
+        label: w.label,
+
+        state: run
+          ? run.state === "closed"
+            ? w.repeatable
+              ? ("available" as const)
+              : ("closed" as const)
+            : ("open" as const)
+          : ("available" as const),
+        runId: run?.id ?? null,
+        onBoard: run ? Boolean(run.ticket_key) && !missing.has(run.id) : null,
+      };
+    });
 }
 
 /**

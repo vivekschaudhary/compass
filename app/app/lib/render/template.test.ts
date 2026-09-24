@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
 import {
   parseTemplate,
   normaliseHeading,
@@ -190,23 +188,10 @@ describe("describeTemplate", () => {
   });
 });
 
-describe("the shipped templates", () => {
-  // Parses the REAL file, not a fixture. A fixture can stay green while the template it stands in
-  // for is rewritten into a shape the parser no longer understands.
-  const sow = resolve(process.cwd(), "..", "compass", "templates", "sow.md");
-
-  it("parses sow.md into its real sections, in order", () => {
-    // ASSERTED, not skipped. `if (!exists) return` would make a moved or renamed template read as
-    // a passing test — a green tick for a file nobody opened. The framework is a sibling of the
-    // app in this repo; if that stops being true this test should say so.
-    expect(existsSync(sow), `no template at ${sow}`).toBe(true);
-    const p = parseTemplate(readFileSync(sow, "utf8"));
-    expect(p.title).toBe("Statement of Work");
-    const keys = p.sections.map((s) => s.key);
-    expect(keys).toContain("purpose & background");
-    expect(keys).toContain("scope of work");
-    // The authoring comment at the top of the file must not have become a section.
-    expect(keys.some((k) => k.includes("template"))).toBe(false);
-    expect(p.sections.length).toBeGreaterThan(3);
-  });
-});
+// There used to be a "the shipped templates" block here, parsing `compass/templates/sow.md`
+// directly off disk rather than a fixture, deliberately — a fixture can stay green while the real
+// template drifts under it. That file is gone now: `document_template` (seeded from it by
+// `scripts/seed-templates.mts`) is what `runAgent` actually reads, per `templates.ts`'s own header.
+// A live equivalent — read the real `document_template` row — is not this test's to add:
+// `vitest.config.mts` is explicit that this suite must not reach the real Supabase account ("never
+// part of `npm test`"). `parseTemplate` itself keeps full synthetic-fixture coverage below.

@@ -9,10 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
 import { startTask } from "@/app/lib/data/tasks";
-import {
-  measureTask,
-  closeNestingRowIfSatisfied,
-} from "@/app/lib/data/gates";
+import { measureTask, closeNestingRowIfSatisfied } from "@/app/lib/data/gates";
 import {
   initiatePhase,
   openNestedFanOut,
@@ -64,14 +61,43 @@ function board(m: BoardResult): Board {
 }
 
 /**
- * Check the gate, then start.
+ * Start a task. The common program — every row goes through this to move out of idle, whatever
+ * kind of row it is.
  *
  * Measuring first is not a convenience — the database refuses to start a task whose Ready criteria
  * have no satisfied measurement, so this is what makes the click possible at all. It also means the
  * refusal, when it comes, is based on a check taken seconds ago rather than whenever someone last
  * looked.
+ *
+ * Knows nothing about nesting. A row that nests a workflow still starts through here — see
+ * `startWorkflowAction`, which calls this first and then does the nesting-specific work — but this
+ * function's own job ends at "the row is running."
  */
 export async function startTaskAction(
+  engagement: string,
+  role: string,
+  taskId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role);
+  if (!actor)
+    return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await startTask(actor, taskId);
+  revalidatePath(`/e/${engagement}/jobs`);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  return { ok: true };
+}
+
+/**
+ * Start a row that NESTS a workflow: start it, then open the child run.
+ *
+ * Calls `startTaskAction` rather than re-implementing it — the row still has to move out of idle
+ * the same way any row does, this just has more to do afterwards. Only `StartWorkflowButton` and
+ * the task page's `NestedRunPanel` call this; a plain agent row never needed a child run and
+ * `startTaskAction` alone is right for it.
+ */
+export async function startWorkflowAction(
   engagement: string,
   role: string,
   taskId: string,
@@ -79,59 +105,43 @@ export async function startTaskAction(
   ok: boolean;
   error?: string;
   openedWorkflow?: string;
-  /** How many child runs opened — more than one when the row fans out per epic. */
   openedRuns?: number;
   mirrored?: Mirrored;
   problems?: string[];
+  /**
+   * Set only when exactly one run opened AND its first task auto-started for this same actor
+   * (see `openNested`'s role check). A fan-out opening several runs has no single "next" task to
+   * send anyone to, so this stays unset and the click lands on the row's own page as before.
+   */
+  startedTaskId?: string;
 }> {
+  const started = await startTaskAction(engagement, role, taskId);
+  if (!started.ok) return started;
+
   const actor = await resolveActor(engagement, role);
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
 
-  await measureTask(actor, taskId);
-
-  const result = await startTask(actor, taskId);
-  if (!result.ok) {
-    revalidatePath(`/e/${engagement}/jobs`);
-    return { ok: false, error: result.error };
-  }
-
-  // A row whose dispatch is `workflow: <code>` is not agent work — starting it opens the CHILD run
-  // that satisfies it, and that run's own steps are where the work happens. Without this the task
-  // would sit at `running` forever with no agent able to pick it up, which is precisely how the
-  // three graph-less workflows looked on Provider FFS.
   const nests = await nestedWorkflowOf(taskId);
-  if (nests) {
-    // One child, or one per epic — the nested workflow decides by whether it produces a per-epic
-    // path. See `openNestedFanOut`.
-    const child = await openNestedFanOut(actor, taskId);
-    revalidatePath(`/e/${engagement}/jobs`);
-    if (!child.ok) return { ok: false, error: child.error };
+  if (!nests) return { ok: true };
 
-    // MEASURE AGAIN, now that the run exists. The measure above this ran before it did, so
-    // `evaluateNested` was asked "has every resources run this row opened closed?" when the answer
-    // was "no such run" — unmeasurable, which writes nothing and deletes any stale row. The card
-    // then read "not checked" about a criterion that had become perfectly knowable one line later,
-    // and nothing re-measured it until someone pressed re-check. "Not checked" reading the same as
-    // "nothing to see" is exactly how the nesting close defect stayed invisible for an hour.
-    await measureTask(actor, taskId);
-    // The board result is RETURNED, not dropped. The run opened either way — but a nested run whose
-    // sub-tasks never reached Jira is invisible to everyone outside Compass, and saying nothing
-    // about it is how that goes unnoticed until somebody asks where the work went.
-    const problems = child.runs.flatMap((r) =>
-      r.mirrored.problems.map((p) => (r.subject ? `${r.subject}: ${p}` : p)),
-    );
-    return {
-      ok: true,
-      openedWorkflow: nests,
-      openedRuns: child.runs.length,
-      mirrored: child.runs[0].mirrored,
-      problems: problems.length ? problems : undefined,
-    };
-  }
-
+  const child = await openNestedFanOut(actor, taskId);
   revalidatePath(`/e/${engagement}/jobs`);
-  return { ok: true };
+  if (!child.ok) return { ok: false, error: child.error };
+
+  //await measureTask(actor, taskId);
+  const problems = child.runs.flatMap((r) =>
+    r.mirrored.problems.map((p) => (r.subject ? `${r.subject}: ${p}` : p)),
+  );
+  return {
+    ok: true,
+    openedWorkflow: nests,
+    openedRuns: child.runs.length,
+    mirrored: child.runs[0].mirrored,
+    problems: problems.length ? problems : undefined,
+    startedTaskId:
+      child.runs.length === 1 ? (child.runs[0].startedTaskId ?? undefined) : undefined,
+  };
 }
 
 /**
@@ -146,6 +156,8 @@ export async function initiatePhaseAction(
   engagement: string,
   role: string,
   workflowCode: string,
+  /** Reporting bucket for a repeating phase (`sprint`) — see `initiatePhase`. */
+  phaseTag?: string,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -156,7 +168,7 @@ export async function initiatePhaseAction(
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
 
-  const result = await initiatePhase(actor, workflowCode);
+  const result = await initiatePhase(actor, workflowCode, phaseTag);
   revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
 

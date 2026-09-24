@@ -35,13 +35,18 @@ const turns: string[] = [];
 vi.mock("../supabase", () => ({
   must: (_what: string, r: { data: unknown }) => r.data,
   supabaseAdmin: () => ({
-    from: () => {
+    from: (table: string) => {
       const q = {
         select: () => q, eq: () => q, is: () => q, in: () => q, order: () => q, limit: () => q,
         update: () => q, insert: (rows: unknown) => { turns.push(JSON.stringify(rows)); return q; },
-        maybeSingle: async () => ({ data: { org_id: "org1" } }),
+        // `state: "running"` satisfies `runAgent`'s own guard that the row was actually started
+        // before it claims the executor — not what this file is testing.
+        maybeSingle: async () => ({ data: { org_id: "org1", state: "running" } }),
         single: async () => ({ data: { id: "turn1" }, error: null }),
-        then: (res: (v: { data: unknown; error: null }) => void) => res({ data: [], error: null }),
+        // `runAgent` claims `work_task.executor` with `.update(...).is("executor", null).select("id")`
+        // before dispatching — every row here starts unclaimed, so that claim must succeed.
+        then: (res: (v: { data: unknown; error: null }) => void) =>
+          res({ data: table === "work_task" ? [{ id: "t1" }] : [], error: null }),
       };
       return q;
     },

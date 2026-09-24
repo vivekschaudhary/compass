@@ -36,6 +36,9 @@ export async function conversation(taskId: string): Promise<Turn[]> {
  */
 export type OpenQuestion = {
   id: string; prompt: string; type: string; options: string[] | null; filesTo: string | null;
+  /** True when the composer may offer "Skip" — `recordAnswers` already treats a blank optional
+   * answer as a decision, not an omission; this is what lets the UI say so. */
+  optional: boolean;
 };
 
 export type PastQuestion = { id: string; prompt: string; answer: string | null; state: string; reason: string | null };
@@ -60,11 +63,12 @@ export async function openQuestions(taskId: string): Promise<OpenQuestion[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
   const { data } = await sb.from("question")
-    .select("id, prompt, type, options, files_to")
+    .select("id, prompt, type, options, files_to, optional")
     .eq("task_id", taskId).eq("state", "open").order("created_at");
   return (data ?? []).map((q) => ({
     id: q.id, prompt: q.prompt, type: q.type, options: q.options,
     filesTo: (q.files_to as string | null) ?? null,
+    optional: q.optional === true,
   }));
 }
 
@@ -320,12 +324,21 @@ export async function childRunBlock(actor: Actor, taskId: string): Promise<strin
   return reason?.trim() || null;
 }
 
-export async function taskState(actor: Actor, taskId: string): Promise<string | null> {
+/**
+ * State AND executor, together — telling apart "just started, nobody has picked it up" from
+ * "an agent is already mid-run" needs both. A caller that reads `state` alone cannot make that
+ * distinction, which is exactly the fact the task page needs to decide whether to fire the run
+ * itself rather than wait for a click.
+ */
+export async function taskState(
+  actor: Actor,
+  taskId: string,
+): Promise<{ state: string; executor: string | null } | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
   const { data } = await sb.from("work_task")
-    .select("state").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
-  return data?.state ?? null;
+    .select("state, executor").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  return data ? { state: data.state, executor: data.executor } : null;
 }
 
 /**
