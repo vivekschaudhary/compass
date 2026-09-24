@@ -308,6 +308,81 @@ async function finished(
   });
 }
 
+/** How long the sweep waits before retrying a failed attempt, indexed by attempt number. Capped. */
+const BACKOFF_MINUTES = [1, 2, 5, 15, 30];
+/** Past this many failed attempts, stop retrying and surface it rather than retry forever. */
+const MAX_RUN_ATTEMPTS = 5;
+
+/**
+ * Release the `executor` claim — the one place every completion and failure path does it, so the
+ * retry bookkeeping lives once instead of at each of the ~14 sites that used to just clear it.
+ *
+ * `failed` is the whole decision. A row that reached `hitl`/`awaiting`/`closed` made progress — not
+ * a retry, so `run_attempts`/`next_attempt_at` reset to nothing owed. A row still sitting at
+ * `running` when this is called did NOT make progress, and that is exactly the signal the
+ * reconciliation sweep reads: `state = 'running' and executor is null`. Counting a failure there is
+ * what lets the sweep back off a persistently-failing row instead of re-hammering it every tick.
+ *
+ * Past `MAX_RUN_ATTEMPTS`, stop incrementing the backoff and say so loudly (`task.run_exhausted`)
+ * rather than let a hopeless row retry forever with no one ever finding out — the swallowed-failure
+ * rule 11 names, applied to the retry loop itself.
+ */
+async function releaseExecutor(
+  taskId: string,
+  ctx: AgentContext,
+  opts: { failed: boolean; state?: string },
+): Promise<void> {
+  const sb = supabaseAdmin();
+  if (!sb) return;
+
+  if (!opts.failed) {
+    await sb
+      .from("work_task")
+      .update({
+        executor: null,
+        run_attempts: 0,
+        next_attempt_at: null,
+        ...(opts.state ? { state: opts.state } : {}),
+      })
+      .eq("id", taskId);
+    return;
+  }
+
+  const { data: row } = await sb
+    .from("work_task")
+    .select("run_attempts")
+    .eq("id", taskId)
+    .maybeSingle();
+  const attempts = (row?.run_attempts ?? 0) + 1;
+
+  if (attempts > MAX_RUN_ATTEMPTS) {
+    await sb
+      .from("work_task")
+      .update({ executor: null, run_attempts: attempts, next_attempt_at: null })
+      .eq("id", taskId);
+    await emit({
+      engagementId: ctx.engagementId,
+      subjectType: "task",
+      subjectId: taskId,
+      verb: "task.run_exhausted",
+      actorKind: "system",
+      actorRoleCode: ctx.roleCode,
+      payload: { attempts },
+    });
+    return;
+  }
+
+  const minutes = BACKOFF_MINUTES[Math.min(attempts - 1, BACKOFF_MINUTES.length - 1)];
+  await sb
+    .from("work_task")
+    .update({
+      executor: null,
+      run_attempts: attempts,
+      next_attempt_at: new Date(Date.now() + minutes * 60_000).toISOString(),
+    })
+    .eq("id", taskId);
+}
+
 /**
  * Hand the row to a person.
  *
@@ -330,13 +405,7 @@ async function handOver(
   message: HostResult | null,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const sb = supabaseAdmin();
-  if (sb) {
-    await sb
-      .from("work_task")
-      .update({ state: "hitl", executor: null })
-      .eq("id", taskId);
-  }
+  await releaseExecutor(taskId, ctx, { failed: false, state: "hitl" });
   await mirrorState(actor.engagementId, taskId, "hitl", ctx.roleCode);
   await finished(ctx.engagementId, taskId, ctx.roleCode, outcome, message, extra);
 }
@@ -370,8 +439,7 @@ async function settleSupplied(
   const closed = await approve(actor, taskId, []);
 
   if (closed.ok) {
-    const sb = supabaseAdmin();
-    if (sb) await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    await releaseExecutor(taskId, ctx, { failed: false });
     await finished(ctx.engagementId, taskId, ctx.roleCode, outcome, message, {
       ...extra,
       closed: true,
@@ -433,6 +501,23 @@ export async function runAgent(
     };
   }
 
+  // `start_task` is the ONLY thing that moves a row out of `idle` — running the agent on one that
+  // never went through it is the defect that left `Draft the timeline` stuck: `executor` got
+  // claimed below, the run never finished cleanly, and because `state` was still `idle` the sweep
+  // (which only watches `state = 'running'`) could never find it again to retry or release it.
+  // Refused here, loudly, rather than proceeding on the assumption the caller already started it.
+  const { data: taskRow } = await sb
+    .from("work_task")
+    .select("state")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (taskRow?.state !== "running") {
+    return {
+      kind: "error",
+      message: `This task is ${taskRow?.state ?? "not startable"}, not running — start it first.`,
+    };
+  }
+
   // A declared template that resolves to nothing HALTS — before the model call, not after.
   //
   // The alternative is drafting free-form, and that is the worst available outcome: the document
@@ -489,7 +574,24 @@ export async function runAgent(
 
   // Mark who is executing BEFORE the call, so a run that dies mid-flight is visibly attributed
   // rather than looking like a task nobody ever picked up.
-  await sb.from("work_task").update({ executor: "app" }).eq("id", taskId);
+  //
+  // CLAIMED, not just set — `.is("executor", null)` means only one caller wins this update. Two
+  // requests hitting a freshly-started row at once used to both pass every check above and both
+  // reach this line; an unconditional update let both proceed to dispatch the model. Auto-firing
+  // the run on page load (rather than waiting for a person to notice and click) makes that race far
+  // more reachable than it was when it needed two people clicking at once, so it is closed here.
+  const claim = await sb
+    .from("work_task")
+    .update({ executor: "app" })
+    .eq("id", taskId)
+    .is("executor", null)
+    .select("id");
+  if (!claim.data?.length) {
+    return {
+      kind: "error",
+      message: "This task is already running. Refresh in a moment rather than run it again.",
+    };
+  }
   const tMirror = Date.now();
   await mirrorState(actor.engagementId, taskId, "running", ctx.roleCode);
   const mirrorMs = Date.now() - tMirror;
@@ -540,7 +642,7 @@ export async function runAgent(
       ],
     });
   } catch (e) {
-    await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    await releaseExecutor(taskId, ctx, { failed: true });
     await finished(ctx.engagementId, taskId, ctx.roleCode, "error", null, {
       error: e instanceof Error ? e.message : String(e),
     });
@@ -554,7 +656,7 @@ export async function runAgent(
   if (message.stopReason === "refusal") {
     const reason = message.refusalExplanation ?? "no explanation given";
     await recordTurn(taskId, `The model declined this request. ${reason}`, ctx);
-    await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+    await releaseExecutor(taskId, ctx, { failed: true });
     return { kind: "refused", reason };
   }
 
@@ -566,10 +668,8 @@ export async function runAgent(
   const call = message.toolCall;
 
   if (!call) {
-    // It answered in prose without choosing a tool. Record what it said rather than discarding it,
-    // and leave the task running — the human can read it and decide.
+    // It answered in prose without choosing a tool. Record what it said rather than discarding it.
     await recordTurn(taskId, text || "(no output)", ctx);
-    await sb.from("work_task").update({ executor: null }).eq("id", taskId);
 
     // For a SUPPLIED row this is the expected ending, not a failure.
     //
@@ -596,6 +696,7 @@ export async function runAgent(
       };
     }
 
+    await releaseExecutor(taskId, ctx, { failed: true });
     await finished(ctx.engagementId, taskId, ctx.roleCode, "no-tool", message);
     return {
       kind: "error",
@@ -675,7 +776,7 @@ export async function runAgent(
         };
       }
 
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       await finished(
         ctx.engagementId,
         taskId,
@@ -708,7 +809,7 @@ export async function runAgent(
     //
     // Only before the document exists. Once it is filed, follow-up questions are ordinary.
     if (ctx.output === "supplied" && !ctx.priorDraft && !put.some((q) => q.files_to)) {
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       await finished(ctx.engagementId, taskId, ctx.roleCode, "ask-unfilable", message, {
         questions: put.length,
       });
@@ -772,10 +873,7 @@ export async function runAgent(
 
     // Waiting on a person is a state, not a pause. The queue should show it as such — and so
     // should the board, which is where everyone who does not open Compass is looking.
-    await sb
-      .from("work_task")
-      .update({ state: "awaiting", executor: null })
-      .eq("id", taskId);
+    await releaseExecutor(taskId, ctx, { failed: false, state: "awaiting" });
     await mirrorState(actor.engagementId, taskId, "awaiting", ctx.roleCode);
     await finished(ctx.engagementId, taskId, ctx.roleCode, "asked", message, {
       questions: put.length,
@@ -812,7 +910,7 @@ export async function runAgent(
     const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "" });
 
     if (built.refusal) {
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       await recordTurn(taskId, `**The build did not start.** ${built.refusal}`, ctx);
       return { kind: "error", message: built.refusal };
     }
@@ -976,7 +1074,7 @@ export async function runAgent(
               "\n```"),
         ctx,
       );
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       return {
         kind: "error",
         message: `The agent wrote a summary but produced no document. ${why}`,
@@ -987,7 +1085,7 @@ export async function runAgent(
     // literal `…/{epic}` would put every epic's design at one path, each overwriting the last, and
     // the Done gate would pass on all of them — a false green built out of real-looking documents.
     if (ctx.unresolvedProduces) {
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       return {
         kind: "error",
         message:
@@ -997,7 +1095,7 @@ export async function runAgent(
     }
 
     if (!ctx.produces) {
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       return {
         kind: "error",
         message:
@@ -1013,7 +1111,7 @@ export async function runAgent(
     // An UNKNOWN slot halts rather than defaulting. `@scm` or a typo would otherwise publish to the
     // doc store and look exactly like it worked, which is the failure that is impossible to notice.
     if (ctx.destination === null) {
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       return {
         kind: "error",
         message:
@@ -1050,7 +1148,7 @@ export async function runAgent(
             `template are welcome.`,
           ctx,
         );
-        await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+        await releaseExecutor(taskId, ctx, { failed: true });
         return {
           kind: "error",
           message:
@@ -1100,7 +1198,7 @@ export async function runAgent(
           sections.map((s) => `## ${s.heading}\n\n${s.body}`).join("\n\n"),
         ctx,
       );
-      await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+      await releaseExecutor(taskId, ctx, { failed: true });
       await finished(ctx.engagementId, taskId, ctx.roleCode, "error", message, {
         error: `filing the draft: ${error.message}`,
       });
@@ -1195,7 +1293,7 @@ export async function runAgent(
     };
   }
 
-  await sb.from("work_task").update({ executor: null }).eq("id", taskId);
+  await releaseExecutor(taskId, ctx, { failed: true });
   return { kind: "error", message: `Unknown tool: ${call.name}` };
 }
 

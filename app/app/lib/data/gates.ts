@@ -902,14 +902,14 @@ export async function closeNestingRowIfSatisfied(
       .select("criterion_id, satisfied")
       .eq("task_id", taskId);
     const met = new Set(
-      (ms ?? []).filter((m) => m.satisfied).map((m) => m.criterion_id as string),
+      (ms ?? [])
+        .filter((m) => m.satisfied)
+        .map((m) => m.criterion_id as string),
     );
     const unmet = done.filter((c) => !met.has(c.id));
     // Named, not counted. "2 criteria are not met" sends someone hunting for which two.
     if (unmet.length)
-      return no(
-        `Not done:\n  ${unmet.map((c) => c.statement).join("\n  ")}`,
-      );
+      return no(`Not done:\n  ${unmet.map((c) => c.statement).join("\n  ")}`);
   }
 
   // The board closes first, for the reason `approve` states: the tracker holds the status of
@@ -1300,15 +1300,6 @@ export async function approve(
     });
   }
 
-  // THE ROWS THIS CLOSE JUST UNBLOCKED. Closing the row that produced `sow` is exactly the moment
-  // every row waiting on `sow` becomes startable, and until now nothing told them so — see
-  // `remeasureRun`. One hop upward as well: when the last row of a nested run closes, the nesting
-  // row's Done gate can now see the child's output.
-  //
-  // NON-FATAL, NEVER SILENT, for the same reason as `materialiseFrom` above. These are network
-  // calls — connector criteria probe Confluence, ticket criteria probe Jira — and a slow or broken
-  // provider must not undo a close the human already made. The worst case is what happened before
-  // this existed: a stale gate somebody re-checks by hand.
   try {
     if (runId) await remeasureRun(actor, runId);
     if (parentRunId) await remeasureRun(actor, parentRunId);

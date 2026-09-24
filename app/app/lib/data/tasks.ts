@@ -13,6 +13,7 @@ import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { pinInputs } from "../agent/context";
 import { emitRefusal } from "./events";
+import { unmetToStart, describeBlockers } from "./start-gate";
 
 /** A card, as the Jobs screen renders it. */
 export type TaskCard = {
@@ -32,9 +33,9 @@ export type TaskCard = {
   /**
    * The workflow this row NESTS, if any — its work happens in a child run's steps, not here.
    *
-   * The card's button already behaves correctly on such a row (`startTaskAction` opens the child
-   * run), but said "Start with agent", promising an agent that does not exist for it. The label
-   * needs the same fact the action has.
+   * The card's button already behaves correctly on such a row (`startWorkflowAction` opens the
+   * child run), but said "Start with agent", promising an agent that does not exist for it. The
+   * label needs the same fact the action has.
    */
   nests: string | null;
   origin: "defined" | "adhoc";
@@ -62,24 +63,38 @@ export type TaskCard = {
 };
 
 type Row = {
-  id: string; title: string; subtitle: string; state: string; kind: string;
-  role_code: string; ticket_key: string | null; origin: "defined" | "adhoc";
-  rationale: string | null; executor: string | null; started_at: string | null; started_by: string | null;
+  id: string;
+  title: string;
+  subtitle: string;
+  state: string;
+  kind: string;
+  role_code: string;
+  ticket_key: string | null;
+  origin: "defined" | "adhoc";
+  rationale: string | null;
+  executor: string | null;
+  started_at: string | null;
+  started_by: string | null;
   // `ord` and `opened_at` are here to ORDER the queue, not to render it — see `queueOrder`.
   workflow_step: {
-    reads: string[] | null; kind: string | null; ord: number;
+    reads: string[] | null;
+    kind: string | null;
+    ord: number;
     nests_workflow_code: string | null;
   } | null;
   workflow_run: {
-    id: string; opened_at: string | null; state: string | null;
-    parent_task_id: string | null; subject_key: string | null;
+    id: string;
+    opened_at: string | null;
+    state: string | null;
+    parent_task_id: string | null;
+    subject_key: string | null;
     workflow: { code: string } | null;
   } | null;
 };
 
 /** PostgREST types a to-one relation as an array. Normalise rather than casting a lie. */
 function one<T>(v: T | T[] | null | undefined): T | null {
-  return Array.isArray(v) ? v[0] ?? null : v ?? null;
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 }
 
 /**
@@ -111,73 +126,6 @@ export function queueOrder(a: Row, b: Row): number {
   return ordA - ordB;
 }
 
-/** A card and the rows the run it opened is made of. */
-export type QueueGroup = { card: TaskCard; children: TaskCard[] };
-
-/**
- * Put every row inside the row that opened it.
- *
- * A row that nests a workflow does no work itself: it opens a run, and that run's steps are where
- * the work happens. The queue rendered those steps as loose top-level cards, which made a nesting
- * row's card the one thing on screen that could not be acted on while looking exactly like one that
- * could — and when a child's title repeats its parent's, which four of the seed's ten nesting rows
- * do, two cards carried one name and the work looked stuck. It was one click away, on the other
- * card.
- *
- * PURE, and separate from the query, for the same reason `queueOrder` is: this is where the decision
- * lives, so this is what has to be testable without a database.
- */
-export function groupByParent(cards: TaskCard[]): QueueGroup[] {
-  const byId = new Map(cards.map((c) => [c.id, c]));
-
-  /**
-   * The TOPMOST visible ancestor — the card this row will be rendered inside.
-   *
-   * Not the immediate parent. Nesting goes two deep in the seed: `sprint-0`'s `Epics` row nests
-   * `epics`, whose row 7 nests `tech-design` once per epic. Attaching each row to its immediate
-   * parent would put the tech-design rows inside a card that is itself only rendered as a child,
-   * and rows that are inside nothing are rows nobody sees. They belong in the outermost card, where
-   * the run labels say which run each came from.
-   *
-   * A row whose parent is not on screen at all — closed, or outside this role's scope — hosts
-   * nowhere and stays top-level. Out of context beats invisible.
-   */
-  const hostOf = (card: TaskCard): TaskCard | null => {
-    // A cycle in `parent_task_id` must not hang a page render. `open_nested_run` cannot make one,
-    // which is precisely why nothing would notice if something else did.
-    const seen = new Set<string>([card.id]);
-    let host: TaskCard | null = null;
-    let at = card.parentTaskId;
-    while (at) {
-      // A cycle hosts nowhere — and the row goes back to the top level rather than into a group
-      // that is itself inside it. Dropping it instead would be the worst outcome available: a row
-      // that exists, is open, and appears on no screen.
-      if (seen.has(at)) return null;
-      seen.add(at);
-      const up = byId.get(at);
-      if (!up) break;
-      host = up;
-      at = up.parentTaskId;
-    }
-    return host;
-  };
-
-  const children = new Map<string, TaskCard[]>();
-  const tops: TaskCard[] = [];
-  for (const card of cards) {
-    const host = hostOf(card);
-    if (!host) {
-      tops.push(card);
-      continue;
-    }
-    const list = children.get(host.id) ?? [];
-    list.push(card);
-    children.set(host.id, list);
-  }
-
-  return tops.map((card) => ({ card, children: children.get(card.id) ?? [] }));
-}
-
 const SELECT =
   "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
   "workflow_step(reads,kind,ord,nests_workflow_code)," +
@@ -190,21 +138,25 @@ const SELECT =
  * `open` excludes closed and abandoned work — a queue is what is still yours to do. The Jobs
  * screen never shows finished cards; that is what Plan is for.
  */
-export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } = {}): Promise<TaskCard[]> {
+export async function tasksFor(
+  actor: Actor,
+  opts: { includeClosed?: boolean } = {},
+): Promise<TaskCard[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
 
-  let q = sb.from("work_task").select(SELECT).eq("engagement_id", actor.engagementId);
+  let q = sb
+    .from("work_task")
+    .select(SELECT)
+    .eq("engagement_id", actor.engagementId);
 
   // Scope, from the role's row rather than a constant here.
   if (actor.scope === "mine") q = q.eq("role_code", actor.roleCode);
-  else if (actor.scope === "workstream" && actor.workstreamCode) q = q.eq("workstream_code", actor.workstreamCode);
+  else if (actor.scope === "workstream" && actor.workstreamCode)
+    q = q.eq("workstream_code", actor.workstreamCode);
 
   if (!opts.includeClosed) q = q.not("state", "in", "(closed,abandoned)");
 
-  // `created_at` is the TIE-BREAK, not the order — the sort below is. Ordering on the embedded
-  // step is not an option: PostgREST sorts the embedded rows, not the parent ones, which is why the
-  // step's ord travels on the row and the comparison happens here.
   const { data, error } = await q.order("created_at", { ascending: true });
   if (error) throw new Error(`read queue: ${error.message}`);
 
@@ -213,10 +165,15 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
   // One query for the whole list rather than one per card.
   const ids = ((data ?? []) as unknown as Row[]).map((r) => r.id);
   const { data: qs } = ids.length
-    ? await sb.from("question").select("task_id").in("task_id", ids).eq("state", "open")
+    ? await sb
+        .from("question")
+        .select("task_id")
+        .in("task_id", ids)
+        .eq("state", "open")
     : { data: [] };
   const openByTask = new Map<string, number>();
-  for (const q of qs ?? []) openByTask.set(q.task_id, (openByTask.get(q.task_id) ?? 0) + 1);
+  for (const q of qs ?? [])
+    openByTask.set(q.task_id, (openByTask.get(q.task_id) ?? 0) + 1);
 
   return ((data ?? []) as unknown as Row[]).sort(queueOrder).map((r) => ({
     id: r.id,
@@ -237,9 +194,6 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
     openQuestions: openByTask.get(r.id) ?? 0,
     startedAt: r.started_at,
     startedBy: r.started_by,
-    // Through `one` for the reason it exists: PostgREST types a to-one relation as an array, and
-    // reading `.parent_task_id` off an array is `undefined` — a nesting row whose children silently
-    // stop grouping, which looks exactly like the bug this fixes.
     runId: one(r.workflow_run)?.id ?? null,
     parentTaskId: one(r.workflow_run)?.parent_task_id ?? null,
     runState: one(r.workflow_run)?.state ?? null,
@@ -263,18 +217,23 @@ export async function tasksFor(actor: Actor, opts: { includeClosed?: boolean } =
  * Scoped identically to `tasksFor`. History is not a place the rules relax, and a count that
  * ignored the role's scope would leak the shape of an engagement to someone who may not see it.
  */
-export async function startedCounts(actor: Actor): Promise<{ mine: number; visible: number }> {
+export async function startedCounts(
+  actor: Actor,
+): Promise<{ mine: number; visible: number }> {
   const sb = supabaseAdmin();
   if (!sb) return { mine: 0, visible: 0 };
 
   // `role_code` only: this is a count, and the started set is tens of rows engagement-wide, so one
   // round trip returning both numbers beats two head-counts that could disagree with each other.
-  let q = sb.from("work_task").select("role_code")
+  let q = sb
+    .from("work_task")
+    .select("role_code")
     .eq("engagement_id", actor.engagementId)
     .not("started_at", "is", null);
 
   if (actor.scope === "mine") q = q.eq("role_code", actor.roleCode);
-  else if (actor.scope === "workstream" && actor.workstreamCode) q = q.eq("workstream_code", actor.workstreamCode);
+  else if (actor.scope === "workstream" && actor.workstreamCode)
+    q = q.eq("workstream_code", actor.workstreamCode);
 
   const { data, error } = await q;
   if (error) throw new Error(`read started counts: ${error.message}`);
@@ -313,7 +272,8 @@ export function queueNotices(x: {
 
   // An empty queue is either "not yet" or "all done", and the difference is whether anything ever
   // started. Nothing else can distinguish them: both have no cards to show.
-  const empty = x.totalQueued > 0 ? null : x.startedVisible > 0 ? "all-done" : "none-yet";
+  const empty =
+    x.totalQueued > 0 ? null : x.startedVisible > 0 ? "all-done" : "none-yet";
 
   return { banner, empty };
 }
@@ -322,10 +282,15 @@ export function queueNotices(x: {
 async function agentLabels(actor: Actor): Promise<Map<string, string>> {
   const sb = supabaseAdmin();
   if (!sb) return new Map();
-  const { data } = await sb.from("role").select("code,label,agent").eq("org_id", actor.orgId);
-  return new Map((data ?? [])
-    .filter((r) => r.agent)
-    .map((r) => [r.code as string, `${r.label} agent`]));
+  const { data } = await sb
+    .from("role")
+    .select("code,label,agent")
+    .eq("org_id", actor.orgId);
+  return new Map(
+    (data ?? [])
+      .filter((r) => r.agent)
+      .map((r) => [r.code as string, `${r.label} agent`]),
+  );
 }
 
 /**
@@ -335,7 +300,10 @@ async function agentLabels(actor: Actor): Promise<Map<string, string>> {
  * second click is refused rather than silently doing nothing. The event is written by a trigger
  * either way — this is the front door, not the only door.
  */
-export async function startTask(actor: Actor, taskId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function startTask(
+  actor: Actor,
+  taskId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
@@ -346,31 +314,49 @@ export async function startTask(actor: Actor, taskId: string): Promise<{ ok: tru
     return { ok: false, error: "That task is not in your queue." };
   }
 
+  // The Ready/depends_on gate, checked HERE rather than inside `start_task`'s SQL — see
+  // `start-gate.ts` for why. This is the only caller of the RPC (phases.ts's machine-row
+  // auto-start calls this function, not the RPC), so it is the single enforcement point.
+  const blockers = await unmetToStart(actor, taskId);
+  const blocked = describeBlockers(blockers);
+  if (blocked) {
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task",
+      subjectId: taskId,
+      verb: "task.start_refused",
+      actorRoleCode: actor.roleCode,
+      actorUserId: actor.holder ?? null,
+      reason: blocked,
+      payload: {
+        gate: blockers.some((b) => b.kind === "ready") ? "ready" : "depends_on",
+      },
+    });
+    return { ok: false, error: blocked };
+  }
+
   const { error } = await sb.rpc("start_task", {
     p_task_id: taskId,
     p_actor: actor.holder ?? actor.roleCode,
     p_actor_role: actor.roleCode,
   });
   if (error) {
-    // Two different refusals reach here — an unmet Ready criterion, and a dependency that has not
-    // closed — and they mean different things to whoever is stuck. The routine distinguishes them
-    // in its message, so the message is kept verbatim and the kind is recorded alongside it,
-    // because "how often does a phase stall waiting on its own rows" is a question worth being
-    // able to ask of the record.
+    // The gate above passed, so a refusal here is a race (someone else started it a moment ago)
+    // or a genuine DB error — not a Ready/depends_on question, so it is reported as-is rather than
+    // classified into a gate the check above already cleared.
     await emitRefusal({
       engagementId: actor.engagementId,
-      subjectType: "task", subjectId: taskId,
+      subjectType: "task",
+      subjectId: taskId,
       verb: "task.start_refused",
-      actorRoleCode: actor.roleCode, actorUserId: actor.holder ?? null,
+      actorRoleCode: actor.roleCode,
+      actorUserId: actor.holder ?? null,
       reason: error.message,
-      payload: { gate: error.message.startsWith("Waiting on") ? "depends_on" : "ready" },
+      payload: { gate: "state" },
     });
     return { ok: false, error: error.message };
   }
 
-  // Pin what this task reads, at the versions live right now. After this the task's inputs are
-  // fixed: editing a source document creates a new version and does not silently change what this
-  // task was working from. Deliberately after the start succeeded — a refused start reads nothing.
   await pinInputs(taskId, actor.engagementId);
 
   return { ok: true };
@@ -380,9 +366,13 @@ export async function startTask(actor: Actor, taskId: string): Promise<{ ok: tru
 export async function recentEvents(actor: Actor, limit = 20) {
   const sb = supabaseAdmin();
   if (!sb) return [];
-  const { data } = await sb.from("event")
-    .select("verb, actor_kind, actor_user_id, actor_role_code, subject_type, occurred_at, payload")
+  const { data } = await sb
+    .from("event")
+    .select(
+      "verb, actor_kind, actor_user_id, actor_role_code, subject_type, occurred_at, payload",
+    )
     .eq("engagement_id", actor.engagementId)
-    .order("occurred_at", { ascending: false }).limit(limit);
+    .order("occurred_at", { ascending: false })
+    .limit(limit);
   return data ?? [];
 }

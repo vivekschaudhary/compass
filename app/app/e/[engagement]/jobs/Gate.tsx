@@ -9,7 +9,8 @@ import { describeCriterion } from "@/app/_ui/criterion";
 
 function mark(s: StoredStatus) {
   if (s.satisfied === true) return { glyph: "✓", cls: "gate-ok", label: "met" };
-  if (s.satisfied === false) return { glyph: "✗", cls: "gate-no", label: "not met" };
+  if (s.satisfied === false)
+    return { glyph: "✗", cls: "gate-no", label: "not met" };
   return { glyph: "○", cls: "gate-unknown", label: "not checked" };
 }
 
@@ -38,6 +39,11 @@ export function doneAllMet(statuses: StoredStatus[]): boolean {
   return done.length > 0 && done.every((s) => s.satisfied === true);
 }
 
+export function readyAllMet(statuses: StoredStatus[]): boolean {
+  const ready = statuses.filter((s) => s.kind === "ready");
+  return ready.length > 0 && ready.every((s) => s.satisfied === true);
+}
+
 /**
  * Ready and Done in one line each, for a row rendered inside a card.
  *
@@ -56,7 +62,60 @@ export function tallyOf(
   return unchecked ? `${head} · ${unchecked} not checked` : head;
 }
 
-export function Gate({ statuses, kind }: { statuses: StoredStatus[]; kind: "ready" | "done" }) {
+/**
+ * Ready or Done as one mark, for the table row — a card's `Gate` renders every criterion; a table
+ * cell has room for one glyph. Hover for what it means — the same disclosure the mocked-up table
+ * layout used, kept compact rather than always printing a criterion's text into the row.
+ */
+export function GateDot({
+  statuses,
+  kind,
+}: {
+  statuses: StoredStatus[];
+  kind: "ready" | "done";
+}) {
+  const mine = statuses.filter((s) => s.kind === kind);
+  if (!mine.length) {
+    return (
+      <span className="gate-dot gate-dot-na" aria-label={`${kind}: not applicable`}>
+        ·
+      </span>
+    );
+  }
+
+  const failing = mine.filter((s) => s.satisfied === false);
+  const unchecked = mine.filter((s) => s.satisfied === null);
+  const ok = failing.length === 0 && unchecked.length === 0;
+
+  const cls = ok ? "gate-dot-ok" : failing.length ? "gate-dot-bad" : "gate-dot-pending";
+  const glyph = ok ? "✓" : failing.length ? "✕" : "—";
+
+  return (
+    <span className="gate-dot-wrap">
+      <span className={`gate-dot ${cls}`} aria-label={`${kind}: ${glyph}`}>
+        {glyph}
+        <span className="gate-tip">
+          {mine.map((s) => {
+            const m = mark(s);
+            return (
+              <span key={s.id} className={`gate-tip-row gate-tip-${m.cls}`}>
+                <span aria-hidden="true">{m.glyph}</span> {describeCriterion(s)}
+              </span>
+            );
+          })}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+export function Gate({
+  statuses,
+  kind,
+}: {
+  statuses: StoredStatus[];
+  kind: "ready" | "done";
+}) {
   const mine = statuses.filter((s) => s.kind === kind);
   if (!mine.length) return null;
 
@@ -66,10 +125,13 @@ export function Gate({ statuses, kind }: { statuses: StoredStatus[]; kind: "read
   return (
     <div className="gate">
       <div className="gate-head">
-        <span className="gate-title">{kind === "ready" ? "Ready" : "Done"}</span>
+        <span className="gate-title">
+          {kind === "ready" ? "Ready" : "Done"}
+        </span>
         {/* "2 of 3 met" and nothing else would hide that one was never checked. Both numbers. */}
         <span className="gate-count">
-          {met} of {mine.length} met{unchecked > 0 && `, ${unchecked} not checked`}
+          {met} of {mine.length} met
+          {unchecked > 0 && `, ${unchecked} not checked`}
         </span>
       </div>
       <ul className="gate-list">
@@ -77,7 +139,9 @@ export function Gate({ statuses, kind }: { statuses: StoredStatus[]; kind: "read
           const m = mark(s);
           return (
             <li key={s.id} className={`gate-item ${m.cls}`}>
-              <span className="gate-glyph" aria-label={m.label}>{m.glyph}</span>
+              <span className="gate-glyph" aria-label={m.label}>
+                {m.glyph}
+              </span>
               <span className="gate-text">
                 {describeCriterion(s)}
                 {s.detail && <span className="gate-detail">{s.detail}</span>}

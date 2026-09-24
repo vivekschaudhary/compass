@@ -15,16 +15,18 @@ import { buildContext } from "@/app/lib/agent/context";
 import { conversation, openQuestions, draftOf, taskState, childRunBlock } from "@/app/lib/data/job";
 import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
+import { documentTree } from "@/app/lib/data/documents";
+import { readyAllMet } from "../Gate";
 import { describeCriterion } from "../../../../_ui/criterion";
 import { Tag } from "../../../../_ui/primitives";
 import { Conversation } from "./Conversation";
 import { ContextStrip } from "./ContextStrip";
 import { DraftPanel } from "./DraftPanel";
-import { AnswerForm } from "./AnswerForm";
-import { RunButton } from "./RunButton";
-import { NoteBox } from "./NoteBox";
+import { Composer } from "./Composer";
 import { ApprovePanel } from "./ApprovePanel";
 import { NestedRunPanel } from "./NestedRunPanel";
+import { RealtimeRefresh } from "./RealtimeRefresh";
+import { DocTreeNav } from "./DocTreeNav";
 
 export const dynamic = "force-dynamic";
 
@@ -51,11 +53,19 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
   const ctx = await buildContext(actor, taskId);
   if (!ctx) notFound();
 
-  const [turns, questions, draft, gates, state, blocked, nests, childRuns] = await Promise.all([
+  const [turns, questions, draft, gates, taskRow, blocked, nests, childRuns, tree] = await Promise.all([
     conversation(taskId), openQuestions(taskId), draftOf(actor, ctx.produces),
     storedStatusFor([taskId]), taskState(actor, taskId), childRunBlock(actor, taskId),
-    nestedWorkflowOf(taskId), childRunsOf(actor, taskId),
+    nestedWorkflowOf(taskId), childRunsOf(actor, taskId), documentTree(actor),
   ]);
+  const state = taskRow?.state ?? null;
+
+  // Freshly started, on this very load: the row is running, nothing has picked it up yet, and
+  // there is no conversation yet either — a task returned to after answering a question, or one an
+  // agent already worked and left `running` mid-tool-call, must NOT re-fire just because executor
+  // happens to read null at that instant.
+  const autoRun =
+    state === "running" && taskRow?.executor === null && turns.length === 0;
 
   const statuses = gates.get(taskId) ?? [];
   const doneCriteria = statuses.filter((g) => g.kind === "done")
@@ -63,6 +73,7 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
 
   return (
     <div className="job">
+      <RealtimeRefresh taskId={taskId} />
       <div className="job-head">
         <Link href={`/e/${engagement}/jobs${role ? `?role=${role}` : ""}`} className="job-back">← Jobs to do</Link>
         <div className="job-title-row">
@@ -89,40 +100,36 @@ export default async function JobPage(props: PageProps<"/e/[engagement]/jobs/[ta
         </p>
       )}
 
-      <div className="job-body">
+      <div className="job-body job-body-3">
+        <DocTreeNav engagement={engagement} roleCode={roleCode} tree={tree} produces={ctx.produces} />
+
         <section className="chat-col">
           <Conversation turns={turns} />
-
-          {questions.length > 0 && (
-            <AnswerForm engagement={engagement} role={roleCode} taskId={taskId} questions={questions} />
-          )}
 
           {state === "hitl" && draft && doneCriteria.length > 0 && (
             <ApprovePanel engagement={engagement} role={roleCode} taskId={taskId} criteria={doneCriteria} />
           )}
 
-          {/* Once there is something to add TO. On a task that has never run it sat above the Run
-              button reading "Add to the conversation", so it looked like the input you had to fill
-              in before anything would happen — which is exactly how it was read. */}
-          {(turns.length > 0 || state === "closed") && (
-            <NoteBox engagement={engagement} role={roleCode} taskId={taskId} closed={state === "closed"} />
-          )}
-
-          {state === "closed" ? (
-            <p className="closed-note">Closed. Approved and published.</p>
-          ) : nests ? (
-            /* No agent to run. The Run button was offered here anyway, and pressing it returned a
-               500 carrying the refusal from `runAgent` — the only act the page offered was the one
-               act that could not work. */
+          {nests && state !== "closed" ? (
+            /* No agent to run — its work happens in the child run's own steps, so the composer
+               (answer/run) makes no sense here either. */
             <NestedRunPanel
               engagement={engagement} role={roleCode} taskId={taskId}
               nests={nests} runs={childRuns}
             />
           ) : (
-            <RunButton
-              engagement={engagement} role={roleCode} taskId={taskId}
-              hasOpenQuestions={questions.length > 0} secondary={state === "hitl"}
-            />
+            <>
+              {state === "closed" && <p className="closed-note">Closed. Approved and published.</p>}
+              {/* Still offered when closed — a note goes on the record, nothing here restarts it.
+                  `questions` is always empty by the time a task is closed. */}
+              <Composer
+                engagement={engagement} role={roleCode} taskId={taskId}
+                questions={state === "closed" ? [] : questions} closed={state === "closed"}
+                hasOpenQuestions={questions.length > 0} secondary={state === "hitl"}
+                autoRun={autoRun}
+                idle={state === "idle"} readyMet={readyAllMet(statuses)}
+              />
+            </>
           )}
         </section>
 

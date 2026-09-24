@@ -24,6 +24,8 @@ const state: {
 const opened: { taskId: string; subject: string | null }[] = [];
 /** Every run whose gates were measured on the way out. */
 const remeasured: string[] = [];
+/** Every task id `startTask` was called with. */
+const started: string[] = [];
 
 const rowsFor = (table: string): Row[] =>
   table === "work_task" ? state.tasks
@@ -81,6 +83,9 @@ vi.mock("./tracker", () => ({
 }));
 vi.mock("./ticket-body", () => ({ composeTicketBodies: async () => ({ written: [], expected: 0, problems: [] }) }));
 vi.mock("./steps", () => ({ sortByStep: <T,>(x: T[]) => x }));
+vi.mock("./tasks", () => ({
+  startTask: async (_actor: unknown, taskId: string) => { started.push(taskId); return { ok: true }; },
+}));
 
 const { openNestedFanOut } = await import("./phases");
 
@@ -108,7 +113,7 @@ function seed(opts: { perEpic: boolean; epics: string[] }) {
   }));
 }
 
-beforeEach(() => { opened.length = 0; remeasured.length = 0; });
+beforeEach(() => { opened.length = 0; remeasured.length = 0; started.length = 0; });
 
 describe("a nesting row that fans out", () => {
   it("opens one run per epic, each carrying its own subject", async () => {
@@ -158,5 +163,30 @@ describe("a nesting row that fans out", () => {
 
     expect(r.ok).toBe(true);
     expect(opened.map((o) => o.subject)).toEqual(["E1"]);
+  });
+});
+
+describe("opening a child run's first task", () => {
+  // Whoever clicked "Open the X run" is already looking at it — starting it too is the same
+  // promise a plain task's own click already makes. But `start_task` carries no role check of its
+  // own, so this must not fire on someone else's row just because nothing stops it.
+  it("auto-starts when the child run's first task belongs to the SAME role that opened it", async () => {
+    seed({ perEpic: false, epics: [] });
+    state.tasks.push({ id: "t-child", workflow_run_id: "run-1", role_code: ACTOR.roleCode });
+
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(true);
+    expect(started).toEqual(["t-child"]);
+  });
+
+  it("leaves it idle when the child run's first task belongs to a DIFFERENT role", async () => {
+    seed({ perEpic: false, epics: [] });
+    state.tasks.push({ id: "t-child", workflow_run_id: "run-1", role_code: "product-manager" });
+
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(true);
+    expect(started).toEqual([]);
   });
 });
