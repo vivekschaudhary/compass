@@ -51,13 +51,14 @@ export default async function JobsPage(
   // A query parameter can legitimately arrive repeated; take the first rather than stringifying
   // an array into a role code that matches nothing.
   const role = Array.isArray(search.role) ? search.role[0] : search.role;
+  const holderId = Array.isArray(search.holder) ? search.holder[0] : search.holder;
 
   const roles = await rolesOnEngagement(engagement);
   const staffed = roles.filter((r) => r.holder);
   const roleCode = role ?? staffed[0]?.code;
   if (!roleCode) notFound();
 
-  const actor = await resolveActor(engagement, roleCode);
+  const actor = await resolveActor(engagement, roleCode, holderId);
   if (!actor) notFound();
 
   const tasks = await tasksFor(actor);

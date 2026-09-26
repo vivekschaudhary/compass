@@ -76,6 +76,34 @@ export type AgentContext = {
    */
   unresolvedProduces: string | null;
   /**
+   * What panel the job page mounts — see `workflow_step.renders` (migration `step_renders`).
+   * `"none"` when the row declares none, which is also what a step imported before this column
+   * existed gets: no panel, exactly what it rendered before.
+   */
+  renders: "doc" | "code" | "doc-review" | "code-review" | "none";
+  /**
+   * `doc-review`/`code-review` ONLY: the document (or change) this row reviews, resolved from the
+   * single `depends_on` row's own `produces`. Null for every other row.
+   *
+   * DELIBERATELY SEPARATE from `produces` above, not a repurposing of it. `produces` is what
+   * `runAgent` files to — `if (!ctx.produces) halt` is the guard that stops a row with nothing to
+   * author from filing anything, and a review row's own `produces` IS empty by construction
+   * (enforced at import). Pointing `produces` at the reviewed document instead would pass that
+   * guard and let running the agent on a REVIEW task silently overwrite the document under
+   * review, filed as if the reviewer authored it. `page.tsx` reads `reviewPath` for display only
+   * (`draftOf`, `DraftPanel`'s `path`) and `runAgent` never looks at it.
+   */
+  reviewPath: string | null;
+  /**
+   * Resolved once here from `actor.capabilities`, not re-derived wherever it is needed — read by
+   * `systemPrompt` (to tell the model it actually has this, rather than leaving it to notice the
+   * gap between its own agent file's `required_tools: [... web_search ...]` and what it was
+   * actually given) and by `run.ts` (to ask the host for it). Most agent files declare `web_search`
+   * required; almost none of them had it — this is that gap closing, one role's capability row at
+   * a time via `roles.csv`, not a blanket flip for everyone.
+   */
+  hasWebSearch: boolean;
+  /**
    * Where it goes. `docs` publishes a page; `tickets` creates issues on the board; `scm` means the
    * deliverable is a branch and a pull request, and the record belongs on the story in the tracker
    * rather than in a document.
@@ -605,13 +633,25 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   let ownOrd = Number.MAX_SAFE_INTEGER;
   let template: ResolvedTemplate | null = null;
   let templateName: string | null = null;
+  let renders: AgentContext["renders"] = "none";
+  let reviewPath: string | null = null;
   if (task.workflow_step_id) {
     const { data: step } = await sb.from("workflow_step")
-      .select("ord, produces, output, template").eq("id", task.workflow_step_id).maybeSingle();
+      .select("ord, produces, output, template, renders, depends_on, workflow_version_id")
+      .eq("id", task.workflow_step_id).maybeSingle();
+    renders = (step?.renders as AgentContext["renders"] | null) ?? "none";
+
     const dest = destinationOf(step?.produces);
     // A per-subject path (`03-architecture/epic/{epic}`) is filled from the run this task belongs
     // to. Resolved HERE and nowhere else on the write side: `ctx.produces` is what gets filed, what
     // the prior draft is looked up by, and what the prompt tells the agent it is writing.
+    //
+    // NEVER redirected to a reviewed document, even for `doc-review`/`code-review` — a row whose
+    // own `produces` is empty must keep `runAgent` refusing to file anything (`if (!ctx.produces)`
+    // below `runAgent`'s own halt), or a review row's run silently overwrites what it is reviewing.
+    // That is `reviewPath` below, kept OUT of this field on purpose: display and "what gets filed"
+    // must not be the same field, because a review task legitimately wants the first and must
+    // never get the second.
     produces = dest ? resolvePath(dest.path, await subjectOfRun(task.workflow_run_id as string | null)) : null;
     // Resolution failing is not the same as the step producing nothing, and the two must not report
     // the same way — one is a row that drafts no document, the other is a row whose document has
@@ -628,6 +668,20 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     template = templateName
       ? await templateFor(templateName, actor.engagementId, actor.orgId)
       : null;
+
+    // `doc-review`/`code-review` ONLY: what the panel shows, resolved from the ONE `depends_on`
+    // row's own `produces` — read-only, display-side, never fed to `runAgent`.
+    if (renders === "doc-review" || renders === "code-review") {
+      const { data: reviewed } = await sb.from("workflow_step")
+        .select("produces")
+        .eq("workflow_version_id", step?.workflow_version_id as string)
+        .eq("task", (step?.depends_on as string[] | null)?.[0] ?? "")
+        .maybeSingle();
+      const reviewedDest = destinationOf(reviewed?.produces);
+      reviewPath = reviewedDest
+        ? resolvePath(reviewedDest.path, await subjectOfRun(task.workflow_run_id as string | null))
+        : null;
+    }
   }
 
   return {
@@ -639,6 +693,9 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     agentFile,
     produces,
     unresolvedProduces,
+    renders,
+    reviewPath,
+    hasWebSearch: actor.capabilities.includes("web-search"),
     destination,
     output,
     inputs: await ensureInputs(taskId, actor.engagementId),
@@ -799,7 +856,29 @@ ${ctx.doneCriteria.length
 These are the criteria your output is measured against. Work to them.
 
 # How to work
+${(() => {
+  // Mirrors `toolsFor`'s own condition exactly — `ask` alone is what a `doc-review`/`code-review`
+  // row gets (nothing to file, so `draft` is withheld, the same reason `supplied` withholds it),
+  // and a `supplied` row (received, not authored) gets it too, via `TOOL_FOR`. Said HERE, not just
+  // decided in the tool list, because "you have two tools and must use one" told a review row with
+  // nothing left to ask that it had to invent a question anyway — the model said so outright: "this
+  // call is only to satisfy the required structured-output step." A hardcoded instruction is advice
+  // that stopped matching what was actually offered, and the fix is the prompt agreeing with the
+  // tool list rather than a model being right that something was demanded of it that made no sense.
+  const askOnly = !ctx.produces || ctx.output === "supplied";
+  if (askOnly) {
+    return `
+You have one tool: \`ask\`. Use it when something you need is genuinely not in what you were given
+and you cannot responsibly infer it — the same discipline as any other row: dates never agreed,
+people never named, standards nobody wrote down are things to ask about, not invent.
 
+This row does not author a document. When you have nothing left that needs asking — including a
+review that is simply finished — say so in plain text and call no tool at all. That is a complete,
+successful turn here, not a gap to fill with a question that only exists to have used the tool.
+Inventing a filler question ("anything else needed?") when you have nothing to ask is worse than
+silence: it reopens a round the person already closed.`.trim();
+  }
+  return `
 You have two tools and must use one of them.
 
 Use \`ask\` when something you need is genuinely not in what you were given and you cannot
@@ -820,7 +899,15 @@ belong in the draft — if it is important and unsupported, that is an \`ask\`.
 
 If some of your inputs are missing, say which, and say what that costs. Producing a confident
 deliverable from a third of the intended inputs, without noting it, is the failure this whole
-system exists to prevent.`.trim());
+system exists to prevent.`.trim();
+})()}
+${ctx.hasWebSearch ? `
+# Web search
+
+You have real web search. Use it for anything that has to come from outside what you were given —
+market data, competitors, what users actually say in public, current facts a document cannot hold.
+It is the difference between citing a source and guessing one; do not answer from training data
+where a search would give you something real and current instead.` : ""}`.trim());
 
   return parts.join("\n\n---\n\n");
 }

@@ -26,6 +26,16 @@ export type HostRequest = {
    */
   tools: Anthropic.Tool[];
   maxTokens: number;
+  /**
+   * Host-agnostic DATA, not an Anthropic tool spec — "this role has web search" is a fact about
+   * the role (`role.capabilities`), and how (or whether) a host fulfills it is that host's own
+   * business. The API host answers it with Anthropic's native server tool, executed on Anthropic's
+   * side with no loop needed here; a future host (Codex, Gemini) would answer it its own way, or
+   * not at all yet. Kept OUT of `tools` above on purpose — that array is the cross-host domain
+   * contract (`ask`/`draft`/…) every host must carry identically; this is a capability, not a tool
+   * the app itself interprets.
+   */
+  wantsWebSearch?: boolean;
 };
 
 export type HostResult = {

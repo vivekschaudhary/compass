@@ -136,8 +136,8 @@ describe("re-running", () => {
     workflows: [{
       code: "build",
       steps: [
-        { workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] },
-        { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "test", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] },
+        { workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" },
+        { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "test", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" },
       ],
       criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],

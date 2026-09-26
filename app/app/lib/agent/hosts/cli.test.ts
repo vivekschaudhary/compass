@@ -41,6 +41,25 @@ describe("buildArgv", () => {
     expect(flag("--tools")).toBe("");
   });
 
+  // The CLI host's own answer to `wantsWebSearch` — Claude Code's own built-in tool, named
+  // explicitly rather than via "default" (which would bring Read/Edit/Bash back too).
+  it("enables ONLY WebSearch when wantsWebSearch is true, and pre-approves it", () => {
+    const withSearch = buildArgv(req({ wantsWebSearch: true }));
+    const f = (name: string) => withSearch[withSearch.indexOf(name) + 1];
+    expect(f("--tools")).toBe("WebSearch");
+    expect(f("--allowedTools")).toBe("WebSearch");
+    expect(withSearch).not.toContain("--dangerously-skip-permissions");
+  });
+
+  it("still disables every built-in tool when wantsWebSearch is false or absent, and never passes --allowedTools", () => {
+    expect(flag("--tools")).toBe("");
+    expect(argv).not.toContain("--allowedTools");
+    const explicit = buildArgv(req({ wantsWebSearch: false }));
+    const f = (name: string) => explicit[explicit.indexOf(name) + 1];
+    expect(f("--tools")).toBe("");
+    expect(explicit).not.toContain("--allowedTools");
+  });
+
   // THE TRAP. --bare reads like the right flag for a minimal invocation and its own help says
   // OAuth and keychain are never read — it silently defeats the subscription this host exists for.
   it("never passes --bare", () => {

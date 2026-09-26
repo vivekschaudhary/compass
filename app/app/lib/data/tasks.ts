@@ -30,6 +30,10 @@ export type TaskCard = {
   reads: string[];
   /** `machine` dispatches nothing — offering "Start with agent" on one is offering a dead end. */
   stepKind: string | null;
+  /** `doc-review`/`code-review` — this row reviews someone else's work, not its own. See `renders`
+   *  on `workflow_step`. Null for an ordinary authoring row, or a step imported before the column
+   *  existed. */
+  renders: string | null;
   /**
    * The workflow this row NESTS, if any — its work happens in a child run's steps, not here.
    *
@@ -81,6 +85,7 @@ type Row = {
     kind: string | null;
     ord: number;
     nests_workflow_code: string | null;
+    renders: string | null;
   } | null;
   workflow_run: {
     id: string;
@@ -128,7 +133,7 @@ export function queueOrder(a: Row, b: Row): number {
 
 const SELECT =
   "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
-  "workflow_step(reads,kind,ord,nests_workflow_code)," +
+  "workflow_step(reads,kind,ord,nests_workflow_code,renders)," +
   // `parent_task_id` rides on the join that was already here. Grouping the queue costs no query.
   "workflow_run!work_task_workflow_run_id_fkey(id,opened_at,state,parent_task_id,subject_key,workflow(code))";
 
@@ -186,6 +191,7 @@ export async function tasksFor(
     ticketKey: r.ticket_key,
     reads: r.workflow_step?.reads ?? [],
     stepKind: r.workflow_step?.kind ?? null,
+    renders: r.workflow_step?.renders ?? null,
     nests: r.workflow_step?.nests_workflow_code ?? null,
     origin: r.origin,
     rationale: r.rationale,

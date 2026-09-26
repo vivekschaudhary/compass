@@ -37,7 +37,10 @@ let memberError: { message: string } | null = null;
 const ROWS: Record<string, unknown> = {
   org: { id: "org-1" },
   work_task: { workflow_step_id: "s1", workflow_run_id: "r1" },
-  workflow_step: { produces: "01-foundation/team", output: "roster" },
+  workflow_step: {
+    task: "propose", produces: "01-foundation/team", output: "roster",
+    renders: "doc", depends_on: [], workflow_version_id: "wv1",
+  },
   document: { current_version_id: "v1" },
 };
 const LISTS: Record<string, unknown[]> = {
@@ -52,6 +55,10 @@ vi.mock("../supabase", () => ({
         select: () => chain,
         eq: () => chain,
         order: () => chain,
+        // `hasDownstreamReviewer`'s containment check — nobody depends on this row in these
+        // fixtures, so it always comes back empty and materialising proceeds on this row's own
+        // close, exactly as before that check existed.
+        contains: () => chain,
         maybeSingle: async () => ({ data: ROWS[table] ?? null }),
         // A bare `await` on the builder resolves to the list form.
         then: (res: (v: { data: unknown[] }) => unknown) => res({ data: LISTS[table] ?? [] }),

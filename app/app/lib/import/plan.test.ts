@@ -502,7 +502,7 @@ describe("import is versioning", () => {
     workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" }],
       criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
@@ -545,7 +545,7 @@ describe("import is versioning", () => {
           steps: [
             already.workflows[0].steps[0],
             { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "write-tests",
-              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] },
+              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" },
           ],
         }],
       },

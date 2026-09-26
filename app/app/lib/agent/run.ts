@@ -632,7 +632,12 @@ export async function runAgent(
       // task needs room for both.
       maxTokens: 64000,
       system: systemPrompt(ctx),
-      tools: toolsFor(ctx.output),
+      // `ctx.produces` is null for a `doc-review`/`code-review` row (and for any row whose subject
+      // did not resolve) — `toolsFor` drops `draft` for exactly the same reason `supplied` already
+      // drops it for a row that receives its deliverable: the tool is a dead end, and the fix is
+      // not offering it.
+      tools: toolsFor(ctx.output, Boolean(ctx.produces)),
+      wantsWebSearch: ctx.hasWebSearch,
       messages: [
         { role: "user", content: inputPrompt(ctx) },
         ...(await priorMessages(taskId)),
@@ -694,6 +699,16 @@ export async function runAgent(
         sections: 0,
         path: ctx.produces,
       };
+    }
+
+    // A `doc-review`/`code-review` row talking is not a failure either — `toolsFor` no longer even
+    // OFFERS it `draft` (see there for why), so prose IS the deliverable: the reviewer asked
+    // something, the agent answered. Back to `hitl`, same as a normal draft handing off to its
+    // reviewer — the row was resumed OUT of `hitl` (see `resumeForReview`) purely so this reply
+    // could run, and now that it has, the ball is back with whoever is reviewing.
+    if (ctx.renders === "doc-review" || ctx.renders === "code-review") {
+      await handOver(actor, taskId, ctx, "reviewed", message);
+      return { kind: "drafted", summary: text || "(no output)", sections: 0, path: null };
     }
 
     await releaseExecutor(taskId, ctx, { failed: true });
@@ -774,6 +789,17 @@ export async function runAgent(
           sections: 0,
           path: ctx.produces,
         };
+      }
+
+      // A `doc-review`/`code-review` row hits this SAME shape, live, even with the prompt telling
+      // it plainly that calling no tool at all is a complete turn (see `systemPrompt`'s `askOnly`
+      // branch) — the model still reaches for its one tool and calls it with nothing in it, rather
+      // than not calling it. `stopReason: "tool_use"`, `questions: 0`, every time observed. Prompt
+      // wording alone was not a reliable enough signal; this is the same fix as the `!call` branch
+      // above, reached by the other door a review row's "nothing to ask" can arrive through.
+      if ((ctx.renders === "doc-review" || ctx.renders === "code-review") && !leaked && !buried) {
+        await handOver(actor, taskId, ctx, "reviewed", message, { via: "ask-empty" });
+        return { kind: "drafted", summary: body || "(no output)", sections: 0, path: null };
       }
 
       await releaseExecutor(taskId, ctx, { failed: true });

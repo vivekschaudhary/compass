@@ -109,6 +109,17 @@ export type StepRow = {
    * impossible to write rather than something to detect.
    */
   dependsOn: string[];
+  /**
+   * What panel the job page mounts beside the conversation, from a closed set. EXPLICIT, never
+   * inferred — a step used to be read as a review only because its own `produces` happened to be
+   * empty, which made "no document" and "this step reviews someone else's document" the same
+   * signal, and the second case rendered as neither the document nor the approval panel.
+   *
+   * `doc` / `code` — this step authors the thing, editable. `doc-review` / `code-review` — it
+   * reads someone else's, read-only with a place to comment. `none` — no panel (a machine check,
+   * or a `workflow` row whose UI is the nested run, not a document).
+   */
+  renders: string;
 };
 export type CriterionRow = {
   workflow: string;
@@ -189,6 +200,9 @@ const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
 // one of these made the dry run green and the apply a 500, after `applyPlan` had already published
 // the new version — leaving `build` with zero steps. See migration 060's header.
 const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied"];
+// CLOSED, and required on every row — see `StepRow.renders`. Not inferred from `produces`/`kind`
+// because the app must not guess which panel a row wants; a row says so.
+const RENDERS = ["doc", "code", "doc-review", "code-review", "none"];
 const CRITERION_KINDS = ["ready", "done"];
 
 /* ── parsing ─────────────────────────────────────────────────────────────── */
@@ -231,6 +245,7 @@ function readSteps(csv: string): StepRow[] {
     conditional: r.conditional ?? "", nests: r.nests ?? "", title: r.title ?? "",
     template: (r.template ?? "").trim(),
     dependsOn: parseList(r.depends_on),
+    renders: (r.renders ?? "").trim(),
   }));
 }
 
@@ -425,6 +440,29 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     if (s.role && !knownRoles.has(s.role))
       add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} names role '${s.role}', which does not exist.`,
         "Add it to roles.csv, or correct the spelling.");
+    // Optional, like `output` and `template` — most fixtures and older rows have none, and an
+    // empty `renders` simply means no panel, same as before this column existed. What must never
+    // happen is a VALUE the app has no panel for, or one that contradicts `produces`/`depends_on`.
+    if (s.renders && !RENDERS.includes(s.renders))
+      add("workflow-steps.csv", row, `Step ${s.workflow}/${s.ord} declares renders '${s.renders}'.`,
+        `Use one of: ${RENDERS.join(", ")}. A value the app has no panel for is a row that promises ` +
+        `a screen nothing draws.`);
+    if ((s.renders === "doc-review" || s.renders === "code-review") && s.dependsOn.length !== 1)
+      add("workflow-steps.csv", row,
+        `Step ${s.workflow}/${s.ord} renders '${s.renders}' but names ${s.dependsOn.length} ` +
+        `dependenc${s.dependsOn.length === 1 ? "y" : "ies"} in depends_on.`,
+        "A review renders the ONE document or change it gates — name exactly one dependency in " +
+        "depends_on, the row that authors what this one reviews.");
+    if ((s.renders === "doc" || s.renders === "code") && !s.produces && s.kind !== "workflow")
+      add("workflow-steps.csv", row,
+        `Step ${s.workflow}/${s.ord} renders '${s.renders}' but declares no produces.`,
+        "A row that authors something names what it produces, or it renders 'none' (or 'doc-review'/" +
+        "'code-review' if it is reviewing someone else's).");
+    if ((s.renders === "doc-review" || s.renders === "code-review") && s.produces)
+      add("workflow-steps.csv", row,
+        `Step ${s.workflow}/${s.ord} renders '${s.renders}' and also declares produces '${s.produces}'.`,
+        "A review reads the document its dependency produced — it does not author its own. Clear " +
+        "produces, or change renders to 'doc'/'code' if this row really does author.");
   });
   workflows.forEach((w) => {
     const ords = steps.filter((s) => s.workflow === w.code).map((s) => s.ord);
@@ -456,6 +494,23 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
           `Step ${s.workflow}/${s.ord} depends on '${d}' at ord ${at}, which is not above it.`,
           "Dependencies point backwards, which is what makes a cycle impossible to write. Renumber the rows so the producer comes first.");
     });
+
+    // A review's shape must match what it reviews — a `code-review` reading a document, or a
+    // `doc-review` reading a change, is a panel that renders the wrong thing for what the
+    // dependency actually filed.
+    if (s.renders === "doc-review" || s.renders === "code-review") {
+      const dep = siblings.find((x) => x.task === s.dependsOn[0]);
+      if (dep) {
+        const wantCode = s.renders === "code-review";
+        if (wantCode !== (dep.output === "code"))
+          add("workflow-steps.csv", i + 2,
+            `Step ${s.workflow}/${s.ord} renders '${s.renders}' but depends on '${dep.task}', whose ` +
+            `output is ${dep.output ? `'${dep.output}'` : "an ordinary document"}.`,
+            wantCode
+              ? "code-review reviews a change — the dependency should declare output 'code'."
+              : "doc-review reviews a document — the dependency should not declare output 'code'.");
+      }
+    }
   });
 
   // A slug that names two rows.
@@ -909,7 +964,7 @@ function describeChanges(
   // could change which workflow it nests and the importer would report "unchanged" — a diff that
   // does not compare everything is a diff that lies. Adding a column means adding it here.
   const key = (s: StepRow) =>
-    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.output}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.template}:${s.dependsOn.join("|")}`;
+    `${s.ord}:${s.kind}:${s.role}:${s.task}:${s.produces}:${s.output}:${s.reads.join("|")}:${s.conditional}:${s.nests}:${s.title}:${s.template}:${s.dependsOn.join("|")}:${s.renders}`;
   const ckey = (c: CriterionRow) =>
     `${c.stepTask ?? "-"}:${c.kind}:${c.text}:${c.subjectKind}:${c.subjectRef}:${c.operator}:${c.value}`;
 

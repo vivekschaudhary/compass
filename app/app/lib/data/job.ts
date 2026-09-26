@@ -374,6 +374,29 @@ export async function addNote(
 }
 
 /**
+ * Resume a task paused for approval, so a plain chat message can prompt the agent again without
+ * going through a formal Reject.
+ *
+ * `addNote` above deliberately never touches state, for a closed task's sake — a note there must
+ * not reopen it. This is the opposite, narrow case: `hitl` specifically, and ONLY `hitl` (the
+ * `eq("state", "hitl")` makes it a no-op everywhere else, including closed and idle, so calling
+ * this from the composer is safe regardless of what state the row happens to be in). Mirrors the
+ * same transition `reject()` already makes ("there is work to do, and it is the agent's"), without
+ * a criterion or a rejection reason attached — a comment is not a verdict.
+ */
+export async function resumeForReview(
+  actor: Actor, taskId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+  const { error } = await sb.from("work_task")
+    .update({ state: "running" })
+    .eq("id", taskId).eq("engagement_id", actor.engagementId).eq("state", "hitl");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
  * The write behind a note, with no link reading.
  *
  * Separate so Compass's own notes — "filing your answer failed" — go straight in. A system message

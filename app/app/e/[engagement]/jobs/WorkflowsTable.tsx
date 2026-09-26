@@ -109,7 +109,7 @@ export function WorkflowsTable({
   }
 
   return (
-    <div className="queue-table-scroll workflows-table-wrap">
+    <div className="queue-table-scroll jobs-table-card">
       <h3 className="phases-head">Workflows you own</h3>
       <table className="queue-table">
         <colgroup>

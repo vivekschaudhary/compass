@@ -77,8 +77,9 @@ export async function startTaskAction(
   engagement: string,
   role: string,
   taskId: string,
+  holderId?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
-  const actor = await resolveActor(engagement, role);
+  const actor = await resolveActor(engagement, role, holderId);
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
 
@@ -101,6 +102,7 @@ export async function startWorkflowAction(
   engagement: string,
   role: string,
   taskId: string,
+  holderId?: string | null,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -115,10 +117,10 @@ export async function startWorkflowAction(
    */
   startedTaskId?: string;
 }> {
-  const started = await startTaskAction(engagement, role, taskId);
+  const started = await startTaskAction(engagement, role, taskId, holderId);
   if (!started.ok) return started;
 
-  const actor = await resolveActor(engagement, role);
+  const actor = await resolveActor(engagement, role, holderId);
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
 

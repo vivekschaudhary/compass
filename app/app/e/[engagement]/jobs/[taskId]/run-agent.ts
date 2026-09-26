@@ -12,12 +12,12 @@ import type { AgentOutcome } from "@/app/lib/agent/run";
 export type RunOutcome = { ok: boolean; message: string };
 
 export async function requestRun(
-  engagement: string, role: string, taskId: string,
+  engagement: string, role: string, taskId: string, holderId?: string | null,
 ): Promise<RunOutcome> {
   try {
     const res = await fetch("/api/agent/run", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ engagement, role, taskId }),
+      body: JSON.stringify({ engagement, role, taskId, holderId }),
     });
     // A refusal or a failed run arrives as `ok: false`; the agent's own `kind: "error"` is sent that
     // way by the route, so it is never read here as an outcome.

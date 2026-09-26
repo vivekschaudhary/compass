@@ -32,7 +32,7 @@ export function TasksTable({
   if (!rows.length) return null;
 
   return (
-    <div className="queue-table-scroll">
+    <div className="queue-table-scroll jobs-table-card">
       <h3 className="phases-head">Your tasks</h3>
       <table className="queue-table">
         <colgroup>
@@ -59,17 +59,39 @@ export function TasksTable({
               <tr key={t.id} className="row">
                 <td className="cell-title">
                   <div className="title-cell">
-                    <a href={href} className="title">{t.title}</a>
-                    {t.ticketKey && <span className="ticket">{t.ticketKey}</span>}
-                    {t.origin === "adhoc" && <span className="chip">ad-hoc</span>}
+                    {/* A review row is someone ELSE's work put in front of you — worth spotting
+                        before you open it, the same way the chat page already marks who is
+                        talking. `doc-review`/`code-review` never author anything (see `renders`);
+                        that's the one fact this badge exists to surface. */}
+                    {(t.renders === "doc-review" ||
+                      t.renders === "code-review") && (
+                      <span
+                        className="review-badge"
+                        title="You are reviewing, not authoring"
+                      >
+                        ◎ Review
+                      </span>
+                    )}
+                    <a href={href} className="title">
+                      {t.title}
+                    </a>
+                    {t.ticketKey && (
+                      <span className="ticket">{t.ticketKey}</span>
+                    )}
+                    {t.origin === "adhoc" && (
+                      <span className="chip">ad-hoc</span>
+                    )}
                   </div>
                   <div className="subtitle">{t.subtitle}</div>
                 </td>
                 <td className="cell-reads">
                   {t.reads.slice(0, 2).map((r) => (
-                    <span key={r} className="chip">{r}</span>
+                    <div key={r}>
+                      <span className="chip">
+                        {r}
+                      </span>
+                    </div>
                   ))}
-                  {t.reads.length > 2 && <span className="chip">+{t.reads.length - 2}</span>}
                 </td>
                 <td className="cell-gate" data-label="Ready">
                   <GateDot statuses={statuses} kind="ready" />
@@ -78,7 +100,13 @@ export function TasksTable({
                   <GateDot statuses={statuses} kind="done" />
                 </td>
                 <td className="cell-action">
-                  {controlFor(t, { engagement, role: myRole, href, statuses, readyMet: readyAllMet(statuses) })}
+                  {controlFor(t, {
+                    engagement,
+                    role: myRole,
+                    href,
+                    statuses,
+                    readyMet: readyAllMet(statuses),
+                  })}
                 </td>
               </tr>
             );

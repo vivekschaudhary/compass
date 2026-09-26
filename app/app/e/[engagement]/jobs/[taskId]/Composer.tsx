@@ -13,7 +13,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OpenQuestion } from "@/app/lib/data/job";
-import { answerAction, noteAction } from "./actions";
+import { answerAction, noteAction, resumeForReviewAction } from "./actions";
 import { startTaskAction } from "../actions";
 import { requestRun } from "./run-agent";
 import { uploadAnswer } from "./upload-answer";
@@ -25,23 +25,38 @@ const ACCEPT = ".pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.md,.markdown,.txt";
 export function Composer({
   engagement,
   role,
+  holderId,
   taskId,
   questions,
   closed,
   hasOpenQuestions,
   secondary,
+  reviewOnly,
+  hitl,
   autoRun,
   idle,
   readyMet,
 }: {
   engagement: string;
   role: string;
+  /** Which of `role`'s several holders (if more than one) is acting — see `resolveActor`. */
+  holderId?: string | null;
   taskId: string;
   questions: OpenQuestion[];
   closed: boolean;
   /** Passed straight through to `RunButton` for its own copy ("Answer N questions" etc.). */
   hasOpenQuestions: boolean;
   secondary?: boolean;
+  /** Passed straight through to `RunButton` — see its own doc for why this needs its own copy. */
+  reviewOnly?: boolean;
+  /**
+   * `runAgent` refuses anything but `state: "running"`, and a plain note never moves a row there
+   * on its own (see `addNote`'s own doc comment) — only a formal Reject does, today. So a message
+   * sent while `hitl` calls `resumeForReviewAction` first, making the same transition `reject()`
+   * makes, without a criterion attached. A comment is not a verdict — it is still filed as an
+   * ordinary note, this only unblocks the run that follows it.
+   */
+  hitl?: boolean;
   autoRun?: boolean;
   /**
    * The row has not been started yet — `RunButton` calls `runAgent` directly with no state check
@@ -73,7 +88,7 @@ export function Composer({
   async function start() {
     setError(null);
     setStarting(true);
-    const r = await startTaskAction(engagement, role, taskId);
+    const r = await startTaskAction(engagement, role, taskId, holderId);
     setStarting(false);
     if (!r.ok) { setError(r.error ?? "Could not start it."); return; }
     // Re-render from the server: `state` flips to `running`, and the page's own `autoRun` becomes
@@ -86,21 +101,26 @@ export function Composer({
   async function runIfLastAnswer(remaining: number | undefined) {
     if (remaining !== 0) return;
     setWorking(true);
-    const run = await requestRun(engagement, role, taskId);
+    const run = await requestRun(engagement, role, taskId, holderId);
     setWorking(false);
     if (!run.ok) setError(run.message);
+    // The run's own reply lands after the run, not before — a second refresh once it settles is
+    // what brings that turn in and clears the "thinking" bubble.
+    router.refresh();
   }
 
   function submitAnswer(value: string) {
     if (!current) return;
     startTransition(async () => {
       setError(null);
-      const r = await answerAction(engagement, role, taskId, { [current.id]: value });
+      const r = await answerAction(engagement, role, taskId, { [current.id]: value }, holderId);
       if (!r.ok) { setError(r.error ?? "Could not record that."); return; }
       setText("");
       setIndex(0); // the answered question is gone after refresh; land on whatever is now first
-      await runIfLastAnswer(r.remaining);
+      // Posted before the run starts, not after it finishes — an answer that only appears once a
+      // model call minutes away has completed reads as the click having done nothing.
       router.refresh();
+      await runIfLastAnswer(r.remaining);
     });
   }
 
@@ -108,10 +128,30 @@ export function Composer({
     if (!text.trim()) return;
     startTransition(async () => {
       setError(null);
-      const r = await noteAction(engagement, role, taskId, text);
+      const r = await noteAction(engagement, role, taskId, text, holderId);
       if (!r.ok) { setError(r.error ?? "Could not add that."); return; }
       setText("");
+      // Refreshed HERE, before the agent runs, so the message you just sent shows up in the chat
+      // immediately — same reasoning as `submitAnswer`. A message TO the agent is one side of a
+      // conversation, not a note filed and left for someone to notice, so it answers back without
+      // a second click on "Run the agent" — but only once the row is actually running: `closed`
+      // has nothing left to run, and `idle` has never been started (the row's own "Start with
+      // agent" control does that, not this).
       router.refresh();
+      if (!closed && !idle) {
+        // `hitl` needs an explicit nudge FIRST — `runAgent` refuses anything but `state:
+        // "running"`, and this row is paused for approval. Skipped everywhere else, where the row
+        // is already running and this would be a silent no-op.
+        if (hitl) {
+          const resumed = await resumeForReviewAction(engagement, role, taskId, holderId);
+          if (!resumed.ok) { setError(resumed.error ?? "Could not resume it."); return; }
+        }
+        setWorking(true);
+        const run = await requestRun(engagement, role, taskId, holderId);
+        setWorking(false);
+        if (!run.ok) setError(run.message);
+        router.refresh();
+      }
     });
   }
 
@@ -133,21 +173,38 @@ export function Composer({
 
   return (
     <div className="composer">
+      {/* The agent's own turn hasn't landed yet — this sits where it will, styled as its bubble,
+          so the wait reads as "it's replying" rather than the page having done nothing. The
+          message you just sent is already in `Conversation` above by the time this shows, since
+          `submitNote`/`submitAnswer` refresh before awaiting the run, not after. */}
+      {working && (
+        <div className="msg msg-thinking" aria-live="polite">
+          <span className="msg-thinking-dot" />
+          <span className="msg-thinking-dot" />
+          <span className="msg-thinking-dot" />
+        </div>
+      )}
+
       {current && (
         <div className="qcard">
-          <div className="qcard-head">
-            <span className="qcard-count">{at + 1} of {questions.length}</span>
-            <div className="qcard-nav">
-              <button
-                className="qcard-nav-btn" disabled={at === 0}
-                onClick={() => setIndex(at - 1)} aria-label="Previous question"
-              >‹</button>
-              <button
-                className="qcard-nav-btn" disabled={at >= questions.length - 1}
-                onClick={() => setIndex(at + 1)} aria-label="Next question"
-              >›</button>
+          {/* The counter and prev/next nav earn their place only once there is more than one
+              question queued — a single question is just the agent's own last word, and a "1 of
+              1" counter with disabled arrows around it is what made this read as a form. */}
+          {questions.length > 1 && (
+            <div className="qcard-head">
+              <span className="qcard-count">{at + 1} of {questions.length}</span>
+              <div className="qcard-nav">
+                <button
+                  className="qcard-nav-btn" disabled={at === 0}
+                  onClick={() => setIndex(at - 1)} aria-label="Previous question"
+                >‹</button>
+                <button
+                  className="qcard-nav-btn" disabled={at >= questions.length - 1}
+                  onClick={() => setIndex(at + 1)} aria-label="Next question"
+                >›</button>
+              </div>
             </div>
-          </div>
+          )}
 
           <p className="qcard-prompt">{current.prompt.split("\n")[0]}</p>
           {current.prompt.split("\n").slice(1).join("\n").trim() && (
@@ -246,8 +303,9 @@ export function Composer({
             </div>
           ) : (
             <RunButton
-              engagement={engagement} role={role} taskId={taskId}
-              hasOpenQuestions={hasOpenQuestions} secondary={secondary} autoRun={autoRun}
+              engagement={engagement} role={role} holderId={holderId} taskId={taskId}
+              hasOpenQuestions={hasOpenQuestions} secondary={secondary} reviewOnly={reviewOnly}
+              autoRun={autoRun}
             />
           )
         )}

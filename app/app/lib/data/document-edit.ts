@@ -35,6 +35,7 @@ export type EditResult =
  */
 export async function editSection(
   actor: Actor,
+  taskId: string,
   path: string,
   sectionId: string,
   body: string,
@@ -46,6 +47,25 @@ export async function editSection(
     // An empty body is almost never the intent, and it is indistinguishable from a section that was
     // deleted — which is the one thing this path must not be able to do.
     return { ok: false, error: "A section cannot be emptied. Say what it should contain, or ask the agent to remove it." };
+  }
+
+  // Enforced HERE, not only by `DraftPanel` hiding its own Edit button — a client-side gate is a
+  // suggestion, and this is the one write path a review row must never reach. `doc-review`/
+  // `code-review` means this task reads what its ONE dependency produced (see `context.ts`'s
+  // `reviewPath`); a reviewer's edit would rewrite the document out from under the row they are
+  // gating, using their own name as the author of someone else's draft. Document updates flow only
+  // from the row that actually authors the document.
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_step_id").eq("id", taskId).maybeSingle();
+  if (task?.workflow_step_id) {
+    const { data: step } = await sb.from("workflow_step")
+      .select("renders").eq("id", task.workflow_step_id).maybeSingle();
+    if (step?.renders === "doc-review" || step?.renders === "code-review") {
+      return {
+        ok: false,
+        error: "This task reviews the document — it does not author it. Ask the agent to revise it, or edit from the row that drafted it.",
+      };
+    }
   }
 
   const { data: doc } = await sb
