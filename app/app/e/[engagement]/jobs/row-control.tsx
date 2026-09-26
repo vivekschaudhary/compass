@@ -44,6 +44,7 @@ export function controlFor(
       role={role}
       state={t.state}
       executor={t.executor}
+      heartbeatAt={t.heartbeatAt}
       href={href}
       openQuestions={t.openQuestions}
       readyMet={readyMet}

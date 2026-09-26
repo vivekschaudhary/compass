@@ -18,13 +18,7 @@ import { startTaskAction } from "../actions";
 import { requestRun } from "./run-agent";
 import { uploadAnswer } from "./upload-answer";
 import { RunButton } from "./RunButton";
-
-/** "working — 1m 12s", ticking. Never fractional seconds — nobody needs that precision. */
-function elapsed(since: string, nowMs: number): string {
-  const s = Math.max(0, Math.floor((nowMs - new Date(since).getTime()) / 1000));
-  const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
-}
+import { formatElapsed } from "@/app/lib/agent/heartbeat-config";
 
 /** What the file picker offers. Everything `readUpload` can actually read, and nothing else. */
 const ACCEPT = ".pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.md,.markdown,.txt";
@@ -226,7 +220,7 @@ export function Composer({
           <span className="msg-thinking-dot" />
           <span className="msg-thinking-dot" />
           <span className="msg-thinking-elapsed">
-            working{heartbeatAt ? ` — ${elapsed(heartbeatAt, now)}` : "…"}
+            working{heartbeatAt ? ` — ${formatElapsed(heartbeatAt, now)}` : "…"}
           </span>
         </div>
       )}
@@ -234,7 +228,7 @@ export function Composer({
       {stalled && (
         <div className="jobs-note jobs-note-stalled">
           <span>
-            Stuck{heartbeatAt ? ` since ${elapsed(heartbeatAt, now)}` : ""} — the process behind
+            Stuck{heartbeatAt ? ` since ${formatElapsed(heartbeatAt, now)}` : ""} — the process behind
             this run is gone, not just slow.
           </span>
           <button
