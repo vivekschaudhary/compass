@@ -3150,7 +3150,7 @@ textarea.verdict-reason {
 /* ── starting a phase ─────────────────────────────────────────────────────── */
 
 .phases {
-  border: 1 solid var(--color-divider);
+  border: 1px solid var(--color-divider);
   padding: var(--space-4);
   margin-bottom: var(--space-6);
 }

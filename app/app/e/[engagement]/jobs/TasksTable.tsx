@@ -92,6 +92,7 @@ export function TasksTable({
                       </span>
                     </div>
                   ))}
+                  {t.reads.length > 2 && <span className="chip">+{t.reads.length - 2}</span>}
                 </td>
                 <td className="cell-gate" data-label="Ready">
                   <GateDot statuses={statuses} kind="ready" />
