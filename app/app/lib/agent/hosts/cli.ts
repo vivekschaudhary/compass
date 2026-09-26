@@ -97,8 +97,18 @@ export function buildArgv(req: HostRequest): string[] {
     "--effort", "high",
     // A consumer repo's .claude/settings.json must not reach into a Compass run.
     "--setting-sources", "",
-    // See the header: built-ins are ON by default and a drafting agent must not have them.
-    "--tools", "",
+    // See the header: built-ins are ON by default and a drafting agent must not have them. The one
+    // exception is this host's own answer to `req.wantsWebSearch` — Claude Code already ships a
+    // WebSearch tool, so fulfilling the capability here means naming exactly that one, never
+    // "default" (which would hand back Read/Edit/Bash too). The search itself runs inside the CLI's
+    // own internal loop; nothing about it reaches this process differently from a plain text turn.
+    "--tools", req.wantsWebSearch ? "WebSearch" : "",
+    // A tool being IN `--tools` still asks permission before its first use, and stdin is closed
+    // (see below) — an unanswerable prompt, not a fast refusal, so the run sat silent until the
+    // idle guard killed it at 300s. `--allowedTools` pre-approves it WITHOUT the broader
+    // `--dangerously-skip-permissions`, so nothing wider than this one already-narrowed tool set
+    // is ever auto-approved.
+    ...(req.wantsWebSearch ? ["--allowedTools", "WebSearch"] : []),
     "--json-schema", JSON.stringify(unionSchema(req.tools)),
     "--append-system-prompt", req.system,
   ];

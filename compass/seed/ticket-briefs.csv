@@ -1,0 +1,4 @@
+code,brief,enabled
+epic,"A slice of the programme. Say what the slice delivers as a whole, what it unblocks downstream, and how a reader will know it is finished. Not a list of its children.",true
+story,"One shippable deliverable. Say what it is, who needs it, and what acceptance looks like.",true
+subtask,"One step inside its story's own workflow. Say what the role holding it is actually doing right now — writing this code, running this research, reviewing this diff — the inputs it is working from, and what closes it. Never a restatement of the story it belongs to; the story already says what that is.",true

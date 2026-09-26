@@ -420,8 +420,18 @@ const GENERAL = new Set(["ask", "draft"]);
  * A specialised tool replaces `draft` rather than joining it: a step that produces a sprint plan
  * has one way to produce it, and offering both invites a model to file a plan whose commitments
  * never reach the board — a document that looks complete and does nothing.
+ *
+ * `canProduce` is the same mechanism `supplied` already uses for the same reason, generalised: a
+ * `doc-review`/`code-review` row's `ctx.produces` is null by construction (see `context.ts` —
+ * `runAgent` must never let a review row file over the document it is reviewing), so `draft` was
+ * still being offered to it. The model reached for it anyway on a plain "what is the
+ * contradiction?" follow-up, wrote a one-line summary, and hit `runAgent`'s own
+ * `if (!ctx.produces)` halt — which returns an error and writes NO turn explaining why, so the
+ * conversation just stopped after that summary. "Telling it not to is advice, and advice is what
+ * failed" applies here exactly as it does to `supplied`: the fix is not offering the tool.
  */
-export function toolsFor(output: string | null | undefined): Anthropic.Tool[] {
+export function toolsFor(output: string | null | undefined, canProduce: boolean = true): Anthropic.Tool[] {
+  if (!canProduce) return TOOLS.filter((t) => t.name === "ask");
   const special = output ? TOOL_FOR[output] : undefined;
   return TOOLS.filter((t) =>
     special ? t.name === "ask" || t.name === special : GENERAL.has(t.name),

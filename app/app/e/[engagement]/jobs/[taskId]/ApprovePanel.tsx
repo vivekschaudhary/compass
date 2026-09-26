@@ -23,8 +23,19 @@ type Verdict = "none" | "ok" | "no";
  *
  * A rejection without a reason is refused. The agent has to act on it, and "no" is not actionable.
  */
-export function ApprovePanel({ engagement, role, taskId, criteria }: {
-  engagement: string; role: string; taskId: string; criteria: DoneCriterion[];
+export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isReview }: {
+  engagement: string; role: string;
+  /** Which of `role`'s several holders (if more than one) is doing the confirming — see
+   *  `resolveActor`. Undefined/null falls back to the first holder, same as before this existed. */
+  holderId?: string | null;
+  taskId: string; criteria: DoneCriterion[];
+  /**
+   * `doc-review`/`code-review` ONLY — someone judging another role's deliverable. Everywhere else
+   * (a `doc`/`code` row) the person confirming these criteria is the one who just DREW them: "you
+   * are the evidence for these" is true of a reviewer and false of an author checking their own
+   * work before sending it on, and the two must not read the same way.
+   */
+  isReview: boolean;
 }) {
   const router = useRouter();
   // A criterion a CHECK already satisfied is not something to pre-tick. Pre-ticking it made a
@@ -53,7 +64,9 @@ export function ApprovePanel({ engagement, role, taskId, criteria }: {
           ? "Sending back — say what is wrong with each"
           : mine.length === 0
             ? "Everything was checked automatically — nothing needs your signature"
-            : `Approve — ${mine.length} need${mine.length === 1 ? "s" : ""} your judgment. You are the evidence for these.`}
+            : isReview
+              ? `Approve — ${mine.length} need${mine.length === 1 ? "s" : ""} your judgment. You are the evidence for these.`
+              : `Confirm — ${mine.length} need${mine.length === 1 ? "s" : ""} checking before this can move on.`}
       </div>
 
       {/* Shown, not hidden: the reader should see the whole gate. But they carry the source and
@@ -112,7 +125,7 @@ export function ApprovePanel({ engagement, role, taskId, criteria }: {
             onClick={() => startTransition(async () => {
               setError(null);
               const r = await rejectAction(engagement, role, taskId,
-                rejected.map((c) => ({ criterionId: c.id, reason: reasons[c.id] ?? "" })));
+                rejected.map((c) => ({ criterionId: c.id, reason: reasons[c.id] ?? "" })), holderId);
               if (!r.ok) setError(r.error ?? "Could not send it back.");
               else router.refresh();
             })}
@@ -124,12 +137,16 @@ export function ApprovePanel({ engagement, role, taskId, criteria }: {
             className="btn btn-primary" disabled={pending || confirmed.length === 0}
             onClick={() => startTransition(async () => {
               setError(null);
-              const r = await approveAction(engagement, role, taskId, confirmed.map((c) => c.id));
+              const r = await approveAction(engagement, role, taskId, confirmed.map((c) => c.id), holderId);
               if (!r.ok) setError(r.error ?? "Could not approve.");
               else router.refresh();
             })}
           >
-            {pending ? "Recording…" : allOk ? "Approve and close" : `Confirm ${confirmed.length} of ${mine.length}`}
+            {pending
+              ? "Recording…"
+              : allOk
+                ? isReview ? "Approve and close" : "Confirm and send on"
+                : `Confirm ${confirmed.length} of ${mine.length}`}
           </button>
         )}
         <span className="text-muted approve-note">

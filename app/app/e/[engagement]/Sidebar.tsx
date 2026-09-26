@@ -17,7 +17,16 @@ import type { ReactNode } from "react";
  * and made the one that mattered — who you are right now — the hardest thing to find.
  */
 
-export type NavRole = { code: string; label: string; holder: string | null; initials: string; tier: string };
+export type NavRole = {
+  code: string; label: string; tier: string;
+  /** The FIRST holder, kept for every caller that only ever wanted "the" one (display, the
+   *  single-holder common case). See `holders` for the rest. */
+  holder: string | null;
+  initials: string;
+  /** Every person holding this role, in roster order — a role with two engineers is normal, and
+   *  the switcher needs the full list to let you say WHICH of them you are. */
+  holders: { id: string; name: string; initials: string }[];
+};
 export type NavEngagement = { id: string; name: string };
 
 /**
@@ -71,6 +80,13 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
   const params = useSearchParams();
   const activeCode = params.get("role") ?? fallbackRole;
   const activeRole = roles.find((r) => r.code === activeCode) ?? null;
+  const activeHolderParam = params.get("holder");
+  // Explicit choice wins; absent a choice (a single-holder role, or nobody has picked among
+  // several yet), the first holder — same as every page already resolves without this param.
+  const activeHolder = activeRole
+    ? (activeHolderParam ? activeRole.holders.find((h) => h.id === activeHolderParam) : undefined)
+        ?? activeRole.holders[0] ?? null
+    : null;
   const collapsed = useSyncExternalStore(railStore.subscribe, railStore.get, railStore.getServer);
   const [menuOpen, setMenuOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -80,6 +96,18 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
     setMenuOpen(false);
     const q = new URLSearchParams(params.toString());
     q.set("role", code);
+    // A stale holder id from whatever role was active before must not carry over — the new
+    // role's own first holder (or none) is what `resolveActor` falls back to without one.
+    q.delete("holder");
+    router.push(`${pathname}?${q.toString()}`);
+  }
+
+  /** Same as `pickRole`, naming WHICH of that role's several holders is acting. */
+  function pickHolder(code: string, holderId: string) {
+    setMenuOpen(false);
+    const q = new URLSearchParams(params.toString());
+    q.set("role", code);
+    q.set("holder", holderId);
     router.push(`${pathname}?${q.toString()}`);
   }
 
@@ -142,7 +170,10 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
           const active = pathname.startsWith(href);
           return (
             <Link
-              key={n.href} href={activeRole ? `${href}?role=${activeRole.code}` : href}
+              key={n.href}
+              href={activeRole
+                ? `${href}?role=${activeRole.code}${activeHolderParam ? `&holder=${activeHolderParam}` : ""}`
+                : href}
               className={active ? "rail-item rail-item-on" : "rail-item"}
               aria-current={active ? "page" : undefined}
               // The label when there is no room for the label. `title` and aria-label both, so it
@@ -162,14 +193,14 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
         <div className="rail-role">
           <button
             className="rail-role-button" onClick={() => setMenuOpen(!menuOpen)}
-            title={collapsed ? `Working as ${activeRole?.holder ?? activeRole?.label ?? "—"}` : undefined}
+            title={collapsed ? `Working as ${activeHolder?.name ?? activeRole?.label ?? "—"}` : undefined}
             aria-expanded={menuOpen} aria-haspopup="menu"
           >
-            <span className="avatar avatar-active">{activeRole?.initials ?? "—"}</span>
+            <span className="avatar avatar-active">{activeHolder?.initials ?? activeRole?.initials ?? "—"}</span>
             {!collapsed && (
               <span className="rail-role-text">
                 <span className="rail-role-label">Working as</span>
-                <span className="rail-role-name">{activeRole?.holder ?? activeRole?.label ?? "nobody"}</span>
+                <span className="rail-role-name">{activeHolder?.name ?? activeRole?.label ?? "nobody"}</span>
               </span>
             )}
             {!collapsed && <span className="rail-caret" aria-hidden>{menuOpen ? "▾" : "▸"}</span>}
@@ -184,23 +215,47 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
                     what a queue looks like for a role you have not staffed yet — but they are not
                     the same kind of thing. */}
                 {i > 0 && Boolean(list[i - 1].holder) && !r.holder && <div className="rail-menu-rule">Unstaffed roles</div>}
-                <button
-                  role="menuitem"
-                  className={r.code === activeRole?.code ? "rail-menu-item rail-menu-item-on" : "rail-menu-item"}
-                  onClick={() => pickRole(r.code)}
-                >
-                  <span className="avatar">{r.initials}</span>
-                  <span className="rail-menu-text">
-                    <span>{r.holder ?? r.label}</span>
-                    {/* The role under the person, because two people can hold roles that see very
-                        different queues and a name alone does not say which. When nobody holds it
-                        the label IS the name, so repeating it says nothing — the sub-line carries
-                        what the row is actually for instead. */}
-                    <span className="rail-menu-role">
-                      {r.holder ? r.label : "nobody holds this — see its empty queue"}
+                {r.holders.length > 1 ? (
+                  // Two engineers, both shown — one role, more than one person, and this is the
+                  // one place that has to say which of them is about to act. Everything else
+                  // (the queue itself) stays shared: picking one here does not hide the other's
+                  // work, it only says whose name goes on what YOU close next.
+                  <div className="rail-menu-group">
+                    <div className="rail-menu-group-label">{r.label}</div>
+                    {r.holders.map((h) => (
+                      <button
+                        key={h.id} role="menuitem"
+                        className={r.code === activeRole?.code && h.id === activeHolder?.id
+                          ? "rail-menu-item rail-menu-item-on" : "rail-menu-item"}
+                        onClick={() => pickHolder(r.code, h.id)}
+                      >
+                        <span className="avatar">{h.initials}</span>
+                        <span className="rail-menu-text">
+                          <span>{h.name}</span>
+                          <span className="rail-menu-role">{r.label}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    role="menuitem"
+                    className={r.code === activeRole?.code ? "rail-menu-item rail-menu-item-on" : "rail-menu-item"}
+                    onClick={() => pickRole(r.code)}
+                  >
+                    <span className="avatar">{r.initials}</span>
+                    <span className="rail-menu-text">
+                      <span>{r.holder ?? r.label}</span>
+                      {/* The role under the person, because two people can hold roles that see very
+                          different queues and a name alone does not say which. When nobody holds it
+                          the label IS the name, so repeating it says nothing — the sub-line carries
+                          what the row is actually for instead. */}
+                      <span className="rail-menu-role">
+                        {r.holder ? r.label : "nobody holds this — see its empty queue"}
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
                 </div>
               ))}
             </div>

@@ -83,6 +83,12 @@ export type Actor = {
   roleLabel: string;
   /** The person holding this role on this engagement, from the roster. */
   holder: string | null;
+  /** Which `member` row `holder` came from — undefined for an `Actor` built by hand (tests, a
+   *  fixture) rather than resolved; null when `resolveActor` ran but nobody holds the role.
+   *  Round-tripped so a caller can carry the SAME specific person forward (a link, a follow-up
+   *  action) rather than re-resolving and risking a different holder of the same role being
+   *  picked next time. */
+  holderId?: string | null;
   scope: Scope;
   workstreamCode: string | null;
   /** The agent file that runs this role's work — "PM agent" on a card. */
@@ -97,10 +103,17 @@ export type Actor = {
  * THE SEAM. In demo mode the role is whatever the switcher passed. When real identity lands, this
  * reads the session and looks the role up from the user's grants instead — and no call site
  * changes, because every one of them already takes an Actor.
+ *
+ * `holderId` disambiguates WHICH of a role's holders is acting, when there is more than one — two
+ * engineers share `role_code: "engineer"`, see the identical queue (that is correct: if one is
+ * out, the other still needs to close their work), but a click from one of them must not be
+ * recorded under the other's name. Optional and additive: omitted (every call site before this),
+ * it falls back to exactly today's behaviour — the first holder in roster order.
  */
 export async function resolveActor(
   engagementId: string,
   roleCode: string,
+  holderId?: string | null,
   orgCode = "default",
 ): Promise<Actor | null> {
   const sb = supabaseAdmin();
@@ -131,9 +144,13 @@ export async function resolveActor(
   // Through `holdersOn`, so an org-level holder is found and a role with two holders does not
   // throw. The previous `.maybeSingle()` did both wrong: it saw only engagement rows, and it
   // errored on the second holder of a role — which `tracker.ts` had already worked around rather
-  // than fixed. First by `ord` is the roster's own order.
+  // than fixed. First by `ord` is the roster's own order, and stays the fallback below.
   const holders = await holdersOn(engagementId);
-  const holder = holders.find((h) => h.role === roleCode) ?? null;
+  const forRole = holders.filter((h) => h.role === roleCode);
+  // `holderId` scoped to THIS role's own holders, not looked up globally — an id that names a
+  // different role's member row must not let someone claim to be acting as a role they do not
+  // hold. Falls through to the first holder whenever it is absent or does not match.
+  const holder = (holderId ? forRole.find((h) => h.id === holderId) : undefined) ?? forRole[0] ?? null;
 
   return {
     orgId: org.id,
@@ -141,6 +158,7 @@ export async function resolveActor(
     roleCode: role.code,
     roleLabel: role.label,
     holder: holder?.name ?? null,
+    holderId: holder?.id ?? null,
     scope: (role.scope ?? "mine") as Scope,
     workstreamCode: role.workstream_code ?? null,
     agent: role.agent ?? null,
@@ -171,10 +189,12 @@ export async function rolesOnEngagement(
     .eq("enabled", true)
     .order("code");
   // Org-level holders included, so the PMO Analyst shows as held rather than vacant on an
-  // engagement nobody has staffed them to. First writer per role wins, which is roster order.
-  const holderOf = new Map<string, string | null>();
+  // engagement nobody has staffed them to. EVERY holder per role, in roster order — not just the
+  // first. A role with two engineers is normal (`holdersOn`'s own doc comment says so), and
+  // collapsing here is what made the switcher unable to offer the second one at all.
+  const holdersOf = new Map<string, Holder[]>();
   for (const h of await holdersOn(engagementId)) {
-    if (!holderOf.has(h.role)) holderOf.set(h.role, h.name);
+    holdersOf.set(h.role, [...(holdersOf.get(h.role) ?? []), h]);
   }
 
   // Ordered by tier, not alphabetically. Alphabetical put `architect` first — the role now called
@@ -189,13 +209,21 @@ export async function rolesOnEngagement(
   };
 
   return (roles ?? [])
-    .map((r) => ({
-      code: r.code as string,
-      label: r.label as string,
-      tier: r.tier as string,
-      holder: holderOf.get(r.code) ?? null,
-      initials: initialsOf(holderOf.get(r.code) ?? r.label),
-    }))
+    .map((r) => {
+      const holders = (holdersOf.get(r.code as string) ?? [])
+        .map((h) => ({ id: h.id, name: h.name ?? "—", initials: initialsOf(h.name) }));
+      return {
+        code: r.code as string,
+        label: r.label as string,
+        tier: r.tier as string,
+        // Kept for every caller that only ever wanted "the" holder (most of them, correctly —
+        // display and the single-holder common case don't need the list). The FIRST holder,
+        // same as before this change; `holders` below is the addition, not a replacement.
+        holder: holders[0]?.name ?? null,
+        initials: holders[0]?.initials ?? initialsOf(r.label as string),
+        holders,
+      };
+    })
     .sort(
       (a, b) =>
         (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9) ||

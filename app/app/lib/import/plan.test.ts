@@ -23,7 +23,7 @@ const seedBundle = (): Bundle => ({
 const realAgents = () =>
   existsSync(AGENTS) ? readdirSync(AGENTS).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
 
-const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
+const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], ticketBriefs: [], documents: [], workflows: [] };
 
 /* ── the seed itself must be valid, or the first load fails ──────────────── */
 
@@ -499,10 +499,10 @@ describe("import is versioning", () => {
   };
 
   const already: Existing = {
-    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
+    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], ticketBriefs: [], documents: [],
     workflows: [{
       code: "build",
-      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] }],
+      steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" }],
       criteria: [{ workflow: "build", stepTask: "implement", kind: "done", text: "tests pass", subjectKind: "", subjectRef: "", operator: "", value: "" }],
     }],
   };
@@ -545,7 +545,7 @@ describe("import is versioning", () => {
           steps: [
             already.workflows[0].steps[0],
             { workflow: "build", ord: 2, kind: "agent", role: "engineer", task: "write-tests",
-              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [] },
+              produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" },
           ],
         }],
       },

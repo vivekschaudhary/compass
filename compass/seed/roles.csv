@@ -1,8 +1,8 @@
 code,label,title,tier,scope,workstream,agent,hosts,capabilities
 delivery-manager,Delivery Manager,Runs the engagement,oversight,everyone,Delivery,delivery-manager,"claude,codex,gemini","edit-engagement-specs,approve-gates"
-product-manager,Product Manager,The bar for what gets built,oversight,everyone,Product,product-manager,"claude,codex",approve-gates
+product-manager,Product Manager,The bar for what gets built,oversight,everyone,Product,product-manager,"claude,codex","approve-gates,web-search"
 product-owner,Product Owner,Writes what to build,practitioner,everyone,Product,product-owner,"claude,codex",
-researcher,Researcher,Evidence for the bet,practitioner,workstream,Product,researcher,claude,
+researcher,Researcher,Evidence for the bet,practitioner,workstream,Product,researcher,claude,web-search
 designer,Designer,Flows and screens,practitioner,mine,Design,designer,claude,
 ux-writer,UX Writer,The words on the screen,practitioner,mine,Design,ux-writer,claude,
 principal-engineer,Principal Engineer,The standard the how is held to,oversight,everyone,Engineering,principal-engineer,,

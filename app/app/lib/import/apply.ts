@@ -13,7 +13,7 @@
 // The store is an interface rather than the Supabase client so the ordering logic — which is the
 // part that can actually be wrong — is testable without a database.
 
-import type { Plan, WorkstreamRow, RoleRow, WorkflowRow, StepRow, CriterionRow } from "./plan";
+import type { Plan, WorkstreamRow, PhaseRow, TicketBriefRow, RoleRow, WorkflowRow, StepRow, CriterionRow } from "./plan";
 
 /** Which tier is being written: an org default, or one engagement's override. */
 export type Scope = { orgCode: string; engagementId: string | null };
@@ -23,6 +23,8 @@ export interface ConfigStore {
   orgId(code: string): Promise<string>;
 
   upsertWorkstream(orgId: string, engagementId: string | null, row: WorkstreamRow): Promise<void>;
+  upsertPhase(orgId: string, engagementId: string | null, row: PhaseRow): Promise<void>;
+  upsertTicketBrief(orgId: string, engagementId: string | null, row: TicketBriefRow): Promise<void>;
   upsertRole(orgId: string, engagementId: string | null, row: RoleRow): Promise<void>;
 
   /** Upsert the workflow itself (its label, owner, trigger) and return its id. */
@@ -65,6 +67,8 @@ export interface ConfigStore {
 
 export type ApplyReport = {
   workstreams: number;
+  phases: number;
+  ticketBriefs: number;
   roles: number;
   workflowsCreated: string[];
   versionsCreated: { workflow: string; version: number; because: string[] }[];
@@ -100,16 +104,27 @@ export async function applyPlan(
   const eng = scope.engagementId;
 
   const report: ApplyReport = {
-    workstreams: 0, roles: 0, workflowsCreated: [], versionsCreated: [], versionsUpdated: [],
-    skipped: [], retired: [],
+    workstreams: 0, phases: 0, ticketBriefs: 0, roles: 0, workflowsCreated: [], versionsCreated: [],
+    versionsUpdated: [], skipped: [], retired: [],
   };
 
-  // Order matters and is not incidental: a role names a workstream, a workflow names both. Writing
-  // them out of order would leave references dangling for as long as the import takes — which on a
-  // slow connection is long enough for a concurrent read to see a broken graph.
+  // Order matters and is not incidental: a role names a workstream, a workflow names both (and,
+  // optionally, a phase). Writing them out of order would leave references dangling for as long as
+  // the import takes — which on a slow connection is long enough for a concurrent read to see a
+  // broken graph.
   for (const w of plan.workstreams) {
     await store.upsertWorkstream(orgId, eng, w.row);
     report.workstreams++;
+  }
+
+  for (const p of plan.phases) {
+    await store.upsertPhase(orgId, eng, p.row);
+    report.phases++;
+  }
+
+  for (const t of plan.ticketBriefs) {
+    await store.upsertTicketBrief(orgId, eng, t.row);
+    report.ticketBriefs++;
   }
 
   for (const r of plan.roles) {
@@ -171,6 +186,8 @@ export async function applyPlan(
 export function describeReport(r: ApplyReport): string {
   const bits = [
     `${r.workstreams} workstream(s)`,
+    `${r.phases} phase(s)`,
+    `${r.ticketBriefs} ticket brief(s)`,
     `${r.roles} role(s)`,
     r.workflowsCreated.length ? `${r.workflowsCreated.length} new workflow(s)` : "",
     r.versionsCreated.length ? `${r.versionsCreated.length} version(s) published` : "",

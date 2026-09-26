@@ -28,11 +28,19 @@ export const apiHost: Host = {
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system: req.system,
-      tools: req.tools,
+      // Anthropic's own server tool, executed on their side — no client loop needed for it. Kept
+      // OUT of `req.tools` (see `HostRequest.wantsWebSearch`): that array is the cross-host domain
+      // contract every host must carry identically, and this is how THIS host fulfills a capability
+      // request, not a tool the app itself calls.
+      tools: req.wantsWebSearch
+        ? [...req.tools, { type: "web_search_20250305" as const, name: "web_search" as const }]
+        : req.tools,
       messages: req.messages,
     });
     const message = await stream.finalMessage();
 
+    // `server_tool_use` (the model invoking web_search) is a distinct block type from `tool_use`
+    // (the model calling one of ours, `ask`/`draft`/…) — this already only ever matches the latter.
     const call = message.content.find((b) => b.type === "tool_use");
 
     return {

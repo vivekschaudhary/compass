@@ -188,6 +188,38 @@ const REGISTRY: Record<
 };
 
 /**
+ * The step this one reviews — same lookup `context.ts` makes for `ctx.reviewPath`, kept here
+ * rather than imported: that module is agent-prompt-facing, this one is the data layer, and the
+ * three-line join is cheaper than a cross-layer dependency for it.
+ */
+async function producingStep(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>, workflowVersionId: string, dependsOnTask: string,
+): Promise<{ produces: string | null; output: string | null } | null> {
+  const { data } = await sb.from("workflow_step")
+    .select("produces, output").eq("workflow_version_id", workflowVersionId).eq("task", dependsOnTask)
+    .maybeSingle();
+  return data ? { produces: data.produces, output: data.output } : null;
+}
+
+/**
+ * Does an independent reviewer depend on this step? If one does, ITS close is what should
+ * materialise — not this one's. `propose-resource-plan`'s own close used to write `member` rows
+ * the moment its author finished editing, before `approve-resource-plan` — the actual independent
+ * check — had looked at any of it. `output` still lives on the drafting row (it is also what gets
+ * the model the structured `roster`/`backlog`/`sprint` tool instead of free-form `draft`, and that
+ * reason did not go away); this is what stops its OWN close from being the trigger when a real
+ * review is coming.
+ */
+async function hasDownstreamReviewer(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>, workflowVersionId: string, taskSlug: string,
+): Promise<boolean> {
+  const { data } = await sb.from("workflow_step")
+    .select("renders, depends_on").eq("workflow_version_id", workflowVersionId)
+    .contains("depends_on", [taskSlug]);
+  return (data ?? []).some((s) => s.renders === "doc-review" || s.renders === "code-review");
+}
+
+/**
  * Run whatever the closing task's produced document turns into.
  *
  * Called after a close succeeds. Returns null when the path has no materialiser, which is the
@@ -202,16 +234,31 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb.from("workflow_step")
-    .select("produces, output").eq("id", task.workflow_step_id).maybeSingle();
+    .select("task, produces, output, renders, depends_on, workflow_version_id")
+    .eq("id", task.workflow_step_id).maybeSingle();
+  if (!step) return null;
+
+  // `doc-review`/`code-review`: this row authors nothing (`produces` is empty by construction,
+  // see `plan.ts`'s import validation) — what materialises is what its ONE dependency produced.
+  // Otherwise: an ordinary drafting row, UNLESS an independent reviewer depends on it, in which
+  // case THAT row's close is the real trigger and this one defers.
+  const source =
+    step.renders === "doc-review" || step.renders === "code-review"
+      ? await producingStep(sb, step.workflow_version_id as string, (step.depends_on as string[] | null)?.[0] ?? "")
+      : (await hasDownstreamReviewer(sb, step.workflow_version_id as string, step.task as string))
+        ? null
+        : { produces: step.produces as string | null, output: step.output as string | null };
+  if (!source) return null;
+
   // The declared output decides WHAT happens; the path only says where the document is read from.
   // A step that declares nothing materialises nothing, which is the common case.
-  const run = step?.output ? REGISTRY[step.output as string] : undefined;
+  const run = source.output ? REGISTRY[source.output] : undefined;
   if (!run) return null;
   // Still the bare PATH for the read — a step may decorate `produces` with a destination
   // (`…@tickets`), and looking a document up by the decorated string finds nothing. A path naming
   // a subject (`…/{epic}`) is filled from the run, exactly as the write side filled it.
   const path = resolvePath(
-    destinationOf(step?.produces)?.path,
+    destinationOf(source.produces)?.path,
     await subjectOfRun(task.workflow_run_id as string | null),
   );
   if (!path) return null;

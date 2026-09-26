@@ -51,13 +51,14 @@ export default async function JobsPage(
   // A query parameter can legitimately arrive repeated; take the first rather than stringifying
   // an array into a role code that matches nothing.
   const role = Array.isArray(search.role) ? search.role[0] : search.role;
+  const holderId = Array.isArray(search.holder) ? search.holder[0] : search.holder;
 
   const roles = await rolesOnEngagement(engagement);
   const staffed = roles.filter((r) => r.holder);
   const roleCode = role ?? staffed[0]?.code;
   if (!roleCode) notFound();
 
-  const actor = await resolveActor(engagement, roleCode);
+  const actor = await resolveActor(engagement, roleCode, holderId);
   if (!actor) notFound();
 
   const tasks = await tasksFor(actor);
@@ -123,6 +124,20 @@ export default async function JobsPage(
             {`No work is assigned to ${actor.roleLabel} here yet.`} Work arrives
             when an upstream job publishes — on a new engagement that means the
             kickoff backlog, which the Delivery Manager shapes first.
+          </p>
+        </div>
+      ) : notice.empty === "waiting" && workflows.length === 0 ? (
+        // Distinct from both the others on purpose — see `queueNotices`'s own doc comment. This is
+        // an `everyone`-scope role (Principal Engineer, PM) between gates, not a stalled or a
+        // finished engagement: plenty is happening, just nothing needs THIS role's eyes right now.
+        <div className="jobs-empty">
+          <p className="jobs-empty-title">All clear</p>
+          <p className="text-muted">
+            {`Nothing needs ${actor.roleLabel} right now.`} The rest of the
+            engagement is carrying on without you — check{" "}
+            <a href={`/e/${engagement}/history`}>the history</a> if you&apos;re
+            curious what&apos;s moving. We&apos;ll fill this queue the moment
+            something reaches your gate.
           </p>
         </div>
       ) : (

@@ -13,7 +13,7 @@ import { supabaseAdmin } from "../supabase";
 import { readShippedDocTree } from "../doctree";
 import { COMPASS_DIR } from "../specs";
 import type { ConfigStore } from "./apply";
-import type { Existing, StepRow, CriterionRow, WorkstreamRow, RoleRow, WorkflowRow } from "./plan";
+import type { Existing, StepRow, CriterionRow, WorkstreamRow, PhaseRow, TicketBriefRow, RoleRow, WorkflowRow } from "./plan";
 
 // NOTE ON THE REPEATED TERNARY BELOW: `.eq()` cannot match NULL, and the natural keys are
 // `unique nulls not distinct`, so an org-default row (engagement_id IS NULL) needs `.is()`
@@ -54,6 +54,37 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         fail("update workstream", (await sb.from("workstream").update(patch).eq("id", found.data.id)).error);
       } else {
         fail("insert workstream", (await sb.from("workstream").insert({ org_id: orgId, engagement_id: engagementId, code: row.code, ...patch })).error);
+      }
+    },
+
+    async upsertPhase(orgId, engagementId, row) {
+      const patch = {
+        label: row.label, ord: row.ord, enabled: row.enabled, cycles: row.cycles,
+        updated_at: new Date().toISOString(),
+      };
+      const base = sb.from("phase").select("id").eq("org_id", orgId).eq("code", row.code);
+      const found = await (engagementId === null
+        ? base.is("engagement_id", null)
+        : base.eq("engagement_id", engagementId)).maybeSingle();
+      fail("read phase", found.error);
+      if (found.data) {
+        fail("update phase", (await sb.from("phase").update(patch).eq("id", found.data.id)).error);
+      } else {
+        fail("insert phase", (await sb.from("phase").insert({ org_id: orgId, engagement_id: engagementId, code: row.code, ...patch })).error);
+      }
+    },
+
+    async upsertTicketBrief(orgId, engagementId, row) {
+      const patch = { brief: row.brief, enabled: row.enabled, updated_at: new Date().toISOString() };
+      const base = sb.from("ticket_brief").select("id").eq("org_id", orgId).eq("code", row.code);
+      const found = await (engagementId === null
+        ? base.is("engagement_id", null)
+        : base.eq("engagement_id", engagementId)).maybeSingle();
+      fail("read ticket brief", found.error);
+      if (found.data) {
+        fail("update ticket brief", (await sb.from("ticket_brief").update(patch).eq("id", found.data.id)).error);
+      } else {
+        fail("insert ticket brief", (await sb.from("ticket_brief").insert({ org_id: orgId, engagement_id: engagementId, code: row.code, ...patch })).error);
       }
     },
 
@@ -151,6 +182,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
         // Checked at COMMIT, not per row — the backward-only rule is a deferred constraint trigger
         // precisely because these arrive in one insert and cannot see each other before then.
         depends_on: s.dependsOn,
+        renders: s.renders,
       })))).error);
     },
 
@@ -196,6 +228,7 @@ export function supabaseConfigStore(sb: SupabaseClient): ConfigStore {
           title: s.title || null,
           template: s.template || null,
           depends_on: s.dependsOn,
+          renders: s.renders,
         };
         const id = byOrd.get(s.ord);
         if (id) {
@@ -311,7 +344,7 @@ export async function readExisting(
     : [];
 
   const { data: org } = await sb.from("org").select("id").eq("code", orgCode).maybeSingle();
-  if (!org) return { workstreams: [], roles: [], agents, phases: [], documents: [], workflows: [] };
+  if (!org) return { workstreams: [], roles: [], agents, phases: [], ticketBriefs: [], documents: [], workflows: [] };
 
   // IN SERVICE only. A row already retired is not "existing" for planning purposes: listing it
   // would have the importer retire it again on every run, and a retirement that repeats forever is
@@ -348,7 +381,7 @@ export async function readExisting(
     // makes the comparison read `undefined` against a real value, so every row reports changed —
     // the mirror image of the bug where a field is compared on neither side and nothing ever does.
     const { data: steps } = await sb.from("workflow_step")
-      .select("ord, kind, role_code, task, produces, output, reads, conditional, nests_workflow_code, title, template, depends_on")
+      .select("ord, kind, role_code, task, produces, output, reads, conditional, nests_workflow_code, title, template, depends_on, renders")
       .eq("workflow_version_id", ver.id).order("ord");
     const { data: crits } = await sb.from("criterion")
       .select("step_task, kind, statement, subject_kind, subject_ref, operator, value")
@@ -363,6 +396,7 @@ export async function readExisting(
         nests: s.nests_workflow_code ?? "", title: s.title ?? "",
         template: s.template ?? "",
         dependsOn: s.depends_on ?? [],
+        renders: s.renders ?? "",
       })),
       criteria: (crits ?? []).map((c): CriterionRow => ({
         workflow: wf.code, stepTask: c.step_task, kind: c.kind, text: c.statement ?? "",
@@ -397,7 +431,7 @@ export async function readExisting(
   return {
     workstreams: await list("workstream"),
     roles: await list("role"),
-    agents, phases: await list("phase"),
+    agents, phases: await list("phase"), ticketBriefs: await list("ticket_brief"),
     documents: [...new Set([...(docs ?? []).map((d: { path: string }) => d.path), ...declared])],
     workflows,
   };

@@ -11,8 +11,8 @@ import { ok, refuse, fail } from "@/app/lib/http";
 export const maxDuration = 800;
 
 export async function POST(req: NextRequest) {
-  const { engagement, role, taskId } = await req.json();
-  const actor = await resolveActor(engagement, role);
+  const { engagement, role, taskId, holderId } = await req.json();
+  const actor = await resolveActor(engagement, role, holderId);
   if (!actor) return refuse("no such role on this engagement", 400);
   const outcome = await runAgent(actor, taskId);
   // `AgentOutcome` is a domain result and keeps its `kind`: asked, drafted and refused are all runs

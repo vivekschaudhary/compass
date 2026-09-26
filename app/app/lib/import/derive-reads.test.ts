@@ -8,6 +8,7 @@ import { planImport, deriveReads, type StepRow } from "./plan";
 const step = (over: Partial<StepRow>): StepRow => ({
   workflow: "sprint-0", ord: 1, kind: "agent", role: "delivery-manager", task: "t",
   produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [],
+  renders: "",
   ...over,
 });
 
@@ -68,7 +69,7 @@ const BUNDLE = (stepsCsv: string) => ({
 });
 
 const EXISTING = {
-  workstreams: [], roles: [], agents: ["delivery-manager"], phases: [],
+  workstreams: [], roles: [], agents: ["delivery-manager"], phases: [], ticketBriefs: [],
   documents: [], workflows: [],
 };
 

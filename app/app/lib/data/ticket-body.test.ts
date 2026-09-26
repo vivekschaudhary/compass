@@ -4,7 +4,31 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // back. Everything around it is a boundary — Supabase, Jira, the host — and each is stubbed so the
 // decisions are testable without a database, a board or a model.
 vi.mock("server-only", () => ({}));
-vi.mock("../supabase", () => ({ supabaseAdmin: () => null }));
+// `ticketBriefFor` (in the module under test) reads `ticket_brief` through this same client — a
+// canned org-default row per level, so every existing test still reaches the model exactly as
+// before. `briefState.blocked` lets the "no ticket brief configured" tests simulate one level
+// genuinely missing from the catalog, the same way an org that never imported it would see.
+const briefState = vi.hoisted(() => ({ blocked: null as string | null }));
+vi.mock("../supabase", () => ({
+  supabaseAdmin: () => ({
+    from: (table: string) => {
+      let code: string | undefined;
+      const q = {
+        select: () => q,
+        eq: (col: string, val: unknown) => {
+          if (col === "code") code = val as string;
+          return q;
+        },
+        is: () => q,
+        maybeSingle: async () =>
+          table === "ticket_brief" && code && code !== briefState.blocked
+            ? { data: { brief: `Ground rules for ${code}.` } }
+            : { data: null },
+      };
+      return q;
+    },
+  }),
+}));
 vi.mock("../jira", () => ({ resolveJira: () => null, updateIssue: async () => true }));
 vi.mock("./events", () => ({ emit: async () => {}, orgIdFor: async () => "org" }));
 
@@ -40,7 +64,7 @@ const answered = (tickets: unknown) => ({
 });
 
 const ticket = (over: Partial<Parameters<typeof composeTicketBody>[0]["tickets"][number]> = {}) => ({
-  ref: "task:1", issueType: "Story" as const, roleCode: "product-manager", key: "CT-16",
+  ref: "task:1", level: "story" as const, roleCode: "product-manager", key: "CT-16",
   summary: "Product brief", facts: { produces: "01-product/brief" }, doneCriteria: [], ...over,
 });
 
@@ -54,8 +78,30 @@ const call = (over: Partial<Parameters<typeof composeTicketBody>[0]> = {}) =>
 beforeEach(() => {
   vi.clearAllMocks();
   selectThrows = null;
+  briefState.blocked = null;
   agentMarkdown.mockResolvedValue(AGENT_MD);
   dispatch.mockResolvedValue(answered([{ ref: "task:1", summary: "A real title", description: "A real body." }]));
+});
+
+describe("the ground rules are data, not a constant", () => {
+  it("drops a ticket whose level has no brief configured, rather than composing with nothing to go on", async () => {
+    briefState.blocked = "story";
+    const result = await call();
+    expect(result.bodies).toEqual([]);
+    expect(result.reason).toBe("no-brief");
+    expect(result.problems.join(" ")).toContain("No ticket brief configured for level 'story'");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("composes the tickets whose level DOES have a brief, in a mixed batch, and only reports the rest", async () => {
+    briefState.blocked = "subtask";
+    dispatch.mockResolvedValue(answered([{ ref: "task:1", summary: "A real title", description: "A real body." }]));
+    const result = await call({
+      tickets: [ticket({ ref: "task:1", level: "story" }), ticket({ ref: "task:2", level: "subtask" })],
+    });
+    expect(result.bodies.map((b) => b.ref)).toEqual(["task:1"]);
+    expect(result.problems.join(" ")).toContain("No ticket brief configured for level 'subtask' — `task:2`");
+  });
 });
 
 describe("what governs the writing", () => {
@@ -120,9 +166,9 @@ describe("what the model is told", () => {
     expect(dispatch.mock.calls[0][0].messages[0].content as string).toContain("never been drafted");
   });
 
-  it("shapes the instruction by issue type", async () => {
-    await call({ tickets: [ticket({ issueType: "Bug" })] });
-    expect(dispatch.mock.calls[0][0].messages[0].content as string).toContain("behaving wrongly");
+  it("shapes the instruction by LEVEL, read from the ticket_brief catalog, not a hardcoded Jira type", async () => {
+    await call({ tickets: [ticket({ level: "subtask" })] });
+    expect(dispatch.mock.calls[0][0].messages[0].content as string).toContain("Ground rules for subtask.");
   });
 });
 

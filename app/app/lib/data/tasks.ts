@@ -30,6 +30,10 @@ export type TaskCard = {
   reads: string[];
   /** `machine` dispatches nothing — offering "Start with agent" on one is offering a dead end. */
   stepKind: string | null;
+  /** `doc-review`/`code-review` — this row reviews someone else's work, not its own. See `renders`
+   *  on `workflow_step`. Null for an ordinary authoring row, or a step imported before the column
+   *  existed. */
+  renders: string | null;
   /**
    * The workflow this row NESTS, if any — its work happens in a child run's steps, not here.
    *
@@ -81,6 +85,7 @@ type Row = {
     kind: string | null;
     ord: number;
     nests_workflow_code: string | null;
+    renders: string | null;
   } | null;
   workflow_run: {
     id: string;
@@ -128,7 +133,7 @@ export function queueOrder(a: Row, b: Row): number {
 
 const SELECT =
   "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
-  "workflow_step(reads,kind,ord,nests_workflow_code)," +
+  "workflow_step(reads,kind,ord,nests_workflow_code,renders)," +
   // `parent_task_id` rides on the join that was already here. Grouping the queue costs no query.
   "workflow_run!work_task_workflow_run_id_fkey(id,opened_at,state,parent_task_id,subject_key,workflow(code))";
 
@@ -186,6 +191,7 @@ export async function tasksFor(
     ticketKey: r.ticket_key,
     reads: r.workflow_step?.reads ?? [],
     stepKind: r.workflow_step?.kind ?? null,
+    renders: r.workflow_step?.renders ?? null,
     nests: r.workflow_step?.nests_workflow_code ?? null,
     origin: r.origin,
     rationale: r.rationale,
@@ -246,15 +252,28 @@ export async function startedCounts(
 }
 
 /**
- * Which of the Jobs screen's two claims about an empty-looking queue is true.
+ * Which of the Jobs screen's three claims about an empty-looking queue is true.
  *
  * Pure, and separate from the query for the same reason `queueOrder` is: the decision is where the
  * defect lived, so it is the thing that needs to be testable without a database.
  *
- * Both sentences are about ABSENCE, which is why they were wrong. "Nothing has run yet" and "work
- * arrives when an upstream job publishes" are true on a fresh engagement and false on a finished
- * one, and the queue alone cannot tell those apart — an engagement whose every row has closed and
- * an engagement that has not begun both present as an empty list.
+ * THE SECOND DEFECT this caught, after the one below it: `empty` used to gate on `totalQueued` —
+ * everyone's cards in scope, not just this role's. An `everyone`-scope oversight role (Principal
+ * Engineer, PM) sees every OTHER role's tasks too, so on a busy engagement `totalQueued` is never
+ * zero even when this role's OWN queue — `mineQueued` — genuinely is. `empty` came back `null`,
+ * `TasksTable` filtered to `myRole`, found nothing, and rendered nothing: not the empty state, not
+ * the table, a blank page below the blurb. `mineQueued` is what decides whether THIS role's queue
+ * is empty; `totalQueued` only tells the two empty cases apart from a third — see `waiting`.
+ *
+ * Three sentences, not two, because an empty queue is not always the same absence:
+ *   `none-yet`  nothing exists ANYWHERE in scope yet — a true, fresh kickoff.
+ *   `waiting`   nothing is at THIS role's gate, but the engagement is plainly active elsewhere —
+ *               an oversight role between gates, not a stalled or finished engagement.
+ *   `all-done`  nothing exists anywhere in scope, and something once did — every visible row
+ *               closed, not merely this role's.
+ * Collapsing `waiting` into `all-done` (as an earlier version did, via `totalQueued`) told an
+ * approver "everything here is done" while the engagement was mid-flight; collapsing it into
+ * `none-yet` would tell them nothing had started when eleven other rows already had.
  */
 export function queueNotices(x: {
   /** Cards in the queue owned by this role. */
@@ -265,15 +284,19 @@ export function queueNotices(x: {
   startedMine: number;
   /** Tasks anyone in scope has ever started, closed ones included. */
   startedVisible: number;
-}): { banner: "never-run" | null; empty: "none-yet" | "all-done" | null } {
+}): { banner: "never-run" | null; empty: "none-yet" | "waiting" | "all-done" | null } {
   // Only claim nothing has run when nothing has — over every task this role owns, not over the
   // ones still waiting. With work in the queue to explain, and none of it yet touched.
   const banner = x.startedMine === 0 && x.mineQueued > 0 ? "never-run" : null;
 
-  // An empty queue is either "not yet" or "all done", and the difference is whether anything ever
-  // started. Nothing else can distinguish them: both have no cards to show.
   const empty =
-    x.totalQueued > 0 ? null : x.startedVisible > 0 ? "all-done" : "none-yet";
+    x.mineQueued > 0
+      ? null
+      : x.totalQueued > 0
+        ? "waiting"
+        : x.startedVisible > 0
+          ? "all-done"
+          : "none-yet";
 
   return { banner, empty };
 }

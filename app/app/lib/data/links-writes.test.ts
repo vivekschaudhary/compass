@@ -31,8 +31,8 @@ vi.mock("./sprint", () => ({ sprintJql: () => "", sprintNoOf: () => null }));
 type Emitted = { verb: string; payload: Record<string, unknown> };
 const emitted: Emitted[] = [];
 
-/** Every write, by table. */
-const writes: { table: string; op: string; row: Record<string, unknown> }[] = [];
+/** Every write, by table — `filters` are the `.eq()` calls chained after `update`, in order. */
+const writes: { table: string; op: string; row: Record<string, unknown>; filters?: [string, unknown][] }[] = [];
 const rpcs: { fn: string; args: Record<string, unknown> }[] = [];
 let openQuestions: Record<string, unknown>[] = [];
 /** Does a `document` already exist at the filed path? Decides whether a title is passed. */
@@ -55,8 +55,13 @@ vi.mock("../supabase", () => ({
         insert: async (row: Record<string, unknown>) => { writes.push({ table, op: "insert", row }); return { error: null }; },
         upsert: async (row: Record<string, unknown>) => { writes.push({ table, op: "upsert", row }); return { error: null }; },
         update: (row: Record<string, unknown>) => {
-          writes.push({ table, op: "update", row });
-          const u: Record<string, unknown> = { eq: () => u, then: (res: (v: { error: null }) => unknown) => res({ error: null }) };
+          const entry: { table: string; op: string; row: Record<string, unknown>; filters: [string, unknown][] } =
+            { table, op: "update", row, filters: [] };
+          writes.push(entry);
+          const u: Record<string, unknown> = {
+            eq: (col: string, val: unknown) => { entry.filters.push([col, val]); return u; },
+            then: (res: (v: { error: null }) => unknown) => res({ error: null }),
+          };
           return u;
         },
       };
@@ -66,7 +71,7 @@ vi.mock("../supabase", () => ({
   }),
 }));
 
-const { recordAnswers, addNote } = await import("./job");
+const { recordAnswers, addNote, resumeForReview } = await import("./job");
 const { reject } = await import("./gates");
 
 // Deliberately NOT the delivery manager: nothing here may depend on which role is answering.
@@ -225,5 +230,26 @@ describe("sending a draft back with a link", () => {
     const r = await reject(ACTOR, "t1", [{ criterionId: "c1", reason: "See https://example.com/gone" }]);
     expect(r.ok).toBe(false);
     expect(writes).toEqual([]);
+  });
+});
+
+describe("resuming a hitl row for a plain chat message", () => {
+  // `runAgent` refuses anything but `state: "running"`, and a plain note never moves a row there
+  // on its own — that gap is exactly what left a message posted on a hitl task with no reply and
+  // no trace of a run ever having been attempted (`work_task.executor` still null, `updated_at`
+  // untouched). `resumeForReview` is the fix: the same transition `reject()` makes, without a
+  // criterion attached.
+  it("updates state to running, scoped to THIS task, THIS engagement, and ONLY from hitl", async () => {
+    const r = await resumeForReview(ACTOR, "t1");
+
+    expect(r).toEqual({ ok: true });
+    const update = writes.find((w) => w.table === "work_task" && w.op === "update");
+    expect(update?.row).toEqual({ state: "running" });
+    // The `eq("state", "hitl")` is the safety property: it is what makes this a no-op on a closed
+    // or idle row instead of a resume that should never have applied to it. Real Postgres enforces
+    // it; asserted here because this mock does not simulate a WHERE clause actually filtering rows.
+    expect(update?.filters).toEqual(
+      expect.arrayContaining([["id", "t1"], ["engagement_id", "e1"], ["state", "hitl"]]),
+    );
   });
 });

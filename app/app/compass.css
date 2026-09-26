@@ -795,8 +795,18 @@
 .queue-table-scroll {
   overflow-x: auto;
 }
-.workflows-table-wrap {
+
+/* Boxes each table so two adjacent ones (Workflows, then Tasks) read as separate things — before
+ * this, both used the same borderless row-underline style, so the divider under a header row and
+ * the divider between tables carried equal weight and the two lists visually ran together. */
+.jobs-table-card {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
   margin-bottom: var(--space-6);
+}
+.jobs-table-card:last-child {
+  margin-bottom: 0;
 }
 
 .cell-glyph {
@@ -862,6 +872,23 @@
   font-size: 11px;
   white-space: nowrap;
   flex: none;
+}
+/* "This is someone else's work" — spotted before the row is even opened, same instinct as marking
+   who is talking in the chat itself. */
+.review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--color-accent-300, var(--color-divider));
+  background: var(--color-accent-100, var(--color-neutral-100));
+  color: var(--color-accent-700, var(--color-text));
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .queue-table .subtitle {
   color: var(--color-neutral-600);
@@ -1076,6 +1103,100 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   font-family: var(--font-heading);
   font-size: 15px;
   margin: 0 0 4px;
+}
+
+/* The Plan & sprint board — one lane per phase, side by side. Lanes are the one place on this
+ * page allowed to overflow: the page body itself must never scroll horizontally, so the board is
+ * its own `overflow-x: auto` container, same exception the repo already makes for a wide table. */
+.plan-board {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  align-items: flex-start;
+}
+.plan-lane {
+  flex: 0 0 260px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-neutral-100);
+}
+.plan-lane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+}
+.plan-lane-head .phases-head {
+  margin: 0;
+}
+.plan-lane-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.plan-lane-empty {
+  font-size: 12.5px;
+}
+.plan-card {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+.plan-card:hover {
+  border-color: var(--color-neutral-400);
+}
+.plan-card:focus-visible {
+  outline: 2px solid var(--color-accent-300, var(--color-neutral-400));
+  outline-offset: 1px;
+}
+.plan-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.plan-card-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 13px;
+}
+.plan-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.plan-count {
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.plan-row-title {
+  font-size: 13px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.plan-row-title:hover {
+  text-decoration: underline;
+}
+.plan-issue-table {
+  margin-top: var(--space-2);
+}
+
+/* The detail popup — `.dialog` from Organic, widened: a task/issue table needs more than the
+ * 440px a confirmation dialog does. */
+.plan-modal {
+  width: min(720px, 100%);
+}
+.plan-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 /* A state, where a button would be if there were anything to start. */
@@ -1455,6 +1576,13 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  /* Fills the viewport minus `main`'s own top/bottom padding — the ONE offset that is a fixed
+     token rather than something that varies per task. Everything above `.job-body` (the title,
+     the tag, the context strip) still just takes its natural height; `.job-body` below gets
+     `flex: 1` and claims whatever is left. A calc() on `.chat-col`/`.draft-col` themselves tried
+     to guess that remainder directly and was always short, since it had no way to know the
+     header's actual height — flex measures it instead of guessing. */
+  height: calc(100vh - var(--space-8) - var(--space-8) * 1.7);
 }
 .job-head {
   display: flex;
@@ -1489,7 +1617,14 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
   gap: var(--space-6);
-  align-items: start;
+  /* `stretch` (the grid default — no longer overridden to `start`), so each column's height
+     comes from the ROW, not its own content. `.job`'s `flex: 1` above hands this row exactly the
+     space left after the title and context strip; `min-height: 0` is what lets a grid item
+     actually shrink to that instead of growing to fit whatever is inside it (its default
+     `min-height` is `auto`, i.e. "never shrink below my content" — the same rule `.chat-col`/
+     `.draft-col` need `min-height: 0` for, one level up). */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .job-body:has(.draft-col-wide) {
   grid-template-columns: minmax(0, 0.45fr) minmax(0, 1.55fr);
@@ -1499,9 +1634,26 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   .job-body:has(.draft-col-wide) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .draft-col {
-    position: static;
+  /* Stacked, not side by side — each pane's own scrollbar would mean two independent scroll
+     boxes squeezed onto a narrow screen. Let them take their natural height and the page scroll
+     as a whole instead, same as before this column got its own scroll region. */
+  .job {
+    height: auto;
   }
+  .draft-col,
+  .chat-col {
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* Named explicitly now that the nav column is gone, rather than leaving the page's two-column
+   shape implicit in the bare `.job-body` default — `job-body-2` needs no rule of its own, `.job-body`
+   already is this. */
+.job-body-2 {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
 }
 
 /* the task page's third pane — the document tree, narrowed. Same breakpoint as the two-column
@@ -1614,11 +1766,26 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
 }
 
 /* the conversation */
+/* Same card treatment as `.draft-col` beside it — a bordered pane, not a bare column of turns —
+   and the same sticky/bounded-height trick so it scrolls on its OWN content instead of growing
+   the whole page: past `max-height` it gets its own scrollbar, independent of the document panel
+   scrolling on its own overflow beside it. */
 .chat-col {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-neutral-100);
+  /* The grid row's own height (stretched — see `.job-body`), not a guess at the viewport minus
+     some fixed offset. `min-height: 0` is what lets the item actually shrink TO that height
+     instead of growing to fit its content (a grid item's default min-height is `auto`, i.e.
+     "never shrink below my content" — content here being every message in the thread). */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 .chat {
   display: flex;
@@ -1639,6 +1806,22 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
 }
 .chat-earlier:hover {
   color: var(--color-accent-700);
+}
+
+/* Pinned to the bottom of `.chat-col`'s own scroll — the approve checklist AND the composer
+   together, so neither scrolls away behind older messages. Was the composer's own trick alone;
+   moved up to wrap the checklist too, since "type approved in chat" doing nothing is what
+   happens when the actual approve control isn't on screen to be seen. */
+.chat-action {
+  position: sticky;
+  bottom: calc(var(--space-4) * -1);
+  margin: 0 calc(var(--space-4) * -1) calc(var(--space-4) * -1);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: var(--color-neutral-100);
+  border-top: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .msg {
@@ -1678,6 +1861,29 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   color: var(--color-accent-700);
 }
 
+/* The agent's reply is in flight — a bubble in its own place rather than the composer just going
+   quiet, so a run that takes a minute or more reads as working, not stuck. */
+.msg-thinking {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: var(--space-3) var(--space-4);
+  width: fit-content;
+}
+.msg-thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-neutral-500);
+  animation: msg-thinking-bounce 1.2s infinite ease-in-out;
+}
+.msg-thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.msg-thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes msg-thinking-bounce {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
 /* the deliverable */
 .draft-col {
   display: flex;
@@ -1687,8 +1893,11 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-lg);
   background: var(--color-neutral-100);
-  position: sticky;
-  top: var(--space-4);
+  /* Fills the grid row (see `.job-body`/`.chat-col`) and scrolls independently within it — a long
+     document scrolls inside its own pane rather than carrying the chat beside it along with it. */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 .draft-head {
   display: flex;
@@ -1818,6 +2027,90 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
 .draft-body {
   font-size: 11.5px;
 }
+
+/* ── select-and-comment ───────────────────────────────────────────────────────────────────── */
+.commentable {
+  position: relative;
+}
+/* Fixed, from the selection's own `getBoundingClientRect` — viewport-relative already, so no
+   scroll-offset math, and it stays correctly placed regardless of which ancestor scrolls (the
+   panel itself now does, see `.draft-col`). */
+.comment-trigger {
+  position: fixed;
+  z-index: 20;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-divider);
+  background: var(--color-text);
+  color: var(--color-neutral-50);
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgb(32 30 29 / 0.18);
+}
+.comment-composer {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-0, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.comment-composer-quote {
+  margin: 0;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--color-neutral-600);
+  border-left: 2px solid var(--color-divider);
+  padding-left: 8px;
+}
+.comment-composer-input {
+  font-size: 12.5px;
+}
+.comment-composer-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.comment-thread {
+  margin-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.comment-thread-item {
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-2-100);
+}
+.comment-thread-head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 10.5px;
+  color: var(--color-neutral-600);
+}
+.comment-thread-author {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.comment-thread-quote {
+  font-style: italic;
+}
+.comment-thread-body {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+/* The re-highlighted selection itself, inside the rendered markdown — a plain `<mark>`, styled
+   down from the browser default so it reads as an annotation, not shouting. */
+.comment-highlight {
+  background: var(--color-accent-2-200);
+  color: inherit;
+  border-radius: 2px;
+  cursor: help;
+}
+
 .draft-cites {
   font-size: 10px;
   color: var(--color-neutral-600);
@@ -1984,14 +2277,13 @@ textarea.verdict-reason {
   margin-top: var(--space-4);
 }
 
+/* Not a boxed form — the question is the agent's own last word, so it reads as a continuation of
+   the chat rather than a separate card bolted on above the composer. */
 .qcard {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-lg);
-  background: var(--color-neutral-100);
-  border: 1px solid var(--color-divider);
+  padding: 0 var(--space-2);
 }
 .qcard-head {
   display: flex;
@@ -2024,11 +2316,12 @@ textarea.verdict-reason {
   cursor: default;
 }
 .qcard-prompt {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.5;
   max-width: 68ch;
   margin: 0;
+  color: var(--color-neutral-700);
 }
 .qcard-why {
   font-size: 13px;
@@ -2039,41 +2332,46 @@ textarea.verdict-reason {
   border-left: 2px solid var(--color-divider);
   margin: 0;
 }
+/* Pills in a wrapping row, not stacked full-width form rows — a quick reply reads as part of the
+   chat, not as a form to fill in. */
 .qcard-options {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-/* A numbered, clickable row rather than the old radio chips — matching the "type a number to
-   pick it, or click" pattern a keyboard-driven chat composer wants. */
 .qcard-option {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: 9px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-divider);
-  background: var(--color-neutral-0, #fff);
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-accent-300, var(--color-divider));
+  background: var(--color-accent-50, var(--color-neutral-0, #fff));
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 13px;
   text-align: left;
+  white-space: nowrap;
 }
 .qcard-option:hover:not(:disabled) {
   border-color: var(--color-accent-500);
+  background: var(--color-accent-100, var(--color-accent-50));
 }
 .qcard-option:disabled {
   opacity: 0.5;
   cursor: default;
 }
+/* Small and inline rather than a separate badge — the "type its number to pick it" shortcut
+   still works from the keyboard, it just no longer needs its own visual weight. */
 .qcard-option-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
   border-radius: 999px;
-  background: var(--color-neutral-200);
-  font-size: 11px;
+  background: var(--color-accent-200, var(--color-neutral-200));
+  font-size: 9.5px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -2113,7 +2411,10 @@ textarea.verdict-reason {
 }
 
 /* The dock — the one persistent input, and whatever action goes beside it (Start/Run, never both
-   with a question card at the same time). */
+   with a question card at the same time). Sticky to the BOTTOM of `.chat-col`'s own scroll area
+   (not the page), so it stays put while older turns scroll behind it — a chat window, not a form
+   that happens to have messages above it. The negative margin cancels the panel's own padding so
+   the dock's background reaches the card's edge instead of floating with a gap under it. */
 .composer-dock {
   display: flex;
   flex-direction: column;
@@ -2313,6 +2614,13 @@ textarea.verdict-reason {
   position: sticky;
   top: 0;
   height: 100vh;
+  /* `position: sticky` gives this its own stacking context, so a descendant's z-index (the
+     working-as menu is 40) only outranks OTHER rail content — it says nothing about content in
+     `<main>`. `.chat-col`/`.draft-col` are sticky too and come later in the DOM, so without this
+     they paint over a popover that, in the collapsed rail, extends past the rail's own edge into
+     the page beside it: the menu was visible but unclickable, painted under content that looked
+     transparent but wasn't. This lifts the WHOLE rail (popovers included) above that content. */
+  z-index: 50;
 }
 
 .rail-brand {
@@ -2555,6 +2863,19 @@ textarea.verdict-reason {
   padding: 8px 8px 4px;
   border-top: 1px solid var(--color-divider);
   margin-top: 4px;
+}
+/* A role with more than one holder — the group label names the role once, so each holder's own
+   row underneath can just be their name, not "Engineer" repeated three times. */
+.rail-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+.rail-menu-group-label {
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  padding: 6px 8px 2px;
 }
 
 /* ── squared off ─────────────────────────────────────────────────────────────
@@ -2836,7 +3157,8 @@ textarea.verdict-reason {
 .phases-head {
   font-size: 14px;
   font-weight: 600;
-  margin: 0 0 2px;
+  margin: 0 0 32px;
+  text-transform: uppercase;
 }
 .phases-blurb {
   font-size: 12.5px;
