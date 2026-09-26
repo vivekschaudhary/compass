@@ -16,6 +16,8 @@ import type { Refusal } from "../envelope";
 
 export type Bundle = {
   workstreams?: string;
+  phases?: string;
+  ticketBriefs?: string;
   roles?: string;
   workflows?: string;
   steps?: string;
@@ -25,6 +27,14 @@ export type Bundle = {
 /* ── the shapes, after parsing ───────────────────────────────────────────── */
 
 export type WorkstreamRow = { code: string; label: string; ord: number; enabled: boolean };
+export type PhaseRow = {
+  code: string; label: string; ord: number; enabled: boolean;
+  /** Does this phase's own lane sub-group by sprint cycle rather than list workflows directly? */
+  cycles: boolean;
+};
+/** The ground rules for one ticket LEVEL (`epic`/`story`/`subtask`) — see the `ticket_brief`
+ *  table's own migration comment for why this is data rather than an in-code constant. */
+export type TicketBriefRow = { code: string; brief: string; enabled: boolean };
 export type RoleRow = {
   code: string; label: string; title: string; tier: string; scope: string;
   workstream: string; agent: string; hosts: string[]; capabilities: string[];
@@ -145,6 +155,7 @@ export type Existing = {
   roles: string[];
   agents: string[];               // compass/agents/*.md that actually exist on disk
   phases: string[];
+  ticketBriefs: string[];
   /** Document paths that exist on the engagement, so `reads` can be checked against reality. */
   documents: string[];
   workflows: { code: string; steps: StepRow[]; criteria: CriterionRow[] }[];
@@ -159,6 +170,8 @@ export type Problem = Required<Refusal>;
 
 export type Plan = {
   workstreams: { action: "create" | "unchanged"; row: WorkstreamRow }[];
+  phases: { action: "create" | "unchanged"; row: PhaseRow }[];
+  ticketBriefs: { action: "create" | "unchanged"; row: TicketBriefRow }[];
   roles: { action: "create" | "unchanged"; row: RoleRow }[];
   workflows: {
     action: "create" | "new-version" | "unchanged";
@@ -212,6 +225,19 @@ const num = (s: string, fallback = 0) => (s === "" ? fallback : Number(s));
 function readWorkstreams(csv: string): WorkstreamRow[] {
   return parseRecords(csv).map((r) => ({
     code: r.code, label: r.label || r.code, ord: num(r.ord), enabled: parseBool(r.enabled),
+  }));
+}
+
+function readPhases(csv: string): PhaseRow[] {
+  return parseRecords(csv).map((r) => ({
+    code: r.code, label: r.label || r.code, ord: num(r.ord), enabled: parseBool(r.enabled),
+    cycles: parseBool(r.cycles),
+  }));
+}
+
+function readTicketBriefs(csv: string): TicketBriefRow[] {
+  return parseRecords(csv).map((r) => ({
+    code: r.code, brief: r.brief ?? "", enabled: parseBool(r.enabled),
   }));
 }
 
@@ -317,6 +343,8 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     problems.push({ file, row, message, fix });
 
   const workstreams = readWorkstreams(bundle.workstreams ?? "");
+  const phases = readPhases(bundle.phases ?? "");
+  const ticketBriefs = readTicketBriefs(bundle.ticketBriefs ?? "");
   const roles = readRoles(bundle.roles ?? "");
   const workflows = readWorkflows(bundle.workflows ?? "");
   // Authored first, then derived. The checks below run against the AUTHORED rows — a problem must
@@ -327,6 +355,7 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
 
   // Codes available after this import: what exists already, plus what the bundle declares.
   const knownWorkstreams = new Set([...existing.workstreams, ...workstreams.map((w) => w.code)]);
+  const knownPhases = new Set([...existing.phases, ...phases.map((p) => p.code)]);
   const knownRoles = new Set([...existing.roles, ...roles.map((r) => r.code)]);
   const knownWorkflows = new Set(workflows.map((w) => w.code));
 
@@ -339,6 +368,25 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   });
   dupes(workstreams.map((w) => w.code)).forEach((c) =>
     add("workstreams.csv", null, `Workstream '${c}' appears more than once.`, "Remove the duplicate row."));
+
+  /* phases — a display band only; see the `phase` table's own comment. Optional on purpose:
+     leaving phases.csv empty (or a workflow's phase column blank) draws no lane at all rather
+     than refusing the import, because a phase is ordering and a label, never a gate. */
+  phases.forEach((p, i) => {
+    if (!p.code) add("phases.csv", i + 2, "A phase has no code.", "Give it a short code, e.g. Build.");
+  });
+  dupes(phases.map((p) => p.code)).forEach((c) =>
+    add("phases.csv", null, `Phase '${c}' appears more than once.`, "Remove the duplicate row."));
+
+  /* ticket briefs — the ground rules for one level (epic/story/subtask), never gated on the
+     workflow/step CSVs the way workstream/phase are: nothing else references a brief's code, so
+     there is nothing to cross-check it against beyond itself. */
+  ticketBriefs.forEach((t, i) => {
+    if (!t.code) add("ticket-briefs.csv", i + 2, "A ticket brief has no code.", "Give it a code, e.g. subtask.");
+    if (!t.brief) add("ticket-briefs.csv", i + 2, `Ticket brief '${t.code}' has no text.`, "Give it the ground rules a model should follow at this level.");
+  });
+  dupes(ticketBriefs.map((t) => t.code)).forEach((c) =>
+    add("ticket-briefs.csv", null, `Ticket brief '${c}' appears more than once.`, "Remove the duplicate row."));
 
   /* roles */
   roles.forEach((r, i) => {
@@ -370,9 +418,9 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     else if (!knownWorkstreams.has(w.workstream))
       add("workflows.csv", row, `Workflow '${w.code}' names workstream '${w.workstream}', which does not exist.`,
         "Add it to workstreams.csv, or correct the spelling.");
-    if (w.phase && existing.phases.length > 0 && !existing.phases.includes(w.phase))
+    if (w.phase && knownPhases.size > 0 && !knownPhases.has(w.phase))
       add("workflows.csv", row, `Workflow '${w.code}' names phase '${w.phase}', which does not exist.`,
-        "Add the phase first, or leave the column empty — a phase is a display band and is optional.");
+        "Add it to phases.csv, or leave the column empty — a phase is a display band and is optional.");
     if (w.ownerRole && !knownRoles.has(w.ownerRole))
       add("workflows.csv", row, `Workflow '${w.code}' is owned by role '${w.ownerRole}', which does not exist.`,
         "Add it to roles.csv, or correct the spelling.");
@@ -682,6 +730,12 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     workstreams: workstreams.map((row) => ({
       action: existing.workstreams.includes(row.code) ? "unchanged" : "create", row,
     })),
+    phases: phases.map((row) => ({
+      action: existing.phases.includes(row.code) ? "unchanged" : "create", row,
+    })),
+    ticketBriefs: ticketBriefs.map((row) => ({
+      action: existing.ticketBriefs.includes(row.code) ? "unchanged" : "create", row,
+    })),
     roles: roles.map((row) => ({
       action: existing.roles.includes(row.code) ? "unchanged" : "create", row,
     })),
@@ -712,6 +766,8 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
   const n = (as: { action: string }[], a: string) => as.filter((x) => x.action === a).length;
   const summary = [
     `${n(plan.workstreams, "create")} new workstream(s)`,
+    `${n(plan.phases, "create")} new phase(s)`,
+    `${n(plan.ticketBriefs, "create")} new ticket brief(s)`,
     `${n(plan.roles, "create")} new role(s)`,
     `${n(plan.workflows, "create")} new workflow(s)`,
     `${n(plan.workflows, "new-version")} workflow(s) gaining a version`,

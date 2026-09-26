@@ -23,7 +23,7 @@ const seedBundle = (): Bundle => ({
 const realAgents = () =>
   existsSync(AGENTS) ? readdirSync(AGENTS).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
 
-const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
+const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], ticketBriefs: [], documents: [], workflows: [] };
 
 /* ── the seed itself must be valid, or the first load fails ──────────────── */
 
@@ -499,7 +499,7 @@ describe("import is versioning", () => {
   };
 
   const already: Existing = {
-    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
+    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], ticketBriefs: [], documents: [],
     workflows: [{
       code: "build",
       steps: [{ workflow: "build", ord: 1, kind: "agent", role: "engineer", task: "implement", produces: "", output: "", reads: [], conditional: "", nests: "", title: "", template: "", dependsOn: [], renders: "" }],

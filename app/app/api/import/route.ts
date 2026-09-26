@@ -20,6 +20,8 @@ export const dynamic = "force-dynamic";
 
 const SEED_FILES: Record<keyof Bundle, string> = {
   workstreams: "workstreams.csv",
+  phases: "phases.csv",
+  ticketBriefs: "ticket-briefs.csv",
   roles: "roles.csv",
   workflows: "workflows.csv",
   steps: "workflow-steps.csv",

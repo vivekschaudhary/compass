@@ -1105,6 +1105,100 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   margin: 0 0 4px;
 }
 
+/* The Plan & sprint board — one lane per phase, side by side. Lanes are the one place on this
+ * page allowed to overflow: the page body itself must never scroll horizontally, so the board is
+ * its own `overflow-x: auto` container, same exception the repo already makes for a wide table. */
+.plan-board {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  align-items: flex-start;
+}
+.plan-lane {
+  flex: 0 0 260px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-neutral-100);
+}
+.plan-lane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+}
+.plan-lane-head .phases-head {
+  margin: 0;
+}
+.plan-lane-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.plan-lane-empty {
+  font-size: 12.5px;
+}
+.plan-card {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+.plan-card:hover {
+  border-color: var(--color-neutral-400);
+}
+.plan-card:focus-visible {
+  outline: 2px solid var(--color-accent-300, var(--color-neutral-400));
+  outline-offset: 1px;
+}
+.plan-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.plan-card-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 13px;
+}
+.plan-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.plan-count {
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.plan-row-title {
+  font-size: 13px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.plan-row-title:hover {
+  text-decoration: underline;
+}
+.plan-issue-table {
+  margin-top: var(--space-2);
+}
+
+/* The detail popup — `.dialog` from Organic, widened: a task/issue table needs more than the
+ * 440px a confirmation dialog does. */
+.plan-modal {
+  width: min(720px, 100%);
+}
+.plan-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* A state, where a button would be if there were anything to start. */
 .task-state {
   font-size: 12px;

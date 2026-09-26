@@ -11,6 +11,8 @@ function fakeStore({ published = null as string | null } = {}) {
   const store: ConfigStore = {
     async orgId(code) { calls.push(`org:${code}`); return "org-1"; },
     async upsertWorkstream(_o, _e, row) { calls.push(`workstream:${row.code}`); },
+    async upsertPhase(_o, _e, row) { calls.push(`phase:${row.code}`); },
+    async upsertTicketBrief(_o, _e, row) { calls.push(`ticketBrief:${row.code}`); },
     async upsertRole(_o, _e, row) { calls.push(`role:${row.code}`); },
     async upsertWorkflow(_o, _e, row) { calls.push(`workflow:${row.code}`); return `wf-${row.code}`; },
     async latestVersion() { return version; },
@@ -34,7 +36,7 @@ const bundle: Bundle = {
   criteria: "workflow,task,kind,text\nbuild,implement,done,tests pass\n",
 };
 
-const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], documents: [], workflows: [] };
+const empty: Existing = { workstreams: [], roles: [], agents: [], phases: [], ticketBriefs: [], documents: [], workflows: [] };
 
 describe("retiring what the bundle no longer names", () => {
   // The importer upserted and never removed, so a role dropped from the seed lived on and a role
@@ -132,7 +134,7 @@ describe("applyPlan", () => {
 
 describe("re-running", () => {
   const already: Existing = {
-    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], documents: [],
+    workstreams: ["Engineering"], roles: ["engineer"], agents: [], phases: [], ticketBriefs: [], documents: [],
     workflows: [{
       code: "build",
       steps: [

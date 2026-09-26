@@ -164,3 +164,25 @@ export async function sprintNoOf(taskId: string): Promise<number | null> {
   const { data } = await sb.from("work_task").select("sprint_no").eq("id", taskId).maybeSingle();
   return (data?.sprint_no as number | null) ?? null;
 }
+
+/**
+ * The highest sprint number any planning task in this engagement has claimed — 0 when none has.
+ *
+ * Same aggregate `nextSprintNumber` computes internally, exposed standalone for a reader that wants
+ * the CURRENT count (how many cycles exist to show) rather than the next one to allocate. Zero over
+ * no rows is correct here for the same reason it is there: an engagement with no sprint yet has zero
+ * cycles, not a refusal.
+ */
+export async function maxSprintNo(engagementId: string): Promise<number> {
+  const sb = supabaseAdmin();
+  if (!sb) return 0;
+  const { data, error } = await sb
+    .from("work_task")
+    .select("sprint_no")
+    .eq("engagement_id", engagementId)
+    .not("sprint_no", "is", null)
+    .order("sprint_no", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`reading the highest sprint number: ${error.message}`);
+  return (data?.[0]?.sprint_no as number | undefined) ?? 0;
+}

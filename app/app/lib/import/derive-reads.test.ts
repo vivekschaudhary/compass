@@ -69,7 +69,7 @@ const BUNDLE = (stepsCsv: string) => ({
 });
 
 const EXISTING = {
-  workstreams: [], roles: [], agents: ["delivery-manager"], phases: [],
+  workstreams: [], roles: [], agents: ["delivery-manager"], phases: [], ticketBriefs: [],
   documents: [], workflows: [],
 };
 

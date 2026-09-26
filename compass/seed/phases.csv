@@ -1,0 +1,4 @@
+code,label,ord,enabled,cycles
+New,Setup,10,true,false
+Discovery,Discovery,20,true,false
+Build,Build,30,true,true

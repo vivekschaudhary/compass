@@ -10,6 +10,8 @@ import { readShippedDocTree } from "../doctree";
 const SEED = join(process.cwd(), "..", "compass", "seed");
 const FILES: Record<keyof Bundle, string> = {
   workstreams: "workstreams.csv",
+  phases: "phases.csv",
+  ticketBriefs: "ticket-briefs.csv",
   roles: "roles.csv",
   workflows: "workflows.csv",
   steps: "workflow-steps.csv",
@@ -31,7 +33,7 @@ test("plan the on-disk seed", () => {
   // An empty database, plus the documents the shipped tree declares — which is what
   // `readExisting` falls back to on a fresh engagement.
   const existing: Existing = {
-    workstreams: [], roles: [], agents, phases: [],
+    workstreams: [], roles: [], agents, phases: [], ticketBriefs: [],
     documents: readShippedDocTree().filter((n) => n.kind !== "folder").map((n) => n.path),
     workflows: [],
   };
