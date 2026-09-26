@@ -126,6 +126,20 @@ export default async function JobsPage(
             kickoff backlog, which the Delivery Manager shapes first.
           </p>
         </div>
+      ) : notice.empty === "waiting" && workflows.length === 0 ? (
+        // Distinct from both the others on purpose — see `queueNotices`'s own doc comment. This is
+        // an `everyone`-scope role (Principal Engineer, PM) between gates, not a stalled or a
+        // finished engagement: plenty is happening, just nothing needs THIS role's eyes right now.
+        <div className="jobs-empty">
+          <p className="jobs-empty-title">All clear</p>
+          <p className="text-muted">
+            {`Nothing needs ${actor.roleLabel} right now.`} The rest of the
+            engagement is carrying on without you — check{" "}
+            <a href={`/e/${engagement}/history`}>the history</a> if you&apos;re
+            curious what&apos;s moving. We&apos;ll fill this queue the moment
+            something reaches your gate.
+          </p>
+        </div>
       ) : (
         <TasksTable tasks={tasks} engagement={engagement} myRole={myRole} gates={gates} />
       )}

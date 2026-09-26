@@ -69,6 +69,25 @@ describe("queueNotices", () => {
 
   // The banner explains what clicking a card does, so with no card to click it explains nothing.
   it("does not announce that nothing has run when there is nothing to run", () => {
-    expect(queueNotices(at({ totalQueued: 3 }))).toEqual({ banner: null, empty: null });
+    expect(queueNotices(at({ totalQueued: 3 }))).toEqual({ banner: null, empty: "waiting" });
+  });
+
+  // THE BUG a live screenshot caught: an `everyone`-scope oversight role (Principal Engineer) with
+  // nothing of its own queued, on an engagement where every OTHER role has plenty. `totalQueued`
+  // alone used to read this as "not empty" and suppress the empty state entirely — the page showed
+  // neither a message nor a table, just the blurb and blank space below it.
+  it("says 'waiting', not nothing, when my queue is empty but the engagement plainly is not", () => {
+    expect(
+      queueNotices(at({ mineQueued: 0, totalQueued: 16, startedMine: 0, startedVisible: 9 })),
+    ).toEqual({ banner: null, empty: "waiting" });
+  });
+
+  // `waiting` is for MY queue specifically — a role with its own cards still queued is not "waiting
+  // on the engagement", it has its own explaining to do (the banner above, or nothing at all).
+  it("does not say 'waiting' when this role has its own cards queued", () => {
+    expect(queueNotices(at({ mineQueued: 2, totalQueued: 16 }))).toEqual({
+      banner: "never-run",
+      empty: null,
+    });
   });
 });
