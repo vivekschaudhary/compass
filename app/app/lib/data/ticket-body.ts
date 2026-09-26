@@ -18,10 +18,27 @@
 // unreachable — `tracker.ts` is deliberately "never fatal while work is in flight" and that stays
 // true. It also makes this the repair path for the one-liners already on the board.
 //
-// TYPE-FIRST, NOT PHASE-FIRST. `composeTicketBody` takes an issue type and a role, so the same
-// composer serves a triaged Bug, an ops Task and a bet's Epic when those surfaces are ported. Six
-// other `createIssue` callers each invent their own description today; this is what they collapse
-// into, and shaping it around phases would have guaranteed a seventh.
+// LEVEL-FIRST, NOT JIRA-TYPE-FIRST. This used to take a Jira issue type (Epic/Story/Task/Bug) as
+// its framing concept — four generic buckets, identical across every org, that thought in Jira's
+// vocabulary rather than Compass's own. Compass's actual hierarchy is three levels: `epic` (the
+// phase/bet as a whole), `story` (one deliverable within it), `subtask` (one step inside that
+// deliverable's own workflow — see `mirrorNested`). Conflating `subtask` with the old generic
+// "Task" brief is exactly how a sub-task like "Accept the feature" ended up saying nothing more
+// than `${title}.\n\n_Part of ${parent}._` forever: nothing ever gave it ground rules of its own,
+// let alone ones demanding it read as EXECUTION — what the role holding it is doing right now,
+// not a restatement of the story it sits under.
+//
+// THE GROUND RULES ARE DATA, NOT A CONSTANT. `ticket_brief` (see its own migration comment) holds
+// one brief per level, org-default with an optional engagement override — same two-tier precedence
+// `phase`/`workstream` already use. A client-specific org can rewrite what a sub-task says without
+// a deploy; this file only resolves it and hands it to the model.
+//
+// ONE MODEL CALL PER ROLE, IN PARALLEL — not one after another. `composeTicketBodies` batches by
+// role because one system prompt is one role's markdown; a phase with six roles used to mean six
+// sequential model calls before anything was on the board, and a nested run adds a seventh path
+// (sub-tasks) with the same cost. Nothing about one role's batch depends on another's answer, so
+// they run concurrently — bounded, not unbounded, because both the model host and Jira have real
+// rate limits and a phase's role count is not.
 
 import "server-only";
 import { supabaseAdmin } from "../supabase";
@@ -31,8 +48,67 @@ import { selectHost, MODEL } from "../agent/hosts/select";
 import { emit, orgIdFor } from "./events";
 import { sortByStep } from "./steps";
 
-/** The four Jira issue types Compass files. The prompt is shaped per type, not per caller. */
-export type IssueType = "Epic" | "Story" | "Task" | "Bug";
+/** Compass's own three-level hierarchy — never a Jira issue type. `Bug` deliberately has no level
+ *  here: nothing live composes one today (triage/fix is a different flow, with its own ground
+ *  rules when it exists), and squeezing it into this hierarchy would misdescribe it. */
+export type TicketLevel = "epic" | "story" | "subtask";
+
+/**
+ * How many role batches compose at once — see the file header. Not a config value: this is a
+ * concurrency cap, not a business rule an org would ever want to override, so it stays a constant
+ * the same way `ASK_BATCH` does in `context.ts`.
+ */
+const COMPOSE_CONCURRENCY = 3;
+
+/**
+ * Run `fn` over `items`, at most `limit` in flight at once — a worker pool, not a batch-and-wait:
+ * the moment one item finishes, the next starts, so a slow item never idles a fast one behind it.
+ *
+ * Pure and dependency-free on purpose. `p-limit` is already in the lockfile, but only as some
+ * other package's transitive dependency — importing it directly here would be relying on a version
+ * nothing in `package.json` actually pins, exactly the kind of drift `AGENTS.md`'s lockfile rule
+ * exists to catch. Four lines is cheaper than a real dependency for what this needs.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[], limit: number, fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    for (let i = next++; i < items.length; i = next++) {
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/**
+ * One level's ground rules, engagement override winning over the org default — same precedence
+ * `templateFor` and every other two-tier catalog in this app resolve with.
+ *
+ * Null means genuinely unconfigured (the seed was never imported for this org), and callers must
+ * treat that as a real gap — see `composeTicketBody`'s `no-brief` handling — never as license to
+ * fall back to invented text. The catalog existing is the whole point of moving this out of code.
+ */
+export async function ticketBriefFor(
+  orgId: string, engagementId: string | null, level: TicketLevel,
+): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  if (engagementId) {
+    const { data } = await sb.from("ticket_brief").select("brief")
+      .eq("org_id", orgId).eq("engagement_id", engagementId).eq("code", level).eq("enabled", true)
+      .maybeSingle();
+    if (data?.brief) return data.brief as string;
+  }
+
+  const { data } = await sb.from("ticket_brief").select("brief")
+    .eq("org_id", orgId).is("engagement_id", null).eq("code", level).eq("enabled", true)
+    .maybeSingle();
+  return (data?.brief as string | undefined) ?? null;
+}
 
 /** What a role is asked to write about, assembled from the record by the caller. */
 export type TicketRequest = {
@@ -44,7 +120,7 @@ export type TicketRequest = {
    * explicit and an unrecognised `ref` is dropped rather than guessed at.
    */
   ref: string;
-  issueType: IssueType;
+  level: TicketLevel;
   /** Whose markdown governs the writing. Its agent file must exist, or nothing is composed. */
   roleCode: string;
   /** The Jira key to write to. Absent means compose but do not patch — used by tests and previews. */
@@ -66,7 +142,7 @@ export type ComposedBody = { ref: string; key: string | null; summary: string; d
  */
 export type ComposeReason =
   | "no-supabase" | "no-tracker" | "no-run" | "nothing-to-compose"
-  | "no-agent-file" | "no-host" | "model-refused" | "model-silent" | "patch-refused";
+  | "no-agent-file" | "no-brief" | "no-host" | "model-refused" | "model-silent" | "patch-refused";
 
 export type Composed = {
   /** Tickets whose body was composed AND written. */
@@ -82,23 +158,6 @@ export function composeIncomplete(c: Composed): boolean {
   if (c.reason === "no-tracker" || c.reason === "no-supabase" || c.reason === "nothing-to-compose") return false;
   return c.written.length < c.expected;
 }
-
-/**
- * What each issue type is FOR, in one line each.
- *
- * The five-question contract in the agent markdown holds for all four; this says what "the
- * deliverable" means for the type in hand, so an Epic does not get written as an oversized story
- * and a Bug does not get written as a work request.
- */
-const TYPE_BRIEF: Record<IssueType, string> = {
-  Epic: "A slice of the programme. Say what the slice delivers as a whole, what it unblocks " +
-    "downstream, and how a reader will know it is finished. Not a list of its children.",
-  Story: "One shippable deliverable. Say what it is, who needs it, and what acceptance looks like.",
-  Task: "A change to make. Say what changes, why now, what it touches, and how it is undone if it " +
-    "goes wrong.",
-  Bug: "Something behaving wrongly. Say what was observed, where, who it affects, and what correct " +
-    "looks like. Do not speculate about the cause beyond what the report supports.",
-};
 
 /**
  * The tool the composer forces.
@@ -158,6 +217,7 @@ function userPrompt(
   programme: { engagement: string; context: string[] },
   grounding: { path: string; title: string | null; version: string | null; body: string | null }[],
   tickets: TicketRequest[],
+  briefs: Map<TicketLevel, string>,
 ): string {
   const parts: string[] = [];
 
@@ -190,9 +250,9 @@ function userPrompt(
       .filter(([, v]) => v != null && String(v).trim() !== "")
       .map(([k, v]) => `  - ${k}: ${v}`);
     parts.push(
-      `\n## ref \`${t.ref}\` — ${t.issueType}\n` +
+      `\n## ref \`${t.ref}\` — ${t.level}\n` +
       `- current title: ${t.summary}\n` +
-      `- what this type is for: ${TYPE_BRIEF[t.issueType]}\n` +
+      `- what this level is for: ${briefs.get(t.level)}\n` +
       (facts.length ? `- what the record holds:\n${facts.join("\n")}\n` : `- the record holds nothing else about it\n`) +
       (t.doneCriteria.length
         ? `- ${t.doneCriteria.length} acceptance criteri${t.doneCriteria.length === 1 ? "on is" : "a are"} ` +
@@ -232,8 +292,26 @@ export async function composeTicketBody(input: {
   grounding: Awaited<ReturnType<typeof loadDocumentText>>[];
   tickets: TicketRequest[];
 }): Promise<{ bodies: ComposedBody[]; problems: string[]; reason?: ComposeReason }> {
-  const { tickets, roleCode } = input;
-  if (!tickets.length) return { bodies: [], problems: [], reason: "nothing-to-compose" };
+  const { roleCode } = input;
+  if (!input.tickets.length) return { bodies: [], problems: [], reason: "nothing-to-compose" };
+
+  // The ground rules ARE data — resolve every level this batch actually needs, once. A level with
+  // no brief configured (the seed was never imported for this org) is a real gap, not license to
+  // invent text: its tickets are dropped, named, rather than composed with nothing to go on.
+  const levels = [...new Set(input.tickets.map((t) => t.level))];
+  const briefs = new Map<TicketLevel, string>();
+  const problems: string[] = [];
+  await Promise.all(levels.map(async (level) => {
+    const brief = await ticketBriefFor(input.orgId, input.engagementId, level);
+    if (brief) briefs.set(level, brief);
+  }));
+
+  const tickets = input.tickets.filter((t) => {
+    if (briefs.has(t.level)) return true;
+    problems.push(`No ticket brief configured for level '${t.level}' — \`${t.ref}\` left as it was.`);
+    return false;
+  });
+  if (!tickets.length) return { bodies: [], problems, reason: "no-brief" };
 
   // The role's markdown IS the standard. Absent, there is no standard, and a body written anyway
   // would be the model's own idea of a ticket wearing the role's name.
@@ -242,6 +320,7 @@ export async function composeTicketBody(input: {
     return {
       bodies: [], reason: "no-agent-file",
       problems: [
+        ...problems,
         `No agent file for role \`${roleCode}\` — ${tickets.length} ticket(s) left as they are. ` +
         `Its markdown is what defines what a ticket carries; nothing was substituted for it.`,
       ],
@@ -258,19 +337,19 @@ export async function composeTicketBody(input: {
       maxTokens: 32000,
       system: md,
       tools: [BODY_TOOL],
-      messages: [{ role: "user", content: userPrompt(input.programme, input.grounding, tickets) }],
+      messages: [{ role: "user", content: userPrompt(input.programme, input.grounding, tickets, briefs) }],
     });
   } catch (e) {
     return {
       bodies: [], reason: "no-host",
-      problems: [`Could not reach a model host: ${e instanceof Error ? e.message : String(e)}`],
+      problems: [...problems, `Could not reach a model host: ${e instanceof Error ? e.message : String(e)}`],
     };
   }
 
   if (result.stopReason === "refusal") {
     return {
       bodies: [], reason: "model-refused",
-      problems: [`The model declined to write these bodies. ${result.refusalExplanation ?? "No explanation given."}`],
+      problems: [...problems, `The model declined to write these bodies. ${result.refusalExplanation ?? "No explanation given."}`],
     };
   }
 
@@ -279,6 +358,7 @@ export async function composeTicketBody(input: {
     return {
       bodies: [], reason: "model-silent",
       problems: [
+        ...problems,
         `The model answered without using \`${BODY_TOOL.name}\`` +
         (result.text ? `: ${result.text.slice(0, 300)}` : "."),
       ],
@@ -289,7 +369,6 @@ export async function composeTicketBody(input: {
   const returned = Array.isArray(raw) ? raw : [];
   const byRef = new Map(tickets.map((t) => [t.ref, t]));
   const bodies: ComposedBody[] = [];
-  const problems: string[] = [];
   const seen = new Set<string>();
 
   for (const entry of returned) {
@@ -324,8 +403,17 @@ export async function composeTicketBody(input: {
  * contains: the same `sortByStep`, the same task rows, the epic key off `workflow_run.ticket_key`.
  */
 export async function composeTicketBodies(
-  engagementId: string, runId: string, actorRole: string, opts: { force?: boolean } = {},
+  engagementId: string, runId: string, actorRole: string,
+  opts: {
+    force?: boolean;
+    /** What level THIS run's own tasks are — `story` for a phase's rows (the default), `subtask`
+     *  for a nested run's (see `mirrorNested`). The run's own epic-level request, when it has one,
+     *  is always `epic` regardless — a nested run never has one (`ticket_key` stays null; see
+     *  `mirrorNested`'s own comment), so that branch simply never fires for it. */
+    taskLevel?: TicketLevel;
+  } = {},
 ): Promise<Composed> {
+  const taskLevel = opts.taskLevel ?? "story";
   const out: Composed = { written: [], expected: 0, problems: [] };
   const sb = supabaseAdmin();
   if (!sb) return { ...out, reason: "no-supabase", problems: ["Supabase is not configured."] };
@@ -355,14 +443,17 @@ export async function composeTicketBodies(
   // Everything these steps read, once. Today that is the SOW; the shape does not change when it
   // is not.
   const paths = [...new Set(tasks.flatMap((t) => stepOf(t)?.reads ?? []))] as string[];
-  const grounding = [];
+  const grounding: Awaited<ReturnType<typeof loadDocumentText>>[] = [];
   for (const p of paths) grounding.push(await loadDocumentText(engagementId, p));
 
   const programme = {
     engagement: eng?.name ?? engagementId,
     context: [
-      `Phase: ${wf?.label ?? wf?.code ?? "unnamed"}.`,
-      `The epic covers the phase as a whole; each story is one deliverable within it.`,
+      `Workflow: ${wf?.label ?? wf?.code ?? "unnamed"}.`,
+      taskLevel === "subtask"
+        ? `The parent ticket covers what this row belongs to as a whole; each sub-task below is one ` +
+          `step of the work happening inside it — describe the step, not the whole.`
+        : `The epic covers the phase as a whole; each story is one deliverable within it.`,
     ],
   };
 
@@ -371,7 +462,7 @@ export async function composeTicketBodies(
   if (run.ticket_key && (opts.force || !run.ticket_body_at)) {
     requests.push({
       ref: `run:${run.id}`,
-      issueType: "Epic",
+      level: "epic",
       // The run's own owning role when it has one — the delivery manager owns a phase — falling
       // back to whoever is asking rather than to a hardcoded role name.
       roleCode: (run.owner_role_code as string | null) ?? actorRole,
@@ -390,7 +481,7 @@ export async function composeTicketBodies(
     const step = stepOf(t);
     requests.push({
       ref: `task:${t.id}`,
-      issueType: "Story",
+      level: taskLevel,
       roleCode: t.role_code,
       key: t.ticket_key as string,
       summary: t.title,
@@ -410,7 +501,12 @@ export async function composeTicketBodies(
   const byRole = new Map<string, TicketRequest[]>();
   for (const r of requests) byRole.set(r.roleCode, [...(byRole.get(r.roleCode) ?? []), r]);
 
-  for (const [roleCode, group] of byRole) {
+  // One model call per role, up to `COMPOSE_CONCURRENCY` at once — see the file header. Every
+  // group's outcome only ever touches `out` through a synchronous push/assign, never split across
+  // an `await`, so interleaving groups here is safe: two groups can never observe or clobber each
+  // other's half-written state, only decide in whichever order they actually finish which failure
+  // `out.reason` ends up naming when more than one group has one.
+  await mapWithConcurrency([...byRole.entries()], COMPOSE_CONCURRENCY, async ([roleCode, group]) => {
     const { bodies, problems, reason } = await composeTicketBody({
       engagementId, orgId, roleCode, programme, grounding, tickets: group,
     });
@@ -437,7 +533,7 @@ export async function composeTicketBodies(
       }
       out.written.push(b);
     }
-  }
+  });
 
   await emit({
     engagementId, subjectType: "workflow_run", subjectId: runId,

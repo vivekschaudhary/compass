@@ -57,18 +57,22 @@ export type Initiated =
   | { ok: false; error: string };
 
 /**
- * Mirror, then compose.
+ * Mirror, then compose — the one call path both `initiatePhase` (epic + stories) and `openNested`
+ * (a nested run's own sub-tasks) go through, rather than two copies that drift the next time
+ * either changes.
  *
- * Composition runs after, never during: opening a phase must not wait on a model, and a phase whose
- * bodies could not be written still has its board. Its failure is returned, never thrown — the work
- * happened whether or not a ticket reads well.
+ * Composition runs after, never during: opening a phase or a nested run must not wait on a model,
+ * and one whose bodies could not be written still has its board. Its failure is returned, never
+ * thrown — the work happened whether or not a ticket reads well.
  */
-async function putOnBoard(
+async function mirrorAndCompose(
   engagementId: string,
   runId: string,
   roleCode: string,
+  mirror: () => Promise<Mirrored>,
+  composeOpts: Parameters<typeof composeTicketBodies>[3] = {},
 ): Promise<BoardResult> {
-  const mirrored = await mirrorPhase(engagementId, runId, roleCode);
+  const mirrored = await mirror();
   // Nothing on the board is nothing to write on. Composing here would spend a model call producing
   // text with nowhere to go.
   if (!mirrored.epic) return mirrored;
@@ -76,7 +80,7 @@ async function putOnBoard(
   try {
     return {
       ...mirrored,
-      composed: await composeTicketBodies(engagementId, runId, roleCode),
+      composed: await composeTicketBodies(engagementId, runId, roleCode, composeOpts),
     };
   } catch (e) {
     return {
@@ -91,6 +95,14 @@ async function putOnBoard(
       },
     };
   }
+}
+
+async function putOnBoard(
+  engagementId: string,
+  runId: string,
+  roleCode: string,
+): Promise<BoardResult> {
+  return mirrorAndCompose(engagementId, runId, roleCode, () => mirrorPhase(engagementId, runId, roleCode));
 }
 
 /**
@@ -341,7 +353,7 @@ export async function openNested(
   | {
       ok: true;
       runId: string;
-      mirrored: Mirrored;
+      mirrored: BoardResult;
       startedTaskId: string | null;
     }
   | { ok: false; error: string }
@@ -366,10 +378,12 @@ export async function openNested(
   });
   if (error) return { ok: false, error: error.message };
 
-  const mirrored = await mirrorNested(
+  const mirrored = await mirrorAndCompose(
     actor.engagementId,
     runId as string,
     actor.roleCode,
+    () => mirrorNested(actor.engagementId, runId as string, actor.roleCode),
+    { taskLevel: "subtask" },
   );
   // The row itself is now in progress: its work is the child run. Reported through `mirrored`
   // rather than failing the open — the run exists whether or not the board heard about it.
@@ -437,7 +451,7 @@ type FanOutResult =
       runs: {
         runId: string;
         subject: string | null;
-        mirrored: Mirrored;
+        mirrored: BoardResult;
         /** Set when this run's first task was auto-started for the actor who opened it. */
         startedTaskId: string | null;
       }[];
@@ -497,7 +511,7 @@ async function openNestedPerEpic(
   const runs: {
     runId: string;
     subject: string | null;
-    mirrored: Mirrored;
+    mirrored: BoardResult;
     startedTaskId: string | null;
   }[] = [];
   for (const epic of epics) {
