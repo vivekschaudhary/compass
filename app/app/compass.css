@@ -1883,6 +1883,26 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-3px); }
 }
+.msg-thinking-elapsed {
+  font-size: 12px;
+  color: var(--color-neutral-500);
+  margin-left: 2px;
+}
+
+/* A claimed run whose heartbeat has gone stale — names an actual defect (a dead process), so it
+   earns more weight than `.jobs-note`'s plain neutral tone. Per this file's own rule (`.start-error`,
+   `.ctx-warn`): no red in this palette, emphasis is ink weight, not colour. */
+.jobs-note-stalled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--color-accent-700);
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
 
 /* the deliverable */
 .draft-col {

@@ -10,14 +10,21 @@
 // `router.refresh()`, the server re-fetches `questions` without the one just answered, and the view
 // resets to its first entry — which is now the next question, not the same one re-shown.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OpenQuestion } from "@/app/lib/data/job";
-import { answerAction, noteAction, resumeForReviewAction } from "./actions";
+import { answerAction, noteAction, resumeForReviewAction, resetStalledRunAction } from "./actions";
 import { startTaskAction } from "../actions";
 import { requestRun } from "./run-agent";
 import { uploadAnswer } from "./upload-answer";
 import { RunButton } from "./RunButton";
+
+/** "working — 1m 12s", ticking. Never fractional seconds — nobody needs that precision. */
+function elapsed(since: string, nowMs: number): string {
+  const s = Math.max(0, Math.floor((nowMs - new Date(since).getTime()) / 1000));
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+}
 
 /** What the file picker offers. Everything `readUpload` can actually read, and nothing else. */
 const ACCEPT = ".pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.md,.markdown,.txt";
@@ -36,6 +43,9 @@ export function Composer({
   autoRun,
   idle,
   readyMet,
+  running,
+  stalled,
+  heartbeatAt,
 }: {
   engagement: string;
   role: string;
@@ -69,6 +79,17 @@ export function Composer({
    */
   idle?: boolean;
   readyMet?: boolean;
+  /**
+   * The DB's own answer to "is this claimed and alive right now", regardless of whether THIS tab
+   * is the one that started it — a reload, a different tab, or coming back later all need to say
+   * the same thing rather than offering "Run the agent" over a task that is already running
+   * somewhere else. See `heartbeat-config.ts` for the staleness line `stalled` sits the other side
+   * of.
+   */
+  running?: boolean;
+  /** A claim past the staleness threshold with nobody left to release it — see `resetStalledRun`. */
+  stalled?: boolean;
+  heartbeatAt?: string | null;
 }) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
@@ -78,6 +99,16 @@ export function Composer({
   const [note, setNote] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [resetting, setResetting] = useState(false);
+
+  // Ticks once a second only while something is actually shown that needs it — the thinking bubble
+  // or the stuck badge — rather than running an interval on every job page regardless.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!working && !running && !stalled) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [working, running, stalled]);
 
   // Never past the end — the list shrinks after every answer, and a stale index otherwise points at
   // nothing.
@@ -171,17 +202,48 @@ export function Composer({
 
   const busy = pending || uploading || working;
 
+  async function resetStalled() {
+    setError(null);
+    setResetting(true);
+    const r = await resetStalledRunAction(engagement, role, taskId, holderId);
+    setResetting(false);
+    if (!r.ok) { setError(r.error ?? "Could not reset it."); return; }
+    router.refresh();
+  }
+
   return (
     <div className="composer">
       {/* The agent's own turn hasn't landed yet — this sits where it will, styled as its bubble,
           so the wait reads as "it's replying" rather than the page having done nothing. The
           message you just sent is already in `Conversation` above by the time this shows, since
-          `submitNote`/`submitAnswer` refresh before awaiting the run, not after. */}
-      {working && (
+          `submitNote`/`submitAnswer` refresh before awaiting the run, not after.
+          `running` (not just `working`) so this also shows on a page that loaded mid-run from a
+          DIFFERENT tab or a later visit — the exact case that used to render nothing at all, or a
+          "Run the agent" button over a task already running somewhere else. */}
+      {(working || running) && !stalled && (
         <div className="msg msg-thinking" aria-live="polite">
           <span className="msg-thinking-dot" />
           <span className="msg-thinking-dot" />
           <span className="msg-thinking-dot" />
+          <span className="msg-thinking-elapsed">
+            working{heartbeatAt ? ` — ${elapsed(heartbeatAt, now)}` : "…"}
+          </span>
+        </div>
+      )}
+
+      {stalled && (
+        <div className="jobs-note jobs-note-stalled">
+          <span>
+            Stuck{heartbeatAt ? ` since ${elapsed(heartbeatAt, now)}` : ""} — the process behind
+            this run is gone, not just slow.
+          </span>
+          <button
+            className="btn btn-secondary btn-compact"
+            disabled={resetting}
+            onClick={resetStalled}
+          >
+            {resetting ? "Resetting…" : "Reset this run"}
+          </button>
         </div>
       )}
 
@@ -289,8 +351,11 @@ export function Composer({
 
         {/* Starting or running is a distinct act from answering — offered beside the composer, not
             instead of it, exactly as RunButton and NoteBox already coexisted before this merge. A
-            closed task offers neither: a note goes on the record, nothing here restarts it. */}
-        {!current && !closed && (
+            closed task offers neither: a note goes on the record, nothing here restarts it.
+            Suppressed on `running`/`stalled` too — those already render their own control above
+            (the thinking bubble, or the stuck badge's own Reset button); offering "Run the agent"
+            here as well is the exact ambiguity this was built to remove. */}
+        {!current && !closed && !running && !stalled && (
           idle ? (
             <div className="start-control">
               <button

@@ -26,6 +26,9 @@ comment on column work_task.heartbeat_at is
 -- SECOND concurrent dispatch racing the first (the claim's `.is("executor", null)` CAS stops that
 -- from doing damage, but it still burns a model call); the cost of being too generous is only that
 -- an actually-dead row waits a little longer to be noticed. Asymmetric, so the number leans long.
+--
+-- 10 minutes, matching `HEARTBEAT_STALE_MINUTES` in `app/lib/agent/heartbeat-config.ts` — this file
+-- cannot import that constant, so the two are duplicated on purpose. Change both together.
 create or replace function compass_sweep_due_tasks() returns void as $$
 declare
   v_url    text := current_setting('app.sweep_url', true);

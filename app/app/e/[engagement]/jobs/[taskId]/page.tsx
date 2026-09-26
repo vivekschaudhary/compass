@@ -21,6 +21,7 @@ import {
 } from "@/app/lib/data/job";
 import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
+import { HEARTBEAT_STALE_MINUTES } from "@/app/lib/agent/heartbeat-config";
 import { documentTree } from "@/app/lib/data/documents";
 import { commentsForSections } from "@/app/lib/data/comments";
 import { readyAllMet } from "../Gate";
@@ -96,6 +97,17 @@ export default async function JobPage(
   // happens to read null at that instant.
   const autoRun =
     state === "running" && taskRow?.executor === null && turns.length === 0;
+
+  // Someone else's claim — a run this tab never started (another tab, a reload, coming back
+  // later). `autoRun` above only ever looks at THIS load; a claimed row with a live heartbeat must
+  // say so plainly instead of offering "Run the agent" again, which is the exact ambiguity that
+  // made a real run look identical to nothing happening.
+  const heartbeatAgeMs = taskRow?.heartbeatAt
+    ? Date.now() - new Date(taskRow.heartbeatAt).getTime()
+    : null;
+  const stale = heartbeatAgeMs !== null && heartbeatAgeMs > HEARTBEAT_STALE_MINUTES * 60_000;
+  const running = Boolean(taskRow?.executor) && !stale;
+  const stalled = Boolean(taskRow?.executor) && stale;
 
   const statuses = gates.get(taskId) ?? [];
   const doneCriteria = statuses
@@ -210,6 +222,9 @@ export default async function JobPage(
                   autoRun={autoRun}
                   idle={state === "idle"}
                   readyMet={readyAllMet(statuses)}
+                  running={running}
+                  stalled={stalled}
+                  heartbeatAt={taskRow?.heartbeatAt ?? null}
                 />
               </>
             )}
