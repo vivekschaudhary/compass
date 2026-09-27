@@ -1401,47 +1401,6 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   background: var(--color-accent-100);
 }
 
-/* Collapsed by default (ApprovePanel) — a single pinned row rather than the full checklist, which
-   was eating the chat pane's height even for a single criterion. */
-.approve-collapsed {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  width: 100%;
-  margin-top: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-accent-2-100);
-  border: none;
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--color-accent-2-900);
-  text-align: left;
-  cursor: pointer;
-}
-.approve-head-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-  color: inherit;
-}
-.approve-collapsed-caret {
-  color: var(--color-neutral-500);
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
 .verdict {
   padding: 4px 0;
 }
