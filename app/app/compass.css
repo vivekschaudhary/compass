@@ -1849,6 +1849,11 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   letter-spacing: 0;
   color: var(--color-neutral-500);
 }
+/* The optimistic echo of a message THIS tab just sent, before the write is confirmed — faded, not
+   hidden, so it reads as "sending" rather than looking identical to an already-recorded message. */
+.msg-pending {
+  opacity: 0.6;
+}
 .msg-body {
   font-size: 13px;
 }

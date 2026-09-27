@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Markdown } from "../../../../_ui/Markdown";
 import type { Turn } from "@/app/lib/data/job";
+import { useOptimisticTurns } from "./OptimisticTurns";
+import { mergeTurns } from "./optimistic-turns";
 
 /**
  * The conversation, as a conversation.
@@ -16,8 +18,13 @@ import type { Turn } from "@/app/lib/data/job";
  * single message past a few hundred characters clamps with its own control. The default view is
  * "what just happened", which is what someone opening a job actually wants.
  */
-export function Conversation({ turns }: { turns: Turn[] }) {
+export function Conversation({ turns: real }: { turns: Turn[] }) {
   const [showAll, setShowAll] = useState(false);
+  // The optimistic echo of a message THIS tab just sent — merged in here, not held by `Composer`,
+  // because that's the sibling that actually renders the conversation. See `optimistic-turns.ts`.
+  const { pending } = useOptimisticTurns();
+  const turns = mergeTurns(real, pending);
+
   if (!turns.length) {
     return <p className="text-muted pane-empty">Nothing yet. Run the agent and it will read the pinned documents.</p>;
   }
@@ -39,17 +46,19 @@ export function Conversation({ turns }: { turns: Turn[] }) {
 
 const LONG = 700;
 
-function Message({ turn }: { turn: Turn }) {
+function Message({ turn }: { turn: Turn & { pending?: true } }) {
   const [open, setOpen] = useState(false);
   const long = turn.body.length > LONG;
   const shown = long && !open ? turn.body.slice(0, LONG).trimEnd() + "…" : turn.body;
 
   return (
-    <article className={`msg msg-${turn.authorKind}`}>
+    <article className={`msg msg-${turn.authorKind}${turn.pending ? " msg-pending" : ""}`}>
       <div className="msg-who">
         <span>{turn.authorKind === "agent" ? `${turn.authorRoleCode ?? "agent"} agent` : turn.authorUserId ?? "you"}</span>
         <span className="msg-when">
-          {new Date(turn.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          {turn.pending
+            ? "sending…"
+            : new Date(turn.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
         </span>
       </div>
       <Markdown className="msg-body">{shown}</Markdown>

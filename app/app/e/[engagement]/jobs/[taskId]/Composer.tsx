@@ -19,6 +19,7 @@ import { requestRun } from "./run-agent";
 import { uploadAnswer } from "./upload-answer";
 import { RunButton } from "./RunButton";
 import { formatElapsed } from "@/app/lib/agent/heartbeat-config";
+import { useOptimisticTurns } from "./OptimisticTurns";
 
 /** What the file picker offers. Everything `readUpload` can actually read, and nothing else. */
 const ACCEPT = ".pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.md,.markdown,.txt";
@@ -94,6 +95,7 @@ export function Composer({
   const [working, setWorking] = useState(false);
   const [pending, startTransition] = useTransition();
   const [resetting, setResetting] = useState(false);
+  const { addPending, removePending } = useOptimisticTurns();
 
   // Ticks once a second only while something is actually shown that needs it — the thinking bubble
   // or the stuck badge — rather than running an interval on every job page regardless.
@@ -136,11 +138,19 @@ export function Composer({
 
   function submitAnswer(value: string) {
     if (!current) return;
+    // Echoed and cleared BEFORE the request, not after — the round trip a real write takes must
+    // not be the thing that decides when your own answer becomes visible. `removePending` on
+    // failure, since a failed write has nothing coming to reconcile it away otherwise.
+    setText("");
+    const pendingId = value.trim() ? addPending(value, null) : null;
     startTransition(async () => {
       setError(null);
       const r = await answerAction(engagement, role, taskId, { [current.id]: value }, holderId);
-      if (!r.ok) { setError(r.error ?? "Could not record that."); return; }
-      setText("");
+      if (!r.ok) {
+        setError(r.error ?? "Could not record that.");
+        if (pendingId) removePending(pendingId);
+        return;
+      }
       setIndex(0); // the answered question is gone after refresh; land on whatever is now first
       // Posted before the run starts, not after it finishes — an answer that only appears once a
       // model call minutes away has completed reads as the click having done nothing.
@@ -151,11 +161,17 @@ export function Composer({
 
   function submitNote() {
     if (!text.trim()) return;
+    const body = text;
+    setText("");
+    const pendingId = addPending(body, null);
     startTransition(async () => {
       setError(null);
-      const r = await noteAction(engagement, role, taskId, text, holderId);
-      if (!r.ok) { setError(r.error ?? "Could not add that."); return; }
-      setText("");
+      const r = await noteAction(engagement, role, taskId, body, holderId);
+      if (!r.ok) {
+        setError(r.error ?? "Could not add that.");
+        removePending(pendingId);
+        return;
+      }
       // Refreshed HERE, before the agent runs, so the message you just sent shows up in the chat
       // immediately — same reasoning as `submitAnswer`. A message TO the agent is one side of a
       // conversation, not a note filed and left for someone to notice, so it answers back without

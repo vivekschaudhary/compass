@@ -34,6 +34,7 @@ import { Composer } from "./Composer";
 import { ApprovePanel } from "./ApprovePanel";
 import { NestedRunPanel } from "./NestedRunPanel";
 import { RealtimeRefresh } from "./RealtimeRefresh";
+import { OptimisticTurnsProvider } from "./OptimisticTurns";
 import { DocTreeNav } from "./DocTreeNav";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +169,7 @@ export default async function JobPage(
         {/* <DocTreeNav engagement={engagement} roleCode={roleCode} tree={tree} produces={ctx.produces} /> */}
 
         <section className="chat-col">
+          <OptimisticTurnsProvider realCount={turns.length}>
           <Conversation turns={turns} />
 
           {/* Pinned below the scrolling conversation, not carried away with it — the approve
@@ -226,6 +228,7 @@ export default async function JobPage(
               </>
             )}
           </div>
+        </OptimisticTurnsProvider>
         </section>
 
         <DraftPanel
