@@ -51,23 +51,49 @@ export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isR
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Collapsed by default — the full checklist is real estate the chat pane is short on, and this
+  // sits pinned above the composer on every load whether or not anyone is ready to act on it yet.
+  // Forced open the moment there's a rejection in progress: a reason textarea hidden behind a
+  // collapsed pill is a reason nobody can act on.
+  const [expanded, setExpanded] = useState(false);
 
   const set = (id: string, v: Verdict) => setVerdicts((p) => ({ ...p, [id]: p[id] === v ? "none" : v }));
   const confirmed = mine.filter((c) => verdicts[c.id] === "ok");
   const rejected = mine.filter((c) => verdicts[c.id] === "no");
   const allOk = confirmed.length === mine.length;
+  const showFull = expanded || rejected.length > 0;
+
+  const headline = rejected.length
+    ? "Sending back — say what is wrong with each"
+    : mine.length === 0
+      ? "Everything was checked automatically — nothing needs your signature"
+      : isReview
+        ? `Approve — ${mine.length} need${mine.length === 1 ? "s" : ""} your judgment. You are the evidence for these.`
+        : `Confirm — ${mine.length} need${mine.length === 1 ? "s" : ""} checking before this can move on.`;
+
+  if (!showFull) {
+    return (
+      <button
+        className="approve approve-collapsed"
+        onClick={() => setExpanded(true)}
+        aria-expanded={false}
+      >
+        <span>{headline}</span>
+        <span className="approve-collapsed-caret" aria-hidden>▸</span>
+      </button>
+    );
+  }
 
   return (
     <div className={rejected.length ? "approve approve-sending-back" : "approve"}>
-      <div className="approve-head">
-        {rejected.length
-          ? "Sending back — say what is wrong with each"
-          : mine.length === 0
-            ? "Everything was checked automatically — nothing needs your signature"
-            : isReview
-              ? `Approve — ${mine.length} need${mine.length === 1 ? "s" : ""} your judgment. You are the evidence for these.`
-              : `Confirm — ${mine.length} need${mine.length === 1 ? "s" : ""} checking before this can move on.`}
-      </div>
+      <button
+        className="approve-head approve-head-toggle"
+        onClick={() => setExpanded(false)}
+        aria-expanded={true}
+      >
+        <span>{headline}</span>
+        <span className="approve-collapsed-caret" aria-hidden>▾</span>
+      </button>
 
       {/* Shown, not hidden: the reader should see the whole gate. But they carry the source and
           they carry no checkbox, because nobody is signing for them. */}
