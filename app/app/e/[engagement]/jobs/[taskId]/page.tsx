@@ -228,7 +228,7 @@ export default async function JobPage(
               </>
             )}
           </div>
-        </OptimisticTurnsProvider>
+          </OptimisticTurnsProvider>
         </section>
 
         <DraftPanel
