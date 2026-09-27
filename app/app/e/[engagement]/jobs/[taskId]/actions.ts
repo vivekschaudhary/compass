@@ -4,7 +4,7 @@
 
 import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
-import { recordAnswers, addNote, resumeForReview } from "@/app/lib/data/job";
+import { recordAnswers, addNote, resumeForReview, resetStalledRun } from "@/app/lib/data/job";
 import { approve, reject } from "@/app/lib/data/gates";
 import { editSection } from "@/app/lib/data/document-edit";
 import { addComment } from "@/app/lib/data/comments";
@@ -101,6 +101,23 @@ export async function noteAction(
   if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
 
   const result = await addNote(actor, taskId, body);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/**
+ * Reset a run that's been stalled for a while — the one manual action available once the sweep
+ * hasn't caught it yet. See `resetStalledRun`'s own doc comment for the safety condition.
+ */
+export async function resetStalledRunAction(
+  engagement: string, role: string, taskId: string,
+  holderId?: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await resetStalledRun(actor, taskId);
   revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };

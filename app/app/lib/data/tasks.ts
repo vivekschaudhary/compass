@@ -47,6 +47,8 @@ export type TaskCard = {
   workflowCode: string | null;
   /** Which engine picked it up. NULL means nothing has — started is not the same as running. */
   executor: string | null;
+  /** Touched while a claim is genuinely alive — see `heartbeat-config.ts`. Null if never claimed. */
+  heartbeatAt: string | null;
   /** How many of the agent's questions are still blocking this task. */
   openQuestions: number;
   startedAt: string | null;
@@ -77,6 +79,7 @@ type Row = {
   origin: "defined" | "adhoc";
   rationale: string | null;
   executor: string | null;
+  heartbeat_at: string | null;
   started_at: string | null;
   started_by: string | null;
   // `ord` and `opened_at` are here to ORDER the queue, not to render it — see `queueOrder`.
@@ -132,7 +135,7 @@ export function queueOrder(a: Row, b: Row): number {
 }
 
 const SELECT =
-  "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,started_at,started_by," +
+  "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,heartbeat_at,started_at,started_by," +
   "workflow_step(reads,kind,ord,nests_workflow_code,renders)," +
   // `parent_task_id` rides on the join that was already here. Grouping the queue costs no query.
   "workflow_run!work_task_workflow_run_id_fkey(id,opened_at,state,parent_task_id,subject_key,workflow(code))";
@@ -197,6 +200,7 @@ export async function tasksFor(
     rationale: r.rationale,
     workflowCode: r.workflow_run?.workflow?.code ?? null,
     executor: r.executor,
+    heartbeatAt: r.heartbeat_at,
     openQuestions: openByTask.get(r.id) ?? 0,
     startedAt: r.started_at,
     startedBy: r.started_by,

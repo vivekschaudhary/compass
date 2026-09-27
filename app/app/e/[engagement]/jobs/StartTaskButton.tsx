@@ -21,6 +21,7 @@ export function StartTaskButton({
   role,
   state,
   executor,
+  heartbeatAt,
   href,
   openQuestions = 0,
   readyMet = false,
@@ -31,6 +32,8 @@ export function StartTaskButton({
   state: string;
   /** Which engine has the task. NULL means nothing has picked it up. */
   executor?: string | null;
+  /** Touched while the claim is alive — a stale one is told apart in `labelFor`, not here. */
+  heartbeatAt?: string | null;
   /** Where the job lives. A card that says "waiting on you" must give you somewhere to go. */
   href?: string;
   openQuestions?: number;
@@ -56,13 +59,13 @@ export function StartTaskButton({
                 : "Open the job"}
           </a>
           <span className="task-state text-muted">
-            {labelFor(state, executor)}
+            {labelFor(state, executor, heartbeatAt)}
           </span>
         </div>
       );
     }
     return (
-      <span className="task-state text-muted">{labelFor(state, executor)}</span>
+      <span className="task-state text-muted">{labelFor(state, executor, heartbeatAt)}</span>
     );
   }
 
