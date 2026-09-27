@@ -943,8 +943,10 @@ export function revisionPrompt(ctx: AgentContext): string | null {
       `and explain — do not quietly comply with something you think is wrong.`);
   } else {
     parts.push(
-      `Revise it rather than starting over. Keep what still holds, change what should change, and say ` +
-      `what you changed and why. If nothing needs changing, say that instead of redrafting.`);
+      `Revise it rather than starting over. Keep what still holds, change what should change. Say ` +
+      `what you changed and why in \`summary\` — plainly, a couple of sentences, the way the tool's ` +
+      `own description asks; the revised sections themselves are where the detail and citations go, ` +
+      `not the summary. If nothing needs changing, say that instead of redrafting.`);
   }
 
   return parts.join("\n\n");
