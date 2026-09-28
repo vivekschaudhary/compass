@@ -22,6 +22,19 @@ export function isStale(heartbeatAt: string | null, nowMs: number = Date.now()):
   return heartbeatAt !== null && nowMs - new Date(heartbeatAt).getTime() > HEARTBEAT_STALE_MINUTES * 60_000;
 }
 
+/**
+ * The last moment there is any evidence a claim was alive: its heartbeat, or — for a claim that
+ * somehow never got one (an out-of-band write, a future code path that sets `executor` without
+ * `heartbeat_at`) — when the row was started. `isStale(null)` is false by design ("no evidence" is
+ * not "dead"), which on its own made such a claim read as alive for ever; falling back to
+ * `started_at` gives it the same grace period as any other and then lets it be seen as stuck.
+ * Every non-idle row has a `started_at` (the table's own check constraint), so this is null only
+ * for a row that was never claimed at all.
+ */
+export function lastSign(heartbeatAt: string | null, startedAt: string | null): string | null {
+  return heartbeatAt ?? startedAt;
+}
+
 /** "1m 12s" / "43s" — never fractional seconds, nobody needs that precision. */
 export function formatElapsed(since: string, nowMs: number = Date.now()): string {
   const s = Math.max(0, Math.floor((nowMs - new Date(since).getTime()) / 1000));

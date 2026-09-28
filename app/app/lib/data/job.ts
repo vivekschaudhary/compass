@@ -334,14 +334,19 @@ export async function childRunBlock(actor: Actor, taskId: string): Promise<strin
 export async function taskState(
   actor: Actor,
   taskId: string,
-): Promise<{ state: string; executor: string | null; heartbeatAt: string | null } | null> {
+): Promise<{
+  state: string; executor: string | null; heartbeatAt: string | null; startedAt: string | null;
+} | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
   const { data } = await sb.from("work_task")
-    .select("state, executor, heartbeat_at")
+    .select("state, executor, heartbeat_at, started_at")
     .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
   return data
-    ? { state: data.state, executor: data.executor, heartbeatAt: data.heartbeat_at }
+    ? {
+        state: data.state, executor: data.executor,
+        heartbeatAt: data.heartbeat_at, startedAt: data.started_at,
+      }
     : null;
 }
 
@@ -369,7 +374,9 @@ export async function resetStalledRun(
     .eq("id", taskId)
     .eq("engagement_id", actor.engagementId)
     .not("executor", "is", null)
-    .lt("heartbeat_at", staleBefore)
+    // No heartbeat at all is judged from `started_at` (see `lastSign`) — `.lt` alone never matches a
+    // null, which would leave exactly the claim that most needs resetting impossible to reset.
+    .or(`heartbeat_at.lt.${staleBefore},and(heartbeat_at.is.null,started_at.lt.${staleBefore})`)
     .select("id");
 
   if (!data?.length) {
