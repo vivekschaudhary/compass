@@ -68,7 +68,12 @@ export function RunButton({
     const r = await requestRun(engagement, role, taskId, holderId);
     setOutcome(r.message);
     router.refresh();
-    setRunning(false);
+    // "Accepted" is not "done" — the run is detached and takes minutes. On success this button
+    // stays in its working state until `Composer` swaps it for the thinking bubble (it stops
+    // rendering this whenever the DB says a run is live), with a timeout so a claim that never came
+    // cannot leave it disabled for ever. A failed request re-enables it straight away.
+    if (!r.ok) { setRunning(false); return; }
+    setTimeout(() => setRunning(false), 45_000);
   }
 
   useEffect(() => {

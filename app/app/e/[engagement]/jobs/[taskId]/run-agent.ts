@@ -3,11 +3,15 @@
 // Asking the agent to work, from anywhere that should cause it.
 //
 // Shared rather than duplicated because two places now trigger a run — the Run button, and
-// answering the last open question — and they must report the outcome identically. A run takes
-// minutes and goes through the API route rather than a server action for that reason.
+// answering the last open question — and they must report the outcome identically.
+//
+// The route answers "accepted", not the run's outcome: a run takes minutes and is detached from the
+// request (see `/api/agent/run`), so there is nothing to report here beyond "it started" or "it
+// could not be started". What the run actually did — asked, drafted, declined, failed — lands in
+// the task's own rows, and the page reads it from there (heartbeat-driven running/stalled state plus
+// the realtime refresh), the same way whether this tab or a different one made the request.
 
 import { readEnvelope, describeFailure } from "@/app/lib/envelope";
-import type { AgentOutcome } from "@/app/lib/agent/run";
 
 export type RunOutcome = { ok: boolean; message: string };
 
@@ -19,17 +23,9 @@ export async function requestRun(
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ engagement, role, taskId, holderId }),
     });
-    // A refusal or a failed run arrives as `ok: false`; the agent's own `kind: "error"` is sent that
-    // way by the route, so it is never read here as an outcome.
-    const d = await readEnvelope<Exclude<AgentOutcome, { kind: "error" }>>(res);
+    const d = await readEnvelope<{ kind: "accepted"; taskId: string }>(res);
     if (!d.ok) return { ok: false, message: describeFailure(d) };
-    return {
-      ok: d.kind === "asked" || d.kind === "drafted",
-      message:
-        d.kind === "asked" ? `Asked ${d.questions?.length ?? 0} question(s).`
-        : d.kind === "drafted" ? `Drafted ${d.sections} section(s) into ${d.path}.`
-        : `The model declined: ${d.reason}`,
-    };
+    return { ok: true, message: "Started — this page updates when the agent replies." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }

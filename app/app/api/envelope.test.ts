@@ -197,8 +197,9 @@ describe("POST /api/agent/run", () => {
     expect((await run.POST(post("agent/run", RUN))).status).toBe(400);
   });
 
-  // The domain `kind` survives for every run that happened, including one the model declined.
-  it("answers 200 with the outcome's kind for a run that happened", async () => {
+  // DETACHED: the response is "accepted", never the run's own outcome — a run takes minutes and is
+  // no longer awaited (see the route's header). What the run did lands in the task's rows instead.
+  it("answers 200 accepted whatever the run later does", async () => {
     for (const outcome of [
       { kind: "asked", preamble: "p", questions: [] },
       { kind: "drafted", summary: "s", sections: 2, path: "01/brief" },
@@ -206,14 +207,17 @@ describe("POST /api/agent/run", () => {
     ]) {
       s.agentOutcome = outcome;
       expect(await answer(await run.POST(post("agent/run", RUN))), outcome.kind)
-        .toEqual({ status: 200, body: { ok: true, ...outcome } });
+        .toEqual({ status: 200, body: { ok: true, kind: "accepted", taskId: "t" } });
     }
   });
 
-  it("sends kind: error as a 500 failure, never a 200", async () => {
+  // The old contract turned `kind: error` into a 500. Detached, nothing is left waiting to be told:
+  // a failing run records itself on the task (`releaseExecutor` + `finished`), and the request that
+  // started it was already answered. A 500 here would now mean the REQUEST failed, which it did not.
+  it("does not turn a later run failure into a failed request", async () => {
     s.agentOutcome = { kind: "error", message: "ANTHROPIC_API_KEY is not set" };
     expect(await answer(await run.POST(post("agent/run", RUN)))).toEqual({
-      status: 500, body: { ok: false, error: "ANTHROPIC_API_KEY is not set" },
+      status: 200, body: { ok: true, kind: "accepted", taskId: "t" },
     });
   });
 });
