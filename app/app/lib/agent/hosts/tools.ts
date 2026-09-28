@@ -99,7 +99,12 @@ export const TOOLS: Anthropic.Tool[] = [
         summary: {
           type: "string",
           description:
-            "What you produced and what it is based on. Note any input that was missing and what it cost.",
+            "The chat message a person reads, not a second copy of the document. Plain language — " +
+            "explain it the way you'd explain it to a smart 12-year-old, no jargon (the Feynman " +
+            "test: if you can't say it simply, you don't understand it well enough yet). Lead with " +
+            "what you did and what needs a look; then note any input that was missing and what it " +
+            "cost. Citations, confidence levels and caveats belong in `sections` below, never here " +
+            "— this field is read once and moved past, that one is what gets checked.",
         },
         sections: {
           type: "array",
@@ -139,7 +144,12 @@ export const TOOLS: Anthropic.Tool[] = [
         summary: {
           type: "string",
           description:
-            "What you produced and what it is based on. Note any input that was missing and what it cost.",
+            "The chat message a person reads, not a second copy of the backlog. Plain language — " +
+            "explain it the way you'd explain it to a smart 12-year-old, no jargon (the Feynman " +
+            "test: if you can't say it simply, you don't understand it well enough yet). Lead with " +
+            "what you produced and what needs a look; then note any input that was missing and what " +
+            "it cost. The epics/stories below carry their own citations — this field is read once " +
+            "and moved past, not where rigor lives.",
         },
         epics: {
           type: "array",
@@ -206,8 +216,11 @@ export const TOOLS: Anthropic.Tool[] = [
         summary: {
           type: "string",
           description:
-            "What this change does, in the product's vocabulary. Note any input that was missing " +
-            "and what it cost.",
+            "The chat message a person reads, not a second copy of the approach. Plain language — " +
+            "explain it the way you'd explain it to a smart 12-year-old, no jargon (the Feynman " +
+            "test: if you can't say it simply, you don't understand it well enough yet). Lead with " +
+            "what this change does and what needs a look; then note any input that was missing and " +
+            "what it cost. The technical detail belongs in `approach` below, never here.",
         },
         approach: {
           type: "string",
@@ -246,7 +259,11 @@ export const TOOLS: Anthropic.Tool[] = [
         summary: {
           type: "string",
           description:
-            "What you committed to and why. Note any input that was missing and what it cost.",
+            "The chat message a person reads, not a second copy of the plan. Plain language — " +
+            "explain it the way you'd explain it to a smart 12-year-old, no jargon (the Feynman " +
+            "test: if you can't say it simply, you don't understand it well enough yet). Lead with " +
+            "what you committed to and why; then note any input that was missing and what it cost. " +
+            "The reasoning and risks belong in `sections` below, never here.",
         },
         goal: {
           type: "string",
@@ -328,7 +345,11 @@ export const TOOLS: Anthropic.Tool[] = [
         summary: {
           type: "string",
           description:
-            "What you produced and what it is based on. Note any input that was missing and what it cost.",
+            "The chat message a person reads, not a second copy of the roster. Plain language — " +
+            "explain it the way you'd explain it to a smart 12-year-old, no jargon (the Feynman " +
+            "test: if you can't say it simply, you don't understand it well enough yet). Lead with " +
+            "what you produced and what needs a look; then note any input that was missing and what " +
+            "it cost. The reasoning belongs in `sections` below, never here.",
         },
         rows: {
           type: "array",
