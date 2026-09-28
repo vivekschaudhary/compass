@@ -121,7 +121,7 @@ export default async function JobPage(
 
   return (
     <div className="job">
-      <RealtimeRefresh taskId={taskId} />
+      <RealtimeRefresh taskId={taskId} pollWhileRunning={running} />
       <div className="job-head">
         <Link
           href={`/e/${engagement}/jobs${role ? `?role=${role}` : ""}`}
