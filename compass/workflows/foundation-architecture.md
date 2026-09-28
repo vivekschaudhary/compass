@@ -4,8 +4,7 @@ status: active
 owner: principal-engineer
 auto_invokes: []
 invoked_by: []
-version: 0.3.42
-requires_approved: [docs/foundation/product.md]
+version: 0.3.43
 ---
 
 # Workflow: /setup-foundation-architecture
@@ -14,6 +13,21 @@ requires_approved: [docs/foundation/product.md]
 
 Establish the technical foundation an engagement builds on: what the ground actually is, what the
 architecture will be, and a scaffold that matches it.
+
+## The precondition lives in the DB, not in this file's frontmatter
+
+Every row here is TS-driven — since `scaffold-repo` moved its write path to the GitHub API, nothing
+in this workflow ever calls `run.py`, which is the only thing that ever read a `requires_approved:`
+line. This file used to carry `requires_approved: [docs/foundation/product.md]`, and it was wrong on
+both counts even before that: the path named a v1 convention the seed never uses (the seed's own
+document is `product-brief`, not `docs/foundation/product.md`), and it was unreachable regardless,
+because nothing here is a code-rendered row that `run.py` executes.
+
+The real precondition is `workflows.csv`'s own `inputs: product-brief,features` for
+`foundation-architecture` — `deriveCriteria` turns a nested workflow's declared inputs into `ready`
+criteria on the ROW THAT NESTS IT (`sprint-0.draft-foundation-architecture`), and `start-gate.ts`
+refuses to start that row until both are published. Declare a precondition by giving the workflow an
+input in `workflows.csv`, never by adding frontmatter here — nothing reads it.
 
 ## Dispatch graph
 
