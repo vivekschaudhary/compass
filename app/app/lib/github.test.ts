@@ -60,12 +60,14 @@ describe("parsing", () => {
 });
 
 describe("the token", () => {
-  it("prefers the engagement's, and falls back to the server's", () => {
+  it("prefers the repo's own, over the engagement's, over the server's", () => {
     vi.stubEnv("GITHUB_TOKEN", "from-env");
-    expect(resolveGithub({ github_token: "plain-token" })?.token).toBe("plain-token");
-    expect(resolveGithub({ github_token: null })?.token).toBe("from-env");
+    expect(resolveGithub({ access_token: "repo-token" }, { github_token: "eng-token" })?.token).toBe("repo-token");
+    expect(resolveGithub({ access_token: null }, { github_token: "eng-token" })?.token).toBe("eng-token");
+    expect(resolveGithub({ access_token: null }, { github_token: null })?.token).toBe("from-env");
     vi.stubEnv("GITHUB_TOKEN", "");
-    expect(resolveGithub({ github_token: null })).toBeNull();
+    expect(resolveGithub({ access_token: null }, { github_token: null })).toBeNull();
+    expect(resolveGithub(null)).toBeNull();
     vi.unstubAllEnvs();
   });
 });

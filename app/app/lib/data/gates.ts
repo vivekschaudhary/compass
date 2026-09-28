@@ -581,10 +581,10 @@ async function evaluateCiChecks(
   const where = parsePrUrl(prs[prs.length - 1]);
   if (!where) return { state: "unmeasurable", why: `could not read a repo and number from '${prs[prs.length - 1]}'` };
 
-  const { data: repo } = await sb.from("repo").select("url").eq("engagement_id", actor.engagementId).eq("key", key).maybeSingle();
+  const { data: repo } = await sb.from("repo").select("url, access_token").eq("engagement_id", actor.engagementId).eq("key", key).maybeSingle();
   const { data: eng } = await sb.from("engagement").select("github_token").eq("id", actor.engagementId).maybeSingle();
-  const creds = resolveGithub(eng);
-  if (!creds) return { state: "unmeasurable", why: "no GitHub token is configured for this engagement" };
+  const creds = resolveGithub(repo, eng);
+  if (!creds) return { state: "unmeasurable", why: `no GitHub token is configured for repo '${key}' (or the engagement, or the server)` };
 
   let checks;
   try {

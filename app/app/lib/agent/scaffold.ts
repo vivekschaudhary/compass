@@ -114,7 +114,7 @@ export async function runScaffold(
     return { ...none, refusal: "This scaffold run names no repo. It is opened once per registered repo, with the repo's key as its subject. Nothing was written." };
 
   const { data: repo } = await sb.from("repo")
-    .select("key, name, url").eq("engagement_id", engagementId).eq("key", key).maybeSingle();
+    .select("key, name, url, access_token").eq("engagement_id", engagementId).eq("key", key).maybeSingle();
   if (!repo)
     return { ...none, refusal: `No repo '${key}' is registered on this engagement. Register it with its GitHub URL first. Nothing was written.` };
   const where = parseRepoUrl(repo.url as string | null);
@@ -122,9 +122,9 @@ export async function runScaffold(
     return { ...none, repoName: repo.name as string, refusal: `Repo '${key}' has no GitHub URL the app can read (${repo.url ?? "none set"}). Set it to https://github.com/<owner>/<name>. Nothing was written.` };
 
   const { data: eng } = await sb.from("engagement").select("github_token").eq("id", engagementId).maybeSingle();
-  const creds = resolveGithub(eng);
+  const creds = resolveGithub(repo, eng);
   if (!creds)
-    return { ...none, repoName: repo.name as string, refusal: "No GitHub token is configured for this engagement (and GITHUB_TOKEN is not set on the server). Nothing was written." };
+    return { ...none, repoName: repo.name as string, refusal: `No GitHub token is configured for repo '${key}' (or the engagement, or the server GITHUB_TOKEN). Nothing was written.` };
 
   const branch = `chore/scaffold-${slug(key)}`;
   try {

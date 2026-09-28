@@ -5,16 +5,25 @@
 // clone on the machine that runs it. A scaffold is greenfield and small, and needs no checkout at
 // all: the git data API takes the files as text, so the app can do it from anywhere it is hosted.
 //
-// Per-engagement token wins; fall back to the server env. Returns null if there is none, so the
-// caller can say "no GitHub token" instead of failing on a 401 that names nothing.
+// Three tiers, in order: the REPO's own token, then the engagement's, then the server env. A repo's
+// own wins because repos on one engagement can span more than one GitHub org, or need scopes
+// narrower than one shared token would grant; the other two exist so an operator with one org need
+// not paste the same token onto every repo row. Returns null if none resolve, so the caller can say
+// "no GitHub token" instead of failing on a 401 that names nothing.
 
 import { decryptSecret } from "./crypto";
 
 export type GithubCreds = { token: string };
 
-export function resolveGithub(eng: { github_token?: string | null } | null | undefined): GithubCreds | null {
+export function resolveGithub(
+  repo: { access_token?: string | null } | null | undefined,
+  eng?: { github_token?: string | null } | null,
+): GithubCreds | null {
   // Stored encrypted; a legacy plaintext value passes through `decryptSecret` unchanged.
-  const token = decryptSecret(eng?.github_token) || process.env.GITHUB_TOKEN || "";
+  const token =
+    decryptSecret(repo?.access_token) ||
+    decryptSecret(eng?.github_token) ||
+    process.env.GITHUB_TOKEN || "";
   return token ? { token } : null;
 }
 

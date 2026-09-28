@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 type Row = Record<string, unknown>;
 const state: { tasks: Row[]; runs: Row[]; repos: Row[]; engs: Row[] } = { tasks: [], runs: [], repos: [], engs: [] };
 const opened: Record<string, unknown>[] = [];
+const usedCreds: { token: string }[] = [];
 const gh = { fail: null as Error | null };
 
 vi.mock("../supabase", () => ({
@@ -23,8 +24,9 @@ vi.mock("../supabase", () => ({
 }));
 vi.mock("../github", async (orig) => ({
   ...(await orig<typeof import("../github")>()),
-  openScaffoldPr: async (_c: unknown, args: Record<string, unknown>) => {
+  openScaffoldPr: async (creds: { token: string }, args: Record<string, unknown>) => {
     if (gh.fail) throw gh.fail;
+    usedCreds.push(creds);
     opened.push(args);
     return { url: "https://github.com/o/r/pull/9", number: 9, branch: args.branch, headSha: "s", base: "main" };
   },
@@ -101,7 +103,7 @@ const seed = (over: { subject?: string | null; repo?: Row | null; token?: string
   state.engs = [{ id: "e1", github_token: over.token === undefined ? "tok" : over.token }];
 };
 const IN = { summary: "Scaffold the API", files: good() };
-beforeEach(() => { opened.length = 0; gh.fail = null; vi.unstubAllEnvs(); vi.stubEnv("GITHUB_TOKEN", ""); });
+beforeEach(() => { opened.length = 0; usedCreds.length = 0; gh.fail = null; vi.unstubAllEnvs(); vi.stubEnv("GITHUB_TOKEN", ""); });
 
 describe("running a scaffold", () => {
   it("opens the pull request in the repo the run's subject names", async () => {
@@ -143,6 +145,19 @@ describe("running a scaffold", () => {
     seed({ token: null });
     vi.stubEnv("GITHUB_TOKEN", "server");
     expect((await runScaffold("e1", "t1", IN)).ok).toBe(true);
+  });
+
+  // The repo's own token wins — repos on one engagement can span more than one GitHub org.
+  it("prefers the repo's own token over the engagement's", async () => {
+    seed({ repo: { access_token: "repo-tok" }, token: "eng-tok" });
+    await runScaffold("e1", "t1", IN);
+    expect(usedCreds[0]).toEqual({ token: "repo-tok" });
+  });
+
+  it("falls back to the engagement's token when the repo has none", async () => {
+    seed({ repo: { access_token: null }, token: "eng-tok" });
+    await runScaffold("e1", "t1", IN);
+    expect(usedCreds[0]).toEqual({ token: "eng-tok" });
   });
 
   // A GitHub failure is not a refusal: it was attempted, and the message is GitHub's.
