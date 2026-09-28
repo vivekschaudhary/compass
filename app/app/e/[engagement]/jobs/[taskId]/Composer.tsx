@@ -6,9 +6,14 @@
 // one open question at a time, a persistent input below it, a "+" for whichever question currently
 // wants a document.
 //
-// Auto-advance falls out for free rather than being tracked here: answering a question calls
-// `router.refresh()`, the server re-fetches `questions` without the one just answered, and the view
-// resets to its first entry — which is now the next question, not the same one re-shown.
+// Auto-advance is now purely local: `answeredIds` filters the just-answered question out of the
+// view immediately, and the index resets to whatever is now first — no round trip needed for
+// something this tab already knows. `router.refresh()` is no longer the default reaction to
+// sending anything; see the header on `OptimisticTurns.tsx` for why a chat message must not cost
+// re-fetching the draft, gates, document tree and everything else on the page. It still fires on
+// the two paths that cause a REAL `work_task.state` change this tab caused synchronously
+// (recordAnswers flips state on the last answer; resumeForReviewAction flips hitl → running) —
+// everywhere else, `refreshTurns()` (just the conversation) is enough.
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -95,7 +100,11 @@ export function Composer({
   const [working, setWorking] = useState(false);
   const [pending, startTransition] = useTransition();
   const [resetting, setResetting] = useState(false);
-  const { addPending, removePending } = useOptimisticTurns();
+  const { addPending, removePending, refreshTurns } = useOptimisticTurns();
+  // Questions this tab has already answered, filtered out of `questions` locally rather than
+  // waiting on a refetch — the server already knows (the write happened), so there is nothing this
+  // round trip would tell the UI that it does not already know itself.
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
 
   // Ticks once a second only while something is actually shown that needs it — the thinking bubble
   // or the stuck badge — rather than running an interval on every job page regardless.
@@ -127,8 +136,9 @@ export function Composer({
 
   // Never past the end — the list shrinks after every answer, and a stale index otherwise points at
   // nothing.
-  const at = Math.min(index, Math.max(0, questions.length - 1));
-  const current = questions[at] ?? null;
+  const visibleQuestions = questions.filter((q) => !answeredIds.has(q.id));
+  const at = Math.min(index, Math.max(0, visibleQuestions.length - 1));
+  const current = visibleQuestions[at] ?? null;
 
   const [starting, setStarting] = useState(false);
   async function start() {
@@ -149,9 +159,10 @@ export function Composer({
     setWorking(true);
     const run = await requestRun(engagement, role, taskId, holderId);
     if (!run.ok) { setWorking(false); setError(run.message); }
-    // The run's own reply lands after the run, not before — a second refresh once it settles is
-    // what brings that turn in and clears the "thinking" bubble.
-    router.refresh();
+    // No refresh here. `requestRun` only confirms acceptance now (the run is detached — see
+    // `/api/agent/run`'s own header); the state change that matters (running) was already covered
+    // by `submitAnswer`'s own refresh below, and the eventual reply arrives as a new turn that
+    // `RealtimeRefresh`'s subscription catches on its own.
   }
 
   function submitAnswer(value: string) {
@@ -160,19 +171,31 @@ export function Composer({
     // not be the thing that decides when your own answer becomes visible. `removePending` on
     // failure, since a failed write has nothing coming to reconcile it away otherwise.
     setText("");
+    const questionId = current.id;
     const pendingId = value.trim() ? addPending(value, null) : null;
     startTransition(async () => {
       setError(null);
-      const r = await answerAction(engagement, role, taskId, { [current.id]: value }, holderId);
+      const r = await answerAction(engagement, role, taskId, { [questionId]: value }, holderId);
       if (!r.ok) {
         setError(r.error ?? "Could not record that.");
         if (pendingId) removePending(pendingId);
         return;
       }
-      setIndex(0); // the answered question is gone after refresh; land on whatever is now first
-      // Posted before the run starts, not after it finishes — an answer that only appears once a
-      // model call minutes away has completed reads as the click having done nothing.
-      router.refresh();
+      // The answered question is gone from view immediately — this tab already knows, no round
+      // trip needed to be told its own write happened.
+      setAnsweredIds((s) => new Set(s).add(questionId));
+      setIndex(0); // land on whatever is now first among what's left
+      // The answer itself is filed as a turn (`recordAnswers`) — bring it in without the rest of
+      // the page. Posted before the run starts, not after it finishes — an answer that only
+      // appears once a model call minutes away has completed reads as the click having done
+      // nothing.
+      void refreshTurns();
+      if (r.remaining === 0) {
+        // `recordAnswers` flips `work_task.state` to `running` synchronously on the LAST answer —
+        // a real state change (ApprovePanel/NestedRunPanel visibility, the state tag), which
+        // `refreshTurns()` alone does not cover.
+        router.refresh();
+      }
       await runIfLastAnswer(r.remaining);
     });
   }
@@ -190,13 +213,9 @@ export function Composer({
         removePending(pendingId);
         return;
       }
-      // Refreshed HERE, before the agent runs, so the message you just sent shows up in the chat
-      // immediately — same reasoning as `submitAnswer`. A message TO the agent is one side of a
-      // conversation, not a note filed and left for someone to notice, so it answers back without
-      // a second click on "Run the agent" — but only once the row is actually running: `closed`
-      // has nothing left to run, and `idle` has never been started (the row's own "Start with
-      // agent" control does that, not this).
-      router.refresh();
+      // Just the conversation, not the whole page — a plain note changes nothing else. See
+      // `OptimisticTurns.tsx`'s own header for why this replaced `router.refresh()` here.
+      void refreshTurns();
       if (!closed && !idle) {
         // `hitl` needs an explicit nudge FIRST — `runAgent` refuses anything but `state:
         // "running"`, and this row is paused for approval. Skipped everywhere else, where the row
@@ -204,27 +223,34 @@ export function Composer({
         if (hitl) {
           const resumed = await resumeForReviewAction(engagement, role, taskId, holderId);
           if (!resumed.ok) { setError(resumed.error ?? "Could not resume it."); return; }
+          // A real, synchronous state change (hitl → running) THIS tab just caused — worth
+          // reflecting immediately rather than waiting on realtime's own round trip.
+          router.refresh();
         }
         setWorking(true);
         const run = await requestRun(engagement, role, taskId, holderId);
         if (!run.ok) { setWorking(false); setError(run.message); }
-        router.refresh();
+        // No refresh here either — same reasoning as `runIfLastAnswer`: "accepted" carries nothing
+        // new, and the eventual reply is a turn `RealtimeRefresh` already catches.
       }
     });
   }
 
   async function submitUpload(file: File) {
     if (!current) return;
+    const questionId = current.id;
     setError(null);
     setNote(null);
     setUploading(true);
-    const r = await uploadAnswer(engagement, role, taskId, current.id, file);
+    const r = await uploadAnswer(engagement, role, taskId, questionId, file);
     setUploading(false);
     if (!r.ok) { setError(r.message); return; }
     setNote(r.message);
+    setAnsweredIds((s) => new Set(s).add(questionId));
     setIndex(0);
+    void refreshTurns(); // same as submitAnswer — an uploaded answer is filed as a turn too
+    if (r.remaining === 0) router.refresh(); // same state-change reasoning as submitAnswer
     await runIfLastAnswer(r.remaining);
-    router.refresh();
   }
 
   const busy = pending || uploading || working;
@@ -279,16 +305,16 @@ export function Composer({
           {/* The counter and prev/next nav earn their place only once there is more than one
               question queued — a single question is just the agent's own last word, and a "1 of
               1" counter with disabled arrows around it is what made this read as a form. */}
-          {questions.length > 1 && (
+          {visibleQuestions.length > 1 && (
             <div className="qcard-head">
-              <span className="qcard-count">{at + 1} of {questions.length}</span>
+              <span className="qcard-count">{at + 1} of {visibleQuestions.length}</span>
               <div className="qcard-nav">
                 <button
                   className="qcard-nav-btn" disabled={at === 0}
                   onClick={() => setIndex(at - 1)} aria-label="Previous question"
                 >‹</button>
                 <button
-                  className="qcard-nav-btn" disabled={at >= questions.length - 1}
+                  className="qcard-nav-btn" disabled={at >= visibleQuestions.length - 1}
                   onClick={() => setIndex(at + 1)} aria-label="Next question"
                 >›</button>
               </div>

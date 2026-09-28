@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { backoffMs } from "./RealtimeRefresh";
+import { backoffMs } from "./realtime-backoff";
 
 describe("backoffMs", () => {
   it("doubles each retry, starting at 1s", () => {
