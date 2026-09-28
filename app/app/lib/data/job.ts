@@ -346,6 +346,25 @@ export async function taskState(
 }
 
 /**
+ * Who a task belongs to — for a caller that has no session to take an engagement from.
+ *
+ * Deliberately NOT scoped by an Actor: its one caller is the sweep, which arrives from a Postgres
+ * function with a shared secret and no user, so the engagement and role can only come from the row
+ * itself. Anything with a session must use `taskState` (or another Actor-scoped read) instead.
+ */
+export async function taskOwner(
+  taskId: string,
+): Promise<{ engagementId: string; roleCode: string } | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("work_task")
+    .select("engagement_id, role_code").eq("id", taskId).maybeSingle();
+  return data
+    ? { engagementId: data.engagement_id as string, roleCode: data.role_code as string }
+    : null;
+}
+
+/**
  * The human alternative to waiting up to `HEARTBEAT_STALE_MINUTES` for the sweep, or to me
  * PATCH-ing the row by hand — which is what "clearing the executor" has meant every time this has
  * come up so far.
