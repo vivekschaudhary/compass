@@ -20,7 +20,7 @@ vi.mock("./roster-rows", () => ({
 vi.mock("./sprint-rows", () => ({ parseCommitments: () => ({ commitments: [], problems: [] }) }));
 vi.mock("./backlog", () => ({ backlogOf: async () => [] }));
 vi.mock("./tracker", () => ({ mirrorBacklog: async () => ({ placed: [], problems: [] }), mirrorSprint: async () => ({ placed: [], problems: [] }) }));
-vi.mock("../agent/context", () => ({ subjectOfRun: async () => null }));
+vi.mock("./run-subject", () => ({ subjectOfRun: async () => null }));
 
 type Emitted = { verb: string; payload: Record<string, unknown> };
 const emitted: Emitted[] = [];

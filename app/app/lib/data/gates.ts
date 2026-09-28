@@ -17,7 +17,7 @@ import { mirrorState, moveFailed } from "./tracker";
 import { materialiseFrom } from "./materialise";
 import { probeDocs, type DocEng } from "../docstore";
 import { resolvePath } from "../adapters";
-import { subjectOfRun } from "../agent/context";
+import { subjectOfRun } from "./run-subject";
 import {
   resolveJira,
   projectStatuses,

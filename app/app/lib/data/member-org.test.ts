@@ -27,7 +27,7 @@ vi.mock("./actor", () => ({ holdersOn: async () => [] }));
 vi.mock("./sprint-rows", () => ({ parseCommitments: () => [] }));
 vi.mock("./backlog", () => ({ backlogOf: async () => [] }));
 vi.mock("./tracker", () => ({ mirrorBacklog: async () => ({}), mirrorSprint: async () => ({}) }));
-vi.mock("../agent/context", () => ({ subjectOfRun: async () => null }));
+vi.mock("./run-subject", () => ({ subjectOfRun: async () => null }));
 
 /** What each table was handed, and what the next `member` insert should return. */
 const inserted: Record<string, Record<string, unknown>[]> = {};
