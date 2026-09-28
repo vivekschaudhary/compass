@@ -21,7 +21,7 @@ import {
 } from "@/app/lib/data/job";
 import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
-import { isStale } from "@/app/lib/agent/heartbeat-config";
+import { isStale, lastSign } from "@/app/lib/agent/heartbeat-config";
 import { documentTree } from "@/app/lib/data/documents";
 import { commentsForSections } from "@/app/lib/data/comments";
 import { readyAllMet } from "../Gate";
@@ -103,7 +103,8 @@ export default async function JobPage(
   // later). `autoRun` above only ever looks at THIS load; a claimed row with a live heartbeat must
   // say so plainly instead of offering "Run the agent" again, which is the exact ambiguity that
   // made a real run look identical to nothing happening.
-  const stale = isStale(taskRow?.heartbeatAt ?? null);
+  const sign = lastSign(taskRow?.heartbeatAt ?? null, taskRow?.startedAt ?? null);
+  const stale = isStale(sign);
   const running = Boolean(taskRow?.executor) && !stale;
   const stalled = Boolean(taskRow?.executor) && stale;
 
@@ -223,7 +224,7 @@ export default async function JobPage(
                   readyMet={readyAllMet(statuses)}
                   running={running}
                   stalled={stalled}
-                  heartbeatAt={taskRow?.heartbeatAt ?? null}
+                  heartbeatAt={sign}
                 />
               </>
             )}

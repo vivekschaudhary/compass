@@ -4,11 +4,16 @@
 // Same shape as `/api/agent/run`, with one difference: the caller has no session, so there is no
 // engagement/role to trust from a query string — everything is re-derived from the task row itself,
 // and the request must carry the shared secret the migration's `app.sweep_secret` setting was given.
+//
+// DETACHED, same reasoning as `/api/agent/run` — see that route's own header. `pg_net` does not wait
+// on the response body either way, but on a real deployment the function itself can be frozen shortly
+// after responding, so this needs the same fix for the same eventual reason.
 
 import { NextRequest } from "next/server";
 import { taskOwner } from "@/app/lib/data/job";
 import { resolveActor } from "@/app/lib/data/actor";
 import { runAgent } from "@/app/lib/agent/run";
+import { detach } from "@/app/lib/agent/detach";
 import { ok, refuse, fail } from "@/app/lib/http";
 
 export const maxDuration = 800;
@@ -31,9 +36,6 @@ export async function POST(req: NextRequest) {
   const actor = await resolveActor(task.engagementId, task.roleCode);
   if (!actor) return refuse("That role does not exist on this engagement.", 400);
 
-  const outcome = await runAgent(actor, taskId);
-  // Same rule as `/api/agent/run`: only `kind: "error"` leaves the domain vocabulary and becomes a
-  // 5xx — a refusal or a completed ask/draft is a run that happened, not a route failure.
-  if (outcome.kind === "error") return fail(outcome.message);
-  return ok(outcome);
+  detach(() => runAgent(actor, taskId));
+  return ok({ kind: "accepted" as const, taskId });
 }

@@ -10,7 +10,7 @@ import type { TaskCard } from "@/app/lib/data/tasks";
 import type { StoredStatus } from "@/app/lib/data/gates";
 import { controlFor } from "./row-control";
 import { GateDot, readyAllMet } from "./Gate";
-import { isStale } from "@/app/lib/agent/heartbeat-config";
+import { isStale, lastSign } from "@/app/lib/agent/heartbeat-config";
 
 export function TasksTable({
   tasks,
@@ -77,7 +77,7 @@ export function TasksTable({
                         heartbeat state the job page's own banner reads (`state-label.ts`'s
                         `labelFor` already says "stuck — no response for…" in the action cell; this
                         is the same fact surfaced where a glance at the title lands first). */}
-                    {t.state === "running" && t.executor && isStale(t.heartbeatAt) && (
+                    {t.state === "running" && t.executor && isStale(lastSign(t.heartbeatAt, t.startedAt)) && (
                       <span className="review-badge" title="No response from the agent">
                         ⚠ Stuck
                       </span>

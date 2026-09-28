@@ -10,6 +10,7 @@ import type { TaskCard } from "@/app/lib/data/tasks";
 import type { StoredStatus } from "@/app/lib/data/gates";
 import { StartMachineButton } from "./StartMachineButton";
 import { StartTaskButton } from "./StartTaskButton";
+import { lastSign } from "@/app/lib/agent/heartbeat-config";
 
 export function controlFor(
   t: TaskCard,
@@ -44,7 +45,7 @@ export function controlFor(
       role={role}
       state={t.state}
       executor={t.executor}
-      heartbeatAt={t.heartbeatAt}
+      heartbeatAt={lastSign(t.heartbeatAt, t.startedAt)}
       href={href}
       openQuestions={t.openQuestions}
       readyMet={readyMet}

@@ -10,7 +10,7 @@
 // `router.refresh()`, the server re-fetches `questions` without the one just answered, and the view
 // resets to its first entry — which is now the next question, not the same one re-shown.
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OpenQuestion } from "@/app/lib/data/job";
 import { answerAction, noteAction, resumeForReviewAction, resetStalledRunAction } from "./actions";
@@ -106,6 +106,25 @@ export function Composer({
     return () => clearInterval(t);
   }, [working, running, stalled]);
 
+  // `requestRun` now answers "accepted" in milliseconds — the run itself is detached and takes
+  // minutes — so `working` can no longer mean "this tab is awaiting a fetch". It stays on from the
+  // moment a run is accepted until the DB says it landed: `running` (heartbeat-driven, from the
+  // server) goes true when the claim is made, and false again when the run finishes. Without this
+  // the thinking bubble would vanish the instant the request returned, minutes before anything
+  // was actually done.
+  const sawRunning = useRef(false);
+  useEffect(() => {
+    if (!working) { sawRunning.current = false; return; }
+    if (running) { sawRunning.current = true; return; }
+    if (sawRunning.current) setWorking(false);
+  }, [working, running]);
+  // Never wait forever on a claim that never came (refused, or finished before a refresh saw it).
+  useEffect(() => {
+    if (!working) return;
+    const t = setTimeout(() => setWorking(false), 45_000);
+    return () => clearTimeout(t);
+  }, [working]);
+
   // Never past the end — the list shrinks after every answer, and a stale index otherwise points at
   // nothing.
   const at = Math.min(index, Math.max(0, questions.length - 1));
@@ -129,8 +148,7 @@ export function Composer({
     if (remaining !== 0) return;
     setWorking(true);
     const run = await requestRun(engagement, role, taskId, holderId);
-    setWorking(false);
-    if (!run.ok) setError(run.message);
+    if (!run.ok) { setWorking(false); setError(run.message); }
     // The run's own reply lands after the run, not before — a second refresh once it settles is
     // what brings that turn in and clears the "thinking" bubble.
     router.refresh();
@@ -189,8 +207,7 @@ export function Composer({
         }
         setWorking(true);
         const run = await requestRun(engagement, role, taskId, holderId);
-        setWorking(false);
-        if (!run.ok) setError(run.message);
+        if (!run.ok) { setWorking(false); setError(run.message); }
         router.refresh();
       }
     });
