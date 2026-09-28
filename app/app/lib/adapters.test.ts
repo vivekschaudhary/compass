@@ -70,6 +70,15 @@ describe("resolvePath", () => {
       .toBe("03-architecture/epic/KAN-12-review");
   });
 
+  it("fills {repo} from the subject, which is the repo's key", () => {
+    expect(resolvePath("scaffold/{repo}", { ref: "api", key: null })).toBe("scaffold/api");
+    expect(resolvePath("scaffold/{repo}", { ref: "ios", key: null })).toBe("scaffold/ios");
+  });
+
+  it("returns null for {repo} with no subject, rather than filing at the literal path", () => {
+    expect(resolvePath("scaffold/{repo}", null)).toBeNull();
+  });
+
   // The ticket key is what somebody holding the epic can search for; `E1` means something only
   // inside the turn that drafted it.
   it("prefers the tracker key, and falls back to the ref before Jira has accepted the epic", () => {

@@ -17,8 +17,8 @@ type Row = Record<string, unknown>;
 
 const state: {
   tasks: Row[]; steps: Row[]; workflows: Row[]; versions: Row[];
-  versionSteps: Row[]; backlog: Row[];
-} = { tasks: [], steps: [], workflows: [], versions: [], versionSteps: [], backlog: [] };
+  versionSteps: Row[]; backlog: Row[]; repos: Row[];
+} = { tasks: [], steps: [], workflows: [], versions: [], versionSteps: [], backlog: [], repos: [] };
 
 /** Every open_nested_run call the code under test made, in order. */
 const opened: { taskId: string; subject: string | null }[] = [];
@@ -33,6 +33,7 @@ const rowsFor = (table: string): Row[] =>
   : table === "workflow" ? state.workflows
   : table === "workflow_version" ? state.versions
   : table === "backlog_item" ? state.backlog
+  : table === "repo" ? state.repos
   : [];
 
 vi.mock("../supabase", () => ({
@@ -113,7 +114,22 @@ function seed(opts: { perEpic: boolean; epics: string[] }) {
   }));
 }
 
-beforeEach(() => { opened.length = 0; remeasured.length = 0; started.length = 0; });
+/** The `foundation-architecture.scaffold-repos` row, and the `scaffold-repo` workflow it nests. */
+function seedRepos(opts: { perRepo: boolean; repos: string[] }) {
+  state.tasks = [
+    { id: "t-nest", org_id: "org-1", engagement_id: "e1", workflow_step_id: "s-nest", workflow_run_id: "run-fa" },
+  ];
+  state.steps = [{ id: "s-nest", nests_workflow_code: "scaffold-repo", kind: "workflow" }];
+  state.workflows = [{ id: "w-sr", org_id: "org-1", code: "scaffold-repo", engagement_id: null }];
+  state.versions = [{ id: "v-sr", workflow_id: "w-sr", status: "published" }];
+  state.versionSteps = opts.perRepo
+    ? [{ workflow_version_id: "v-sr", produces: "scaffold/{repo}@scm" }, { workflow_version_id: "v-sr", produces: null }]
+    : [{ workflow_version_id: "v-sr", produces: "features" }];
+  state.repos = opts.repos.map((key, i) => ({ engagement_id: "e1", key, ord: i }));
+  state.backlog = [];
+}
+
+beforeEach(() => { opened.length = 0; remeasured.length = 0; started.length = 0; state.repos = []; });
 
 describe("a nesting row that fans out", () => {
   it("opens one run per epic, each carrying its own subject", async () => {
@@ -188,5 +204,57 @@ describe("opening a child run's first task", () => {
 
     expect(r.ok).toBe(true);
     expect(started).toEqual([]);
+  });
+});
+
+// One row, one run per REGISTERED REPO — the shape `scaffold-repo` needs, derived the same way the
+// per-epic one is: from the subject token the nested workflow's steps produce.
+describe("a nesting row that fans out over repos", () => {
+  it("opens one run per registered repo, each carrying the repo key as its subject", async () => {
+    seedRepos({ perRepo: true, repos: ["api", "ios"] });
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(true);
+    expect(opened.map((o) => o.subject)).toEqual(["api", "ios"]);
+    expect(new Set((r as { runs: { runId: string }[] }).runs.map((x) => x.runId)).size).toBe(2);
+  });
+
+  // THE ZERO-ROW CASE, again. A scaffold that scaffolded nothing must not read as one that
+  // scaffolded everything.
+  it("refuses when no repo is registered, rather than opening nothing and reporting success", async () => {
+    seedRepos({ perRepo: true, repos: [] });
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(false);
+    expect((r as { error: string }).error).toMatch(/no repos registered/i);
+    expect(opened).toEqual([]);
+  });
+
+  // Registered on ANOTHER engagement is not registered on this one.
+  it("only fans out over this engagement's repos", async () => {
+    seedRepos({ perRepo: true, repos: ["api"] });
+    state.repos.push({ engagement_id: "other", key: "web", ord: 9 });
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(true);
+    expect(opened.map((o) => o.subject)).toEqual(["api"]);
+  });
+
+  it("does not fan out a workflow that produces no {repo} path, even with repos registered", async () => {
+    seedRepos({ perRepo: false, repos: ["api", "ios"] });
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(true);
+    expect(opened).toEqual([{ taskId: "t-nest", subject: null }]);
+  });
+
+  // Epic wins where a workflow names both, so the existing per-epic designs cannot be captured by a
+  // repo path added later.
+  it("still fans out per epic when the nested workflow produces an {epic} path", async () => {
+    seed({ perEpic: true, epics: ["E1", "E2"] });
+    state.repos = [{ engagement_id: "e1", key: "api", ord: 0 }];
+    await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(opened.map((o) => o.subject)).toEqual(["E1", "E2"]);
   });
 });

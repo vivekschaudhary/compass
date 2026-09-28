@@ -185,16 +185,29 @@ class TestRealWorkflows(unittest.TestCase):
 
     def test_foundation_architecture(self):
         # Was `setup-foundation-architecture`: eight rows, gates at 2, 4 and 7, and the same role
-        # authoring and approving. Eight now — research, architecture and scaffold each written by
-        # the staff engineer and accepted by the principal engineer, plus row 7 (register the repos, offline) and row 8, which executes the
-        # accepted scaffold (#execute-scaffold) — a `code`-rendered row, not a fourth document.
+        # authoring and approving. Eight now, differently: research, architecture and scaffold plan are
+        # each written by the staff engineer and accepted by the principal engineer; row 7 accepts the
+        # plan together with the repos registered offline; row 8 nests `scaffold-repo`, once per repo.
         #
         # THREE GATES, NOT ONE, is what the count is guarding: each deliverable is accepted before
         # the next is drafted on it, rather than one approval at the end standing for all three.
         steps = load_workflow(WORKFLOWS / "foundation-architecture.md")
         self.assertEqual(len(steps), 8)
         self.assertEqual([s.number for s in steps if s.is_hitl], [2, 4, 6, 7])
+        self.assertEqual(steps[7].nests, "scaffold-repo")
         self.assert_author_never_closes(steps)
+
+    def test_scaffold_repo(self):
+        # The nested workflow the orchestrator loads BY NAME for `--step 1`. If this file is missing
+        # or unparseable the code row halts at "workflow file not found" after the app has already
+        # fanned out, so the shape is pinned here.
+        steps = load_workflow(WORKFLOWS / "scaffold-repo.md")
+        self.assertEqual([(s.number, s.agent, s.task) for s in steps],
+                         [(1, "staff-engineer", "execute-scaffold"), (2, "principal-engineer", None)])
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2])
+        # No requirement gate: the orchestrator would look for the product brief in the TARGET repo's
+        # filesystem, where it does not live, and refuse every run.
+        self.assertEqual(load_workflow_meta(WORKFLOWS / "scaffold-repo.md")["requires_approved"], [])
 
     def test_create_story(self):
         steps = load_workflow(WORKFLOWS / "story.md")
@@ -798,11 +811,10 @@ class TestDeliveryCheck(unittest.TestCase):
 
     def test_code_vs_doc_workflow_split(self):
         # #151: only code workflows cut a work branch; doc workflows skip it.
-        # #execute-scaffold: `foundation-architecture` joined this set once its row 8 started
-        # calling the orchestrator — it is a mixed workflow (six doc rows, one code row), same as
-        # `build`'s own dispatch graph mixes agent and hitl rows under one code-workflow name.
+        # #execute-scaffold: `scaffold-repo` joined this set: it is the nested workflow whose code row calls the
+        # orchestrator (foundation-architecture itself only nests it).
         from compass.orchestrator import run as runmod
-        self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops", "foundation-architecture"})
+        self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops", "scaffold-repo"})
         for doc in ("create-brief", "create-epic-architecture", "create-story",
                     "create-product-brief"):
             self.assertNotIn(doc, runmod._CODE_WORKFLOWS)

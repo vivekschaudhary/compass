@@ -238,7 +238,7 @@ export function resolvePath(
 
   let bad = false;
   const out = path.replace(/\{([a-z_]+)\}/g, (whole, token) => {
-    if (token !== "epic" && token !== "subject") { bad = true; return whole; }
+    if (token !== "epic" && token !== "subject" && token !== "repo") { bad = true; return whole; }
     if (!filled) { bad = true; return whole; }
     return filled;
   });

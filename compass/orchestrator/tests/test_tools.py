@@ -411,14 +411,14 @@ class TestWorkBranch(unittest.TestCase):
         self.assertTrue(_work_branch_name("build", None, "x").startswith("feat/"))
         self.assertTrue(_work_branch_name("triage", None, "x").startswith("fix/"))
 
-    def test_foundation_architecture_is_a_code_workflow(self):
+    def test_scaffold_repo_is_a_code_workflow(self):
         # #execute-scaffold: the app's `execute-scaffold` row reaches this orchestrator with no
         # story (a top-level run has no subject), so branch/write gating must not require one.
         from compass.orchestrator.run import _CODE_WORKFLOWS, _CHECK_TASKS, _work_branch_name
-        self.assertIn("foundation-architecture", _CODE_WORKFLOWS)
+        self.assertIn("scaffold-repo", _CODE_WORKFLOWS)
         self.assertIn("execute-scaffold", _CHECK_TASKS)
         self.assertEqual(
-            _work_branch_name("foundation-architecture", None, "initial project structure"),
+            _work_branch_name("scaffold-repo", None, "initial project structure"),
             "chore/initial-project-structure",
         )
 

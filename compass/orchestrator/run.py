@@ -194,7 +194,7 @@ def _merge_pr(project_dir, branch):
     return (False, f"merge failed for PR {pr.get('url')}: {err or 'unknown'} — check CI/conflicts, merge manually")
 
 
-_CODE_WORKFLOWS = ("fix", "build", "ops", "foundation-architecture")
+_CODE_WORKFLOWS = ("fix", "build", "ops", "scaffold-repo")
 
 # #92: after one of these code-producing steps commits+pushes, the orchestrator runs
 # the CI-parity check suite in the worktree and opens the PR only on green.
@@ -428,7 +428,7 @@ _WORKFLOW_BRANCH_TYPE = {
     "create-story": "feat",
     "create-brief": "feat",
     "create-epic-architecture": "feat",
-    "foundation-architecture": "chore",
+    "scaffold-repo": "chore",
 }
 
 

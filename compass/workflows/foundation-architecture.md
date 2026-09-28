@@ -24,9 +24,9 @@ architecture will be, and a scaffold that matches it.
 | 3 | Foundation architecture | `agent: staff-engineer.derive-architecture` | staff-engineer | `foundational-architecture` | 2 |
 | 4 | Accept the architecture | `hitl` | principal-engineer | `—` | 3 |
 | 5 | Scaffold the foundation | `agent: staff-engineer.scaffold-foundation` | staff-engineer | `scaffold-record` | 4 |
-| 6 | Accept the scaffold | `hitl` | principal-engineer | `—` | 5 |
-| 7 | Register the repos | `hitl` | principal-engineer | `—` | 6 |
-| 8 | Execute the scaffold | `agent: staff-engineer.execute-scaffold` | staff-engineer | `scaffold@scm` (a pull request) | 7 |
+| 6 | Review the scaffold plan | `hitl` | principal-engineer | `—` | 5 |
+| 7 | Accept the scaffold and the registered repos | `hitl` | principal-engineer | `—` | 6 |
+| 8 | Scaffold each repo | `workflow: scaffold-repo` | staff-engineer | `—` | 7 |
 
 ## Why it is eight rows and not three
 
@@ -44,19 +44,23 @@ The dependency chain is what enforces it: row 3 reads what row 2 accepted, not w
 that depends on the one that drafted. That is what lets send-back work without a special case, and
 it means how much review an engagement wants is rows in the seed rather than a code path.
 
-**Every doc-rendered agent row produces a document.** `run.ts` refuses a step that declares none: the
-agent would draft for two minutes and then error at the filing step. The `hitl` rows produce
-nothing, correctly — a human accepting something files nothing. Row 8 is the one exception, and
-deliberately: its `renders` is `code`, not `doc`, so it never reaches the filing step at all — it
-hands off to the `code` tool the same way `build`'s rows do, and its deliverable is a pull request,
-not a document.
+**Every agent row here produces a document.** `run.ts` refuses a step that declares none: the agent
+would draft for two minutes and then error at the filing step. The `hitl` rows produce nothing,
+correctly — a human accepting something files nothing. Row 8 writes no code itself: it nests
+`scaffold-repo`, whose one code row hands off to the `code` tool.
 
-**The scaffold is drafted, accepted, provisioned, then executed — four separate acts.** Row 5 writes what
-the scaffold should be, including which repos it needs; row 6 is a human accepting that plan; row 7 is
-a person creating those repos offline and registering them on the engagement, so the closed list of
-repos exists before anything targets one; row 8 calls the orchestrator to write into a registered repo.
-Provisioning follows acceptance so an unaccepted plan never creates anything external, and execution
-follows provisioning because `runCode` refuses a repo that is not registered with a checkout on disk.
+**The scaffold is planned, reviewed, provisioned, accepted, then executed.** Row 5 writes what the
+scaffold should be, including which repos it needs. Row 6 is the principal engineer reviewing that
+plan; only after it closes does anyone create anything external. Between 6 and 7 the team creates the
+listed repos offline and registers each on the engagement (key, name, URL, area, local path). Row 7
+is the principal engineer confirming the registered repos match the plan and accepting it, so the
+closed list of repos exists before anything targets one. Two `hitl` rows in a row read as review
+then approve, which is what they are here.
+
+**Row 8 fans out, once per registered repo.** Which shape applies is derived from what the nested
+workflow produces: `scaffold-repo` produces a `{repo}` path, so it opens one run per `repo` row,
+with the repo key as the run's subject — the same mechanism `tech-design` uses per epic. Zero
+registered repos refuses rather than completing over nothing.
 
 **Every row depends on the one before it.** `reads` is DERIVED from `depends_on`, so a row without
 one is handed nothing and drafts from a blank page. That was the state of this workflow before it

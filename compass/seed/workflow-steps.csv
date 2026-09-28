@@ -26,9 +26,11 @@ foundation-architecture,2,hitl,principal-engineer,approve-research,,,,,,Accept t
 foundation-architecture,3,agent,staff-engineer,derive-architecture,foundational-architecture,,"product-brief,features,architecture-research",,,Foundation architecture,foundation-architecture,approve-research,doc
 foundation-architecture,4,hitl,principal-engineer,approve-architecture,,,,,,Accept the architecture,,derive-architecture,doc-review
 foundation-architecture,5,agent,staff-engineer,scaffold-foundation,scaffold-record,,foundational-architecture,,,Scaffold the foundation,,approve-architecture,doc
-foundation-architecture,6,hitl,principal-engineer,approve-scaffold,,,,,,Accept the scaffold,,scaffold-foundation,doc-review
-foundation-architecture,7,hitl,principal-engineer,register-repos,,,,,,Register the repos,,approve-scaffold,none
-foundation-architecture,8,agent,staff-engineer,execute-scaffold,scaffold@scm,code,scaffold-record,,,Execute the scaffold,,register-repos,code
+foundation-architecture,6,hitl,principal-engineer,review-scaffold,,,,,,Review the scaffold plan,,scaffold-foundation,doc-review
+foundation-architecture,7,hitl,principal-engineer,accept-scaffold,,,,,,Accept the scaffold and the registered repos,,review-scaffold,doc-review
+foundation-architecture,8,workflow,staff-engineer,scaffold-repos,,,,,scaffold-repo,Scaffold each repo,,accept-scaffold,none
+scaffold-repo,1,agent,staff-engineer,execute-scaffold,scaffold/{repo}@scm,code,scaffold-record,,,Scaffold the repo,,,code
+scaffold-repo,2,hitl,principal-engineer,approve-repo-scaffold,,,,,,Accept the repo scaffold,,execute-scaffold,code-review
 feature-architecture,1,agent,staff-engineer,draft-feature-architecture,feature-architecture,,"product-brief,features,foundational-architecture",,,Feature architecture,architecture,,doc
 feature-architecture,2,hitl,principal-engineer,approve-feature-architecture,,,,,,Review and approve the feature architecture,,draft-feature-architecture,doc-review
 design-library,1,agent,designer,research-design,design-research,,"requirements,product-brief",,,Research the design ground,research-findings,,doc

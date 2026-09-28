@@ -896,7 +896,13 @@ function deriveCriteria(
       // aggregate of nothing. criteria.csv carried that gate by hand; when the gates became derived
       // the row silently lost it, and `build` and `fix` have been in the same state ever since,
       // every one of their `{subject}@scm` rows ungated.
-      const own = destinationOf(s.produces)?.path;
+      //
+      // NOT for a row whose destination is the source-control slot. Its deliverable is a branch and a
+      // pull request, and a code run files no document — a `{subject}` or `{repo}` "published" gate
+      // there reads "No document at …" forever and the row can never close. The PR is what its
+      // ticket gate (`pr-linked`) measures instead.
+      const dest = destinationOf(s.produces);
+      const own = dest?.slot === "scm" ? undefined : dest?.path;
       if (own) {
         published(wf.code, s.task, own, `${own} is published.`);
       }
@@ -926,7 +932,12 @@ function deriveCriteria(
               `${pathOf(output)} is published — ${s.nests} produces it.`);
           }
           // What the child's own steps promise the tracker travels up with the deliverable.
-          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output)) {
+          //
+          // Except `code`. A pull request belongs to ONE child run, so "a pull request is linked" on the
+          // parent asks a question with no answer — which run's? — and a fan-out row has no story of
+          // its own to read it from, so it would sit unmeasurable and the row could never close. Each
+          // child gates its own PR, and the `nested` check below covers that every child ran.
+          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output && x.output !== "code")) {
             ticketsFor(wf.code, s.task, cs.output);
           }
           emit({
@@ -949,7 +960,12 @@ function deriveCriteria(
       // Per-subject paths included, for the reason given at 1: `nearestProduced` never leaves this
       // workflow, so every path it returns was filed by a sibling row of the SAME run and resolves
       // against the same subject. A reviewer whose document is per-epic is reviewing an epic.
-      for (const { path } of upstream) {
+      //
+      // Not when the row upstream delivers a pull request (`@scm`): there is no document to have been
+      // published, so the gate would read "No document at …" forever and the approval could never
+      // close. What the reviewer checks there is the PR, and the independence gate below still applies.
+      for (const { path, by } of upstream) {
+        if (destinationOf(by.produces)?.slot === "scm") continue;
         published(wf.code, s.task, path, `${path} is published.`);
       }
 

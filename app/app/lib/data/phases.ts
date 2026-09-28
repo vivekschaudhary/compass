@@ -530,9 +530,59 @@ async function openNestedPerEpic(
 }
 
 /**
- * Open the child run(s) for a nesting row — one, or one per epic.
+ * Open one child run per repo registered on the engagement, for a nesting row whose nested workflow
+ * writes into a repo. The subject is the repo's KEY — the closed list `repo` holds — and the run
+ * later resolves its checkout from it, so a scaffold can never land in a repo nobody registered.
  *
- * The only caller of `nestedIsPerEpic`. WHICH SHAPE APPLIES IS DERIVED, NOT CONFIGURED — a workflow
+ * FANNING OUT OVER ZERO REPOS REFUSES, for the same reason zero epics does: `for (const r of [])`
+ * completes, the row closes, and a scaffold that scaffolded nothing looks exactly like one that
+ * scaffolded everything.
+ */
+async function openNestedPerRepo(
+  actor: Actor,
+  taskId: string,
+): Promise<FanOutResult> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const { data: repos } = await sb
+    .from("repo")
+    .select("key")
+    .eq("engagement_id", actor.engagementId)
+    .order("ord");
+  const keys = (repos ?? []).map((r) => r.key as string | null).filter((k): k is string => !!k);
+  if (!keys.length) {
+    return {
+      ok: false,
+      error:
+        "This row scaffolds one repo at a time, and this engagement has no repos registered. " +
+        "Nothing was opened — create the repos the scaffold plan lists and register each first.",
+    };
+  }
+
+  const runs: {
+    runId: string;
+    subject: string | null;
+    mirrored: BoardResult;
+    startedTaskId: string | null;
+  }[] = [];
+  for (const key of keys) {
+    const child = await openNested(actor, taskId, key);
+    if (!child.ok) return { ok: false, error: `${key}: ${child.error}` };
+    runs.push({
+      runId: child.runId,
+      subject: key,
+      mirrored: child.mirrored,
+      startedTaskId: child.startedTaskId,
+    });
+  }
+  return { ok: true, runs };
+}
+
+/**
+ * Open the child run(s) for a nesting row — one, one per epic, or one per repo.
+ *
+ * The only caller of `nestedFanOutKind`. WHICH SHAPE APPLIES IS DERIVED, NOT CONFIGURED — a workflow
  * declares itself per-epic by producing a per-epic path (`03-architecture/epic/{epic}`), which it
  * must do anyway or its documents would collide. A separate flag saying the same thing is a second
  * source of truth, and the two would eventually disagree — one of them silently. This function is
@@ -546,22 +596,31 @@ export async function openNestedFanOut(
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
-  return (await nestedIsPerEpic(taskId))
+  const kind = await nestedFanOutKind(taskId);
+  return kind === "epic"
     ? openNestedPerEpic(actor, taskId)
-    : openNestedSingle(actor, taskId);
+    : kind === "repo"
+      ? openNestedPerRepo(actor, taskId)
+      : openNestedSingle(actor, taskId);
 }
 
-/** Does the workflow this row nests author one document per epic? */
-async function nestedIsPerEpic(taskId: string): Promise<boolean> {
+/**
+ * What the workflow this row nests is per — `epic`, `repo`, or neither.
+ *
+ * Derived from the SUBJECT TOKEN its steps produce, so one source says both where a document goes
+ * and how many runs there are. `{repo}` is as deliberate as `{epic}`: a path that did not name its
+ * repo would put every repo's scaffold at one address.
+ */
+async function nestedFanOutKind(taskId: string): Promise<"epic" | "repo" | null> {
   const sb = supabaseAdmin();
-  if (!sb) return false;
+  if (!sb) return null;
 
   const { data: task } = await sb
     .from("work_task")
     .select("org_id, engagement_id, workflow_step_id")
     .eq("id", taskId)
     .maybeSingle();
-  if (!task?.workflow_step_id) return false;
+  if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb
     .from("workflow_step")
@@ -569,7 +628,7 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
     .eq("id", task.workflow_step_id)
     .maybeSingle();
   const code = step?.nests_workflow_code as string | null;
-  if (!code) return false;
+  if (!code) return null;
 
   // The engagement's override wins over the org default, exactly as `open_workflow_run` resolves it
   // — reading the org copy here would answer for a workflow this run is not using.
@@ -582,7 +641,7 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
     .order("engagement_id", { nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  if (!wf) return false;
+  if (!wf) return null;
 
   const { data: ver } = await sb
     .from("workflow_version")
@@ -590,15 +649,16 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
     .eq("workflow_id", wf.id)
     .eq("status", "published")
     .maybeSingle();
-  if (!ver) return false;
+  if (!ver) return null;
 
   const { data: steps } = await sb
     .from("workflow_step")
     .select("produces")
     .eq("workflow_version_id", ver.id);
-  return (steps ?? []).some((s) =>
-    (s.produces as string | null)?.includes("{epic}"),
-  );
+  const produced = (steps ?? []).map((s) => (s.produces as string | null) ?? "");
+  if (produced.some((p) => p.includes("{epic}"))) return "epic";
+  if (produced.some((p) => p.includes("{repo}"))) return "repo";
+  return null;
 }
 
 /** The epics drafted in this task's own run — what the fan-out opens a design for. */

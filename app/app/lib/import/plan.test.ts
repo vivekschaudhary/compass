@@ -981,6 +981,50 @@ describe("criteria derived from workflows and steps", () => {
     expect(doc[0].generated).toBeUndefined();
   });
 
+  // A code run files no document. Its destination is the source-control slot, its deliverable a pull
+  // request, and a "{subject} is published" gate on it read "No document at …" forever — the row
+  // could never close. The ticket gate is what measures the PR.
+  it("does not gate a source-control row on a document it can never file", () => {
+    const code = gates("workflow,ord,kind,role,task,produces,output,depends_on\nw,1,agent,author,build,x@scm,code,\n");
+    expect(on(code, "build").some((c) => c.subjectKind === "document")).toBe(false);
+    expect(on(code, "build")).toContainEqual(expect.objectContaining({ subjectKind: "ticket", subjectRef: "pr-linked" }));
+    // Only the slot decides: the same path routed to the doc store is still a document.
+    const doc = gates("workflow,ord,kind,role,task,produces,output,depends_on\nw,1,agent,author,build,x@docs,,\n");
+    expect(on(doc, "build")).toContainEqual(expect.objectContaining({ subjectKind: "document", subjectRef: "x" }));
+  });
+
+  // The same fact seen from the row after it: an approval of a pull request has no document to be
+  // "published", and the row that nests a per-repo run has no story to read a PR from.
+  it("does not gate an approval, or a nesting row, on a document or ticket a code run cannot have", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const sr = r.plan.workflows.find((w) => w.row.code === "scaffold-repo")!;
+    const approve = sr.criteria.filter((c) => c.stepTask === "approve-repo-scaffold");
+    expect(approve.some((c) => c.subjectKind === "document")).toBe(false);
+    expect(approve.some((c) => c.text.startsWith("Accepted by"))).toBe(true);
+    const fa = r.plan.workflows.find((w) => w.row.code === "foundation-architecture")!;
+    expect(fa.criteria.some((c) => c.stepTask === "scaffold-repos" && c.subjectRef === "pr-linked")).toBe(false);
+  });
+
+  it("gives the shipped scaffold-repo code row a pull-request gate and no document gate", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const sr = r.plan.workflows.find((w) => w.row.code === "scaffold-repo");
+    expect(sr, "scaffold-repo must ship in the seed").toBeDefined();
+    const mine = sr!.criteria.filter((c) => c.stepTask === "execute-scaffold");
+    expect(mine.some((c) => c.subjectKind === "document")).toBe(false);
+    expect(mine).toContainEqual(expect.objectContaining({ subjectKind: "ticket", subjectRef: "pr-linked" }));
+  });
+
+  it("gates the row that nests scaffold-repo on every run having closed, not on a per-repo path", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const fa = r.plan.workflows.find((w) => w.row.code === "foundation-architecture")!;
+    const nest = fa.criteria.filter((c) => c.stepTask === "scaffold-repos");
+    expect(nest).toContainEqual(expect.objectContaining({ subjectKind: "nested", subjectRef: "scaffold-repo" }));
+    expect(nest.some((c) => c.subjectRef.includes("{"))).toBe(false);
+  });
+
   // The failure that produced 391 refusals: a criterion aimed at a path no step writes.
   it("never aims the shipped seed's generated gates at a path nothing produces", () => {
     const r = planImport(seedBundle(), { ...empty, agents: realAgents() });

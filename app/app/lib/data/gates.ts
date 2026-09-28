@@ -508,6 +508,46 @@ async function evaluateNested(
 }
 
 /**
+ * `pr-linked` for a run with no ticket: did the orchestrator open a pull request for it?
+ *
+ * The pull request URL comes from the orchestrator's own log and is written on the task's
+ * `agent.run.finished` event, which is the only place it exists for a run with no story. That is
+ * weaker than asking Jira, and says so: the source is `compass`, not `tracker`. It is still a real
+ * bar — the orchestrator opens a pull request ONLY when the project's checks pass — and a run that
+ * recorded none is UNSATISFIED, never unmeasurable, because "nothing shipped" is an answer.
+ */
+async function evaluateRecordedPr(runId: string, subject: string): Promise<Verdict> {
+  const sb = supabaseAdmin();
+  if (!sb) return { state: "unmeasurable", why: "no database" };
+
+  const { data: tasks } = await sb.from("work_task").select("id").eq("workflow_run_id", runId);
+  const ids = (tasks ?? []).map((t) => t.id as string);
+  if (!ids.length) return { state: "unmeasurable", why: "this run has no tasks to read" };
+
+  const { data: events } = await sb
+    .from("event")
+    .select("payload")
+    .eq("verb", "agent.run.finished")
+    .in("subject_id", ids);
+  const prs = [...new Set(
+    (events ?? [])
+      .map((e) => (e.payload as { pr?: string | null } | null)?.pr ?? null)
+      .filter((u): u is string => !!u && /\/pull\/\d+/.test(u)),
+  )];
+  return prs.length
+    ? {
+        state: "satisfied",
+        source: "compass",
+        detail: `${subject}: the run recorded ${prs.length} pull request(s): ${prs.join(", ")}.`,
+      }
+    : {
+        state: "unsatisfied",
+        source: "compass",
+        detail: `${subject}: the run recorded no pull request — nothing shipped.`,
+      };
+}
+
+/**
  * A criterion about the ONE story a run is the subject of.
  *
  * `pr-linked` is the build's real bar and it is deliberately indirect: the orchestrator opens a
@@ -531,11 +571,15 @@ async function evaluateStoryTicket(
   const { data: run } = task?.workflow_run_id
     ? await sb
         .from("workflow_run")
-        .select("subject_key")
+        .select("subject_key, subject_ref")
         .eq("id", task.workflow_run_id)
         .maybeSingle()
     : { data: null };
   const key = (run?.subject_key as string | null) ?? null;
+  // A run about a repo (`scaffold-repo`) has a subject and no story. Its pull request was never put
+  // on a ticket — there is none — so the record is what the run itself wrote when it finished.
+  if (!key && run?.subject_ref && c.subjectRef === "pr-linked" && task?.workflow_run_id)
+    return evaluateRecordedPr(task.workflow_run_id as string, run.subject_ref as string);
   if (!key) {
     // Not unsatisfied: a run with no story is misconfigured, not a build that failed. Blaming the
     // engineer for it would send someone to read a diff that was never produced.
