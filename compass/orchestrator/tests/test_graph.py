@@ -185,14 +185,15 @@ class TestRealWorkflows(unittest.TestCase):
 
     def test_foundation_architecture(self):
         # Was `setup-foundation-architecture`: eight rows, gates at 2, 4 and 7, and the same role
-        # authoring and approving. Six now — research, architecture and scaffold, each written by
-        # the staff engineer and accepted by the principal engineer.
+        # authoring and approving. Eight now — research, architecture and scaffold each written by
+        # the staff engineer and accepted by the principal engineer, plus row 7 (register the repos, offline) and row 8, which executes the
+        # accepted scaffold (#execute-scaffold) — a `code`-rendered row, not a fourth document.
         #
         # THREE GATES, NOT ONE, is what the count is guarding: each deliverable is accepted before
         # the next is drafted on it, rather than one approval at the end standing for all three.
         steps = load_workflow(WORKFLOWS / "foundation-architecture.md")
-        self.assertEqual(len(steps), 6)
-        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 4, 6])
+        self.assertEqual(len(steps), 8)
+        self.assertEqual([s.number for s in steps if s.is_hitl], [2, 4, 6, 7])
         self.assert_author_never_closes(steps)
 
     def test_create_story(self):
@@ -796,11 +797,14 @@ class TestDeliveryCheck(unittest.TestCase):
             self.assertFalse(any(p.endswith(".jsonl") for p in left))
 
     def test_code_vs_doc_workflow_split(self):
-        # #151: only code workflows cut a work branch; doc workflows skip it
+        # #151: only code workflows cut a work branch; doc workflows skip it.
+        # #execute-scaffold: `foundation-architecture` joined this set once its row 8 started
+        # calling the orchestrator — it is a mixed workflow (six doc rows, one code row), same as
+        # `build`'s own dispatch graph mixes agent and hitl rows under one code-workflow name.
         from compass.orchestrator import run as runmod
-        self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops"})
+        self.assertEqual(set(runmod._CODE_WORKFLOWS), {"fix", "build", "ops", "foundation-architecture"})
         for doc in ("create-brief", "create-epic-architecture", "create-story",
-                    "create-product-brief", "setup-foundation-architecture"):
+                    "create-product-brief"):
             self.assertNotIn(doc, runmod._CODE_WORKFLOWS)
 
     def test_delivery_warning_workflow_aware(self):

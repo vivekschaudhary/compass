@@ -28,6 +28,7 @@ vi.mock("../supabase", () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, val: unknown) => { rows = rows.filter((r) => r[col] === val); return chain; },
+        lt: (col: string, val: unknown) => { rows = rows.filter((r) => (r[col] as number) < (val as number)); return chain; },
         order: () => chain,
         maybeSingle: async () => ({ data: rows[0] ?? null }),
         then: (res: (v: { data: Row[] }) => unknown) => res({ data: rows }),
@@ -59,9 +60,22 @@ vi.mock("child_process", () => ({
 
 const { runCode } = await import("./code-run");
 
-function seed(opts: { subjectKey?: string | null; localPath?: string | null; ord?: number; workflow?: string } = {}) {
+function seed(opts: {
+  subjectKey?: string | null; localPath?: string | null; ord?: number; workflow?: string;
+  // Which earlier ords, in this same workflow, are themselves `renders: code` rows — what
+  // `isFirstCodeStep` is computed from. Defaults to "every ord before this one" so build's
+  // existing tests (ords 1-4, all consecutive code rows of one PR) keep working unchanged;
+  // `foundation-architecture`'s tests override this to `[]` since its row 8 is a LONE code row
+  // with six non-code rows in front of it.
+  codeOrdsBefore?: number[];
+} = {}) {
+  const ord = opts.ord ?? 1;
+  const codeOrdsBefore = opts.codeOrdsBefore ?? Array.from({ length: Math.max(0, ord - 1) }, (_, i) => i + 1);
   state.tasks = [{ id: "t1", workflow_run_id: "r1", workflow_step_id: "s1" }];
-  state.steps = [{ id: "s1", ord: opts.ord ?? 1 }];
+  state.steps = [
+    { id: "s1", ord, workflow_version_id: "wv1" },
+    ...codeOrdsBefore.map((o, i) => ({ id: `prior${i}`, ord: o, workflow_version_id: "wv1", renders: "code" })),
+  ];
   state.workflows = [{ id: "w1", code: opts.workflow ?? "build" }];
   state.runs = [{ id: "r1", workflow_id: "w1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
   state.repos = opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
@@ -212,6 +226,50 @@ describe("what the branch gets called", () => {
     await runCode("e1", "t1", { context: "something else entirely" });
     const args = proc.spawned[0];
     expect(args).toEqual(expect.arrayContaining(["--from-step", "3"]));
+  });
+});
+
+// ── the one code workflow with no story ──────────────────────────────────────────────────────
+//
+// `foundation-architecture` is a top-level run — `subject: null` by construction, same as any
+// other run opened by `openNestedSingle` — so it is the one workflow allowed to reach the
+// orchestrator without a Jira key. Every other code workflow still requires one.
+describe("foundation-architecture — the one workflow with no story", () => {
+  it("does not refuse for lack of a story", async () => {
+    seed({ workflow: "foundation-architecture", subjectKey: null, ord: 8, codeOrdsBefore: [] });
+    proc.stdout = "https://github.com/acme/scaffold/pull/1";
+    const r = await runCode("e1", "t1");
+    expect(r.refusal).toBeNull();
+    expect(r.ok).toBe(true);
+  });
+
+  it("omits --story from the orchestrator args", async () => {
+    seed({ workflow: "foundation-architecture", subjectKey: null, ord: 8, codeOrdsBefore: [] });
+    proc.stdout = "https://github.com/acme/scaffold/pull/1";
+    await runCode("e1", "t1");
+    expect(proc.spawned[0]).not.toContain("--story");
+  });
+
+  // THE BUG THIS GUARDS: row 8 is the ONLY code row in this workflow, but its `ord` is 8, not 1.
+  // Gating the branch decision on `ord > 1` sent it down the RESUME path with nothing to resume —
+  // `_prior_run_branch` finds no recorded branch and falls back to "stay on the current branch"
+  // (run.py:2571), meaning no worktree, no new branch, and the agent commits wherever HEAD already
+  // is. `isFirstCodeStep` (computed from sibling `renders: code` rows, not raw `ord`) is what keeps
+  // a lone code row on the cut-a-fresh-branch path instead.
+  it("cuts a fresh branch for a lone code row, even though its ord is not 1", async () => {
+    seed({ workflow: "foundation-architecture", subjectKey: null, ord: 8, codeOrdsBefore: [] });
+    proc.stdout = "https://github.com/acme/scaffold/pull/1";
+    await runCode("e1", "t1");
+    const args = proc.spawned[0];
+    expect(args).not.toContain("--from-step");
+    expect(args).toEqual(expect.arrayContaining(["--step", "8"]));
+  });
+
+  it("build still refuses without a story — this is not a general relaxation", async () => {
+    seed({ workflow: "build", subjectKey: null });
+    const r = await runCode("e1", "t1");
+    expect(r.refusal).toMatch(/no story on the tracker/i);
+    expect(proc.spawned).toEqual([]);
   });
 });
 

@@ -194,12 +194,12 @@ def _merge_pr(project_dir, branch):
     return (False, f"merge failed for PR {pr.get('url')}: {err or 'unknown'} — check CI/conflicts, merge manually")
 
 
-_CODE_WORKFLOWS = ("fix", "build", "ops")
+_CODE_WORKFLOWS = ("fix", "build", "ops", "foundation-architecture")
 
 # #92: after one of these code-producing steps commits+pushes, the orchestrator runs
 # the CI-parity check suite in the worktree and opens the PR only on green.
 _CHECK_TASKS = frozenset({"triage-and-fix", "implement-story", "apply-ops-change",
-                          "respond-to-review"})
+                          "respond-to-review", "execute-scaffold"})
 
 # Per-stack default check suite — CI-parity commands the orchestrator runs to VERIFY a
 # branch before opening a PR (not the agent's self-report). The project overrides via
@@ -428,6 +428,7 @@ _WORKFLOW_BRANCH_TYPE = {
     "create-story": "feat",
     "create-brief": "feat",
     "create-epic-architecture": "feat",
+    "foundation-architecture": "chore",
 }
 
 

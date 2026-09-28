@@ -38,6 +38,7 @@ plan,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one age
 product-brief,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 release-comms,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 release,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+resources,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 retro,1,refresh,delivery-manager,Delivery,refresh,,"No dispatch graph — one agent, recurring"
 scan,1,refresh,scanner,Security,refresh,,"No dispatch graph — one agent, recurring"
 sprint-0,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
@@ -50,6 +51,7 @@ story,3,agent,ux-writer,Design,write-copy,,ux-writer.write-copy (UX Writer agent
 story,4,hitl,human,,approve,,HITL gate (human — only when hitl_level: every_phase)
 story,5,agent,delivery-manager,Delivery,update-status,,delivery-manager.update-status (Delivery Manager agent owns)
 tech-design,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
+timeline,1,refresh,,,refresh,,No dispatch graph and no agent named — needs review
 triage,1,agent,support,Support,classify-intake,,support.classify-intake (Support agent owns)
 triage,2,hitl,human,,approve,,HITL — ITIL intake routing gate (human)
 triage,3,agent,support,Support,triage-incident,incident branch,support.triage-incident (Support agent owns) — [incident branch]
