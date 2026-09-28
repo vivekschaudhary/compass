@@ -29,16 +29,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase-browser";
+import { useOptimisticTurns } from "./OptimisticTurns";
+import { backoffMs } from "./realtime-backoff";
 
 const POLL_MS = 45_000;
-const MAX_BACKOFF_MS = 30_000;
-
-/** 1s, 2s, 4s, 8s… capped — pulled out so the cap itself is checked by a real test, not just read
- *  by eye. The one easy way to get this wrong is forgetting the cap and reconnecting slower and
- *  slower forever on a real outage. */
-export function backoffMs(retries: number): number {
-  return Math.min(MAX_BACKOFF_MS, 1000 * 2 ** retries);
-}
 
 export function RealtimeRefresh({
   taskId, pollWhileRunning = false,
@@ -48,6 +42,7 @@ export function RealtimeRefresh({
   pollWhileRunning?: boolean;
 }) {
   const router = useRouter();
+  const { refreshTurns } = useOptimisticTurns();
 
   useEffect(() => {
     const sb = supabaseBrowser();
@@ -67,16 +62,27 @@ export function RealtimeRefresh({
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "work_task", filter: `id=eq.${taskId}` },
-          () => router.refresh(),
+          // A state change (idle→running→hitl→closed) genuinely changes which sections of the page
+          // are mounted — ApprovePanel, NestedRunPanel, Composer's own controls — so this is one of
+          // the two things still worth a full `router.refresh()`. `refreshTurns` rides along too:
+          // some state transitions (the model declining, filing failing) also add a turn in the
+          // same beat, and `Conversation` no longer sees a new turn from `router.refresh()` alone —
+          // see `OptimisticTurns.tsx`'s own header.
+          () => { router.refresh(); void refreshTurns(); },
         )
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "turn", filter: `task_id=eq.${taskId}` },
-          () => router.refresh(),
+          // Never changes what's MOUNTED — only what the conversation shows — so this is exactly
+          // the case `refreshTurns` exists for: no draft, gates, document tree or context strip
+          // refetch just to bring in one more message.
+          () => void refreshTurns(),
         )
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "question", filter: `task_id=eq.${taskId}` },
+          // A NEW question changes what's mounted too (the qcard appears) — unlike removing an
+          // already-answered one, which `Composer` already handles locally without any refresh.
           () => router.refresh(),
         )
         .subscribe((status) => {
@@ -104,13 +110,16 @@ export function RealtimeRefresh({
       if (timer) clearTimeout(timer);
       if (channel) sb!.removeChannel(channel);
     };
-  }, [taskId, router]);
+  }, [taskId, router, refreshTurns]);
 
   useEffect(() => {
     if (!pollWhileRunning) return;
-    const t = setInterval(() => router.refresh(), POLL_MS);
+    // Both — the state might have moved on (router.refresh()) and/or the agent's reply might have
+    // landed (refreshTurns()); this fallback exists for a channel failure the SDK never reports, so
+    // it cannot assume which of the two actually happened.
+    const t = setInterval(() => { router.refresh(); void refreshTurns(); }, POLL_MS);
     return () => clearInterval(t);
-  }, [pollWhileRunning, router]);
+  }, [pollWhileRunning, router, refreshTurns]);
 
   return null;
 }

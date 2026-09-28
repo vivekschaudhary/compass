@@ -4,7 +4,9 @@
 
 import { revalidatePath } from "next/cache";
 import { resolveActor } from "@/app/lib/data/actor";
-import { recordAnswers, addNote, resumeForReview, resetStalledRun } from "@/app/lib/data/job";
+import {
+  recordAnswers, addNote, resumeForReview, resetStalledRun, conversationFor, type Turn,
+} from "@/app/lib/data/job";
 import { approve, reject } from "@/app/lib/data/gates";
 import { editSection } from "@/app/lib/data/document-edit";
 import { addComment } from "@/app/lib/data/comments";
@@ -90,6 +92,24 @@ export async function addCommentAction(
   revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
+}
+
+/**
+ * The conversation alone, for the lightweight refresh — no `revalidatePath`, deliberately: refetching
+ * the turns list is the one thing this must NOT trigger a full page refresh to get, that being the
+ * entire reason it exists (see `OptimisticTurns.tsx`). `conversationFor`, not `conversation`,
+ * because a server action is reachable directly from the client with just a `taskId` — the
+ * engagement-scope check that a page's own `resolveActor`/`buildContext` chain already did has to be
+ * redone here rather than assumed.
+ */
+export async function getConversationAction(
+  engagement: string, role: string, taskId: string,
+  holderId?: string | null,
+): Promise<{ ok: true; turns: Turn[] } | { ok: false; error: string }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  return { ok: true, turns: await conversationFor(actor, taskId) };
 }
 
 /** Add a message to the conversation. Never changes the task's state. */

@@ -28,6 +28,23 @@ export async function conversation(taskId: string): Promise<Turn[]> {
 }
 
 /**
+ * `conversation`, scoped — the version safe to reach from a server ACTION rather than only from a
+ * page that already resolved an Actor and called `buildContext` (which itself checks
+ * `engagement_id`) before ever getting here. `conversation(taskId)` alone trusts the caller entirely
+ * — fine when the only caller is a page that already checked, not fine once a client component can
+ * ask for any taskId's conversation directly (the lightweight turns refresh, see
+ * `OptimisticTurns.tsx`). Same pattern `taskState` already uses.
+ */
+export async function conversationFor(actor: Actor, taskId: string): Promise<Turn[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+  const { data: task } = await sb.from("work_task")
+    .select("id").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  if (!task) return [];
+  return conversation(taskId);
+}
+
+/**
  * `filesTo` is the path this question's answer BECOMES a document at.
  *
  * It has always been on the row and read inside `recordAnswers`; the UI simply never saw it, so the

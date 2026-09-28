@@ -6,38 +6,60 @@
 // that IS unit-tested, and this file is just the state and the plumbing.
 //
 // A context rather than lifting state into `page.tsx` (a server component, which cannot hold it) or
-// threading a callback prop between `Conversation` and `Composer` (siblings today, not parent/child
-// — see `page.tsx`'s own JSX). Provided once, high enough to wrap both.
+// threading callback props between `Conversation`, `Composer` and `RealtimeRefresh` (siblings today
+// — see `page.tsx`'s own JSX, and `RealtimeRefresh`'s own header). Provided once, high enough to
+// wrap all three.
+//
+// OWNS THE REAL TURNS LIST NOW, not just the pending overlay. `turns` starts from `initialTurns` (the
+// server's own read, for a fast first paint) and after that is updated ONLY by `refreshTurns` — a
+// direct, scoped server action (`getConversationAction`), never by `router.refresh()`. That is the
+// whole point: a new chat message must not cost re-fetching the draft, the gates, the document tree
+// and everything else on the page just to bring in one more turn. `initialTurns` is read once, on
+// mount, and never re-synced from a later prop change — a second source of truth for the same list
+// (the server-rendered prop, on some LATER page-level refresh) racing this one is worse than not
+// having it; `RealtimeRefresh`'s `work_task` handler calls `refreshTurns` itself alongside its own
+// `router.refresh()` for exactly this reason, rather than relying on prop reconciliation here.
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { pendingSurvivesRealCountChange, type PendingTurn } from "./optimistic-turns";
+import type { Turn } from "@/app/lib/data/job";
+import { getConversationAction } from "./actions";
 
 type Ctx = {
+  turns: Turn[];
   pending: PendingTurn[];
   /** Returns the new entry's id, so the caller can remove exactly this one on a failed write. */
   addPending: (body: string, authorUserId: string | null) => string;
   removePending: (id: string) => void;
+  /** Re-fetch the conversation directly — no page-level refresh involved. */
+  refreshTurns: () => Promise<void>;
 };
 
 const OptimisticTurnsContext = createContext<Ctx | null>(null);
 
 export function OptimisticTurnsProvider({
-  realCount, children,
+  engagement, role, taskId, holderId, initialTurns, children,
 }: {
-  /** `turns.length` as the server last handed it — watched, not read, so this stays a MERGE point
-   *  rather than a second copy of the conversation. */
-  realCount: number;
+  engagement: string;
+  role: string;
+  taskId: string;
+  holderId?: string | null;
+  initialTurns: Turn[];
   children: React.ReactNode;
 }) {
+  const [turns, setTurns] = useState<Turn[]>(initialTurns);
   const [pending, setPending] = useState<PendingTurn[]>([]);
-  const prevRealCount = useRef(realCount);
+  const prevRealCount = useRef(turns.length);
 
-  useEffect(() => {
-    if (!pendingSurvivesRealCountChange(prevRealCount.current, realCount)) {
+  const refreshTurns = useCallback(async () => {
+    const r = await getConversationAction(engagement, role, taskId, holderId);
+    if (!r.ok) return; // best-effort — a stale list is a worse failure mode than a thrown error here
+    setTurns(r.turns);
+    if (!pendingSurvivesRealCountChange(prevRealCount.current, r.turns.length)) {
       setPending([]);
     }
-    prevRealCount.current = realCount;
-  }, [realCount]);
+    prevRealCount.current = r.turns.length;
+  }, [engagement, role, taskId, holderId]);
 
   function addPending(body: string, authorUserId: string | null): string {
     const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -50,7 +72,9 @@ export function OptimisticTurnsProvider({
   }
 
   return (
-    <OptimisticTurnsContext.Provider value={{ pending, addPending, removePending }}>
+    <OptimisticTurnsContext.Provider
+      value={{ turns, pending, addPending, removePending, refreshTurns }}
+    >
       {children}
     </OptimisticTurnsContext.Provider>
   );
