@@ -173,7 +173,6 @@ export async function initiatePhase(
     .order("opened_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  console.log(" in InitiatePhase check open runs ", open);
 
   if (open) {
     const tasks = await tasksOfRun(open.id);
