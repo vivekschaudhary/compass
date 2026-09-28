@@ -149,6 +149,14 @@ export type AgentContext = {
   rejections: { criterion: string; reason: string; by: string }[];
   /** Set only on a step that plans a sprint. Null everywhere else. */
   sprint: SprintContext | null;
+  /**
+   * The run's own subject (`subjectOfRun`), surfaced here rather than re-read: a `scaffold` row has
+   * no per-subject path to resolve `produces` through (its deliverable is a pull request, not a
+   * document), so this is the only place the run's repo key reaches the prompt.
+   */
+  subject: { ref: string | null; key: string | null } | null;
+  /** The registered repo the subject names, when `output === "scaffold"`. Null otherwise. */
+  repoName: string | null;
 };
 
 /**
@@ -652,7 +660,8 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     // That is `reviewPath` below, kept OUT of this field on purpose: display and "what gets filed"
     // must not be the same field, because a review task legitimately wants the first and must
     // never get the second.
-    produces = dest ? resolvePath(dest.path, await subjectOfRun(task.workflow_run_id as string | null)) : null;
+    const subj = await subjectOfRun(task.workflow_run_id as string | null);
+    produces = dest ? resolvePath(dest.path, subj) : null;
     // Resolution failing is not the same as the step producing nothing, and the two must not report
     // the same way — one is a row that drafts no document, the other is a row whose document has
     // nowhere to go. Kept apart so the halt can say which.
@@ -679,10 +688,12 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
         .maybeSingle();
       const reviewedDest = destinationOf(reviewed?.produces);
       reviewPath = reviewedDest
-        ? resolvePath(reviewedDest.path, await subjectOfRun(task.workflow_run_id as string | null))
+        ? resolvePath(reviewedDest.path, subj)
         : null;
     }
   }
+
+  const subject = task.workflow_step_id ? await subjectOfRun(task.workflow_run_id as string | null) : null;
 
   return {
     taskId: task.id,
@@ -709,7 +720,20 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     sprint: produces === SPRINT_PLAN_PATH
       ? await loadSprintContext(actor.engagementId, taskId)
       : null,
+    subject,
+    repoName: output === "scaffold" && subject?.ref
+      ? await repoNameFor(actor.engagementId, subject.ref)
+      : null,
   };
+}
+
+/** The registered name for a repo key, so the prompt can say "kt-api", not just "api". */
+async function repoNameFor(engagementId: string, key: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("repo").select("name")
+    .eq("engagement_id", engagementId).eq("key", key).maybeSingle();
+  return (data?.name as string | null) ?? key;
 }
 
 /** The one path that makes a step a sprint plan. Keyed on the path, never on either row's slug. */
@@ -980,8 +1004,31 @@ export function inputPrompt(ctx: AgentContext): string {
   if (ctx.sprint) parts.push(sprintPrompt(ctx.sprint));
   if (ctx.template) parts.push(templatePrompt(ctx.template));
   if (ctx.output === "supplied") parts.push(suppliedPrompt(ctx));
+  if (ctx.output === "scaffold") parts.push(scaffoldPrompt(ctx));
 
   return parts.join("\n\n");
+}
+
+/**
+ * Which repo this row scaffolds, and that its deliverable is a pull request, not a document.
+ *
+ * `scaffold`'s own `produces` (`scaffold/{repo}@scm`) resolves to a path nobody files anything at —
+ * the `scm` slot means the record lives on the deliverable itself, same as `code`. Restated here as
+ * plain text because the model otherwise has no way to tell "row 8 of foundation-architecture" from
+ * "the repo I am actually meant to touch"; the run's subject and the registered name are both said.
+ */
+function scaffoldPrompt(ctx: AgentContext): string {
+  const repo = ctx.repoName ?? ctx.subject?.ref ?? "(unknown — this run has no subject)";
+  return [
+    `<scaffold repo="${repo}">`,
+    `This row scaffolds ONE repo: ${repo}. The accepted scaffold plan may list several; write only`,
+    `what that plan said THIS repo starts with.`,
+    ``,
+    `Your deliverable is a pull request, not a document — call \`scaffold\` with the files this repo`,
+    `starts with. The app opens the branch and the pull request; you do not, and there is nothing to`,
+    `file at a path.`,
+    `</scaffold>`,
+  ].join("\n");
 }
 
 /**

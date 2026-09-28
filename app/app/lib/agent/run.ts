@@ -31,6 +31,7 @@ import { resolveCommitments } from "../data/sprint";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { runCode, storyFor } from "./code-run";
+import { validateScaffoldFiles, runScaffold } from "./scaffold";
 import { jiraForEngagement, addRemoteLink, addComment } from "../jira";
 import { nestedWorkflowOf } from "../data/phases";
 import { approve, measureTask } from "../data/gates";
@@ -990,6 +991,59 @@ export async function runAgent(
     return built.ok
       ? { kind: "drafted", summary: outcome, sections: files.length, path: built.prUrl ?? null }
       : { kind: "error", message: `The build produced no pull request (exit ${built.exit}).` };
+  }
+
+  // The other tool whose outcome this app does not author, and the one that needs no orchestrator
+  // at all: a scaffold is greenfield, so the app writes the files straight to a branch through the
+  // GitHub API and opens the pull request itself. What comes back — the PR URL, the branch — is a
+  // fact GitHub returned, same discipline as `code`.
+  if (call.name === "scaffold") {
+    const input = call.input as { summary?: string; files?: unknown };
+
+    const validated = validateScaffoldFiles(input.files);
+    if (!validated.ok) {
+      // NOT a failed run — the model gets a turn to fix it. Nothing was written; recording it as a
+      // build failure would count a retry-able mistake as a shipped-nothing outcome.
+      const msg =
+        `Not scaffolded — this needs fixing before anything is written:\n` +
+        validated.problems.map((p) => `- ${p}`).join("\n");
+      await recordTurn(taskId, msg, ctx);
+      await releaseExecutor(taskId, ctx, { failed: true });
+      return { kind: "error", message: msg };
+    }
+
+    const intent =
+      `**Scaffolding.** ${input.summary ?? ""}\n\n` +
+      `**Files.**\n${validated.files.map((f) => `- \`${f.path}\``).join("\n")}\n`;
+    // Written BEFORE the call, same reason `code` writes its intent first: a call that fails leaves
+    // a record of what was attempted.
+    await recordTurn(taskId, intent, ctx);
+
+    const result = await runScaffold(actor.engagementId, taskId, {
+      summary: input.summary ?? "", files: validated.files,
+    });
+
+    if (result.refusal) {
+      await releaseExecutor(taskId, ctx, { failed: true });
+      await recordTurn(taskId, `**The scaffold did not start.** ${result.refusal}`, ctx);
+      return { kind: "error", message: result.refusal };
+    }
+
+    const outcome = result.ok
+      ? `**Scaffolded ${result.repoName}.** The pull request is open: ${result.prUrl}` +
+        (result.branch ? `\n\nBranch \`${result.branch}\`.` : "")
+      : `**UNSHIPPED — no pull request.** ${result.repoName ? `Scaffolding ${result.repoName} failed: ` : ""}${result.error ?? "unknown error"}`;
+    await recordTurn(taskId, outcome, ctx);
+
+    // hitl either way, same as `code`: a failed scaffold still needs a person to look, not an agent
+    // retrying forever against a repo call that will not succeed on its own.
+    await handOver(actor, taskId, ctx, result.ok ? "scaffolded" : "scaffold-failed", message, {
+      branch: result.branch ?? null, pr: result.prUrl ?? null,
+    });
+
+    return result.ok
+      ? { kind: "drafted", summary: outcome, sections: validated.files.length, path: result.prUrl ?? null }
+      : { kind: "error", message: `The scaffold produced no pull request. ${result.error ?? ""}`.trim() };
   }
 
   if (call.name === "draft" || call.name === "backlog" || call.name === "sprint" || call.name === "roster") {

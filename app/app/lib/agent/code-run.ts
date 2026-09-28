@@ -49,19 +49,12 @@ export type CodeRun = {
  * inside the orchestrator with a message about a missing workflow file. Refusing here says the
  * true thing — nobody set a local path — and says where to set it.
  */
-async function repoFor(
-  engagementId: string,
-  key: string | null = null,
-): Promise<{ path: string; name: string } | null> {
+async function repoFor(engagementId: string): Promise<{ path: string; name: string } | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
   const { data } = await sb.from("repo")
     .select("key, name, local_path").eq("engagement_id", engagementId).order("ord");
-  // A run about ONE repo names it. Taking the first row with a path here was correct while an
-  // engagement had one repo and is wrong the moment it has two: every run would build in whichever
-  // was registered first, and nothing would say so.
-  const rows = key ? (data ?? []).filter((r) => r.key === key) : (data ?? []);
-  for (const r of rows) {
+  for (const r of data ?? []) {
     const p = (r.local_path as string | null)?.trim();
     if (p && existsSync(p)) return { path: p, name: (r.name as string) || (r.key as string) };
   }
@@ -71,8 +64,6 @@ async function repoFor(
 /** What a code step needs to know about itself: the story, its position, its run, its workflow. */
 type Placement = {
   story: string | null;
-  /** The agent's own handle for the run's subject — a repo key for `scaffold-repo`. */
-  subjectRef: string | null;
   ord: number | null;
   runId: string | null;
   /** `build`, `fix`, … — which graph the orchestrator walks. Never assumed. */
@@ -90,7 +81,7 @@ type Placement = {
 
 async function placementOf(taskId: string): Promise<Placement> {
   const sb = supabaseAdmin();
-  const none: Placement = { story: null, subjectRef: null, ord: null, runId: null, workflow: null, isFirstCodeStep: true };
+  const none: Placement = { story: null, ord: null, runId: null, workflow: null, isFirstCodeStep: true };
   if (!sb) return none;
 
   const { data: task } = await sb.from("work_task")
@@ -98,7 +89,7 @@ async function placementOf(taskId: string): Promise<Placement> {
   if (!task?.workflow_run_id) return none;
 
   const { data: run } = await sb.from("workflow_run")
-    .select("id, subject_key, subject_ref, workflow_id").eq("id", task.workflow_run_id).maybeSingle();
+    .select("id, subject_key, workflow_id").eq("id", task.workflow_run_id).maybeSingle();
   const { data: wf } = run?.workflow_id
     ? await sb.from("workflow").select("code").eq("id", run.workflow_id).maybeSingle()
     : { data: null };
@@ -121,7 +112,6 @@ async function placementOf(taskId: string): Promise<Placement> {
     // The TRACKER's key, never the agent's ref. `--story` is passed to a process that looks the
     // issue up in Jira; handing it `E1-S3` would send it looking for an issue that does not exist.
     story: (run?.subject_key as string | null) ?? null,
-    subjectRef: (run?.subject_ref as string | null) ?? null,
     ord: (step?.ord as number | null) ?? null,
     runId: (run?.id as string | null) ?? null,
     workflow: (wf?.code as string | null) ?? null,
@@ -146,25 +136,13 @@ export async function runCode(
 ): Promise<CodeRun> {
   const empty = { ok: false, exit: null, branch: null, prUrl: null, log: "", repoName: null };
 
-  const { story, subjectRef, ord, runId, workflow, isFirstCodeStep } = await placementOf(taskId);
-  // Every other code workflow is per-story — `build`'s branch, its requirement gate, its Jira
-  // linkage all key on it. `scaffold-repo` is per REPO: it has no ticket to scope a scaffold to, and
-  // its subject is the repo key instead.
-  const perRepo = workflow === "scaffold-repo";
-  if (!story && !perRepo) {
+  const { story, ord, runId, workflow, isFirstCodeStep } = await placementOf(taskId);
+  if (!story) {
     return {
       ...empty,
       refusal:
         "This build run has no story on the tracker. A build is per story — the run's subject " +
         "must carry a Jira key before there is anything to build.",
-    };
-  }
-  if (perRepo && !subjectRef) {
-    return {
-      ...empty,
-      refusal:
-        "This scaffold run names no repo. It is opened once per registered repo, with the repo's key " +
-        "as its subject — a run without one has nowhere to write. Nothing was spawned.",
     };
   }
   if (ord === null || !runId || !workflow) {
@@ -175,16 +153,13 @@ export async function runCode(
     };
   }
 
-  const repo = await repoFor(engagementId, perRepo ? subjectRef : null);
+  const repo = await repoFor(engagementId);
   if (!repo) {
     return {
       ...empty,
-      refusal: perRepo
-        ? `No repository '${subjectRef}' with a working local path is registered for this engagement. ` +
-          "Create the repo, clone it, and register it with its local path; without a checkout there " +
-          "is nowhere to scaffold."
-        : "No repository with a working local path is configured for this engagement. Set one in " +
-          "Settings → Repositories; without a checkout there is nowhere to build.",
+      refusal:
+        "No repository with a working local path is configured for this engagement. Set one in " +
+        "Settings → Repositories; without a checkout there is nowhere to build.",
     };
   }
 
@@ -230,11 +205,7 @@ export async function runCode(
     "-m", "compass.orchestrator.run", workflow,
     "--project-dir", repo.path,
     ...(vendored ? [] : ["--compass-dir", COMPASS_DIR]),
-    // `scaffold-repo` has no story to scope to (see the refusal guard above) — the
-    // orchestrator's own `--story` is optional (run.py's parser defaults it to None) and
-    // `_work_branch_name` already degrades to `<type>/<slug>` with no id, so omitting it here is
-    // enough; nothing on the Python side needed to change for it.
-    ...(story ? ["--story", story] : []),
+    "--story", story,
     // THE BRANCH NAME'S KEYWORDS COME FROM HERE. `_work_branch_name` builds
     // `<type>/<story>-<slug>` and `_slug` takes the first six meaningful words of the context —
     // so with nothing passed, every branch came out `feat/KAN-42-` with a trailing hyphen and

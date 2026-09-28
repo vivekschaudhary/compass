@@ -212,7 +212,7 @@ const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
 // Moves in the SAME commit as the database's `workflow_step_output_known`. Adding `code` to only
 // one of these made the dry run green and the apply a 500, after `applyPlan` had already published
 // the new version — leaving `build` with zero steps. See migration 060's header.
-const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied"];
+const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied", "scaffold"];
 // CLOSED, and required on every row — see `StepRow.renders`. Not inferred from `produces`/`kind`
 // because the app must not guess which panel a row wants; a row says so.
 const RENDERS = ["doc", "code", "doc-review", "code-review", "none"];
@@ -550,13 +550,16 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
       const dep = siblings.find((x) => x.task === s.dependsOn[0]);
       if (dep) {
         const wantCode = s.renders === "code-review";
-        if (wantCode !== (dep.output === "code"))
+        // `scaffold` is a change too — a pull request the app opened rather than the orchestrator —
+        // so a `code-review` panel is the right shape for it, same as `code`.
+        const isCode = dep.output === "code" || dep.output === "scaffold";
+        if (wantCode !== isCode)
           add("workflow-steps.csv", i + 2,
             `Step ${s.workflow}/${s.ord} renders '${s.renders}' but depends on '${dep.task}', whose ` +
             `output is ${dep.output ? `'${dep.output}'` : "an ordinary document"}.`,
             wantCode
-              ? "code-review reviews a change — the dependency should declare output 'code'."
-              : "doc-review reviews a document — the dependency should not declare output 'code'.");
+              ? "code-review reviews a change — the dependency should declare output 'code' or 'scaffold'."
+              : "doc-review reviews a document — the dependency should not declare output 'code' or 'scaffold'.");
       }
     }
   });
@@ -861,7 +864,8 @@ function deriveCriteria(
 
   /** The ticket checks a produced KIND implies — keyed on `output`, never on a path an author renames. */
   const TICKETS: Record<string, { ref: string; why: string }[]> = {
-    code:   [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
+    code:     [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
+    scaffold: [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
     sprint: [
       { ref: "committed-have-epic", why: "Every committed story belongs to an epic." },
       { ref: "on-board", why: "Every committed story is on the board with an owner." },
@@ -933,11 +937,12 @@ function deriveCriteria(
           }
           // What the child's own steps promise the tracker travels up with the deliverable.
           //
-          // Except `code`. A pull request belongs to ONE child run, so "a pull request is linked" on the
-          // parent asks a question with no answer — which run's? — and a fan-out row has no story of
-          // its own to read it from, so it would sit unmeasurable and the row could never close. Each
-          // child gates its own PR, and the `nested` check below covers that every child ran.
-          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output && x.output !== "code")) {
+          // Except `code` and `scaffold`. A pull request belongs to ONE child run, so "a pull request
+          // is linked" on the parent asks a question with no answer — which run's? — and a fan-out row
+          // has no story of its own to read it from, so it would sit unmeasurable and the row could
+          // never close. Each child gates its own PR, and the `nested` check below covers that every
+          // child ran.
+          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output && x.output !== "code" && x.output !== "scaffold")) {
             ticketsFor(wf.code, s.task, cs.output);
           }
           emit({

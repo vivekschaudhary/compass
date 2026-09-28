@@ -231,6 +231,53 @@ export const TOOLS: Anthropic.Tool[] = [
     strict: true,
   },
   {
+    name: "scaffold",
+    description:
+      "Scaffold ONE repo: return the files it starts with. The app creates a branch, commits exactly " +
+      "these files as one commit, and opens a pull request — you do not run git and you do not open " +
+      "the pull request, and what happened to it is appended by the app, so it cannot be claimed " +
+      "into existence.\n\n" +
+      "You scaffold the repo this run is about, not the whole product: the accepted scaffold plan " +
+      "lists every repo, and your input names which one is yours. Write what the plan says that repo " +
+      "starts with — its structure, its build files, a README — and nothing beyond it.\n\n" +
+      "TWO FILES ARE REQUIRED AND THE CALL IS REFUSED WITHOUT THEM. `compass/config.yaml` carries a " +
+      "`checks:` list — the exact commands that build, lint and test THIS repo, one per line, each " +
+      "runnable from the repo root (a repo with several apps `cd`s into each). And a " +
+      "`.github/workflows/*.yml` that runs those same commands on `pull_request`, because CI is what " +
+      "verifies the pull request and the gate reads its result; a repo with no workflow has no result " +
+      "to read. Write commands you know work for the stack the plan chose — a failing check leaves the " +
+      "pull request unmergeable.\n\n" +
+      "Paths are relative to the repo root with no leading slash. Every file's full content is in this " +
+      "call; you cannot say \"as before\".",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "What this repo is and what you scaffolded, in a few sentences. It becomes the pull " +
+            "request description. Note anything the plan left open and what you assumed.",
+        },
+        files: {
+          type: "array",
+          description: "Every file to create. Paths are unique and repo-relative.",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Repo-relative, e.g. `compass/config.yaml`." },
+              content: { type: "string", description: "The whole file. An empty file is an empty string." },
+            },
+            required: ["path", "content"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["summary", "files"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "sprint",
     description:
       "Plan ONE sprint: commit to a set of stories that already exist on the board, and say which " +
@@ -403,6 +450,7 @@ export const TOOL_FOR: Record<string, string> = {
   sprint: "sprint",
   roster: "roster",
   code: "code",
+  scaffold: "scaffold",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
   // by a person must not be able to write it, and the reliable way to stop a model doing something

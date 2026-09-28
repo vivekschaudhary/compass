@@ -22,7 +22,7 @@ const BASE: AgentContext = {
   renders: "doc-review", reviewPath: "resource-plan", hasWebSearch: false, destination: null,
   output: null, inputs: [], doneCriteria: ["resource-plan is published"], inventory: [], phaseRows: [],
   template: null, templateName: null,
-  priorDraft: null, rejections: [], sprint: null,
+  priorDraft: null, rejections: [], sprint: null, subject: null, repoName: null,
 };
 
 describe("a row with nothing to produce (doc-review/code-review, or supplied)", () => {

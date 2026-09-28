@@ -42,6 +42,13 @@ step-count     build
 # not a transcription — so it stays debt until someone makes that call.
 step-count     sprint-0
 
+# `scaffold-repo` has no dispatch graph, and never will. Its one code row runs as `output: scaffold`
+# — the app writes the files through the GitHub API (`scaffold.ts`), never through v1's
+# orchestrator — so there is no `--step N` for a `.md` to number. This is the OPPOSITE of the
+# other entries above it: those record v1 files a seed row still depends on; this records a seed
+# row that owes v1 nothing at all.
+missing-graph  scaffold-repo
+
 # The `unseeded` entries that used to sit here are gone with the class itself: a dispatch
 # graph with no seed row is now NORMAL — the seed is a subset of the framework — and is
 # reported under NOT TAKEN UP rather than failed on. A seed row with no graph still fails.

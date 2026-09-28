@@ -27,7 +27,7 @@ const ctx = (phaseRows: PhaseRow[]): AgentContext => ({
   renders: "doc", reviewPath: null, hasWebSearch: false, destination: "docs",
   output: null, inputs: [], doneCriteria: ["The SOW is filed"], inventory: [], phaseRows,
   template: null, templateName: null,
-  priorDraft: null, rejections: [], sprint: null,
+  priorDraft: null, rejections: [], sprint: null, subject: null, repoName: null,
 });
 
 describe("the rest of this phase, in the prompt", () => {

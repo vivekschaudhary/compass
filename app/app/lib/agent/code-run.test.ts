@@ -61,13 +61,10 @@ vi.mock("child_process", () => ({
 const { runCode } = await import("./code-run");
 
 function seed(opts: {
-  subjectKey?: string | null; subjectRef?: string | null; localPath?: string | null; ord?: number; workflow?: string;
-  repos?: { key: string; path: string }[];
+  subjectKey?: string | null; localPath?: string | null; ord?: number; workflow?: string;
   // Which earlier ords, in this same workflow, are themselves `renders: code` rows — what
   // `isFirstCodeStep` is computed from. Defaults to "every ord before this one" so build's
-  // existing tests (ords 1-4, all consecutive code rows of one PR) keep working unchanged;
-  // `foundation-architecture`'s tests override this to `[]` since its row 8 is a LONE code row
-  // with six non-code rows in front of it.
+  // existing tests (ords 1-4, all consecutive code rows of one PR) keep working unchanged.
   codeOrdsBefore?: number[];
 } = {}) {
   const ord = opts.ord ?? 1;
@@ -78,10 +75,8 @@ function seed(opts: {
     ...codeOrdsBefore.map((o, i) => ({ id: `prior${i}`, ord: o, workflow_version_id: "wv1", renders: "code" })),
   ];
   state.workflows = [{ id: "w1", code: opts.workflow ?? "build" }];
-  state.runs = [{ id: "r1", workflow_id: "w1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: opts.subjectRef === undefined ? "E1-S3" : opts.subjectRef }];
-  state.repos = opts.repos
-    ? opts.repos.map((r, i) => ({ engagement_id: "e1", key: r.key, name: `acme-${r.key}`, local_path: r.path, ord: i }))
-    : opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
+  state.runs = [{ id: "r1", workflow_id: "w1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
+  state.repos = opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
 }
 
 beforeEach(() => { proc.stdout = ""; proc.exit = 0; proc.spawned = []; });
@@ -232,89 +227,22 @@ describe("what the branch gets called", () => {
   });
 });
 
-// ── the code workflow that is about a repo, not a story ──────────────────────────────────────
+// ── the first code row of a workflow ────────────────────────────────────────────────────────────
 //
-// `scaffold-repo` is nested once per registered repo, with the repo's KEY as the run's subject and
-// no Jira key at all. So it is the one workflow allowed to reach the orchestrator without a story —
-// and the one that must pick its repo by that key rather than by position. Every other code
-// workflow still requires a story.
-describe("scaffold-repo — a run about one repo", () => {
-  const two = [{ key: "api", path: "/tmp/kt-api" }, { key: "ios", path: "/tmp/kt-ios" }];
-  const repoRun = (ref: string | null, over: Parameters<typeof seed>[0] = {}) =>
-    seed({ workflow: "scaffold-repo", subjectKey: null, subjectRef: ref, ord: 1, repos: two, ...over });
-
-  it("does not refuse for lack of a story", async () => {
-    repoRun("api");
-    proc.stdout = "https://github.com/acme/kt-api/pull/1";
-    const r = await runCode("e1", "t1");
-    expect(r.refusal).toBeNull();
-    expect(r.ok).toBe(true);
-  });
-
-  it("omits --story from the orchestrator args", async () => {
-    repoRun("api");
-    proc.stdout = "https://github.com/acme/kt-api/pull/1";
-    await runCode("e1", "t1");
-    expect(proc.spawned[0]).not.toContain("--story");
-  });
-
-  // THE BUG THIS GUARDS: with two repos registered, taking the first row builds every run in
-  // whichever was registered first — the ios scaffold would land in the api repo and the run would
-  // report success.
-  it("builds in the repo its subject names, not the first one registered", async () => {
-    repoRun("ios");
-    proc.stdout = "https://github.com/acme/kt-ios/pull/1";
-    await runCode("e1", "t1");
-    expect(proc.spawned[0]).toEqual(expect.arrayContaining(["--project-dir", "/tmp/kt-ios"]));
-    expect(proc.spawned[0]).not.toContain("/tmp/kt-api");
-  });
-
-  it("refuses a repo key that is not registered, and names it", async () => {
-    repoRun("android");
-    const r = await runCode("e1", "t1");
-    expect(r.refusal).toMatch(/'android'/);
-    expect(proc.spawned).toEqual([]);
-  });
-
-  it("refuses a run with no subject rather than guessing a repo", async () => {
-    repoRun(null);
-    const r = await runCode("e1", "t1");
-    expect(r.refusal).toMatch(/names no repo/i);
-    expect(proc.spawned).toEqual([]);
-  });
-
-  // Only a repo with a checkout on disk can be built in, and a key that resolves to a row with no
-  // path is the same failure as an unregistered one.
-  it("refuses a registered repo that has no local path", async () => {
-    repoRun("api", { repos: [{ key: "api", path: "" }] });
-    const r = await runCode("e1", "t1");
-    expect(r.refusal).toMatch(/'api'/);
-    expect(proc.spawned).toEqual([]);
-  });
-
-  // A lone code row still has to cut a fresh branch. The orchestrator's resume path finds no branch
-  // to recover and falls back to committing on whatever is checked out — `main`, on a real repo.
-  it("cuts a fresh branch: no --from-step for the first code row", async () => {
-    repoRun("api");
-    proc.stdout = "https://github.com/acme/kt-api/pull/1";
+// `isFirstCodeStep` is what decides whether a step cuts a fresh branch or takes the resume path,
+// and it is deliberately NOT `ord === 1`: a workflow whose code row is preceded by doc rows has a
+// high `ord` and must still cut fresh. `ord > 1` sent such a row down the RESUME path, and
+// `_prior_run_branch` found no branch to recover — the orchestrator fell back to "stay on the
+// current branch", meaning no worktree, no new branch, committing wherever HEAD already was. On a
+// real repo that is `main`.
+describe("the first code row of a workflow", () => {
+  it("cuts a fresh branch for a code row that follows doc rows, whatever its ord", async () => {
+    seed({ ord: 5, codeOrdsBefore: [] });
+    proc.stdout = "https://github.com/a/b/pull/1";
     await runCode("e1", "t1");
     const args = proc.spawned[0];
     expect(args).not.toContain("--from-step");
-    expect(args).toEqual(expect.arrayContaining(["--step", "1"]));
-  });
-
-  it("cuts a fresh branch for a code row that follows doc rows, whatever its ord", async () => {
-    repoRun("api", { ord: 8, codeOrdsBefore: [] });
-    proc.stdout = "https://github.com/acme/kt-api/pull/1";
-    await runCode("e1", "t1");
-    expect(proc.spawned[0]).not.toContain("--from-step");
-  });
-
-  it("build still refuses without a story — this is not a general relaxation", async () => {
-    seed({ workflow: "build", subjectKey: null });
-    const r = await runCode("e1", "t1");
-    expect(r.refusal).toMatch(/no story on the tracker/i);
-    expect(proc.spawned).toEqual([]);
+    expect(args).toEqual(expect.arrayContaining(["--step", "5"]));
   });
 });
 
