@@ -6,7 +6,7 @@
 // and the request must carry the shared secret the migration's `app.sweep_secret` setting was given.
 
 import { NextRequest } from "next/server";
-import { supabaseAdmin } from "@/app/lib/supabase";
+import { taskOwner } from "@/app/lib/data/job";
 import { resolveActor } from "@/app/lib/data/actor";
 import { runAgent } from "@/app/lib/agent/run";
 import { ok, refuse, fail } from "@/app/lib/http";
@@ -25,17 +25,10 @@ export async function POST(req: NextRequest) {
   const { taskId } = await req.json();
   if (!taskId) return refuse("taskId is required.", 400);
 
-  const sb = supabaseAdmin();
-  if (!sb) return fail("Supabase is not configured.");
-
-  const { data: task } = await sb
-    .from("work_task")
-    .select("engagement_id, role_code")
-    .eq("id", taskId)
-    .maybeSingle();
+  const task = await taskOwner(taskId);
   if (!task) return refuse("No such task.", 400);
 
-  const actor = await resolveActor(task.engagement_id as string, task.role_code as string);
+  const actor = await resolveActor(task.engagementId, task.roleCode);
   if (!actor) return refuse("That role does not exist on this engagement.", 400);
 
   const outcome = await runAgent(actor, taskId);

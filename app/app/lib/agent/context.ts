@@ -21,6 +21,7 @@ import { resolveJira, searchIssues } from "../jira";
 import { nextSprintNumber, committedJql } from "../data/sprint";
 import { holdersOn, type Actor } from "./../data/actor";
 import { sortByStep } from "../data/steps";
+import { subjectOfRun } from "../data/run-subject";
 
 
 /**
@@ -379,24 +380,6 @@ async function loadInputs(taskId: string, engagementId: string): Promise<PinnedI
  * graph was never written, and "this exists but its steps are unspecified" is a fact worth having
  * rather than an absence to infer from.
  */
-/**
- * What the run this task belongs to is ABOUT, when it is about one thing.
- *
- * Null for every run that covers its whole engagement — which is all of them except the per-epic
- * technical designs, so the common path is one cheap read that returns nothing and changes nothing.
- */
-export async function subjectOfRun(
-  runId: string | null,
-): Promise<{ ref: string | null; key: string | null } | null> {
-  if (!runId) return null;
-  const sb = supabaseAdmin();
-  if (!sb) return null;
-  const { data } = await sb.from("workflow_run")
-    .select("subject_ref, subject_key").eq("id", runId).maybeSingle();
-  if (!data?.subject_ref && !data?.subject_key) return null;
-  return { ref: data.subject_ref ?? null, key: data.subject_key ?? null };
-}
-
 /**
  * The rows of the run this task belongs to.
  *

@@ -53,6 +53,36 @@ const eslintConfig = defineConfig([
       }],
     },
   },
+  // ── the data layer does not import the agent ───────────────────────────────────────────────
+  //
+  // `agent/*` builds on `data/*` — run.ts calls the gates, the phases, the documents. When `data`
+  // imports `agent` back, the two become one module with a directory boundary drawn through it, and
+  // no split of either can be done in isolation. `subjectOfRun` was the case that made `gates`
+  // and `materialise` reach into `agent/context` for a single query.
+  //
+  // The files below still do, and are listed rather than exempted by glob: each is a known
+  // violation, not a permitted pattern, and this list should only ever get shorter. Nothing new
+  // may join it. What they take from the agent is mostly `agent/context`'s loaders, which is
+  // Phase 3's split of that file (they belong in data, or in a shared module both layers import).
+  {
+    files: ["app/lib/data/**/*.ts"],
+    ignores: [
+      "**/*.test.ts",
+      "app/lib/data/ticket-body.ts", // agentMarkdown, doneCriteriaFor, loadDocumentText, selectHost
+      "app/lib/data/tasks.ts", // pinInputs
+      "app/lib/data/job.ts", // HEARTBEAT_STALE_MINUTES
+    ],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: ["**/agent", "**/agent/*", "@/app/lib/agent", "@/app/lib/agent/*"],
+          message:
+            "lib/data must not import lib/agent — agent builds on data, not the reverse. Move what " +
+            "you need into lib/data (as `run-subject.ts` did), or into a module both layers import.",
+        }],
+      }],
+    },
+  },
 ]);
 
 export default eslintConfig;

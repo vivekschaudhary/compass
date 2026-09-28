@@ -47,6 +47,9 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
   // visit, and neither is a reason for the document not to render.
   const [wide, setWide] = useState(false);
   useEffect(() => {
+    // Deliberate: this MUST run after mount (see above), and the lint rule cannot tell that from the
+    // cascading-render case it exists to catch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     try { setWide(localStorage.getItem(WIDE_KEY) === "true"); } catch { /* absent is fine */ }
   }, []);
 

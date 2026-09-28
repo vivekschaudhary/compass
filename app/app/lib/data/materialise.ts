@@ -28,7 +28,7 @@ import { parseCommitments } from "./sprint-rows";
 import { backlogOf } from "./backlog";
 import { mirrorBacklog, mirrorSprint } from "./tracker";
 import { destinationOf, resolvePath } from "../adapters";
-import { subjectOfRun } from "../agent/context";
+import { subjectOfRun } from "./run-subject";
 
 export type Materialised = { path: string; created: number; updated: number; problems: string[] };
 
