@@ -309,6 +309,55 @@ async function finished(
   });
 }
 
+/** How often the model call touches `heartbeat_at` while it is in flight. See `withHeartbeat`. */
+const HEARTBEAT_INTERVAL_MS = 20_000;
+
+/**
+ * Keep `work_task.heartbeat_at` fresh for as long as `fn` is still running.
+ *
+ * The claim (`executor` set) already says SOMEONE is working this row; it says nothing about
+ * whether that someone is still alive. A process killed mid-`host.dispatch` — a dev-server restart,
+ * a deploy, a crash — leaves `executor` set forever with nothing left to clear it, which is the
+ * exact shape of the stuck-run incident this app's operator hit twice, both times fixed by hand
+ * with a raw Postgres PATCH. The sweep (`run_heartbeat.sql`) treats a stale heartbeat as an
+ * abandoned claim; this is the other half, keeping it un-stale for as long as the call is genuinely
+ * still going.
+ *
+ * The timer is cleared in `finally`, not just after a successful resolve — a rejection must stop
+ * touching the row too, or the interval outlives the call it was timing and keeps a dead task
+ * looking alive until the process itself exits.
+ */
+async function withHeartbeat<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
+  const sb = supabaseAdmin();
+  // Supabase's query builder is a lazy thenable — building the chain does nothing until it is
+  // awaited. `setInterval`'s callback cannot be `async` in a way anyone awaits its result, so this
+  // wraps the await in its own fire-and-forget async function rather than leaving the request
+  // unbuilt-but-never-sent, which is silent in exactly the way rule 11 warns against: no error,
+  // no effect, and nothing about it looks wrong from the call site.
+  const touch = () => {
+    void (async () => {
+      try {
+        await sb
+          ?.from("work_task")
+          .update({ heartbeat_at: new Date().toISOString() })
+          .eq("id", taskId)
+          // A row the sweep already released (or one that finished) must not be marked alive again
+          // by a timer tick that fires after the fact — only touch a claim this call still holds.
+          .eq("executor", "app");
+      } catch {
+        // Best-effort. A missed tick just means the NEXT one (20s later) still lands before the
+        // sweep's 10-minute staleness window could possibly close.
+      }
+    })();
+  };
+  const timer = setInterval(touch, HEARTBEAT_INTERVAL_MS);
+  try {
+    return await fn();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 /** How long the sweep waits before retrying a failed attempt, indexed by attempt number. Capped. */
 const BACKOFF_MINUTES = [1, 2, 5, 15, 30];
 /** Past this many failed attempts, stop retrying and surface it rather than retry forever. */
@@ -583,7 +632,7 @@ export async function runAgent(
   // more reachable than it was when it needed two people clicking at once, so it is closed here.
   const claim = await sb
     .from("work_task")
-    .update({ executor: "app" })
+    .update({ executor: "app", heartbeat_at: new Date().toISOString() })
     .eq("id", taskId)
     .is("executor", null)
     .select("id");
@@ -625,7 +674,7 @@ export async function runAgent(
     // Which host runs this is a configuration answer, and an unavailable one HALTS here rather
     // than quietly becoming the metered API — see `hosts/select.ts`.
     const host = selectHost();
-    message = await host.dispatch({
+    message = await withHeartbeat(taskId, async () => host.dispatch({
       model: MODEL,
       // 64k, not 32k. A run came back with a complete 1,760-character summary and an EMPTY
       // sections array: adaptive thinking at high effort plus a long summary left no budget for
@@ -646,7 +695,7 @@ export async function runAgent(
         // model sees rather than something buried above a long conversation.
         ...(revision ? [{ role: "user" as const, content: revision }] : []),
       ],
-    });
+    }));
   } catch (e) {
     await releaseExecutor(taskId, ctx, { failed: true });
     await finished(ctx.engagementId, taskId, ctx.roleCode, "error", null, {

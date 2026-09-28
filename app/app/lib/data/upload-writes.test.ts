@@ -27,7 +27,7 @@ vi.mock("./publish", () => ({
     return { ok: true, url: "http://docs/page-1", id: "page-1" };
   },
 }));
-vi.mock("../agent/context", () => ({ subjectOfRun: async () => null }));
+vi.mock("./run-subject", () => ({ subjectOfRun: async () => null }));
 vi.mock("../jira", () => ({}));
 vi.mock("./sprint", () => ({ sprintJql: () => "", sprintNoOf: () => null }));
 

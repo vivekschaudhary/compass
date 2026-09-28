@@ -2,11 +2,25 @@
 //
 // A route rather than a server action because a real run takes minutes: it keeps the long request
 // out of the render path, and anything can call it.
+//
+// DETACHED. This used to `await runAgent` and send its outcome back in the response — the request
+// stayed open for however long the model took, and the response WAS the run's own result ("asked 2
+// questions", "drafted 6 sections"). That made "the fetch resolved" the only signal the client had
+// for "the run finished", which is exactly backwards once a page can be reopened mid-run from a
+// different tab or a reload: the outcome has to live in the row (`work_task`, its turns), read
+// however the page happens to load, not in a response only the tab that made the request ever sees.
+//
+// So this responds the moment the claim is accepted, not when the run is done. `runAgent` keeps
+// doing everything it already did — the claim, the heartbeat, the backoff, filing the draft, writing
+// the turn — none of that changed; it just no longer has anyone waiting on its return value. The
+// page's own running/stalled state (heartbeat-driven) and the realtime channel are what tell the
+// story from here.
 
 import { NextRequest } from "next/server";
 import { resolveActor } from "@/app/lib/data/actor";
 import { runAgent } from "@/app/lib/agent/run";
-import { ok, refuse, fail } from "@/app/lib/http";
+import { detach } from "@/app/lib/agent/detach";
+import { ok, refuse } from "@/app/lib/http";
 
 export const maxDuration = 800;
 
@@ -14,13 +28,7 @@ export async function POST(req: NextRequest) {
   const { engagement, role, taskId, holderId } = await req.json();
   const actor = await resolveActor(engagement, role, holderId);
   if (!actor) return refuse("no such role on this engagement", 400);
-  const outcome = await runAgent(actor, taskId);
-  // `AgentOutcome` is a domain result and keeps its `kind`: asked, drafted and refused are all runs
-  // that happened. Only `kind: "error"` leaves that vocabulary, because it is the one outcome that
-  // must not arrive as a 200. It mixes refusals ("that task is not in your engagement") with real
-  // failures (the model call threw) under one kind, so it is sent as a failure; telling them apart
-  // belongs in `runAgent`, not here.
 
-  if (outcome.kind === "error") return fail(outcome.message);
-  return ok(outcome);
+  detach(() => runAgent(actor, taskId));
+  return ok({ kind: "accepted" as const, taskId });
 }

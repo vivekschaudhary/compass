@@ -6,6 +6,7 @@ import { emit } from "./events";
 import { expandLinks, type LinkRead } from "./links";
 import { publishToDocs } from "./publish";
 import type { Actor } from "./actor";
+import { HEARTBEAT_STALE_MINUTES } from "../agent/heartbeat-config";
 
 export type Turn = {
   id: string; ord: number; authorKind: string;
@@ -333,12 +334,74 @@ export async function childRunBlock(actor: Actor, taskId: string): Promise<strin
 export async function taskState(
   actor: Actor,
   taskId: string,
-): Promise<{ state: string; executor: string | null } | null> {
+): Promise<{
+  state: string; executor: string | null; heartbeatAt: string | null; startedAt: string | null;
+} | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
   const { data } = await sb.from("work_task")
-    .select("state, executor").eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
-  return data ? { state: data.state, executor: data.executor } : null;
+    .select("state, executor, heartbeat_at, started_at")
+    .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle();
+  return data
+    ? {
+        state: data.state, executor: data.executor,
+        heartbeatAt: data.heartbeat_at, startedAt: data.started_at,
+      }
+    : null;
+}
+
+/**
+ * Who a task belongs to — for a caller that has no session to take an engagement from.
+ *
+ * Deliberately NOT scoped by an Actor: its one caller is the sweep, which arrives from a Postgres
+ * function with a shared secret and no user, so the engagement and role can only come from the row
+ * itself. Anything with a session must use `taskState` (or another Actor-scoped read) instead.
+ */
+export async function taskOwner(
+  taskId: string,
+): Promise<{ engagementId: string; roleCode: string } | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("work_task")
+    .select("engagement_id, role_code").eq("id", taskId).maybeSingle();
+  return data
+    ? { engagementId: data.engagement_id as string, roleCode: data.role_code as string }
+    : null;
+}
+
+/**
+ * The human alternative to waiting up to `HEARTBEAT_STALE_MINUTES` for the sweep, or to me
+ * PATCH-ing the row by hand — which is what "clearing the executor" has meant every time this has
+ * come up so far.
+ *
+ * CAS'd on the SAME staleness condition the sweep itself uses (`executor is not null and
+ * heartbeat_at` older than the threshold), not just "clear whatever is there" — a click landing on
+ * a page that loaded a few seconds before a genuinely-still-running task actually finished must not
+ * be able to stomp on a live run out from under it. `run_attempts`/`next_attempt_at` reset to
+ * nothing owed: a person choosing to reset this is a fresh start, not another automatic retry.
+ */
+export async function resetStalledRun(
+  actor: Actor, taskId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const staleBefore = new Date(Date.now() - HEARTBEAT_STALE_MINUTES * 60_000).toISOString();
+  const { data } = await sb
+    .from("work_task")
+    .update({ executor: null, heartbeat_at: null, run_attempts: 0, next_attempt_at: null })
+    .eq("id", taskId)
+    .eq("engagement_id", actor.engagementId)
+    .not("executor", "is", null)
+    // No heartbeat at all is judged from `started_at` (see `lastSign`) — `.lt` alone never matches a
+    // null, which would leave exactly the claim that most needs resetting impossible to reset.
+    .or(`heartbeat_at.lt.${staleBefore},and(heartbeat_at.is.null,started_at.lt.${staleBefore})`)
+    .select("id");
+
+  if (!data?.length) {
+    return { ok: false, error: "This run isn't stalled — it may have just finished. Refresh first." };
+  }
+  return { ok: true };
 }
 
 /**

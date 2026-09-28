@@ -21,6 +21,7 @@ import {
 } from "@/app/lib/data/job";
 import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
+import { isStale, lastSign } from "@/app/lib/agent/heartbeat-config";
 import { documentTree } from "@/app/lib/data/documents";
 import { commentsForSections } from "@/app/lib/data/comments";
 import { readyAllMet } from "../Gate";
@@ -33,6 +34,7 @@ import { Composer } from "./Composer";
 import { ApprovePanel } from "./ApprovePanel";
 import { NestedRunPanel } from "./NestedRunPanel";
 import { RealtimeRefresh } from "./RealtimeRefresh";
+import { OptimisticTurnsProvider } from "./OptimisticTurns";
 import { DocTreeNav } from "./DocTreeNav";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +99,15 @@ export default async function JobPage(
   const autoRun =
     state === "running" && taskRow?.executor === null && turns.length === 0;
 
+  // Someone else's claim — a run this tab never started (another tab, a reload, coming back
+  // later). `autoRun` above only ever looks at THIS load; a claimed row with a live heartbeat must
+  // say so plainly instead of offering "Run the agent" again, which is the exact ambiguity that
+  // made a real run look identical to nothing happening.
+  const sign = lastSign(taskRow?.heartbeatAt ?? null, taskRow?.startedAt ?? null);
+  const stale = isStale(sign);
+  const running = Boolean(taskRow?.executor) && !stale;
+  const stalled = Boolean(taskRow?.executor) && stale;
+
   const statuses = gates.get(taskId) ?? [];
   const doneCriteria = statuses
     .filter((g) => g.kind === "done")
@@ -159,6 +170,7 @@ export default async function JobPage(
         {/* <DocTreeNav engagement={engagement} roleCode={roleCode} tree={tree} produces={ctx.produces} /> */}
 
         <section className="chat-col">
+          <OptimisticTurnsProvider realCount={turns.length}>
           <Conversation turns={turns} />
 
           {/* Pinned below the scrolling conversation, not carried away with it — the approve
@@ -210,10 +222,14 @@ export default async function JobPage(
                   autoRun={autoRun}
                   idle={state === "idle"}
                   readyMet={readyAllMet(statuses)}
+                  running={running}
+                  stalled={stalled}
+                  heartbeatAt={sign}
                 />
               </>
             )}
           </div>
+          </OptimisticTurnsProvider>
         </section>
 
         <DraftPanel

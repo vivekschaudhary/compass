@@ -1385,8 +1385,8 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: var(--space-4);
-  padding: var(--space-4);
+  /* margin-top: var(--space-4);
+  padding: var(--space-4); */
   border-radius: var(--radius-lg);
   background: var(--color-accent-2-100);
 }
@@ -1849,6 +1849,11 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   letter-spacing: 0;
   color: var(--color-neutral-500);
 }
+/* The optimistic echo of a message THIS tab just sent, before the write is confirmed — faded, not
+   hidden, so it reads as "sending" rather than looking identical to an already-recorded message. */
+.msg-pending {
+  opacity: 0.6;
+}
 .msg-body {
   font-size: 13px;
 }
@@ -1877,11 +1882,43 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   background: var(--color-neutral-500);
   animation: msg-thinking-bounce 1.2s infinite ease-in-out;
 }
-.msg-thinking-dot:nth-child(2) { animation-delay: 0.15s; }
-.msg-thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+.msg-thinking-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.msg-thinking-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
 @keyframes msg-thinking-bounce {
-  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-3px); }
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.msg-thinking-elapsed {
+  font-size: 12px;
+  color: var(--color-neutral-500);
+  margin-left: 2px;
+}
+
+/* A claimed run whose heartbeat has gone stale — names an actual defect (a dead process), so it
+   earns more weight than `.jobs-note`'s plain neutral tone. Per this file's own rule (`.start-error`,
+   `.ctx-warn`): no red in this palette, emphasis is ink weight, not colour. */
+.jobs-note-stalled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--color-accent-700);
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
 }
 
 /* the deliverable */
