@@ -1,7 +1,7 @@
 import { runCode, storyFor } from "../code-run";
 import { jiraForEngagement, addRemoteLink, addComment } from "../../jira";
 import { recordTurn } from "./turn-context";
-import { handOver, releaseExecutor } from "./effects";
+import { finished, handOver, releaseExecutor } from "./effects";
 import type { AgentOutcome, Turn } from "./types";
 
 /**
@@ -9,11 +9,6 @@ import type { AgentOutcome, Turn } from "./types";
  * orchestrator creates the branch, runs the project's CI-parity checks and opens a pull request
  * ONLY on green; what comes back is a fact, not a claim, which is why the model writes the intent
  * and the app writes the result.
- *
- * Moved out of `runAgent` as-is — the code refusal here releases the claim BEFORE recording why,
- * the reverse of every other exit in this file, and emits no `agent.run.finished`. That is
- * unchanged from before the split; see the Phase 2 PR description for the discrepancy, tracked
- * separately rather than fixed silently as part of a pure move.
  */
 export async function handleCode({ actor, taskId, ctx, message, call }: Turn): Promise<AgentOutcome> {
   const input = call.input as { summary?: string; approach?: string; files?: unknown };
@@ -31,8 +26,16 @@ export async function handleCode({ actor, taskId, ctx, message, call }: Turn): P
   const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "" });
 
   if (built.refusal) {
-    await releaseExecutor(taskId, ctx, { failed: true });
+    // Recorded BEFORE releasing, same order as every other exit — the turn is why the row failed,
+    // and a release that raced ahead of it used to leave a window where the sweep could pick the
+    // row back up before the reason for the last failure was on the record.
     await recordTurn(taskId, `**The build did not start.** ${built.refusal}`, ctx);
+    await releaseExecutor(taskId, ctx, { failed: true });
+    // Every other exit closes the run in the log; this one silently didn't. A build that never
+    // started looked, from the log, like a run that never finished.
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "build-refused", message, {
+      refusal: built.refusal,
+    });
     return { kind: "error", message: built.refusal };
   }
 
