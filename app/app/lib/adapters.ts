@@ -238,7 +238,11 @@ export function resolvePath(
 
   let bad = false;
   const out = path.replace(/\{([a-z_]+)\}/g, (whole, token) => {
-    if (token !== "epic" && token !== "subject") { bad = true; return whole; }
+    // Kept in sync by hand with `FAN_OUT_KINDS` in `data/phases/nested.ts` — that registry decides
+    // which token gets a fan-out (one child run per subject) at all; this decides which token names
+    // this function will actually fill in. A token recognized by one and not the other is a run
+    // that opens correctly and then fails to file anything, or a token nobody can ever reach.
+    if (token !== "epic" && token !== "subject" && token !== "repo") { bad = true; return whole; }
     if (!filled) { bad = true; return whole; }
     return filled;
   });

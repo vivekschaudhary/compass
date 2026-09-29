@@ -148,59 +148,21 @@ async function openNestedSingle(
     : one;
 }
 
-/**
- * Open one child run per epic, for a nesting row whose nested workflow authors a per-epic document.
- * Epic technical design is the first of these — a design is authored per epic, as its own page,
- * reviewed and approved on its own.
- *
- * FANNING OUT OVER ZERO EPICS REFUSES. `for (const e of [])` completes, the row closes, and a
- * technical design phase that designed nothing looks exactly like one that designed everything.
- * That is the aggregate-over-no-rows failure this repo keeps re-learning, so it is an error.
- */
-async function openNestedPerEpic(
-  actor: Actor,
-  taskId: string,
-): Promise<FanOutResult> {
-  const epics = await epicsOfRun(taskId);
-  if (!epics.length) {
-    return {
-      ok: false,
-      error:
-        "This row opens one technical design per epic, and this run has no epics. " +
-        "Nothing was opened — draft and approve the epics first.",
-    };
-  }
-
-  const runs: {
-    runId: string;
-    subject: string | null;
-    mirrored: BoardResult;
-    startedTaskId: string | null;
-  }[] = [];
-  for (const epic of epics) {
-    const child = await openNested(actor, taskId, epic.ref);
-    // One epic failing does not silently drop the rest: the others still open, and the failure is
-    // returned rather than logged nowhere. A partial fan-out is honest; a quiet one is not.
-    if (!child.ok) return { ok: false, error: `${epic.ref}: ${child.error}` };
-    runs.push({
-      runId: child.runId,
-      subject: epic.ref,
-      mirrored: child.mirrored,
-      startedTaskId: child.startedTaskId,
-    });
-  }
-  return { ok: true, runs };
-}
 
 /**
- * Open the child run(s) for a nesting row — one, or one per epic.
+ * Open the child run(s) for a nesting row — one, or one per subject.
  *
- * The only caller of `nestedIsPerEpic`. WHICH SHAPE APPLIES IS DERIVED, NOT CONFIGURED — a workflow
- * declares itself per-epic by producing a per-epic path (`03-architecture/epic/{epic}`), which it
- * must do anyway or its documents would collide. A separate flag saying the same thing is a second
- * source of truth, and the two would eventually disagree — one of them silently. This function is
- * a router over that derived answer, not a home for either procedure's own logic — see
- * `openNestedSingle`/`openNestedPerEpic` for what each shape actually does.
+ * WHICH SHAPE APPLIES IS DERIVED, NOT CONFIGURED — a workflow declares itself per-epic (or
+ * per-repo, or whatever comes next) by producing a per-subject path
+ * (`03-architecture/epic/{epic}`, `scaffold/{repo}@scm`), which it must do anyway or its documents
+ * would collide. A separate flag saying the same thing is a second source of truth, and the two
+ * would eventually disagree — one of them silently. `nestedFanOutKind` derives the answer;
+ * `FAN_OUT_KINDS` is the one place a new kind gets added — everything else here (`openNested`,
+ * `openNestedPerSubject`) is already generic over which kind it is.
+ *
+ * The `{epic}` case was the only one for a long time, hardcoded end to end — a second real case
+ * (`{repo}`, `scaffold-repos` fanning out over the repos a scaffold plan registers) is what forced
+ * this apart. Adding a THIRD later costs one registry entry, not a new copy of the loop.
  */
 export async function openNestedFanOut(
   actor: Actor,
@@ -209,22 +171,51 @@ export async function openNestedFanOut(
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
 
-  return (await nestedIsPerEpic(taskId))
-    ? openNestedPerEpic(actor, taskId)
-    : openNestedSingle(actor, taskId);
+  const kind = await nestedFanOutKind(taskId);
+  if (!kind) return openNestedSingle(actor, taskId);
+
+  const { subjectsOf, emptyError } = FAN_OUT_KINDS[kind];
+  return openNestedPerSubject(actor, taskId, await subjectsOf(taskId), emptyError);
 }
 
-/** Does the workflow this row nests author one document per epic? */
-async function nestedIsPerEpic(taskId: string): Promise<boolean> {
+/** One subject this taskId's nested workflow can fan out over. */
+type FanOutSubject = { ref: string };
+
+/**
+ * Every recognized fan-out kind, keyed by the token its nested workflow's `produces` path uses
+ * (`{epic}`, `{repo}`). `resolvePath` (`adapters.ts`) must recognize the same token name, or a
+ * subject this opens a run WITH still can't be filled INTO the path — the two lists are kept in
+ * sync by hand, same as `MAX_RUN_ATTEMPTS` between `run.ts` and the SQL sweep.
+ */
+const FAN_OUT_KINDS: Record<string, {
+  subjectsOf: (taskId: string) => Promise<FanOutSubject[]>;
+  emptyError: string;
+}> = {
+  epic: {
+    subjectsOf: epicsOfRun,
+    emptyError:
+      "This row opens one technical design per epic, and this run has no epics. " +
+      "Nothing was opened — draft and approve the epics first.",
+  },
+  repo: {
+    subjectsOf: reposOfRun,
+    emptyError:
+      "This row opens one scaffold run per repo, and no repos are registered on this " +
+      "engagement. Nothing was opened — register the repos first.",
+  },
+};
+
+/** Which fan-out kind (if any) the nested workflow's own steps declare, from its published version. */
+async function nestedFanOutKind(taskId: string): Promise<string | null> {
   const sb = supabaseAdmin();
-  if (!sb) return false;
+  if (!sb) return null;
 
   const { data: task } = await sb
     .from("work_task")
     .select("org_id, engagement_id, workflow_step_id")
     .eq("id", taskId)
     .maybeSingle();
-  if (!task?.workflow_step_id) return false;
+  if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb
     .from("workflow_step")
@@ -232,7 +223,7 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
     .eq("id", task.workflow_step_id)
     .maybeSingle();
   const code = step?.nests_workflow_code as string | null;
-  if (!code) return false;
+  if (!code) return null;
 
   // The engagement's override wins over the org default, exactly as `open_workflow_run` resolves it
   // — reading the org copy here would answer for a workflow this run is not using.
@@ -245,7 +236,7 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
     .order("engagement_id", { nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  if (!wf) return false;
+  if (!wf) return null;
 
   const { data: ver } = await sb
     .from("workflow_version")
@@ -253,21 +244,59 @@ async function nestedIsPerEpic(taskId: string): Promise<boolean> {
     .eq("workflow_id", wf.id)
     .eq("status", "published")
     .maybeSingle();
-  if (!ver) return false;
+  if (!ver) return null;
 
   const { data: steps } = await sb
     .from("workflow_step")
     .select("produces")
     .eq("workflow_version_id", ver.id);
-  return (steps ?? []).some((s) =>
-    (s.produces as string | null)?.includes("{epic}"),
-  );
+  const produces = (steps ?? []).map((s) => s.produces as string | null);
+
+  for (const kind of Object.keys(FAN_OUT_KINDS)) {
+    if (produces.some((p) => p?.includes(`{${kind}}`))) return kind;
+  }
+  return null;
+}
+
+/**
+ * Open one child run per subject, or refuse if there are none.
+ *
+ * FANNING OUT OVER ZERO SUBJECTS REFUSES. `for (const s of [])` completes, the row closes, and a
+ * fan-out that opened nothing looks exactly like one that opened everything — the aggregate-over-
+ * no-rows failure this repo keeps re-learning (rule 11). Shared by every kind in `FAN_OUT_KINDS`;
+ * only the subject list and the empty-case message differ between them.
+ */
+async function openNestedPerSubject(
+  actor: Actor,
+  taskId: string,
+  subjects: FanOutSubject[],
+  emptyError: string,
+): Promise<FanOutResult> {
+  if (!subjects.length) return { ok: false, error: emptyError };
+
+  const runs: {
+    runId: string;
+    subject: string | null;
+    mirrored: BoardResult;
+    startedTaskId: string | null;
+  }[] = [];
+  for (const subject of subjects) {
+    const child = await openNested(actor, taskId, subject.ref);
+    // One subject failing does not silently drop the rest: the others still open, and the failure
+    // is returned rather than logged nowhere. A partial fan-out is honest; a quiet one is not.
+    if (!child.ok) return { ok: false, error: `${subject.ref}: ${child.error}` };
+    runs.push({
+      runId: child.runId,
+      subject: subject.ref,
+      mirrored: child.mirrored,
+      startedTaskId: child.startedTaskId,
+    });
+  }
+  return { ok: true, runs };
 }
 
 /** The epics drafted in this task's own run — what the fan-out opens a design for. */
-async function epicsOfRun(
-  taskId: string,
-): Promise<{ ref: string; key: string | null }[]> {
+async function epicsOfRun(taskId: string): Promise<FanOutSubject[]> {
   const sb = supabaseAdmin();
   if (!sb) return [];
 
@@ -289,12 +318,37 @@ async function epicsOfRun(
 
   const { data: items } = await sb
     .from("backlog_item")
-    .select("ref, ticket_key")
+    .select("ref")
     .in("task_id", ids)
     .eq("kind", "epic")
     .order("ord");
-  return (items ?? []).map((i) => ({
-    ref: i.ref as string,
-    key: (i.ticket_key as string | null) ?? null,
-  }));
+  return (items ?? []).map((i) => ({ ref: i.ref as string }));
+}
+
+/**
+ * The repos registered on this task's engagement — what `scaffold-repos` opens a build for.
+ *
+ * By ENGAGEMENT, not by run: unlike epics (drafted fresh inside the run that fans out over them),
+ * repos are registered once, by `accept-scaffold`, and `repo` carries no `workflow_run_id` of its
+ * own to scope by — there is exactly one live scaffold-acceptance cycle per engagement in practice.
+ */
+async function reposOfRun(taskId: string): Promise<FanOutSubject[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+
+  const { data: task } = await sb
+    .from("work_task")
+    .select("engagement_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task?.engagement_id) return [];
+
+  const { data: repos } = await sb
+    .from("repo")
+    .select("key")
+    .eq("engagement_id", task.engagement_id)
+    .order("ord");
+  return (repos ?? [])
+    .filter((r) => r.key)
+    .map((r) => ({ ref: r.key as string }));
 }

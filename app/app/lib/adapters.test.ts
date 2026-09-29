@@ -70,6 +70,16 @@ describe("resolvePath", () => {
       .toBe("03-architecture/epic/KAN-12-review");
   });
 
+  // The second real fan-out kind (`scaffold-repos` → `execute-scaffold`'s own `produces`) — must
+  // stay in sync by hand with `FAN_OUT_KINDS` in `data/phases/nested.ts`; see that file's own
+  // comment. A repo's own key, not a Jira key — there is no tracker for a repo the way there is
+  // for an epic.
+  it("fills {repo} from the subject too", () => {
+    const d = destinationOf("scaffold/{repo}@scm");
+    expect(d).toEqual({ path: "scaffold/{repo}", slot: "scm" });
+    expect(resolvePath(d!.path, { ref: "app", key: null })).toBe("scaffold/app");
+  });
+
   // The ticket key is what somebody holding the epic can search for; `E1` means something only
   // inside the turn that drafted it.
   it("prefers the tracker key, and falls back to the ref before Jira has accepted the epic", () => {
