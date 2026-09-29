@@ -9,6 +9,7 @@ import { holdersOn, type Actor } from "../../data/actor";
 import { sortByStep } from "../../data/steps";
 import { subjectOfRun } from "../../data/run-subject";
 import { withoutTaskCatalogue } from "./prompts";
+import { resolveReviewedTask } from "./resolve-reviewed-task";
 import type { AgentContext, PhaseRow, PinnedInput, SprintContext, WorkflowSummary } from "./types";
 
 /**
@@ -435,15 +436,26 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
       ? await templateFor(templateName, actor.engagementId, actor.orgId)
       : null;
 
-    // `doc-review`/`code-review` ONLY: what the panel shows, resolved from the ONE `depends_on`
-    // row's own `produces` — read-only, display-side, never fed to `runAgent`.
+    // `doc-review`/`code-review` ONLY: what the panel shows — read-only, display-side, never fed to
+    // `runAgent`. NOT always the one `depends_on` row: a review-of-a-review chain (`review-scaffold`
+    // reviews `scaffold-foundation`'s output; `accept-scaffold` depends on `review-scaffold`, which
+    // is itself a `doc-review` row with no `produces` of its own) left this at a single hop, found a
+    // step with nothing to show, and the whole ApprovePanel silently never appeared — the row was
+    // genuinely `hitl`, waiting on a human, with no visible way to act on it. `resolveReviewedTask`
+    // walks back through `depends_on` until it finds a step that actually produces something.
     if (renders === "doc-review" || renders === "code-review") {
-      const { data: reviewed } = await sb.from("workflow_step")
-        .select("produces")
-        .eq("workflow_version_id", step?.workflow_version_id as string)
-        .eq("task", (step?.depends_on as string[] | null)?.[0] ?? "")
-        .maybeSingle();
-      const reviewedDest = destinationOf(reviewed?.produces);
+      const startTask = (step?.depends_on as string[] | null)?.[0] ?? null;
+      const reviewedProduces = await resolveReviewedTask(startTask, async (t) => {
+        const { data } = await sb.from("workflow_step")
+          .select("produces, depends_on")
+          .eq("workflow_version_id", step?.workflow_version_id as string)
+          .eq("task", t)
+          .maybeSingle();
+        return data
+          ? { produces: data.produces as string | null, dependsOn: data.depends_on as string[] | null }
+          : null;
+      });
+      const reviewedDest = destinationOf(reviewedProduces);
       reviewPath = reviewedDest
         ? resolvePath(reviewedDest.path, await subjectOfRun(task.workflow_run_id as string | null))
         : null;
