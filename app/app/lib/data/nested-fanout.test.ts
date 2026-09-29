@@ -17,8 +17,8 @@ type Row = Record<string, unknown>;
 
 const state: {
   tasks: Row[]; steps: Row[]; workflows: Row[]; versions: Row[];
-  versionSteps: Row[]; backlog: Row[];
-} = { tasks: [], steps: [], workflows: [], versions: [], versionSteps: [], backlog: [] };
+  versionSteps: Row[]; backlog: Row[]; repos: Row[];
+} = { tasks: [], steps: [], workflows: [], versions: [], versionSteps: [], backlog: [], repos: [] };
 
 /** Every open_nested_run call the code under test made, in order. */
 const opened: { taskId: string; subject: string | null }[] = [];
@@ -33,6 +33,7 @@ const rowsFor = (table: string): Row[] =>
   : table === "workflow" ? state.workflows
   : table === "workflow_version" ? state.versions
   : table === "backlog_item" ? state.backlog
+  : table === "repo" ? state.repos
   : [];
 
 vi.mock("../supabase", () => ({
@@ -113,6 +114,23 @@ function seed(opts: { perEpic: boolean; epics: string[] }) {
   }));
 }
 
+/** The `scaffold-repos` row and the `scaffold-repo` workflow it nests, per-repo. */
+function seedRepoFanOut(opts: { repos: string[] }) {
+  state.tasks = [
+    { id: "t-nest", org_id: "org-1", engagement_id: "e1", workflow_step_id: "s-nest", workflow_run_id: "run-scaffold" },
+  ];
+  state.steps = [{ id: "s-nest", nests_workflow_code: "scaffold-repo", kind: "workflow" }];
+  state.workflows = [{ id: "w-sr", org_id: "org-1", code: "scaffold-repo", engagement_id: null }];
+  state.versions = [{ id: "v-sr", workflow_id: "w-sr", status: "published" }];
+  state.versionSteps = [
+    { workflow_version_id: "v-sr", produces: "scaffold/{repo}@scm" },
+    { workflow_version_id: "v-sr", produces: null },
+  ];
+  state.repos = opts.repos.map((key, i) => ({
+    key, engagement_id: "e1", ord: i,
+  }));
+}
+
 beforeEach(() => { opened.length = 0; remeasured.length = 0; started.length = 0; });
 
 describe("a nesting row that fans out", () => {
@@ -163,6 +181,30 @@ describe("a nesting row that fans out", () => {
 
     expect(r.ok).toBe(true);
     expect(opened.map((o) => o.subject)).toEqual(["E1"]);
+  });
+});
+
+// The second real fan-out kind — added to prove `{epic}` was never special-cased anywhere it
+// shouldn't have been. `execute-scaffold`'s own `produces` is `scaffold/{repo}@scm`; the repos come
+// from the `repo` table (registered once per engagement by `accept-scaffold`), not from a run's own
+// backlog the way epics do — the one place this kind's own subject source genuinely differs.
+describe("a nesting row that fans out over repos", () => {
+  it("opens one run per registered repo, each carrying its own key as the subject", async () => {
+    seedRepoFanOut({ repos: ["app", "api"] });
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(true);
+    expect(opened.map((o) => o.subject)).toEqual(["app", "api"]);
+    expect(new Set((r as { runs: { runId: string }[] }).runs.map((x) => x.runId)).size).toBe(2);
+  });
+
+  it("refuses when no repos are registered, rather than opening nothing and reporting success", async () => {
+    seedRepoFanOut({ repos: [] });
+    const r = await openNestedFanOut(ACTOR, "t-nest");
+
+    expect(r.ok).toBe(false);
+    expect((r as { error: string }).error).toMatch(/no repos/i);
+    expect(opened, "nothing should have been opened").toEqual([]);
   });
 });
 
