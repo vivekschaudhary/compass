@@ -424,6 +424,14 @@ export const TOOL_FOR: Record<string, string> = {
   sprint: "sprint",
   roster: "roster",
   code: "code",
+  // A step whose own `output` is more specific than plain `code` — `execute-scaffold`'s is
+  // `scaffold`, the row's own name for "this is a code-output step that builds a repo scaffold" —
+  // still dispatches through the SAME `code` tool; there is no separate scaffold tool to call. Left
+  // unrecognized, this fell through to the `GENERAL` default below (`ask`/`draft`, neither of which
+  // fits "build a repo"), and the model settled on an empty `ask` every single run: reproducible,
+  // confirmed live, not a one-off. The label stays `scaffold` in the data — the row's own vocabulary
+  // is worth keeping — only the CODE gained the alias.
+  scaffold: "code",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
   // by a person must not be able to write it, and the reliable way to stop a model doing something
