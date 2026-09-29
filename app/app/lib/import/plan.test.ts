@@ -892,6 +892,74 @@ describe("nested workflow contract", () => {
  * asserted here with task names that say the OPPOSITE of their role, so a regression to name
  * matching fails loudly.
  */
+describe("what a row reads, derived from the graph", () => {
+  const bundleOf = (steps: string): Bundle => ({
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles:
+      "code,label,tier,scope,workstream\n" +
+      "author,The Author,practitioner,mine,Delivery\n" +
+      "checker,The Checker,oversight,everyone,Delivery\n",
+    workflows: "code,label,workstream,inputs,outputs\nw,W,Delivery,,\n",
+    steps, criteria: "workflow,task,kind,text\n",
+  });
+  const stepsOf = (steps: string) => {
+    const r = planImport(bundleOf(steps), empty);
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    return r.plan.workflows.find((w) => w.row.code === "w")!.steps;
+  };
+  const readsOf = (steps: ReturnType<typeof stepsOf>, task: string) =>
+    steps.find((s) => s.task === task)!.reads;
+
+  // THE BUG: a row depending on a review sees nothing, because the review itself produces no
+  // document — the direct-dependency-only lookup stopped exactly there. `nearestProduced` already
+  // existed to walk through a non-producing row for criteria; this asserts it does the same for
+  // reads, which is what an approve-scaffold row facing an empty <missing> block on a live
+  // engagement traced back to.
+  it("walks through a hitl that produces nothing, to the document it is reviewing", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+      "w,1,agent,author,make,the-doc,,\n" +
+      "w,2,hitl,author,review,,,make\n" +      // reviews `make`'s output; produces nothing itself
+      "w,3,hitl,checker,accept,,,review\n",    // the approval — must still see `the-doc`
+    );
+    expect(readsOf(steps, "accept")).toEqual(["the-doc"]);
+    expect(readsOf(steps, "review")).toEqual(["the-doc"]);
+  });
+
+  // The common case, unchanged: a direct dependency that DOES produce something needs no walk.
+  it("still reads straight off a direct dependency that produces something", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+      "w,1,agent,author,make,the-doc,,\n" +
+      "w,2,hitl,checker,accept,,,make\n",
+    );
+    expect(readsOf(steps, "accept")).toEqual(["the-doc"]);
+  });
+
+  // Two hitls in a row is not automatically a review chain about ONE document — this must not
+  // invent a read for a workflow-level gate that never had a producing dependency at all.
+  it("stays empty when nothing upstream ever produced anything", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+      "w,1,hitl,author,review,,,\n" +
+      "w,2,hitl,checker,accept,,,review\n",
+    );
+    expect(readsOf(steps, "accept")).toEqual([]);
+  });
+
+  // An author-listed read survives alongside whatever the walk finds — the two are unioned, not
+  // one replacing the other.
+  it("keeps an explicitly authored read alongside a derived one", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on,reads\n" +
+      "w,1,agent,author,make,the-doc,,,\n" +
+      "w,2,hitl,author,review,,,make,\n" +
+      "w,3,hitl,checker,accept,,,review,other-doc\n",
+    );
+    expect(new Set(readsOf(steps, "accept"))).toEqual(new Set(["the-doc", "other-doc"]));
+  });
+});
+
 describe("criteria derived from workflows and steps", () => {
   const bundleOf = (steps: string, criteria = "workflow,task,kind,text\n"): Bundle => ({
     workstreams: "code,label\nDelivery,Delivery\n",

@@ -299,22 +299,15 @@ function readSteps(csv: string): StepRow[] {
  * a path the dependency already supplies is harmless rather than an error.
  */
 export function deriveReads(steps: StepRow[]): StepRow[] {
-  // The PATH a step produces, never the decorated `produces` string. A step may name where its
-  // deliverable goes (`02-scope/deliverables@tickets`) and that suffix is routing — it belongs to
-  // the producer alone. Copied into a dependent's `reads` it would become a path no document ever
-  // has, and the agent downstream would be told it reads something that does not exist.
-  const producerOf = new Map<string, Map<string, string>>();   // workflow → task → path
-  for (const s of steps) {
-    const path = destinationOf(s.produces)?.path;
-    if (!path) continue;
-    const m = producerOf.get(s.workflow) ?? new Map();
-    m.set(s.task, path);
-    producerOf.set(s.workflow, m);
-  }
-
   return steps.map((s) => {
-    const mine = producerOf.get(s.workflow) ?? new Map<string, string>();
-    const fromDeps = s.dependsOn.map((d) => mine.get(d)).filter((p): p is string => Boolean(p));
+    // Walks THROUGH a dependency that produces nothing — `nearestProduced` (below), the same
+    // resolver `deriveCriteria` uses for the same reason. A direct-dependency-only lookup used to
+    // sit here, and it stopped exactly where a `hitl` row (a review) produces nothing itself: the
+    // row depending on a review — the approval that follows it — resolved to no reads at all, and
+    // an approve-the-scaffold gate was left reviewing nothing it could see. `nearestProduced`
+    // already existed to fix this for criteria; it was never wired back into the function its own
+    // doc comment names as the one that breaks.
+    const fromDeps = nearestProduced(steps, s.workflow, s.task).map((p) => p.path);
     // Everything the author listed, kept as a PATH for the same reason `fromDeps` is one: a read
     // decorated with its routing slot (`deliverables@tickets`) names a path no document ever has,
     // and the agent would be told it reads something that does not exist.
