@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
+from compass.orchestrator import pr as PR
 from compass.orchestrator import run as R
 
 
@@ -182,19 +183,19 @@ class TestDirtyPrNote(unittest.TestCase):
     PR' when an agent (against #92) already opened one. _dirty_pr_note detects it."""
 
     def setUp(self):
-        self._orig = R._pr_url_any_state
-        self.addCleanup(lambda: setattr(R, "_pr_url_any_state", self._orig))
+        self._orig = PR._pr_url_any_state
+        self.addCleanup(lambda: setattr(PR, "_pr_url_any_state", self._orig))
 
     def test_no_branch_returns_empty(self):
-        R._pr_url_any_state = lambda *a: "https://gh/pr/9"  # must not even be consulted
+        PR._pr_url_any_state = lambda *a: "https://gh/pr/9"  # must not even be consulted
         self.assertEqual(R._dirty_pr_note("/x", None), "")
 
     def test_no_pr_returns_empty(self):
-        R._pr_url_any_state = lambda *a: None
+        PR._pr_url_any_state = lambda *a: None
         self.assertEqual(R._dirty_pr_note("/x", "feat/y"), "")
 
     def test_existing_pr_is_flagged(self):
-        R._pr_url_any_state = lambda *a: "https://github.com/o/r/pull/149"
+        PR._pr_url_any_state = lambda *a: "https://github.com/o/r/pull/149"
         note = R._dirty_pr_note("/x", "feat/WLT-28-4-work")
         self.assertIn("https://github.com/o/r/pull/149", note)
         self.assertIn("#92", note)
