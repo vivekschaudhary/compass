@@ -385,7 +385,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   const task = must(
     "read task",
     await sb.from("work_task")
-      .select("id, title, subtitle, role_code, workflow_step_id, workflow_run_id")
+      .select("id, title, subtitle, role_code, workflow_step_id, workflow_run_id, subject_ref")
       .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle(),
   );
   if (!task) return null;
@@ -419,7 +419,9 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     // That is `reviewPath` below, kept OUT of this field on purpose: display and "what gets filed"
     // must not be the same field, because a review task legitimately wants the first and must
     // never get the second.
-    produces = dest ? resolvePath(dest.path, await subjectOfRun(task.workflow_run_id as string | null)) : null;
+    produces = dest
+      ? resolvePath(dest.path, await subjectOfRun(task.workflow_run_id as string | null, task.subject_ref as string | null))
+      : null;
     // Resolution failing is not the same as the step producing nothing, and the two must not report
     // the same way — one is a row that drafts no document, the other is a row whose document has
     // nowhere to go. Kept apart so the halt can say which.
@@ -457,7 +459,10 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
       });
       const reviewedDest = destinationOf(reviewedProduces);
       reviewPath = reviewedDest
-        ? resolvePath(reviewedDest.path, await subjectOfRun(task.workflow_run_id as string | null))
+        ? resolvePath(
+            reviewedDest.path,
+            await subjectOfRun(task.workflow_run_id as string | null, task.subject_ref as string | null),
+          )
         : null;
     }
   }

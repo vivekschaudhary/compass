@@ -12,10 +12,13 @@ async function subjectFor(
   if (!sb) return null;
   const { data: task } = await sb
     .from("work_task")
-    .select("workflow_run_id")
+    .select("workflow_run_id, subject_ref")
     .eq("id", taskId)
     .maybeSingle();
-  return subjectOfRun((task?.workflow_run_id as string | null) ?? null);
+  return subjectOfRun(
+    (task?.workflow_run_id as string | null) ?? null,
+    (task?.subject_ref as string | null) ?? null,
+  );
 }
 
 export async function evaluateDocument(
