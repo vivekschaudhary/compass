@@ -32,6 +32,47 @@ import textwrap
 from pathlib import Path
 from datetime import datetime
 
+from .git_ops import (
+    _cleanup_merged_worktree,
+    _ensure_work_branch,
+    _ensure_work_worktree,
+    _prior_run_branch,
+    _slug,
+    _work_branch_name,
+    _worktree_root,
+    prune_worktrees,
+)
+from .jira import (
+    _advance_ticket,
+    _apply_tech_design,
+    _create_jira_bug,
+    _extract_md_section,
+    _looks_like_jira_key,
+    _resolve_jira_epic,
+    _resolve_jira_story_for_build,
+    _resolve_jira_story_for_tech,
+    _resolve_jira_work_item,
+    _source_of_truth,
+    _splice_md_section,
+    _work_item_jira_key,
+)
+from .outcome import _classify_outcome, _is_refusal, _review_recommendation
+from .pr import (
+    _CODE_WORKFLOWS,
+    _delivery_warning,
+    _dirty_pr_note,
+    _ensure_pr,
+    _is_merge_gate,
+    _merge_next_steps,
+    _merge_pr,
+    _open_pr_url,
+    _pr_title,
+    _pr_url_any_state,
+    _review_diff,
+    _uncommitted_code,
+    _with_review_context,
+)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility helpers
@@ -54,147 +95,6 @@ def _read_preferred_hosts(agent_file: Path) -> list:
         return ["claude"]
     return [h.strip() for h in ph_match.group(1).split(",")]
 
-
-def _review_diff(project_dir, max_chars: int = 50000) -> str:
-    """#138: the branch diff vs its base, for the Reviewer. The reviewer runs on
-    codex/gemini — bare API adapters with NO tools (no gh/filesystem/shell), so it
-    cannot fetch the PR itself (live: Codex asked the user to paste the diff). The
-    orchestrator fetches it and injects it as context. Returns '' if unavailable."""
-    import subprocess
-    d = ""
-    for base in ("origin/main", "main", "origin/master", "master"):
-        try:
-            r = subprocess.run(
-                ["git", "-C", str(project_dir), "diff", f"{base}...HEAD"],
-                capture_output=True, text=True, timeout=30)
-        except Exception:
-            continue
-        if r.returncode == 0 and r.stdout.strip():
-            d = r.stdout
-            break
-    if not d:  # fallback: uncommitted working-tree changes
-        try:
-            r = subprocess.run(["git", "-C", str(project_dir), "diff", "HEAD"],
-                               capture_output=True, text=True, timeout=30)
-            d = r.stdout if r.returncode == 0 else ""
-        except Exception:
-            d = ""
-    if len(d) > max_chars:
-        d = d[:max_chars] + "\n…[diff truncated]"
-    return d
-
-
-def _uncommitted_code(project_dir) -> list:
-    """#145: CODE files left uncommitted after a write-mode run — the work isn't
-    delivered (no commit → no PR → no deploy; live: a `/fix` left AccountCard.tsx
-    uncommitted with no PR, so nothing shipped). Excludes the orchestrator's own
-    bookkeeping (docs/orchestrator-runs/, docs/role-activity/, *.jsonl) so only
-    real source/test changes count. [] if not a git repo."""
-    import subprocess
-    try:
-        r = subprocess.run(["git", "-C", str(project_dir), "status", "--porcelain"],
-                           capture_output=True, text=True, timeout=15)
-    except Exception:
-        return []
-    if r.returncode != 0:
-        return []
-    skip = ("docs/orchestrator-runs/", "docs/role-activity/")
-    out = []
-    for line in r.stdout.splitlines():
-        path = line[3:].strip().strip('"')
-        if not path or path.endswith(".jsonl"):
-            continue
-        if any(s in path for s in skip):
-            continue
-        out.append(path)
-    return out
-
-
-def _is_merge_gate(title: str) -> bool:
-    """#147: a HITL gate whose approval should MERGE the PR (delivery closure).
-    Detected by 'merge' in the gate title (e.g. 'HITL gate — approve merge')."""
-    return "merge" in (title or "").lower()
-
-
-def _open_pr_url(project_dir, branch):
-    """#157: best-effort URL of the open PR for `branch` (so a merge gate can point
-    the operator at it). Returns the URL or None — never raises into the run."""
-    if not branch:
-        return None
-    import json as _json
-    import subprocess
-    try:
-        r = subprocess.run(["gh", "pr", "view", branch, "--json", "url,state"],
-                           cwd=str(project_dir), capture_output=True, text=True, timeout=60)
-    except Exception:
-        return None
-    if r.returncode != 0:
-        return None
-    try:
-        o = _json.loads(r.stdout)
-        return o.get("url") if o.get("state") == "OPEN" else None
-    except (ValueError, TypeError):
-        return None
-
-
-def _pr_url_any_state(project_dir, branch):
-    """#71: the PR URL for `branch` regardless of state (open OR merged) — the fix
-    record links its PR even on a resume/retro projection. Best-effort; None on failure."""
-    if not branch:
-        return None
-    import json as _json
-    import subprocess
-    try:
-        r = subprocess.run(["gh", "pr", "view", branch, "--json", "url"],
-                           cwd=str(project_dir), capture_output=True, text=True, timeout=60)
-        return _json.loads(r.stdout).get("url") if r.returncode == 0 else None
-    except Exception:
-        return None
-
-
-def _merge_next_steps(pr_url, epic_id) -> str:
-    """#157: the explicit next-step block printed when a MERGE gate is approved but
-    NOT auto-merged — so the operator isn't left at '[handle manually]' with no idea
-    what to do (the live gap: gate cleared, run 'completed', nothing shipped)."""
-    pr = f"merge the PR — {pr_url}" if pr_url else "merge the PR on your host"
-    nxt = f"/create-story {epic_id}" if epic_id else "/create-story <bet> for the next slice"
-    return (f"\n✅ Approved — your turn to ship:\n"
-            f"   1. {pr}\n"
-            f"   2. Then cut the next slice: {nxt}\n"
-            f"   (Set COMPASS_AUTO_MERGE=1 to have approval merge for you.)")
-
-
-def _merge_pr(project_dir, branch):
-    """#147: on approval of a merge gate, merge the PR for `branch` — the delivery
-    closure (merge → the host auto-deploys on main, e.g. Vercel). Best-effort:
-    returns (ok, message), never raises into the run; falls back to manual merge."""
-    import json as _json
-    import subprocess
-
-    def gh(args):
-        try:
-            return subprocess.run(["gh", *args], cwd=str(project_dir),
-                                  capture_output=True, text=True, timeout=60)
-        except Exception:
-            return None
-
-    view = gh(["pr", "view", branch, "--json", "number,state,url"])
-    if not view or view.returncode != 0:
-        return (False, f"no open PR found for '{branch}' (gh unavailable or none) — merge manually")
-    try:
-        pr = _json.loads(view.stdout)
-    except Exception:
-        return (False, "could not read PR info — merge manually")
-    if pr.get("state") != "OPEN":
-        return (False, f"PR {pr.get('url')} is {pr.get('state', '?')}, not OPEN — nothing to merge")
-    merged = gh(["pr", "merge", str(pr["number"]), "--squash", "--delete-branch"])
-    if merged and merged.returncode == 0:
-        return (True, f"merged PR {pr['url']} (squash) — deploy follows (host auto-deploys on main)")
-    err = ((merged.stderr if merged else "") or "").strip()[:200]
-    return (False, f"merge failed for PR {pr.get('url')}: {err or 'unknown'} — check CI/conflicts, merge manually")
-
-
-_CODE_WORKFLOWS = ("fix", "build", "ops")
 
 # #92: after one of these code-producing steps commits+pushes, the orchestrator runs
 # the CI-parity check suite in the worktree and opens the PR only on green.
@@ -236,36 +136,6 @@ def _resolve_allow_write(workflow_name: str, allow_write: bool) -> bool:
     return True if workflow_name in _WRITE_BY_DEFAULT else allow_write
 
 
-def _delivery_warning(workflow_name: str, leftover: list) -> str:
-    """#145/#150: the end-of-run 'work not delivered' warning, tailored by workflow.
-    Code workflows (fix/build/ops) ship via PR → deploy; doc workflows (create-brief
-    /-story/-architecture, setup-*) deliver the artifact itself, so 'no deploy' is
-    nonsensical — just say 'commit the artifacts'."""
-    shown = ", ".join(leftover[:5]) + ("…" if len(leftover) > 5 else "")
-    if workflow_name in _CODE_WORKFLOWS:
-        return (f"⚠ DELIVERY INCOMPLETE — {len(leftover)} code file(s) left "
-                f"uncommitted ({shown}). The work is NOT delivered: no commit → "
-                f"no PR → no deploy. Commit the change + open a PR before merge.")
-    return (f"⚠ ARTIFACTS UNCOMMITTED — {len(leftover)} file(s) written but not "
-            f"committed ({shown}). The work is on disk but unsaved — commit the "
-            f"artifact(s) (e.g. the brief / status docs) to keep it.")
-
-
-def _with_review_context(user_message: str, diff: str) -> str:
-    """Prepend the code-under-review diff so a tool-less reviewer can actually
-    review it (#138). No-op when there's no diff."""
-    if not diff:
-        return user_message
-    return ("## Code under review — `git diff` of the work branch vs its base\n"
-            "(You have no repo/PR tool access on this host; review THIS diff.)\n\n"
-            "**Scope (#95): review ONLY this diff.** Every BLOCKER/ISSUE MUST cite a "
-            "file + line that appears BELOW. Do NOT comment on files not shown here, and "
-            "do NOT raise the reachability / wiring / test-coverage of code this diff "
-            "did not change — that is OUT OF SCOPE for this PR (at most a NIT note, never "
-            "a gating finding). If you cannot tie a concern to a changed line, omit it.\n\n"
-            f"```diff\n{diff}\n```\n\n---\n\n" + user_message)
-
-
 def _remap_claude_cli(preferred_hosts: list) -> list:
     """#120: route Claude steps to the subscription-backed CLI host when opted in
     (--claude-cli / COMPASS_CLAUDE_HOST=cli). Remaps ONLY `claude` → `claude-code`;
@@ -281,92 +151,6 @@ def _remap_codex_cli(preferred_hosts: list) -> list:
     what makes the REVIEWER (preferred_hosts [codex, gemini]) reachable for a CLI-only
     operator with no API key — codex ≠ claude, so review independence is preserved."""
     return ["codex-cli" if h == "codex" else h for h in preferred_hosts]
-
-
-# #125 dispatch-on-outcome: a step whose agent REFUSES (per [refuse-escalate])
-# must HALT the run, not let the workflow cascade into steps that also refuse
-# (live evidence: a misrouted /ops run cascaded 4 refusals then crashed on an API
-# limit). Refusals carry a structured sentinel — a line beginning `REFUSE:` /
-# `[REFUSE]` / `**Refuse(d/ing):**` — so detection is exact, not a fuzzy scan of
-# prose that merely discusses refusing. Only the first few lines are inspected.
-_REFUSAL_RE = re.compile(
-    r"^\s*(?:\*\*|\[)?\s*REFUS(?:E|ED|ING)\b", re.IGNORECASE
-)
-
-
-def _is_refusal(result: str) -> bool:
-    """True if the agent output leads with a refusal sentinel (#125)."""
-    if not result:
-        return False
-    for line in result.strip().splitlines()[:5]:
-        if _REFUSAL_RE.match(line):
-            return True
-    return False
-
-
-# #96: the Reviewer's verdict lives in its "### Recommendation" section — "Approve" vs
-# "Request changes" / "Block until: …". Read it near that heading so a `[BLOCKER]` label
-# up in the findings can't be mistaken for the overall verdict.
-_REVIEW_BLOCK_RE = re.compile(r"request[\s-]?changes|\bblock(?:ed|s)?\b", re.I)
-_REVIEW_APPROVE_RE = re.compile(r"\bapprove", re.I)
-
-
-def _review_recommendation(output: str):
-    """#96: parse the Reviewer's overall verdict. Returns 'approve' | 'request_changes' |
-    None (no recognizable recommendation). Scans the window at the Recommendation heading;
-    falls back to the whole output if there is no heading."""
-    if not output:
-        return None
-    m = re.search(r"(?im)^\s*#{0,4}\s*Recommendation\b.*", output)
-    window = output[m.start():m.start() + 250] if m else output
-    if _REVIEW_BLOCK_RE.search(window):
-        return "request_changes"
-    if _REVIEW_APPROVE_RE.search(window):
-        return "approve"
-    return None
-
-
-# #149: a step that *ran* isn't a step that *succeeded*. Beyond the hard REFUSE:
-# sentinel (#125, which halts), agents often emit a SOFT non-completion — a plan, a
-# confabulated block, a permission claim — yet the step was still marked ✓ done.
-# These high-precision phrases (seen repeatedly in live runs) classify such output
-# as "incomplete" so the dashboard shows ✗, not ✓. Conservative by design: a normal
-# completed step doesn't contain "permission not granted" or "the plan is ready".
-_INCOMPLETE_RE = re.compile(
-    r"permission(?:s)?\s+(?:to\s+\w+\s+)?(?:is\s+)?not\s+(?:been\s+)?(?:auto-)?(?:granted|approved)"
-    r"|write\s+permission[^\n]{0,60}(?:not|grant|approve)"
-    r"|not\s+auto-approved"
-    r"|can'?t\s+access\s+the\s+(?:codebase|repo|home-app)"
-    r"|don'?t\s+have\s+(?:read|write|file)?\s*access"
-    r"|the\s+plan\s+is\s+ready"
-    r"|here'?s\s+the\s+plan"
-    r"|approve\s+the\s+[\"']?(?:exit\s+plan|plan)"
-    r"|\bblocker:\s"
-    r"|requires?\s+(?:a\s+)?permission\s+grant"
-    # #159: the no-TTY write-block class the live create-brief hit — the agent
-    # narrates "please click Allow" / "waiting on permission approval" / "the
-    # permission dialog should be appearing" instead of writing. High-precision:
-    # a completed step never asks the operator to approve a write dialog.
-    r"|click\s+[\"']?allow[\"']?"
-    r"|permission\s+dialog"
-    r"|(?:waiting|pending|blocked)\s+on[^\n]{0,40}permission"
-    r"|(?:awaiting|pending)[^\n]{0,30}permission"
-    r"|approve\s+(?:the\s+|both\s+|two\s+)?(?:file\s+)?writes?\b"
-    r"|please\s+approve[^\n]{0,30}(?:write|file|dialog|prompt)",
-    re.IGNORECASE,
-)
-
-
-def _classify_outcome(result: str) -> tuple:
-    """Classify a step's output as ('done', '') or ('incomplete', reason) (#149).
-    Used to mark each step ✓/✗ in the dashboard — the orchestrator confirms a step
-    *did its job*, not just that it returned. Conservative: defaults to done."""
-    if not result or not result.strip():
-        return ("incomplete", "empty output — the step produced nothing")
-    m = _INCOMPLETE_RE.search(result)
-    if m:
-        return ("incomplete", f"output signals a block/plan, not completed work (\"{m.group(0)[:40]}…\")")
-    return ("done", "")
 
 
 def _read_agent_tools(agent_file: Path) -> list:
@@ -417,139 +201,6 @@ def _reads_bet_catalog(agent_file: Path) -> bool:
     if not fm_match:
         return False
     return bool(re.search(r'^loads_bet_catalog:\s*true\b', fm_match.group(1), re.MULTILINE | re.IGNORECASE))
-
-
-# Workflow → branch type prefix (config.yaml branch_pattern `<type>/<id>-<slug>`).
-_WORKFLOW_BRANCH_TYPE = {
-    "fix": "fix",
-    "ops": "ops",
-    "triage": "fix",
-    "build": "feat",
-    "create-story": "feat",
-    "create-brief": "feat",
-    "create-epic-architecture": "feat",
-}
-
-
-_SLUG_STOPWORDS = {
-    "the", "a", "an", "i", "we", "to", "of", "in", "on", "at", "is", "it", "its",
-    "im", "and", "or", "but", "while", "when", "get", "got", "see", "my", "me",
-    "as", "be", "that", "this", "with", "for", "should", "user", "am", "are",
-}
-
-
-def _slug(text: str, words: int = 6) -> str:
-    """Lowercase hyphen-slug from the first few MEANINGFUL words (stopwords dropped)."""
-    import re as _re
-    cleaned = _re.sub(r"[^a-z0-9\s-]", "", (text or "").lower())
-    toks = [w for w in cleaned.split() if w and w not in _SLUG_STOPWORDS]
-    if not toks:
-        toks = cleaned.split()  # fallback: all words were stopwords
-    slug = "-".join(toks[:words]).strip("-")
-    return slug[:40] or "work"
-
-
-def _work_branch_name(workflow: str, epic_id: str, context: str) -> str:
-    """
-    Branch name per config.yaml `<type>/<id>-<slug>` (#99). Strips a leading
-    'bug:'/'incident:' label from the context before slugging.
-    """
-    typ = _WORKFLOW_BRANCH_TYPE.get(workflow, "chore")
-    ctx = re.sub(r"^\s*(bug|incident|enhancement|change)\s*:\s*", "", context or "", flags=re.IGNORECASE)
-    slug = _slug(ctx)
-    return f"{typ}/{epic_id}-{slug}" if epic_id else f"{typ}/{slug}"
-
-
-def _prior_run_branch(run_id):
-    """#157: on a `--from-step` resume, recover the branch the ORIGINAL run recorded
-    in its `run_start` (event spine), so the resume reuses it instead of cutting a
-    NEW branch from the resume's input. The live bug: a dashboard merge-gate resume
-    re-ran the branch logic with the bet-context blob as `context`, producing a
-    garbage branch `feat/WLT-26-bet-context-wlt-26-briefmd-----id`. Returns the
-    recorded branch name, or None (no spine / no branch recorded)."""
-    if not run_id:
-        return None
-    try:
-        from . import events as _ev
-        for e in reversed(_ev.load_events()):
-            if (e.get("run_id") == run_id and e.get("type") == _ev.RUN_START
-                    and e.get("branch")):
-                return e["branch"]
-    except Exception:
-        return None
-    return None
-
-
-def _ensure_work_branch(project_dir, branch_name: str):
-    """
-    Put write-mode work on a branch, never on main/master (#99), branched from a
-    FRESH base (#143). Returns the branch the work will run on, or None if
-    project_dir isn't a git repo.
-
-    Behavior:
-      - already on `branch_name` (a resume) → reuse it
-      - `branch_name` already exists → switch to it (resume / re-run)
-      - otherwise → create `branch_name` from a fresh base (fetched `origin/main`),
-        **never stacking on whatever feature branch happens to be checked out.**
-
-    #143: the old code reused *any* current non-main branch, so a leftover branch
-    from a prior run got stacked on — carrying its (already-merged) commits into
-    the next fix's PR → merge conflicts + review scope-creep (live: PR #116
-    conflicted because an accounts fix stacked on the merged welcome-back branch).
-    Falls back to the current HEAD when there's no remote/base or the clean
-    checkout fails (e.g. a dirty tree).
-    """
-    import subprocess
-
-    def git(*args):
-        return subprocess.run(
-            ["git", "-C", str(project_dir), *args],
-            capture_output=True, text=True,
-        )
-
-    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
-        return None
-    current = git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    if current == branch_name:
-        return branch_name  # resume — already on the work branch
-    if git("rev-parse", "--verify", "--quiet", branch_name).returncode == 0:
-        # branch already exists (resume / re-run) — switch to it, don't recreate
-        return branch_name if git("checkout", branch_name).returncode == 0 else (current or None)
-    # fresh branch — base it on a clean origin/main, NOT the current (possibly
-    # leftover) branch. Fetch best-effort; fall through local refs.
-    git("fetch", "origin", "--quiet")
-    base = next(
-        (b for b in ("origin/main", "origin/master", "main", "master")
-         if git("rev-parse", "--verify", "--quiet", b).returncode == 0),
-        None,
-    )
-    if base and git("checkout", "-b", branch_name, base).returncode == 0:
-        return branch_name
-    # #173: the clean checkout failed — almost always a DIRTY TREE (leftover work +
-    # orchestrator telemetry from the prior run). The old code silently fell back to
-    # `checkout -b` from the CURRENT branch, stacking the new story's work on the
-    # previous one → cumulative, conflicting PRs (live: WLT-27-2's PR contained
-    # WLT-27-1's commits; -3 contained both). Instead, STASH the dirty tree (incl.
-    # untracked) so the work branch starts CLEAN from the fresh base. The stash is
-    # recoverable (`git stash list`) — nothing is discarded — and we do NOT pop it
-    # onto the new branch (that would re-introduce the contamination).
-    if base:
-        stash = git("stash", "push", "--include-untracked",
-                    "-m", f"compass auto-stash before {branch_name}")
-        stashed = stash.returncode == 0 and "No local changes" not in stash.stdout
-        if stashed and git("checkout", "-b", branch_name, base).returncode == 0:
-            print(f"[branch] stashed a dirty tree to start '{branch_name}' clean from "
-                  f"{base} — prior residue is on the stash (recover via `git stash list`), "
-                  f"NOT stacked onto this branch (#173)")
-            return branch_name
-    # last resort — no remote/base (or stash failed): current HEAD. May stack; loud.
-    made = git("checkout", "-b", branch_name)
-    if made.returncode == 0:
-        print(f"[branch] WARNING: could not isolate from a fresh base — '{branch_name}' "
-              f"is cut from the current HEAD and MAY include prior work (#173).",
-              file=sys.stderr)
-        return branch_name
-    return current or None
 
 
 def _project_artifact(project_dir: Path, compass_dir, rel: str, transport=None) -> tuple:
@@ -604,128 +255,6 @@ def _remove_local_stories(project_dir: Path, bet: str) -> list:
     bet_dir = project_dir / base
     if bet_dir.is_dir() and not any(bet_dir.iterdir()):
         bet_dir.rmdir()
-    return removed
-
-
-def _worktree_root(project_dir) -> Path:
-    """#174: where isolated build worktrees live — under ~/.compass (OUTSIDE the repo),
-    namespaced by project label, so concurrent story builds never share a working tree."""
-    from . import events as _ev
-    return _ev.compass_home() / "worktrees" / _ev.project_label(project_dir)
-
-
-def _ensure_work_worktree(project_dir, branch_name: str):
-    """#174: create (or reuse) a git WORKTREE on `branch_name`, based on a fresh
-    origin/main, at a path outside the repo. Returns the worktree Path, or None if
-    project_dir isn't a git repo or the worktree can't be created (the caller then
-    falls back to the single-tree `_ensure_work_branch`). Unlike `_ensure_work_branch`
-    — which switches the ONE working tree, so two builds in flight collide on the
-    shared index (#173's stacking) — a worktree gives each build its own checkout, so
-    genuinely *parallel* story builds are isolated. The worktree shares the repo's .git
-    (commits land in the same object store), so `gh pr create` from it works unchanged.
-    """
-    import subprocess
-
-    def git(*args):
-        return subprocess.run(["git", "-C", str(project_dir), *args],
-                              capture_output=True, text=True)
-
-    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
-        return None
-    wt = _worktree_root(project_dir) / branch_name.replace("/", "__")
-    # already present (resume / re-run) → reuse the existing checkout
-    if wt.exists():
-        return wt
-    wt.parent.mkdir(parents=True, exist_ok=True)
-    git("fetch", "origin", "--quiet")  # best-effort
-    base = next(
-        (b for b in ("origin/main", "origin/master", "main", "master")
-         if git("rev-parse", "--verify", "--quiet", b).returncode == 0),
-        None,
-    )
-    if git("rev-parse", "--verify", "--quiet", branch_name).returncode == 0:
-        add = git("worktree", "add", str(wt), branch_name)   # branch exists → attach
-    elif base:
-        add = git("worktree", "add", "-b", branch_name, str(wt), base)  # fresh off base
-    else:
-        add = git("worktree", "add", "-b", branch_name, str(wt))  # no base → current HEAD
-    return wt if add.returncode == 0 else None
-
-
-def prune_worktrees(project_dir) -> list:
-    """#175: housekeeping — remove finished (CLEAN) compass-managed build worktrees so
-    they don't accumulate under ~/.compass/worktrees/. A worktree with uncommitted
-    changes (an in-flight build) is KEPT; a clean one (work committed + pushed, or
-    paused at a gate) is removed — a resume recreates it from the branch. Runs
-    `git worktree prune` to clear admin entries for already-gone dirs. Returns the list
-    of removed paths. Best-effort; never raises."""
-    import subprocess
-
-    def git(*args, cwd=None):
-        return subprocess.run(["git", "-C", str(cwd or project_dir), *args],
-                              capture_output=True, text=True)
-
-    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
-        return []
-    # resolve to dodge the macOS /var↔/private/var symlink (git emits the realpath)
-    root = str(_worktree_root(project_dir).resolve())
-    removed = []
-    listing = git("worktree", "list", "--porcelain").stdout
-    paths = [ln[len("worktree "):] for ln in listing.splitlines()
-             if ln.startswith("worktree ")]
-    for p in paths:
-        if not str(Path(p).resolve()).startswith(root):
-            continue  # only OUR build worktrees, never the main checkout
-        dirty = git("status", "--porcelain", cwd=p).stdout.strip()
-        if dirty:
-            continue  # in-flight build — leave it
-        if git("worktree", "remove", p).returncode == 0:
-            removed.append(p)
-    git("worktree", "prune")
-    return removed
-
-
-def _cleanup_merged_worktree(project_dir, work_branch) -> list:
-    """#104: after a PR is MERGED (auto-merge path), remove THIS unit's worktree and
-    delete its now-merged local branch — so finished worktrees don't accumulate under
-    ~/.compass/worktrees/ until the next `--wbs` sweep. Scoped to `work_branch` only, so
-    a sibling in-flight build is never touched. Safe-delete only (`branch -d`, never -D);
-    a worktree with uncommitted changes is left in place. Best-effort; never raises.
-    Returns the list of removed worktree paths (for logging/tests). The manual-merge
-    path is still covered by the opportunistic prune_worktrees()."""
-    import subprocess
-    if not work_branch:
-        return []
-
-    def git(*args, cwd=None):
-        try:
-            return subprocess.run(["git", "-C", str(cwd or project_dir), *args],
-                                  capture_output=True, text=True)
-        except Exception:
-            class _R:  # never raise into the run
-                returncode, stdout, stderr = 1, "", ""
-            return _R()
-
-    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
-        return []
-    root = str(_worktree_root(project_dir).resolve())
-    removed = []
-    listing = git("worktree", "list", "--porcelain").stdout
-    # parse porcelain: pair each `worktree <path>` with its following `branch <ref>`
-    path = None
-    for ln in listing.splitlines():
-        if ln.startswith("worktree "):
-            path = ln[len("worktree "):]
-        elif ln.startswith("branch ") and path is not None:
-            ref = ln[len("branch "):]                       # e.g. refs/heads/feat/WLT-28-4-work
-            if ref.endswith(f"/{work_branch}") or ref == f"refs/heads/{work_branch}":
-                if (str(Path(path).resolve()).startswith(root)          # only OUR worktrees
-                        and not git("status", "--porcelain", cwd=path).stdout.strip()):
-                    if git("worktree", "remove", path).returncode == 0:
-                        removed.append(path)
-            path = None
-    git("worktree", "prune")
-    git("branch", "-d", work_branch)   # safe delete — no-op if not fully merged locally
     return removed
 
 
@@ -1658,281 +1187,6 @@ def _render_fix_record(fid, ftype, epic_id, severity, pr_url, title, today) -> s
     )
 
 
-def _work_item_jira_key(project_dir, epic_id, story_id):
-    """#MVP1: the Jira key of the ticket THIS run is delivering — the story (build) whose
-    `jira_key` was stored on its artifact by create-story's projection. None when there's no
-    story/key (a hygiene fix has no ticket yet; Jira may not be wired)."""
-    from .connector import _frontmatter_field
-    if not (epic_id and story_id):
-        return None
-    story = Path(project_dir) / "docs" / "epics" / epic_id / "stories" / story_id / "story.md"
-    if not story.exists():
-        return None
-    return _frontmatter_field(story.read_text(encoding="utf-8"), "jira_key")
-
-
-_JIRA_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
-
-
-def _looks_like_jira_key(s) -> bool:
-    return bool(s and _JIRA_KEY_RE.match(str(s).strip()))
-
-
-def _resolve_jira_work_item(raw):
-    """#Phase1a: if the /fix input is a Jira key (e.g. KAN-99) and Jira is wired, READ the
-    ticket so Compass executes work that already LIVES in Jira — no repo fix record. Returns
-    {key, context, issuetype, url} on success; None when the input is plain text (current
-    behavior). Refuses LOUD (exit 3) when a key is given but unusable — no dead-ends."""
-    ident = (raw or "").strip()
-    if not _looks_like_jira_key(ident):
-        return None
-    from .stores import jira_auth, jira_get_issue
-    auth = jira_auth()
-    if not auth:
-        print(f"\nRefuse: `{ident}` looks like a Jira key but no Jira creds are set "
-              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Set them, or pass the bug as "
-              f"free text.", file=sys.stderr)
-        sys.exit(3)
-    issue = jira_get_issue(auth, ident)
-    if not issue.get("ok"):
-        print(f"\nRefuse: Jira ticket {ident} not found or unreadable "
-              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
-        sys.exit(3)
-    if issue.get("category") == "done":
-        print(f"\nRefuse: {ident} is already Done — nothing to fix. Reopen it in Jira or file "
-              f"a new bug.", file=sys.stderr)
-        sys.exit(3)
-    context = f"{issue['summary']}\n\n{issue['description']}".strip()
-    return {"key": issue["key"], "context": context,
-            "issuetype": issue["issuetype"], "url": issue["url"]}
-
-
-def _resolve_jira_epic(raw):
-    """#127 (Phase 1c): `/create-story KAN-100` names the Jira **Epic** to decompose. If the
-    input is a Jira key and Jira is wired, READ the Epic so its summary+description become the
-    PM's decomposition context — the stories are authored back into Jira UNDER this Epic, no
-    repo brief. Returns {key, context, url} on success; None when the input isn't a key (repo
-    mode — decompose a local bet). Refuses LOUD (exit 3) when a key is given but unusable, or
-    names an issue that isn't an Epic (you decompose an Epic into Stories, not a Story into
-    Stories) — no dead-ends."""
-    ident = (raw or "").strip()
-    if not _looks_like_jira_key(ident):
-        return None
-    from .stores import jira_auth, jira_get_issue
-    auth = jira_auth()
-    if not auth:
-        print(f"\nRefuse: `{ident}` looks like a Jira Epic key but no Jira creds are set "
-              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN). Set them, or use "
-              f"`source_of_truth: repo` to decompose a local bet.", file=sys.stderr)
-        sys.exit(3)
-    issue = jira_get_issue(auth, ident)
-    if not issue.get("ok"):
-        print(f"\nRefuse: Jira issue {ident} not found or unreadable "
-              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
-        sys.exit(3)
-    if (issue.get("issuetype") or "").lower() != "epic":
-        print(f"\nRefuse: {ident} is a `{issue.get('issuetype')}`, not an Epic. "
-              f"`/create-story` decomposes an **Epic** into Stories — pass the Epic key.",
-              file=sys.stderr)
-        sys.exit(3)
-    context = f"{issue['summary']}\n\n{issue['description']}".strip()
-    return {"key": issue["key"], "context": context, "url": issue["url"]}
-
-
-def _resolve_jira_story_for_tech(raw):
-    """#127 (tech-design): `/tech-design KAN-43` names the Jira **Story** to design. Reads it as
-    the Architect's context. Returns {key, context, url}; None when the input isn't a Jira key.
-    Refuses LOUD (exit 3) on missing/unreadable/no-creds, an already-Done story, or a story that
-    isn't functionally **Ready** (no `ready` label — the AC/design come first, `/create-story`) —
-    you don't design tech for an under-specified story."""
-    ident = (raw or "").strip()
-    if not _looks_like_jira_key(ident):
-        return None
-    from .stores import jira_auth, jira_get_issue
-    auth = jira_auth()
-    if not auth:
-        print(f"\nRefuse: `{ident}` looks like a Jira Story key but no Jira creds are set "
-              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN).", file=sys.stderr)
-        sys.exit(3)
-    issue = jira_get_issue(auth, ident)
-    if not issue.get("ok"):
-        print(f"\nRefuse: Jira story {ident} not found or unreadable "
-              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
-        sys.exit(3)
-    if issue.get("category") == "done":
-        print(f"\nRefuse: {ident} is already Done — no tech design needed.", file=sys.stderr)
-        sys.exit(3)
-    if "ready" not in (issue.get("labels") or []):
-        print(f"\nRefuse: {ident} isn't functionally Ready (no `ready` label) — complete its "
-              f"acceptance criteria / design first (`/create-story`), then tech-design it.",
-              file=sys.stderr)
-        sys.exit(3)
-    context = f"{issue['summary']}\n\n{issue['description']}".strip()
-    return {"key": issue["key"], "context": context, "url": issue["url"]}
-
-
-def _resolve_jira_story_for_build(raw):
-    """#127 (Phase 1d): `/build KAN-43` names the Jira **Story** to build. Reads it as the Engineer's
-    context and enforces the **ready-to-build gate off the ticket**: a story builds only when it is
-    both functionally **Ready** (`ready` — DoR met, `/create-story`) AND **Tech-ready** (`tech-ready`
-    — arch-reviewed, `/tech-design`). Returns {key, context, url}; None when the input isn't a Jira
-    key (repo mode — build reads `story.md`, unchanged). Refuses LOUD (exit 3), each naming the ONE
-    next move (`[refuse-escalate]`, no dead-ends). Generalizes the repo-only #171 design/copy gate
-    into the ticket-read gate for `source_of_truth: external`."""
-    ident = (raw or "").strip()
-    if not _looks_like_jira_key(ident):
-        return None
-    from .stores import jira_auth, jira_get_issue
-    auth = jira_auth()
-    if not auth:
-        print(f"\nRefuse: `{ident}` looks like a Jira Story key but no Jira creds are set "
-              f"(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN).", file=sys.stderr)
-        sys.exit(3)
-    issue = jira_get_issue(auth, ident)
-    if not issue.get("ok"):
-        print(f"\nRefuse: Jira story {ident} not found or unreadable "
-              f"(HTTP {issue.get('status_code')}). Check the key + creds.", file=sys.stderr)
-        sys.exit(3)
-    if issue.get("category") == "done":
-        print(f"\nRefuse: {ident} is already Done — already shipped. Reopen it in Jira or file a "
-              f"new story.", file=sys.stderr)
-        sys.exit(3)
-    labels = issue.get("labels") or []
-    if "ready" not in labels:
-        print(f"\nRefuse: {ident} isn't functionally Ready (no `ready` label) — complete its "
-              f"acceptance criteria / design first (`/create-story`), then build it.",
-              file=sys.stderr)
-        sys.exit(3)
-    if "tech-ready" not in labels:
-        print(f"\nRefuse: {ident} is Ready but not Tech-ready (no `tech-ready` label) — the "
-              f"technical design hasn't been authored. Run `/tech-design {ident}` first, then build.",
-              file=sys.stderr)
-        sys.exit(3)
-    context = f"{issue['summary']}\n\n{issue['description']}".strip()
-    return {"key": issue["key"], "context": context, "url": issue["url"]}
-
-
-def _source_of_truth(project_dir):
-    """#Phase1b (#127): `external` = instances live in Jira/Confluence (Compass authors them
-    there, no repo record) · `repo` = Compass writes repo records (default, back-compat). Read
-    from `compass/config.yaml`; default `repo` so existing setups are unchanged."""
-    cfg = Path(project_dir) / "compass" / "config.yaml"
-    if cfg.exists():
-        m = re.search(r"^source_of_truth:\s*(\w+)", cfg.read_text(encoding="utf-8"), re.MULTILINE)
-        if m:
-            return m.group(1).strip().lower()
-    return "repo"
-
-
-def _create_jira_bug(raw_text):
-    """#Phase1b: `/fix "<text>"` in external mode → CREATE a Bug in Jira from the free text
-    (the fix's home is the ticket, not `docs/fixes/*.md`). The new key then flows exactly like
-    `/fix KAN-99` (status driven, no repo record). Returns {key, context, url}; refuses LOUD
-    (exit 3) if Jira isn't configured — no dead-ends."""
-    from .stores import jira_auth, jira_push
-    auth = jira_auth()
-    project_key = os.environ.get("JIRA_PROJECT")
-    if not auth or not project_key:
-        print("\nRefuse: `source_of_truth: external` needs Jira configured to file the bug "
-              "(JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN + JIRA_PROJECT). Set them, or use "
-              "`source_of_truth: repo`.", file=sys.stderr)
-        sys.exit(3)
-    text = (raw_text or "").strip()
-    summary = (text.splitlines()[0].strip() if text else "Bug")[:120] or "Bug"
-    res = jira_push(auth, project_key, "Bug", summary, text)
-    if not res.get("ok") or not res.get("pointer"):
-        print(f"\nRefuse: could not file the Jira Bug (HTTP {res.get('status')}). Check "
-              f"creds / JIRA_PROJECT.", file=sys.stderr)
-        sys.exit(3)
-    return {"key": res["pointer"], "context": text, "url": res.get("url")}
-
-
-def _extract_md_section(text, heading):
-    """#127 (tech-design): return the body of the `## <heading>` section (up to the next `## ` or
-    EOF), stripped; "" if the heading is absent. Used to pull the Architect's authored
-    `## Technical approach` out of its step output before writing it back onto the Jira Story."""
-    m = re.search(r"(?ms)^##[ \t]+" + re.escape(heading) + r"[ \t]*$\n(.*?)(?=^##[ \t]+|\Z)",
-                  text or "")
-    return m.group(1).strip() if m else ""
-
-
-def _splice_md_section(text, heading, body):
-    """#127 (tech-design): replace the body of the `## <heading>` section with `body` (matching to
-    the next `## ` or EOF), or APPEND the section if the heading is absent. Returns the new text.
-    The one primitive the write-back needs (no section-merge helper exists) — it fills a Jira Story
-    description's `## Technical approach`, replacing its `_Pending architecture review._` placeholder."""
-    text = text or ""
-    body = (body or "").strip()
-    section = f"## {heading}\n\n{body}\n"
-    pat = re.compile(r"(?ms)^##[ \t]+" + re.escape(heading) + r"[ \t]*$\n.*?(?=^##[ \t]+|\Z)")
-    if pat.search(text):
-        new = pat.sub(lambda m: section + "\n", text, count=1)   # lambda: body may contain backrefs
-    else:
-        new = text.rstrip() + "\n\n" + section
-    new = re.sub(r"\n{3,}", "\n\n", new)
-    return new.rstrip() + "\n"
-
-
-def _apply_tech_design(story_key, approach_text, transport=None):
-    """#127 (tech-design): write the Architect's authored `## Technical approach` back onto the Jira
-    Story — read the current description, splice the section in (replacing the placeholder or
-    appending), PUT the full updated description, and mark the Story `tech-ready`. Returns
-    {ok, key, action, url}. Refuses LOUD (exit 3) without Jira creds / an unreadable story; NEVER
-    marks tech-ready when no approach text was produced (no false Tech-ready)."""
-    from .stores import jira_auth, jira_get_issue, jira_push, jira_add_labels
-    approach = (approach_text or "").strip()
-    auth = jira_auth()
-    project_key = os.environ.get("JIRA_PROJECT")
-    if not auth or not project_key:
-        print("\nRefuse: tech-design needs Jira configured to write the technical approach back "
-              "onto the story (JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN + JIRA_PROJECT).",
-              file=sys.stderr)
-        sys.exit(3)
-    if not approach:
-        print(f"\n⚠ No `## Technical approach` was produced for {story_key} — leaving it "
-              f"un-Tech-ready (nothing to write).", file=sys.stderr)
-        return {"ok": False, "key": story_key, "action": "no_approach"}
-    issue = jira_get_issue(auth, story_key, transport=transport)
-    if not issue.get("ok"):
-        print(f"\nRefuse: {story_key} not found or unreadable (HTTP {issue.get('status_code')}).",
-              file=sys.stderr)
-        sys.exit(3)
-    new_desc = _splice_md_section(issue.get("description") or "", "Technical approach", approach)
-    push = jira_push(auth, project_key, "Story", issue.get("summary") or story_key,
-                     new_desc, key=story_key, transport=transport)
-    if not push.get("ok"):
-        print(f"\nRefuse: could not update {story_key} description (HTTP {push.get('status')}).",
-              file=sys.stderr)
-        sys.exit(3)
-    jira_add_labels(auth, story_key, ["tech-ready"], transport=transport)
-    return {"ok": True, "key": story_key, "action": "tech-ready", "url": push.get("url")}
-
-
-def _advance_ticket(project_dir, epic_id, story_id, target, emit, key=None):
-    """#MVP1: transition the run's work-item ticket toward a lifecycle state so the Jira board
-    reflects reality (`to_do → in_progress` on start, `→ done` on merge) instead of sitting at
-    "To Do" forever. `key` (#Phase1a) is the explicit ticket when the run was launched from a
-    Jira key (`/fix KAN-99`); else it's resolved from the story's frontmatter. Best-effort:
-    silent no-op without creds or a key; never raises; `emit`s a NOTE of what moved."""
-    from . import events as ev
-    from .stores import jira_auth, jira_transition
-    auth = jira_auth()
-    if not auth:
-        return
-    key = key or _work_item_jira_key(project_dir, epic_id, story_id)
-    if not key:
-        return
-    try:
-        res = jira_transition(auth, key, target)
-    except Exception as exc:                       # telemetry is best-effort — never break the run
-        emit(ev.NOTE, text=f"⚠ jira {key} → {target}: transition errored ({type(exc).__name__})")
-        return
-    if res.get("action") in ("transitioned", "noop"):
-        emit(ev.NOTE, text=f"[jira {key} → {target}] {res.get('from')} → {res.get('to')} ({res['action']})")
-    else:
-        emit(ev.NOTE, text=f"⚠ jira {key} → {target} not applied ({res.get('action')}): {(res.get('response') or {}).get('error','')}")
-
-
 def _project_fix_record(project_dir, compass_dir, epic_id, work_branch,
                         last_agent_output, run_id):
     """#71: the ORCHESTRATOR (not the agent) writes the fix record from the engineer's
@@ -2150,58 +1404,6 @@ def _run_checks(exec_dir, checks, runner=None):
     return (True, None, "")
 
 
-def _pr_title(exec_dir, work_branch):
-    """#97: a MEANINGFUL PR title — the branch's primary conventional commit subject
-    (`fix:`/`feat:` — the engineer's own one-line description of the change), NOT the
-    `TL;DR:` run-status blurb. Falls back to the branch slug."""
-    import subprocess
-
-    def _git(*args):
-        return subprocess.run(["git", "-C", str(exec_dir), *args],
-                              capture_output=True, text=True, timeout=30)
-    try:
-        base = ""
-        for ref in ("origin/main", "main", "origin/master", "master"):
-            mb = _git("merge-base", "HEAD", ref)
-            if mb.returncode == 0 and mb.stdout.strip():
-                base = mb.stdout.strip()
-                break
-        if base:
-            subs = [s.strip() for s in _git("log", f"{base}..HEAD", "--format=%s")
-                    .stdout.splitlines() if s.strip()]
-            for s in subs:                                # prefer a fix:/feat: subject
-                if re.match(r"^(fix|feat|perf|refactor|chore)(\(.+\))?:", s, re.IGNORECASE):
-                    return s[:100]
-            if subs:
-                return subs[-1][:100]                     # oldest commit = the primary change
-    except Exception:
-        pass
-    return ((work_branch or "change").split("/")[-1].replace("-", " ")[:100] or "change")
-
-
-def _ensure_pr(exec_dir, work_branch, body_output):
-    """#92: the ORCHESTRATOR opens the PR (once) AFTER the check gate passes — a PR is
-    only ever created on green checks (clean from creation, #89). Idempotent: reuse an
-    existing PR for the branch. Best-effort; returns the PR URL or None."""
-    if not work_branch:
-        return None
-    existing = _pr_url_any_state(exec_dir, work_branch)
-    if existing:
-        return existing
-    import subprocess
-    from .connector import extract_artifact_body
-    title = _pr_title(exec_dir, work_branch)          # #97: from the commit, not the TL;DR
-    body = (extract_artifact_body(body_output)[:4000] if body_output
-            else "Opened by the orchestrator after CI-parity checks passed (#92).")
-    try:
-        r = subprocess.run(["gh", "pr", "create", "--head", work_branch,
-                            "--title", title, "--body", body],
-                           cwd=str(exec_dir), capture_output=True, text=True, timeout=120)
-        return r.stdout.strip() if r.returncode == 0 else None
-    except Exception:
-        return None
-
-
 def _short_context(text, limit: int = 200) -> str:
     """#108: a one-line, length-capped rendering of the operator's launch context for the
     RUN_START event, so the cockpit can label a run with what was actually typed. Collapses
@@ -2210,20 +1412,6 @@ def _short_context(text, limit: int = 200) -> str:
         return ""
     flat = " ".join(str(text).split())
     return flat if len(flat) <= limit else flat[:limit - 1].rstrip() + "…"
-
-
-def _dirty_pr_note(exec_dir, work_branch) -> str:
-    """#109: after a FAILED check gate, an agent that (against #92) opened its OWN PR
-    leaves it dirty with the failing code. Detect it so the halt message doesn't falsely
-    claim 'no dirty PR'. Returns a warning naming the PR, or '' when none exists."""
-    if not work_branch:
-        return ""
-    url = _pr_url_any_state(exec_dir, work_branch)
-    if not url:
-        return ""
-    return (f"\n  ⚠ a PR is already open for this branch ({url}) and now holds the "
-            f"FAILING code — the agent should NOT have opened it (#92; the orchestrator "
-            f"opens the PR only on green). Close it or push the fix before merge.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
