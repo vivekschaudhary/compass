@@ -36,6 +36,7 @@ import { priorMessages, recordTurn } from "./outcomes/turn-context";
 import { finished, handOver, releaseExecutor, settleSupplied, withHeartbeat } from "./outcomes/effects";
 import { handleAsk } from "./outcomes/ask";
 import { handleCode } from "./outcomes/code";
+import { handleScaffold } from "./outcomes/scaffold";
 import { handleDocument } from "./outcomes/document";
 import type { Turn } from "./outcomes/types";
 
@@ -314,6 +315,7 @@ export async function runAgent(
 
   if (call.name === "ask") return handleAsk(turn);
   if (call.name === "code") return handleCode(turn);
+  if (call.name === "scaffold") return handleScaffold(turn);
   if (["draft", "backlog", "sprint", "roster"].includes(call.name)) return handleDocument(turn);
 
   await releaseExecutor(taskId, ctx, { failed: true });
