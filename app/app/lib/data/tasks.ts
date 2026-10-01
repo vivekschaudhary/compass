@@ -64,7 +64,11 @@ export type TaskCard = {
    */
   parentTaskId: string | null;
   runState: string | null;
-  /** The `{epic}` a fan-out run is the subject of, so sibling runs are tellable apart. */
+  /**
+   * What this task is about (`'app'`, `'KAN-12'`) — so sibling runs, or sibling tasks sharing one
+   * run (an inline fan-out's per-repo pairs), are tellable apart. The task's own subject first, the
+   * run's otherwise — see the mapping below.
+   */
   runSubject: string | null;
 };
 
@@ -82,6 +86,10 @@ type Row = {
   heartbeat_at: string | null;
   started_at: string | null;
   started_by: string | null;
+  // The task's OWN subject — set only for a task materialized inline (scaffold-repos' per-repo
+  // pairs, several subjects sharing one run). Preferred over the run's subject below; see
+  // `TaskCard.runSubject`.
+  subject_ref: string | null;
   // `ord` and `opened_at` are here to ORDER the queue, not to render it — see `queueOrder`.
   workflow_step: {
     reads: string[] | null;
@@ -95,7 +103,7 @@ type Row = {
     opened_at: string | null;
     state: string | null;
     parent_task_id: string | null;
-    subject_key: string | null;
+    subject_ref: string | null;
     workflow: { code: string } | null;
   } | null;
 };
@@ -135,10 +143,10 @@ export function queueOrder(a: Row, b: Row): number {
 }
 
 const SELECT =
-  "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,heartbeat_at,started_at,started_by," +
+  "id,title,subtitle,state,kind,role_code,ticket_key,origin,rationale,executor,heartbeat_at,started_at,started_by,subject_ref," +
   "workflow_step(reads,kind,ord,nests_workflow_code,renders)," +
   // `parent_task_id` rides on the join that was already here. Grouping the queue costs no query.
-  "workflow_run!work_task_workflow_run_id_fkey(id,opened_at,state,parent_task_id,subject_key,workflow(code))";
+  "workflow_run!work_task_workflow_run_id_fkey(id,opened_at,state,parent_task_id,subject_ref,workflow(code))";
 
 /**
  * The role's queue.
@@ -207,7 +215,9 @@ export async function tasksFor(
     runId: one(r.workflow_run)?.id ?? null,
     parentTaskId: one(r.workflow_run)?.parent_task_id ?? null,
     runState: one(r.workflow_run)?.state ?? null,
-    runSubject: one(r.workflow_run)?.subject_key ?? null,
+    // The task's own subject first (inline-materialized, several subjects sharing one run), falling
+    // back to the run's (the pre-existing, one-subject-per-run case — every row before scaffold).
+    runSubject: r.subject_ref ?? one(r.workflow_run)?.subject_ref ?? null,
   }));
 }
 
@@ -321,6 +331,31 @@ async function agentLabels(actor: Actor): Promise<Map<string, string>> {
 }
 
 /**
+ * Is this task inside the actor's scope — same two filters `tasksFor` applies, asked of one row.
+ *
+ * A dedicated query rather than `tasksFor(actor, {...}).some(...)`: an authorization check is not
+ * a byproduct of building the queue, and the queue's joins (`workflow_step`, `workflow_run`,
+ * question counts, agent labels) cost real work to answer a question none of them are needed for.
+ */
+async function inScope(actor: Actor, taskId: string): Promise<boolean> {
+  const sb = supabaseAdmin();
+  if (!sb) return false;
+
+  let q = sb
+    .from("work_task")
+    .select("id")
+    .eq("id", taskId)
+    .eq("engagement_id", actor.engagementId);
+
+  if (actor.scope === "mine") q = q.eq("role_code", actor.roleCode);
+  else if (actor.scope === "workstream" && actor.workstreamCode)
+    q = q.eq("workstream_code", actor.workstreamCode);
+
+  const { data } = await q.maybeSingle();
+  return Boolean(data);
+}
+
+/**
  * Start a task. Nothing starts itself.
  *
  * Goes through the `start_task` routine rather than an update, so the actor is recorded and a
@@ -336,8 +371,7 @@ export async function startTask(
 
   // Confirm the task is inside this actor's scope BEFORE starting it. Without this, a task id
   // from another engagement would start perfectly happily — the routine only checks state.
-  const mine = await tasksFor(actor, { includeClosed: true });
-  if (!mine.some((t) => t.id === taskId)) {
+  if (!(await inScope(actor, taskId))) {
     return { ok: false, error: "That task is not in your queue." };
   }
 

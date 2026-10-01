@@ -230,7 +230,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   if (!sb) return null;
 
   const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id, workflow_run_id").eq("id", taskId).maybeSingle();
+    .select("workflow_step_id, workflow_run_id, subject_ref").eq("id", taskId).maybeSingle();
   if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb.from("workflow_step")
@@ -259,7 +259,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   // a subject (`…/{epic}`) is filled from the run, exactly as the write side filled it.
   const path = resolvePath(
     destinationOf(source.produces)?.path,
-    await subjectOfRun(task.workflow_run_id as string | null),
+    await subjectOfRun(task.workflow_run_id as string | null, task.subject_ref as string | null),
   );
   if (!path) return null;
 
