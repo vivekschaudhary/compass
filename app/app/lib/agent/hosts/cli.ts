@@ -162,15 +162,23 @@ export function toHostResult(stdout: string): HostResult {
     // Not JSON, so not a tool call. `text` carries it and the caller decides.
   }
 
+  // The CLI's own token counts, not an API charge — a subscription run costs nothing marginal
+  // regardless of what these say. Nothing in this app reads `usage` as a cost guard today (checked:
+  // only the host files and `effects.ts`'s logging touch it), so there is nothing here for a real
+  // number to false-trip. Recorded for visibility — comparing CLI-side token volume against the
+  // API host's — not for billing.
+  const cliUsage = result.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+  const usage =
+    cliUsage && typeof cliUsage.input_tokens === "number" && typeof cliUsage.output_tokens === "number"
+      ? { inputTokens: cliUsage.input_tokens, outputTokens: cliUsage.output_tokens }
+      : null;
+
   return {
     stopReason: call ? "tool_use" : String(result.stop_reason ?? "end_turn"),
     refusalExplanation: null,
     text: call ? "" : raw,
     toolCall: call,
-    // Deliberately null. The CLI reports `total_cost_usd`, but that is an API-EQUIVALENT figure,
-    // not a charge — writing it here would make a flat-cost run look metered and would false-trip
-    // any cost guard built on this field. v1 recorded it as a note and emitted no usage event.
-    usage: null,
+    usage,
   };
 }
 
