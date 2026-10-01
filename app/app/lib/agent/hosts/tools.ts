@@ -244,6 +244,51 @@ export const TOOLS: Anthropic.Tool[] = [
     strict: true,
   },
   {
+    name: "scaffold",
+    description:
+      "Scaffold a new repo's initial structure: state the framework and the options a real " +
+      "generator needs, then hand off — the orchestrator runs the actual generator " +
+      "(`create-next-app`, `django-admin startproject`, …), commits what it produces, and opens a " +
+      "pull request for review. Use this instead of `code` when there is no existing code to " +
+      "change — a repo is being scaffolded, not built against.\n\n" +
+      "YOU ARE NOT WRITING THE SCAFFOLD FILES IN THIS CALL. A hand-written file tree is exactly " +
+      "what real generators exist to avoid — boilerplate an LLM improvises from memory is less " +
+      "reliable than the framework's own tool. What you write here is the intent: which generator " +
+      "and what options it needs. The outcome (branch, pull request) is appended by the app, not " +
+      "by you, so it cannot be claimed into existence.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "The chat message a person reads, not a second copy of the framework/options below. " +
+            "Plain language — explain it the way you'd explain it to a smart 12-year-old, no jargon " +
+            "(the Feynman test: if you can't say it simply, you don't understand it well enough " +
+            "yet). Lead with what is being scaffolded and why this framework; then note any input " +
+            "that was missing and what it cost.",
+        },
+        framework: {
+          type: "string",
+          description:
+            "The real generator to run, in its own vocabulary — e.g. 'next.js', 'django', 'rails'. " +
+            "Named precisely enough that a human recognizes the actual CLI command it maps to.",
+        },
+        options: {
+          type: "string",
+          description:
+            "The generator's own options, in plain language — e.g. 'TypeScript, App Router, " +
+            "Tailwind' or 'Postgres, REST framework'. Bounded by what the foundation architecture " +
+            "and scaffold plan already decided; name any departure from it rather than taking it " +
+            "quietly.",
+        },
+      },
+      required: ["summary", "framework"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "sprint",
     description:
       "Plan ONE sprint: commit to a set of stories that already exist on the board, and say which " +
@@ -424,14 +469,15 @@ export const TOOL_FOR: Record<string, string> = {
   sprint: "sprint",
   roster: "roster",
   code: "code",
-  // A step whose own `output` is more specific than plain `code` — `execute-scaffold`'s is
-  // `scaffold`, the row's own name for "this is a code-output step that builds a repo scaffold" —
-  // still dispatches through the SAME `code` tool; there is no separate scaffold tool to call. Left
-  // unrecognized, this fell through to the `GENERAL` default below (`ask`/`draft`, neither of which
-  // fits "build a repo"), and the model settled on an empty `ask` every single run: reproducible,
-  // confirmed live, not a one-off. The label stays `scaffold` in the data — the row's own vocabulary
-  // is worth keeping — only the CODE gained the alias.
-  scaffold: "code",
+  // Its own tool, not an alias into `code`. The alias was the original fix for "`execute-scaffold`
+  // fell through to the `GENERAL` default (`ask`/`draft`) and the model settled on an empty `ask`
+  // every run" — reproducible, confirmed live — but `code`'s handler (`handleCode`/`runCode`) is
+  // entirely build-shaped: it requires a story (`placementOf`), records outcomes against a Jira
+  // story, and treats "intent" as a diff against existing code. None of that applies to scaffolding
+  // a repo that does not exist yet, which is exactly why the alias produced the "no story on the
+  // tracker" refusal this tool exists to remove. `scaffold` gets its own handler that never asks
+  // for a story at all.
+  scaffold: "scaffold",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
   // by a person must not be able to write it, and the reliable way to stop a model doing something
