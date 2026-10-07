@@ -36,6 +36,9 @@ export function RealtimeRefresh({ taskId }: { taskId: string }) {
         { event: "*", schema: "public", table: "question", filter: `task_id=eq.${taskId}` },
         () => router.refresh(),
       )
+      // Sent by the server the moment a run returns (see notify-run-ended.ts). This is the signal
+      // that does not depend on the database's change feed or on the page's own polling.
+      .on("broadcast", { event: "run-ended" }, () => router.refresh())
       .subscribe();
 
     return () => {

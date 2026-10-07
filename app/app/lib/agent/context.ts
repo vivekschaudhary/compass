@@ -16,6 +16,7 @@ import { templateFor } from "../data/templates";
 import { describeTemplate } from "../render/template";
 import type { ResolvedTemplate } from "../data/templates";
 import { destinationOf, resolvePath } from "../adapters";
+import { resolveReviewedTask } from "./resolve-reviewed-task";
 import { supabaseAdmin, must } from "../supabase";
 import { resolveJira, searchIssues } from "../jira";
 import { nextSprintNumber, committedJql } from "../data/sprint";
@@ -609,7 +610,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
   const task = must(
     "read task",
     await sb.from("work_task")
-      .select("id, title, subtitle, role_code, workflow_step_id, workflow_run_id")
+      .select("id, title, subtitle, role_code, workflow_step_id, workflow_run_id, subject_ref")
       .eq("id", taskId).eq("engagement_id", actor.engagementId).maybeSingle(),
   );
   if (!task) return null;
@@ -643,7 +644,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     // That is `reviewPath` below, kept OUT of this field on purpose: display and "what gets filed"
     // must not be the same field, because a review task legitimately wants the first and must
     // never get the second.
-    const subj = await subjectOfRun(task.workflow_run_id as string | null);
+    const subj = await subjectOfRun(task.workflow_run_id as string | null, (task.subject_ref as string | null) ?? null);
     produces = dest ? resolvePath(dest.path, subj) : null;
     // Resolution failing is not the same as the step producing nothing, and the two must not report
     // the same way — one is a row that drafts no document, the other is a row whose document has
@@ -664,12 +665,22 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     // `doc-review`/`code-review` ONLY: what the panel shows, resolved from the ONE `depends_on`
     // row's own `produces` — read-only, display-side, never fed to `runAgent`.
     if (renders === "doc-review" || renders === "code-review") {
-      const { data: reviewed } = await sb.from("workflow_step")
-        .select("produces")
-        .eq("workflow_version_id", step?.workflow_version_id as string)
-        .eq("task", (step?.depends_on as string[] | null)?.[0] ?? "")
-        .maybeSingle();
-      const reviewedDest = destinationOf(reviewed?.produces);
+      // Walks past review-of-review steps that produce nothing (accept-scaffold -> review-scaffold ->
+      // scaffold-foundation). A one-hop lookup stopped at the middle review and hid the approve panel.
+      const reviewedProduces = await resolveReviewedTask(
+        (step?.depends_on as string[] | null)?.[0] ?? null,
+        async (task) => {
+          const { data } = await sb.from("workflow_step")
+            .select("produces, depends_on")
+            .eq("workflow_version_id", step?.workflow_version_id as string)
+            .eq("task", task)
+            .maybeSingle();
+          return data
+            ? { produces: (data.produces as string | null) ?? null, dependsOn: (data.depends_on as string[] | null) ?? null }
+            : null;
+        },
+      );
+      const reviewedDest = destinationOf(reviewedProduces);
       reviewPath = reviewedDest
         ? resolvePath(reviewedDest.path, subj)
         : null;
@@ -1009,9 +1020,9 @@ function scaffoldPrompt(ctx: AgentContext): string {
     `This row scaffolds ONE repo: ${repo}. The accepted scaffold plan may list several; write only`,
     `what that plan said THIS repo starts with.`,
     ``,
-    `Your deliverable is a pull request, not a document — call \`scaffold\` with the files this repo`,
-    `starts with. The app opens the branch and the pull request; you do not, and there is nothing to`,
-    `file at a path.`,
+    `Your deliverable is a pull request, not a document — call \`scaffold\` with the framework this repo`,
+    `should use and what it should be in \`options\`. A generator writes the files, the app runs the`,
+    `checks and opens the pull request; you write no files and there is nothing to file at a path.`,
     `</scaffold>`,
   ].join("\n");
 }

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "framework": "nextjs-ts",
+  "repo": { "key": "app", "local_path": "/tmp/checkouts/app" },
+  "subject_ref": "app",
+  "options": "app router, tailwind, no src dir",
+  "caller": { "kind": "ts", "handoff_call_id": "11111111-2222-3333-4444-555555555555" }
+}

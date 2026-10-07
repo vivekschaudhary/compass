@@ -29,6 +29,8 @@ import { backlogOf } from "./backlog";
 import { mirrorBacklog, mirrorSprint } from "./tracker";
 import { destinationOf, resolvePath } from "../adapters";
 import { subjectOfRun } from "./run-subject";
+import { parseScaffoldRepos } from "./scaffold-repos";
+import { randomUUID } from "crypto";
 
 export type Materialised = { path: string; created: number; updated: number; problems: string[] };
 
@@ -179,12 +181,69 @@ async function materialiseSprint(actor: Actor, markdown: string, taskId: string)
  * sprint-planning rows carry `sprint`, so they remain one behaviour by construction, and a path
  * rename can no longer disable anything.
  */
+/**
+ * The approved scaffold record names the repos. Approval creates them: one `repo` row each, with no
+ * checkout (`local_path` stays empty for a person to set), and the inline fan-out of the repo's
+ * tasks into this run.
+ *
+ * ALL OR NOTHING. A record that does not parse cleanly creates no repo and no task, and says why.
+ * A scaffold of the repos that did parse, with the rest silently dropped, is the quiet failure this
+ * file exists to prevent.
+ */
+async function materialiseScaffoldPlan(actor: Actor, markdown: string, taskId: string): Promise<Materialised> {
+  const path = "scaffold-record";
+  const sb = supabaseAdmin();
+  if (!sb) return { path, created: 0, updated: 0, problems: ["Supabase is not configured."] };
+
+  const parsed = parseScaffoldRepos(markdown);
+  if (parsed.problems.length) return { path, created: 0, updated: 0, problems: parsed.problems };
+
+  const { data: task } = await sb.from("work_task").select("workflow_run_id").eq("id", taskId).maybeSingle();
+  const runId = (task?.workflow_run_id as string | null) ?? null;
+  if (!runId) return { path, created: 0, updated: 0, problems: ["This approval is not a row of a run, so there is nowhere to put the repos' tasks."] };
+
+  // The row that nests the per-repo workflow is a sibling in this run. Its nested workflow decides
+  // what each repo gets; this only supplies the subjects.
+  const { data: siblings } = await sb.from("work_task")
+    .select("id, workflow_step(nests_workflow_code)").eq("workflow_run_id", runId);
+  const nesting = (siblings ?? []).find(
+    (t) => (t.workflow_step as unknown as { nests_workflow_code: string | null } | null)?.nests_workflow_code === "scaffold-repo",
+  );
+  if (!nesting) return { path, created: 0, updated: 0, problems: ["This run has no row that nests the scaffold-repo workflow."] };
+
+  let created = 0;
+  let updated = 0;
+  const problems: string[] = [];
+  for (const [ord, repo] of parsed.repos.entries()) {
+    const { data: existing } = await sb.from("repo")
+      .select("id").eq("engagement_id", actor.engagementId).eq("key", repo.key).maybeSingle();
+    if (existing) {
+      const { error } = await sb.from("repo").update({ name: repo.name, ord }).eq("id", existing.id as string);
+      if (error) problems.push(`${repo.key}: ${error.message}`); else updated++;
+    } else {
+      const { error } = await sb.from("repo").insert({
+        id: randomUUID(), engagement_id: actor.engagementId, key: repo.key, name: repo.name, ord,
+      });
+      if (error) problems.push(`${repo.key}: ${error.message}`); else created++;
+    }
+  }
+  if (problems.length) return { path, created, updated, problems };
+
+  // Loaded here, not at the top: phases.ts pulls in the whole task and agent graph, and every other
+  // materializer (and the tests that mock them) should not pay for it.
+  const { fanOutInline } = await import("./phases");
+  const fan = await fanOutInline(actor, nesting.id as string, parsed.repos.map((r) => ({ ref: r.key })));
+  if (!fan.ok) problems.push(fan.error);
+  return { path, created, updated, problems };
+}
+
 const REGISTRY: Record<
   string, (actor: Actor, markdown: string, taskId: string) => Promise<Materialised>
 > = {
   roster: materialiseRoster,
   backlog: materialiseBacklog,
   sprint: materialiseSprint,
+  "scaffold-plan": materialiseScaffoldPlan,
 };
 
 /**
@@ -195,10 +254,20 @@ const REGISTRY: Record<
 async function producingStep(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>, workflowVersionId: string, dependsOnTask: string,
 ): Promise<{ produces: string | null; output: string | null } | null> {
-  const { data } = await sb.from("workflow_step")
-    .select("produces, output").eq("workflow_version_id", workflowVersionId).eq("task", dependsOnTask)
-    .maybeSingle();
-  return data ? { produces: data.produces, output: data.output } : null;
+  // A review authors nothing, so the thing it reviews may be a review too (accept-scaffold reviews
+  // review-scaffold, which reviews scaffold-foundation). Walk back to the row that drafted something.
+  let task = dependsOnTask;
+  for (let depth = 0; depth < 8 && task; depth++) {
+    const { data } = await sb.from("workflow_step")
+      .select("produces, output, renders, depends_on")
+      .eq("workflow_version_id", workflowVersionId).eq("task", task)
+      .maybeSingle();
+    if (!data) return null;
+    if (data.produces) return { produces: data.produces as string, output: data.output as string | null };
+    if (data.renders !== "doc-review" && data.renders !== "code-review") return null;
+    task = ((data.depends_on as string[] | null) ?? [])[0] ?? "";
+  }
+  return null;
 }
 
 /**
@@ -230,7 +299,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   if (!sb) return null;
 
   const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id, workflow_run_id").eq("id", taskId).maybeSingle();
+    .select("workflow_step_id, workflow_run_id, subject_ref").eq("id", taskId).maybeSingle();
   if (!task?.workflow_step_id) return null;
 
   const { data: step } = await sb.from("workflow_step")
@@ -242,12 +311,17 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   // see `plan.ts`'s import validation) — what materialises is what its ONE dependency produced.
   // Otherwise: an ordinary drafting row, UNLESS an independent reviewer depends on it, in which
   // case THAT row's close is the real trigger and this one defers.
-  const source =
-    step.renders === "doc-review" || step.renders === "code-review"
-      ? await producingStep(sb, step.workflow_version_id as string, (step.depends_on as string[] | null)?.[0] ?? "")
-      : (await hasDownstreamReviewer(sb, step.workflow_version_id as string, step.task as string))
-        ? null
-        : { produces: step.produces as string | null, output: step.output as string | null };
+  // A review that a LATER review depends on defers to that one: the last review in a chain is the
+  // acceptance, and only the acceptance materialises (accept-scaffold, not review-scaffold).
+  const reviewing = step.renders === "doc-review" || step.renders === "code-review";
+  const laterReviewer = await hasDownstreamReviewer(sb, step.workflow_version_id as string, step.task as string);
+  const source = reviewing
+    ? laterReviewer
+      ? null
+      : await producingStep(sb, step.workflow_version_id as string, (step.depends_on as string[] | null)?.[0] ?? "")
+    : laterReviewer
+      ? null
+      : { produces: step.produces as string | null, output: step.output as string | null };
   if (!source) return null;
 
   // The declared output decides WHAT happens; the path only says where the document is read from.
@@ -259,7 +333,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   // a subject (`…/{epic}`) is filled from the run, exactly as the write side filled it.
   const path = resolvePath(
     destinationOf(source.produces)?.path,
-    await subjectOfRun(task.workflow_run_id as string | null),
+    await subjectOfRun(task.workflow_run_id as string | null, (task.subject_ref as string | null) ?? null),
   );
   if (!path) return null;
 

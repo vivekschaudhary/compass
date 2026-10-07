@@ -68,7 +68,7 @@ async function evaluateStoryTicket(
 
   const { data: task } = await sb
     .from("work_task")
-    .select("workflow_run_id")
+    .select("workflow_run_id, subject_ref")
     .eq("id", taskId)
     .maybeSingle();
   const { data: run } = task?.workflow_run_id
@@ -79,10 +79,16 @@ async function evaluateStoryTicket(
         .maybeSingle()
     : { data: null };
   const key = (run?.subject_key as string | null) ?? null;
+  // The TASK's own subject wins over the run's — a materialized per-repo task (`scaffold-repo`'s
+  // inline fan-out) sits inside a run whose own subject is unrelated (the foundation-architecture
+  // run has none), so reading only `run.subject_ref` found nothing and reported "no story on the
+  // tracker" for a row that plainly names a repo. Same preference `subjectOfRun` already gives
+  // `agent/context.ts` and the materializer.
+  const subjectRef = (task?.subject_ref as string | null) ?? (run?.subject_ref as string | null) ?? null;
   // A run about a repo (`scaffold-repo`) has a subject and no story. Its pull request was never
   // put on a ticket — there is none — so the record is what the run itself wrote when it finished.
-  if (!key && run?.subject_ref && c.subjectRef === "pr-linked" && task?.workflow_run_id)
-    return evaluateRecordedPr(task.workflow_run_id as string, run.subject_ref as string);
+  if (!key && subjectRef && c.subjectRef === "pr-linked" && task?.workflow_run_id)
+    return evaluateRecordedPr(task.workflow_run_id as string, subjectRef);
   if (!key) {
     // Not unsatisfied: a run with no story is misconfigured, not a build that failed. Blaming the
     // engineer for it would send someone to read a diff that was never produced.

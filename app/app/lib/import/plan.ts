@@ -212,7 +212,7 @@ const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
 // Moves in the SAME commit as the database's `workflow_step_output_known`. Adding `code` to only
 // one of these made the dry run green and the apply a 500, after `applyPlan` had already published
 // the new version — leaving `build` with zero steps. See migration 060's header.
-const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied", "scaffold"];
+const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied", "scaffold", "scaffold-plan"];
 // CLOSED, and required on every row — see `StepRow.renders`. Not inferred from `produces`/`kind`
 // because the app must not guess which panel a row wants; a row says so.
 const RENDERS = ["doc", "code", "doc-review", "code-review", "none"];

@@ -131,3 +131,37 @@ describe("a drafting row that an independent reviewer depends on", () => {
     expect(writes.find((w) => w.table === "member")).toBeTruthy();
   });
 });
+
+// The scaffold chain: the record is drafted, reviewed, then ACCEPTED. Only the acceptance materialises
+// the repos, and it reaches the scaffold-plan materializer by walking back through the review.
+describe("the scaffold chain materialises on acceptance only", () => {
+  beforeEach(() => {
+    steps = {
+      draft: { task: "draft", produces: "scaffold-record", output: "scaffold-plan", renders: "doc", depends_on: [], workflow_version_id: WORKFLOW_VERSION },
+      review: { task: "review", produces: null, output: null, renders: "doc-review", depends_on: ["draft"], workflow_version_id: WORKFLOW_VERSION },
+      accept: { task: "accept", produces: null, output: null, renders: "doc-review", depends_on: ["review"], workflow_version_id: WORKFLOW_VERSION },
+    };
+  });
+
+  it("the drafter's close defers to the review (a later reviewer exists)", async () => {
+    taskStep = "draft";
+    expect(await materialiseFrom(ACTOR, "t")).toBeNull();
+  });
+
+  it("the first review's close defers to the acceptance (a later reviewer exists)", async () => {
+    taskStep = "review";
+    expect(await materialiseFrom(ACTOR, "t")).toBeNull();
+  });
+
+  it("the acceptance's close reaches the scaffold-plan materializer, walking back past the review", async () => {
+    taskStep = "accept";
+    const r = await materialiseFrom(ACTOR, "t");
+    // The fake document is a roster, not a scaffold record. The materializer reads it, finds no
+    // Repositories table, and refuses loudly. That proves it ran on the record, not that it returned
+    // null for want of a materializer.
+    expect(r).not.toBeNull();
+    expect(r?.path).toBe("scaffold-record");
+    expect(r?.problems.join(" ")).toMatch(/no Repositories table/);
+    expect(writes.filter((w) => w.table === "repo")).toEqual([]);
+  });
+});

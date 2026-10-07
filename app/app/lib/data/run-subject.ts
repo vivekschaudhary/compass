@@ -13,7 +13,11 @@ import { supabaseAdmin } from "../supabase";
  */
 export async function subjectOfRun(
   runId: string | null,
+  taskSubjectRef: string | null = null,
 ): Promise<{ ref: string | null; key: string | null } | null> {
+  // A task that names its own subject (a materialized per-repo task inside a parent run) is about
+  // that subject, whatever the run it sits in is about. The run's subject is the fallback.
+  if (taskSubjectRef) return { ref: taskSubjectRef, key: null };
   if (!runId) return null;
   const sb = supabaseAdmin();
   if (!sb) return null;

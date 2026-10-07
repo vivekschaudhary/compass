@@ -18,7 +18,11 @@ type Row = Record<string, unknown>;
 const state: {
   tasks: Row[]; steps: Row[]; workflows: Row[]; versions: Row[];
   versionSteps: Row[]; backlog: Row[]; repos: Row[];
-} = { tasks: [], steps: [], workflows: [], versions: [], versionSteps: [], backlog: [], repos: [] };
+  templateSteps: Row[]; runs: Row[]; criteria: Row[];
+} = {
+  tasks: [], steps: [], workflows: [], versions: [], versionSteps: [], backlog: [], repos: [],
+  templateSteps: [], runs: [], criteria: [],
+};
 
 /** Every open_nested_run call the code under test made, in order. */
 const opened: { taskId: string; subject: string | null }[] = [];
@@ -34,6 +38,8 @@ const rowsFor = (table: string): Row[] =>
   : table === "workflow_version" ? state.versions
   : table === "backlog_item" ? state.backlog
   : table === "repo" ? state.repos
+  : table === "workflow_run" ? state.runs
+  : table === "criterion" ? state.criteria
   : [];
 
 vi.mock("../supabase", () => ({
@@ -47,7 +53,15 @@ vi.mock("../supabase", () => ({
           // `workflow_step` is read two ways — once for the nesting row, once for the nested
           // workflow's version. The column list is what tells them apart.
           if (table === "workflow_step" && cols.includes("produces")) rows = state.versionSteps;
+          // The inline materializer reads the nested version's steps by `task` and `title`.
+          if (table === "workflow_step" && cols.includes("task")) rows = state.templateSteps;
           return chain;
+        },
+        insert: (values: Row | Row[]) => {
+          // Writes land in the same array `rowsFor` returned, so a later read in the test sees them.
+          const arr = Array.isArray(values) ? values : [values];
+          for (const v of arr) rowsFor(table).push({ id: `gen-${rowsFor(table).length}`, ...v });
+          return Promise.resolve({ error: null });
         },
         eq: (col: string, val: unknown) => { rows = rows.filter((r) => r[col] === val); return chain; },
         in: (col: string, vals: unknown[]) => { rows = rows.filter((r) => vals.includes(r[col])); return chain; },
@@ -118,6 +132,13 @@ function seed(opts: { perEpic: boolean; epics: string[] }) {
 function seedRepos(opts: { perRepo: boolean; repos: string[] }) {
   state.tasks = [
     { id: "t-nest", org_id: "org-1", engagement_id: "e1", workflow_step_id: "s-nest", workflow_run_id: "run-fa" },
+  ];
+  state.runs = [{ id: "run-fa", workflow_version_id: "v-fa" }];
+  state.criteria = [];
+  // The scaffold-repo template: execute-scaffold then approve-repo-scaffold, each cloned per repo.
+  state.templateSteps = [
+    { id: "step-exec", ord: 1, kind: "agent", role_code: "staff-engineer", task: "execute-scaffold", title: "Scaffold the repo", workflow_version_id: "v-sr" },
+    { id: "step-approve", ord: 2, kind: "hitl", role_code: "principal-engineer", task: "approve-repo-scaffold", title: "Accept the repo scaffold", workflow_version_id: "v-sr" },
   ];
   state.steps = [{ id: "s-nest", nests_workflow_code: "scaffold-repo", kind: "workflow" }];
   state.workflows = [{ id: "w-sr", org_id: "org-1", code: "scaffold-repo", engagement_id: null }];
@@ -210,13 +231,24 @@ describe("opening a child run's first task", () => {
 // One row, one run per REGISTERED REPO — the shape `scaffold-repo` needs, derived the same way the
 // per-epic one is: from the subject token the nested workflow's steps produce.
 describe("a nesting row that fans out over repos", () => {
-  it("opens one run per registered repo, each carrying the repo key as its subject", async () => {
+  // Inline: one run, one task pair per repo. No child run is opened, so no second nesting level.
+  it("materializes one task pair per registered repo, in the SAME run, with each repo as its subject", async () => {
     seedRepos({ perRepo: true, repos: ["api", "ios"] });
     const r = await openNestedFanOut(ACTOR, "t-nest");
 
     expect(r.ok).toBe(true);
-    expect(opened.map((o) => o.subject)).toEqual(["api", "ios"]);
-    expect(new Set((r as { runs: { runId: string }[] }).runs.map((x) => x.runId)).size).toBe(2);
+    expect(opened, "inline mode opens no child run").toEqual([]);
+    const made = state.tasks.filter((t) => t.workflow_run_id === "run-fa" && t.subject_ref);
+    expect(made.map((t) => t.subject_ref).sort()).toEqual(["api", "api", "ios", "ios"]);
+    expect(new Set(((r as { runs: { runId: string }[] }).runs).map((x) => x.runId))).toEqual(new Set(["run-fa"]));
+  });
+
+  it("is idempotent: a second fan-out adds no second pair for the same repo", async () => {
+    seedRepos({ perRepo: true, repos: ["api"] });
+    await openNestedFanOut(ACTOR, "t-nest");
+    const after = state.tasks.length;
+    await openNestedFanOut(ACTOR, "t-nest");
+    expect(state.tasks.length).toBe(after);
   });
 
   // THE ZERO-ROW CASE, again. A scaffold that scaffolded nothing must not read as one that
@@ -237,7 +269,8 @@ describe("a nesting row that fans out over repos", () => {
     const r = await openNestedFanOut(ACTOR, "t-nest");
 
     expect(r.ok).toBe(true);
-    expect(opened.map((o) => o.subject)).toEqual(["api"]);
+    const subjects = state.tasks.filter((t) => t.subject_ref).map((t) => t.subject_ref);
+    expect([...new Set(subjects)]).toEqual(["api"]);
   });
 
   it("does not fan out a workflow that produces no {repo} path, even with repos registered", async () => {

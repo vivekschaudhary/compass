@@ -16,8 +16,10 @@ import {
   conversation,
   openQuestions,
   draftOf,
+  reviewedDeliverablePr,
   taskState,
   childRunBlock,
+  type Draft,
 } from "@/app/lib/data/job";
 import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
@@ -91,6 +93,21 @@ export default async function JobPage(
   // Depends on `draft`'s own section ids, so it cannot join the batch above.
   const comments = await commentsForSections(draft?.sections.map((s) => s.id) ?? []);
   const state = taskRow?.state ?? null;
+
+  // A code-review row's reviewed deliverable is a pull request, not a document — `draft` stays
+  // null for it by construction (`draftOf` only finds a filed document). Generic on `renders`, not
+  // on which workflow this row belongs to: see `reviewedDeliverablePr`'s own header.
+  const reviewedPr =
+    !draft && ctx.renders === "code-review" ? await reviewedDeliverablePr(taskId) : null;
+  // A stand-in draft so DraftPanel shows the PR link rather than an empty panel. Display-side only
+  // — never read by `runAgent`, and not wired into comments (its one section has no real document
+  // row for a comment to attach to).
+  const effectiveDraft: Draft | null = draft ?? (reviewedPr
+    ? {
+        version: "—", status: "open", authorKind: "agent", authoredBy: null,
+        sections: [{ id: "pr-link", heading: "Pull request", body: reviewedPr, cites: [], edited: false }],
+      }
+    : null);
 
   // Freshly started, on this very load: the row is running, nothing has picked it up yet, and
   // there is no conversation yet either — a task returned to after answering a question, or one an
@@ -180,7 +197,7 @@ export default async function JobPage(
               handling); this checklist is the only thing that does, so it stays visible with the
               composer, not above it in the scrolling history. */}
           <div className="chat-action">
-            {state === "hitl" && draft && doneCriteria.length > 0 && (
+            {state === "hitl" && effectiveDraft && doneCriteria.length > 0 && (
               <ApprovePanel
                 engagement={engagement}
                 role={roleCode}
@@ -234,7 +251,7 @@ export default async function JobPage(
 
         <DraftPanel
           path={ctx.reviewPath ?? ctx.produces}
-          draft={draft}
+          draft={effectiveDraft}
           // A plain object, not the `Map` `commentsForSections` returns — a client component prop
           // crossing the server/client boundary sticks to plain values, same as `statuses`/
           // `doneCriteria` below being read out of the `gates` Map server-side rather than handed

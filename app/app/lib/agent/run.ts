@@ -31,13 +31,13 @@ import { resolveCommitments } from "../data/sprint";
 import { emit } from "../data/events";
 import { mirrorState } from "../data/tracker";
 import { runCode, storyFor } from "./code-run";
-import { validateScaffoldFiles, runScaffold } from "./scaffold";
 import { jiraForEngagement, addRemoteLink, addComment } from "../jira";
 import { nestedWorkflowOf } from "../data/phases";
 import { approve, measureTask } from "../data/gates";
 import { missingSections, describeTemplate } from "../render/template";
 import { selectHost, MODEL } from "./hosts/select";
 import { toolsFor } from "./hosts/tools";
+import { runScaffold } from "./generate-run";
 import type { HostResult } from "./hosts/types";
 
 
@@ -1042,57 +1042,56 @@ export async function runAgent(
       : { kind: "error", message: `The build produced no pull request (exit ${built.exit}).` };
   }
 
-  // The other tool whose outcome this app does not author, and the one that needs no orchestrator
-  // at all: a scaffold is greenfield, so the app writes the files straight to a branch through the
-  // GitHub API and opens the pull request itself. What comes back — the PR URL, the branch — is a
-  // fact GitHub returned, same discipline as `code`.
+  // `scaffold`: the model chose a framework; the generator builds the repo and the app opens the
+  // pull request only on green. What comes back is the generator's recorded result, not a claim.
   if (call.name === "scaffold") {
-    const input = call.input as { summary?: string; files?: unknown };
-
-    const validated = validateScaffoldFiles(input.files);
-    if (!validated.ok) {
-      // NOT a failed run — the model gets a turn to fix it. Nothing was written; recording it as a
-      // build failure would count a retry-able mistake as a shipped-nothing outcome.
-      const msg =
-        `Not scaffolded — this needs fixing before anything is written:\n` +
-        validated.problems.map((p) => `- ${p}`).join("\n");
-      await recordTurn(taskId, msg, ctx);
-      await releaseExecutor(taskId, ctx, { failed: true });
-      return { kind: "error", message: msg };
-    }
-
+    const input = call.input as { summary?: string; framework?: string; options?: string };
     const intent =
       `**Scaffolding.** ${input.summary ?? ""}\n\n` +
-      `**Files.**\n${validated.files.map((f) => `- \`${f.path}\``).join("\n")}\n`;
-    // Written BEFORE the call, same reason `code` writes its intent first: a call that fails leaves
-    // a record of what was attempted.
+      `**Framework.** ${input.framework ?? ""}\n\n` +
+      (input.options ? `**Options.** ${input.options}\n` : "");
     await recordTurn(taskId, intent, ctx);
 
     const result = await runScaffold(actor.engagementId, taskId, {
-      summary: input.summary ?? "", files: validated.files,
+      summary: input.summary ?? "", framework: input.framework ?? "", options: input.options ?? "",
     });
 
-    if (result.refusal) {
-      await releaseExecutor(taskId, ctx, { failed: true });
-      await recordTurn(taskId, `**The scaffold did not start.** ${result.refusal}`, ctx);
-      return { kind: "error", message: result.refusal };
-    }
-
-    const outcome = result.ok
-      ? `**Scaffolded ${result.repoName}.** The pull request is open: ${result.prUrl}` +
+    const outcome = result.status === "shipped"
+      ? `**Scaffolded.** Checks passed and the pull request is open: ${result.pr_url}` +
         (result.branch ? `\n\nBranch \`${result.branch}\`.` : "")
-      : `**UNSHIPPED — no pull request.** ${result.repoName ? `Scaffolding ${result.repoName} failed: ` : ""}${result.error ?? "unknown error"}`;
+      : `**UNSHIPPED — ${result.status}.** ${result.refusal ?? result.checks.failed ?? "no pull request"}`;
     await recordTurn(taskId, outcome, ctx);
 
-    // hitl either way, same as `code`: a failed scaffold still needs a person to look, not an agent
-    // retrying forever against a repo call that will not succeed on its own.
-    await handOver(actor, taskId, ctx, result.ok ? "scaffolded" : "scaffold-failed", message, {
-      branch: result.branch ?? null, pr: result.prUrl ?? null,
-    });
+    // A SHIPPED scaffold closes itself. Its own criteria are machine-checked now (ci green, a PR
+    // linked) — judgment moved to `approve-repo-scaffold`, which judges the two now sitting there
+    // against the actual PR (migration 20261007073000). Nothing here is left for a human to attest;
+    // same discipline `settleSupplied` already uses for a fact a machine check settled.
+    if (result.status === "shipped") {
+      await measureTask(actor, taskId);
+      const closed = await approve(actor, taskId, []);
+      if (closed.ok) {
+        await releaseExecutor(taskId, ctx, { failed: false });
+        await finished(ctx.engagementId, taskId, ctx.roleCode, "scaffolded", message, {
+          branch: result.branch ?? null, pr: result.pr_url ?? null, status: result.status, closed: true,
+        });
+      } else {
+        // The gate said no — a criterion isn't actually measured as met yet. Never leave the row
+        // mid-flight: hand it to a person with the reason, same as a failed close anywhere else.
+        await recordTurn(taskId, `Shipped, but this row could not close itself: ${closed.error}`, ctx);
+        await handOver(actor, taskId, ctx, "scaffolded", message, {
+          branch: result.branch ?? null, pr: result.pr_url ?? null, status: result.status, closed: false,
+        });
+      }
+    } else {
+      // hitl: a failed scaffold still needs a person to look, not an agent retrying forever.
+      await handOver(actor, taskId, ctx, "scaffold-failed", message, {
+        branch: result.branch ?? null, pr: result.pr_url ?? null, status: result.status,
+      });
+    }
 
-    return result.ok
-      ? { kind: "drafted", summary: outcome, sections: validated.files.length, path: result.prUrl ?? null }
-      : { kind: "error", message: `The scaffold produced no pull request. ${result.error ?? ""}`.trim() };
+    return result.status === "shipped"
+      ? { kind: "drafted", summary: outcome, sections: 0, path: result.pr_url ?? null }
+      : { kind: "error", message: `The scaffold did not ship: ${result.refusal ?? result.status}.` };
   }
 
   if (call.name === "draft" || call.name === "backlog" || call.name === "sprint" || call.name === "roster") {

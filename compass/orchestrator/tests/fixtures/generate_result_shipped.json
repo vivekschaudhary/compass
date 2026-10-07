@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "status": "shipped",
+  "branch": "b",
+  "pr_url": "https://github.com/o/r/pull/7",
+  "files_changed": 1,
+  "checks": { "ran": ["pnpm build"], "failed": null, "tail": null },
+  "refusal": null,
+  "log_ref": "l",
+  "usage": null
+}

@@ -529,6 +529,234 @@ async function openNestedPerEpic(
   return { ok: true, runs };
 }
 
+// ── inline fan-out: ported from 4b023d40 (materialize-scaffold-repos) ─────────────────────
+
+type FanOutSubject = { ref: string };
+
+/**
+ * The published version of the workflow a task's row nests, resolved the engagement-override-wins
+ * way `open_workflow_run` does. Shared by `nestedFanOutKind` and `materializeInlinePerSubject` so
+ * there is one place this resolution happens, not two that could disagree on which version a run
+ * is actually using.
+ */
+async function resolveNestedVersion(taskId: string): Promise<{
+  orgId: string;
+  engagementId: string;
+  runId: string | null;
+  code: string;
+  versionId: string;
+  ownerRoleCode: string | null;
+  workstreamCode: string | null;
+} | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const { data: task } = await sb
+    .from("work_task")
+    .select("org_id, engagement_id, workflow_run_id, workflow_step_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task?.workflow_step_id) return null;
+
+  const { data: step } = await sb
+    .from("workflow_step")
+    .select("nests_workflow_code")
+    .eq("id", task.workflow_step_id)
+    .maybeSingle();
+  const code = step?.nests_workflow_code as string | null;
+  if (!code) return null;
+
+  // The engagement's override wins over the org default — reading the org copy here would answer
+  // for a workflow this run is not using.
+  const { data: wf } = await sb
+    .from("workflow")
+    .select("id, owner_role_code, workstream_code")
+    .eq("org_id", task.org_id)
+    .eq("code", code)
+    .or(`engagement_id.eq.${task.engagement_id},engagement_id.is.null`)
+    .order("engagement_id", { nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  if (!wf) return null;
+
+  const { data: ver } = await sb
+    .from("workflow_version")
+    .select("id")
+    .eq("workflow_id", wf.id)
+    .eq("status", "published")
+    .maybeSingle();
+  if (!ver) return null;
+
+  return {
+    orgId: task.org_id as string,
+    engagementId: task.engagement_id as string,
+    runId: (task.workflow_run_id as string | null) ?? null,
+    code,
+    versionId: ver.id as string,
+    ownerRoleCode: (wf.owner_role_code as string | null) ?? null,
+    workstreamCode: (wf.workstream_code as string | null) ?? null,
+  };
+}
+
+
+/**
+ * Copy the template workflow's criteria into the PARENT run's own version, once per step_task that
+ * does not already have a row there. Idempotent — safe to call on every materialize, including a
+ * retry.
+ *
+ * Why a copy, not a second lookup path: `criteriaForTask` (`gates/measure.ts`) resolves criteria by
+ * the RUN's `workflow_version_id` plus the step's `task` name — every task in the system is read
+ * this way. A materialized task sits in the parent run but keeps the TEMPLATE's own
+ * `workflow_step_id`, so without this copy its criteria would be registered under a version
+ * `criteriaForTask` never looks at, and every Ready/Done gate on it would silently find nothing.
+ * Copying the rows keeps that one widely-used function completely unchanged — teaching it a second
+ * lookup path risks every OTHER workflow's gates, not just this one's.
+ */
+async function copyCriteriaIfMissing(
+  templateVersionId: string,
+  parentVersionId: string,
+  stepTasks: string[],
+): Promise<void> {
+  const sb = supabaseAdmin();
+  if (!sb || templateVersionId === parentVersionId || !stepTasks.length) return;
+
+  const { data: existing } = await sb
+    .from("criterion")
+    .select("step_task")
+    .eq("workflow_version_id", parentVersionId)
+    .in("step_task", stepTasks);
+  const have = new Set((existing ?? []).map((r) => r.step_task as string));
+
+  const { data: template } = await sb
+    .from("criterion")
+    .select("kind, ord, statement, subject_kind, subject_ref, operator, value, step_task")
+    .eq("workflow_version_id", templateVersionId)
+    .in("step_task", stepTasks);
+
+  const rows = (template ?? [])
+    .filter((c) => c.step_task && !have.has(c.step_task as string))
+    .map((c) => ({ ...c, workflow_version_id: parentVersionId }));
+  if (rows.length) await sb.from("criterion").insert(rows);
+}
+
+/**
+ * The `inline` fan-out mode — materialize a nested workflow's steps as plain tasks INSIDE the
+ * calling run, once per subject, instead of opening a second-level nested run.
+ *
+ * See `FAN_OUT_KINDS`'s own comment for why: Jira's hierarchy caps at one level below an epic, and
+ * `scaffold-repos` already sits one level nested under `sprint-0`'s `foundation-architecture` — a
+ * second nested run per repo cannot be mirrored (`mirrorNested` correctly refuses it as "nested two
+ * deep"). This stays flat instead: no second run, so no second nesting level, ever.
+ *
+ * IDEMPOTENT per (run, subject, step) — a retry or a second click does not clone a second copy of a
+ * subject's pair, same discipline `open_nested_run`'s own idempotency gives the `nest` mode.
+ */
+async function materializeInlinePerSubject(
+  actor: Actor,
+  taskId: string,
+  subjects: FanOutSubject[],
+  emptyError: string,
+): Promise<FanOutResult> {
+  if (!subjects.length) return { ok: false, error: emptyError };
+
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const resolved = await resolveNestedVersion(taskId);
+  if (!resolved) return { ok: false, error: "This row's nested workflow could not be resolved." };
+  if (!resolved.runId) return { ok: false, error: "This row has no run to materialize into." };
+  const runId = resolved.runId;
+
+  const { data: parentRun } = await sb
+    .from("workflow_run")
+    .select("id, workflow_version_id")
+    .eq("id", runId)
+    .maybeSingle();
+  if (!parentRun) return { ok: false, error: "This row's own run could not be found." };
+
+  const { data: templateSteps } = await sb
+    .from("workflow_step")
+    .select("id, ord, kind, role_code, task, title")
+    .eq("workflow_version_id", resolved.versionId)
+    .order("ord");
+  if (!templateSteps?.length) {
+    return { ok: false, error: `'${resolved.code}' has no steps to materialize.` };
+  }
+
+  await copyCriteriaIfMissing(
+    resolved.versionId,
+    parentRun.workflow_version_id as string,
+    templateSteps.map((s) => s.task as string),
+  );
+
+  const subjectRefs = subjects.map((s) => s.ref);
+  const { data: existing } = await sb
+    .from("work_task")
+    .select("subject_ref, workflow_step_id")
+    .eq("workflow_run_id", runId)
+    .in("subject_ref", subjectRefs);
+  const already = new Set((existing ?? []).map((r) => `${r.subject_ref}:${r.workflow_step_id}`));
+
+  const rows = subjects.flatMap((subject) =>
+    templateSteps
+      .filter((step) => !already.has(`${subject.ref}:${step.id}`))
+      .map((step) => ({
+        org_id: resolved.orgId,
+        engagement_id: resolved.engagementId,
+        workflow_run_id: runId,
+        workflow_step_id: step.id as string,
+        subject_ref: subject.ref,
+        role_code: (step.role_code as string | null) ?? resolved.ownerRoleCode,
+        kind: step.kind === "hitl" ? "hitl" : "agent",
+        title: (step.title as string) || (step.task as string) || `Step ${step.ord}`,
+        created_by: actor.holder ?? actor.roleCode,
+        workstream_code: resolved.workstreamCode,
+      })),
+  );
+
+  if (rows.length) {
+    const { error } = await sb.from("work_task").insert(rows);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // One mirror pass for the whole run, not one per subject — `mirrorNested` already skips any task
+  // that already has a ticket and creates one for anything new, so a single call after every
+  // subject's rows exist picks up exactly what this call added. Reused unchanged by every subject's
+  // entry below: it is genuinely the same board result, since they all share one run.
+  const mirrored = await mirrorAndCompose(
+    resolved.engagementId,
+    runId,
+    actor.roleCode,
+    () => mirrorNested(resolved.engagementId, runId, actor.roleCode),
+    { taskLevel: "subtask" },
+  );
+
+  await remeasureRun(actor, runId);
+
+  const { data: runTasks } = await sb
+    .from("work_task")
+    .select("id, subject_ref, role_code, workflow_step(ord)")
+    .eq("workflow_run_id", runId)
+    .in("subject_ref", subjectRefs);
+
+  // Same rule `openNested` applies: auto-start a subject's first materialized task only when it
+  // belongs to the SAME role that triggered the fan-out. A different role's task is left idle in
+  // its own queue.
+  const runs: { runId: string; subject: string | null; mirrored: BoardResult; startedTaskId: string | null }[] = [];
+  for (const subject of subjects) {
+    const forSubject = (runTasks ?? []).filter((t) => t.subject_ref === subject.ref);
+    const first = sortByStep(forSubject)[0] ?? null;
+    let startedTaskId: string | null = null;
+    if (first?.role_code === actor.roleCode) {
+      const started = await startTask(actor, first.id as string).catch(() => null);
+      if (started?.ok) startedTaskId = first.id as string;
+    }
+    runs.push({ runId, subject: subject.ref, mirrored, startedTaskId });
+  }
+
+  return { ok: true, runs };
+}
+
 /**
  * Open one child run per repo registered on the engagement, for a nesting row whose nested workflow
  * writes into a repo. The subject is the repo's KEY — the closed list `repo` holds — and the run
@@ -538,6 +766,18 @@ async function openNestedPerEpic(
  * completes, the row closes, and a scaffold that scaffolded nothing looks exactly like one that
  * scaffolded everything.
  */
+/**
+ * The inline fan-out, callable from a materializer: the caller names the nesting row (the one whose
+ * nested workflow is per-subject) and the subjects, and this materializes one task set per subject.
+ */
+export async function fanOutInline(
+  actor: Actor,
+  nestingTaskId: string,
+  subjects: { ref: string }[],
+): Promise<FanOutResult> {
+  return materializeInlinePerSubject(actor, nestingTaskId, subjects, "No subjects to fan out over.");
+}
+
 async function openNestedPerRepo(
   actor: Actor,
   taskId: string,
@@ -560,23 +800,15 @@ async function openNestedPerRepo(
     };
   }
 
-  const runs: {
-    runId: string;
-    subject: string | null;
-    mirrored: BoardResult;
-    startedTaskId: string | null;
-  }[] = [];
-  for (const key of keys) {
-    const child = await openNested(actor, taskId, key);
-    if (!child.ok) return { ok: false, error: `${key}: ${child.error}` };
-    runs.push({
-      runId: child.runId,
-      subject: key,
-      mirrored: child.mirrored,
-      startedTaskId: child.startedTaskId,
-    });
-  }
-  return { ok: true, runs };
+  // Inline, not nested: one run, one task pair per repo. A second nested run per repo cannot be
+  // mirrored (Jira caps at one level below an epic), so the repos' steps are cloned into this run.
+  return materializeInlinePerSubject(
+    actor,
+    taskId,
+    keys.map((ref) => ({ ref })),
+    "This row scaffolds one repo at a time, and this engagement has no repos registered. " +
+      "Nothing was opened — create the repos the scaffold plan lists and register each first.",
+  );
 }
 
 /**
