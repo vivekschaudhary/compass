@@ -38,6 +38,7 @@ import { missingSections, describeTemplate } from "../render/template";
 import { selectHost, MODEL } from "./hosts/select";
 import { toolsFor } from "./hosts/tools";
 import { runScaffold } from "./generate-run";
+import { parseScaffoldRepos } from "../data/scaffold-repos";
 import type { HostResult } from "./hosts/types";
 
 
@@ -1046,6 +1047,25 @@ export async function runAgent(
   // pull request only on green. What comes back is the generator's recorded result, not a claim.
   if (call.name === "scaffold") {
     const input = call.input as { summary?: string; framework?: string; options?: string };
+
+    // Enforced, not just prompted: a repo the accepted record never named has no plan to carry out.
+    // The model improvising one anyway (live: `app`/kindtree-swap got art-swap-backend's content,
+    // borrowed from the only real repo it could see) is worse than refusing, because it ships a
+    // real PR on a real repo under a false description. Checked against the SAME record this run
+    // was handed, not a second read — the repo list the model saw is the repo list enforced here.
+    const repoKey = ctx.subject?.ref ?? null;
+    const record = ctx.inputs.find((i) => i.path === "scaffold-record")?.body
+      ?? ctx.inputs.find((i) => i.body)?.body ?? null;
+    const { repos: acceptedRepos } = record ? parseScaffoldRepos(record) : { repos: [] };
+    if (!repoKey || !acceptedRepos.some((r) => r.key === repoKey)) {
+      const msg = `**Refused.** '${repoKey ?? "(no subject)"}' is not listed in the accepted ` +
+        `scaffold-record's Repositories table, so there is nothing to scaffold it against. ` +
+        `Nothing was built.`;
+      await recordTurn(taskId, msg, ctx);
+      await releaseExecutor(taskId, ctx, { failed: true });
+      return { kind: "error", message: msg };
+    }
+
     const intent =
       `**Scaffolding.** ${input.summary ?? ""}\n\n` +
       `**Framework.** ${input.framework ?? ""}\n\n` +

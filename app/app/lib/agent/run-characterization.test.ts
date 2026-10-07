@@ -192,6 +192,7 @@ beforeEach(() => {
   taskState = "running";
   dispatch.mockReset();
   runCode.mockReset();
+  runScaffold.mockReset();
   buildContext.mockReset();
   buildContext.mockResolvedValue({ ...baseCtx });
   process.env.ANTHROPIC_API_KEY = "test";
@@ -365,6 +366,17 @@ describe("code — the build hand-off", () => {
 
 describe("scaffold — a shipped run closes itself, judgment moved to its reviewer", () => {
   const scaffoldCall = { name: "scaffold", input: { summary: "art-swap-backend", framework: "nextjs-ts", options: "" } };
+  const backendRecord = {
+    path: "scaffold-record", version: 1,
+    body: "## Repositories\n\n| key | name | framework |\n|---|---|---|\n"
+      + "| backend | art-swap-backend | nextjs-ts |\n",
+  };
+
+  beforeEach(() => {
+    buildContext.mockResolvedValue({
+      ...baseCtx, output: "scaffold", subject: { ref: "backend", key: null }, inputs: [backendRecord],
+    });
+  });
 
   it("on shipped: records intent then outcome, measures, approves with no confirmations, and releases clean — no hand-over", async () => {
     runScaffold.mockResolvedValue({
@@ -391,7 +403,28 @@ describe("scaffold — a shipped run closes itself, judgment moved to its review
     expect(out).toMatchObject({ kind: "drafted", path: "https://github.com/o/r/pull/1" });
   });
 
-  it("on checks_failed: hands over to a person, same as a failed build", async () => {
+  it("refuses a scaffold call for a repo the accepted record never named, without spawning the generator", async () => {
+    buildContext.mockResolvedValue({
+      ...baseCtx,
+      output: "scaffold",
+      subject: { ref: "app", key: null },
+      inputs: [{
+        path: "scaffold-record", version: 1,
+        body: "## Repositories\n\n| key | name | framework |\n|---|---|---|\n"
+          + "| backend | art-swap-backend | nextjs-ts |\n",
+      }],
+    });
+    replyWith(scaffoldCall);
+
+    const out = await runAgent(actor as never, "t1");
+
+    expect(runScaffold).not.toHaveBeenCalled();
+    expect(log.slice(-2)).toEqual(["turn.insert", "release:failed"]);
+    expect(out.kind).toBe("error");
+    expect((out as { message: string }).message).toMatch(/not listed in the accepted/);
+  });
+
+    it("on checks_failed: hands over to a person, same as a failed build", async () => {
     runScaffold.mockResolvedValue({
       version: 1, status: "checks_failed", branch: "feat/scaffold-backend", pr_url: null,
       files_changed: 0, checks: { ran: ["npm ci", "npm run build"], failed: "npm run build", tail: "x" },
