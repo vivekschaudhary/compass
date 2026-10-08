@@ -57,7 +57,9 @@ function Message({ turn }: { turn: Turn & { pending?: true } }) {
     <article className={`msg msg-${turn.authorKind}${turn.pending ? " msg-pending" : ""}`}>
       <div className="msg-who">
         <span>{turn.authorKind === "agent" ? `${turn.authorRoleCode ?? "agent"} agent` : turn.authorUserId ?? "you"}</span>
-        <span className="msg-when">
+        {/* The time depends on the viewer's locale, which the server cannot know. Rendered only in the
+            browser's own format, so React is told to accept the difference rather than rebuild the page. */}
+        <span className="msg-when" suppressHydrationWarning>
           {turn.pending
             ? "sending…"
             : new Date(turn.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}

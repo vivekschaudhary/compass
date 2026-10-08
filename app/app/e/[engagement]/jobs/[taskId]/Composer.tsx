@@ -127,6 +127,14 @@ export function Composer({
     if (running) { sawRunning.current = true; return; }
     if (sawRunning.current) setWorking(false);
   }, [working, running]);
+  // A run finishes on the server, not in this tab. While this page shows one as running (or as
+  // waiting for its claim), re-read the server every few seconds, so the page sees the end of the
+  // run instead of staying on the state it loaded with. Stops as soon as the server says it's over.
+  useEffect(() => {
+    if (!running && !working) return;
+    const t = setInterval(() => router.refresh(), 5_000);
+    return () => clearInterval(t);
+  }, [running, working, router]);
   // Never wait forever on a claim that never came (refused, or finished before a refresh saw it).
   useEffect(() => {
     if (!working) return;
@@ -278,7 +286,8 @@ export function Composer({
           <span className="msg-thinking-dot" />
           <span className="msg-thinking-dot" />
           <span className="msg-thinking-dot" />
-          <span className="msg-thinking-elapsed">
+          {/* The elapsed time reads the clock, so the server and the browser can differ by a second. */}
+          <span className="msg-thinking-elapsed" suppressHydrationWarning>
             working{heartbeatAt ? ` — ${formatElapsed(heartbeatAt, now)}` : "…"}
           </span>
         </div>

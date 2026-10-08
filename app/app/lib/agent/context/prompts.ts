@@ -239,8 +239,36 @@ export function inputPrompt(ctx: AgentContext): string {
   if (ctx.sprint) parts.push(sprintPrompt(ctx.sprint));
   if (ctx.template) parts.push(templatePrompt(ctx.template));
   if (ctx.output === "supplied") parts.push(suppliedPrompt(ctx));
+  if (ctx.output === "scaffold") parts.push(scaffoldPrompt(ctx));
 
   return parts.join("\n\n");
+}
+
+/**
+ * Which repo this row scaffolds, and that its deliverable is a pull request, not a document.
+ *
+ * `scaffold`'s own `produces` (`scaffold/{repo}@scm`) resolves to a path nobody files anything at —
+ * the `scm` slot means the record lives on the deliverable itself, same as `code`. Restated here as
+ * plain text because the model otherwise has no way to tell "row 8 of foundation-architecture" from
+ * "the repo I am actually meant to touch"; the run's subject and the registered name are both said.
+ */
+function scaffoldPrompt(ctx: AgentContext): string {
+  const repo = ctx.repoName ?? ctx.subject?.ref ?? "(unknown — this run has no subject)";
+  return [
+    `<scaffold repo="${repo}">`,
+    `This row scaffolds ONE repo: ${repo}. The accepted scaffold plan may list several; write only`,
+    `what that plan said THIS repo starts with.`,
+    ``,
+    `IF ${repo} IS NOT NAMED IN THE ACCEPTED SCAFFOLD-RECORD'S REPOSITORIES TABLE: call \`ask\`, not`,
+    `\`scaffold\`. Do not borrow another repo's framework or description to fill the gap — a repo the`,
+    `plan never named has no plan to carry out, and guessing one is worse than asking. This is`,
+    `enforced after the call too: a \`scaffold\` for a repo not in the table is refused outright.`,
+    ``,
+    `Your deliverable is a pull request, not a document — call \`scaffold\` with the framework this repo`,
+    `should use and what it should be in \`options\`. A generator writes the files, the app runs the`,
+    `checks and opens the pull request; you write no files and there is nothing to file at a path.`,
+    `</scaffold>`,
+  ].join("\n");
 }
 
 /**

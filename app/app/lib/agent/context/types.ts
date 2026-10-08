@@ -72,6 +72,14 @@ export type AgentContext = {
    */
   reviewPath: string | null;
   /**
+   * The run's own subject (`subjectOfRun`), surfaced here rather than re-read: a `scaffold` row has
+   * no per-subject path to resolve `produces` through (its deliverable is a pull request, not a
+   * document), so this is the only place the run's repo key reaches the prompt.
+   */
+  subject: { ref: string | null; key: string | null } | null;
+  /** The registered repo the subject names, when `output === "scaffold"`. Null otherwise. */
+  repoName: string | null;
+  /**
    * Resolved once here from `actor.capabilities`, not re-derived wherever it is needed — read by
    * `systemPrompt` (to tell the model it actually has this, rather than leaving it to notice the
    * gap between its own agent file's `required_tools: [... web_search ...]` and what it was

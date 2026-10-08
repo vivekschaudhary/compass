@@ -110,6 +110,57 @@ export type Draft = {
   }[];
 };
 
+/**
+ * The pull request a CODE-REVIEW row is reviewing, when its reviewed row shipped a PR rather than
+ * filing a document.
+ *
+ * `draftOf` requires a row in `document` at the reviewed path, and a code/scaffold-shaped row never
+ * files one there — its deliverable IS the pull request. Without this, every `code-review` row in
+ * every workflow (`review-pr` in `build`, `approve-repo-scaffold` here, and any future one) would
+ * have nothing to show `draft`, so the approve panel could never render for it — confirmed live on
+ * `approve-repo-scaffold`: the row reached `hitl` with a shipped PR and no way to close.
+ *
+ * Generic on purpose: keyed on `renders`, the render kind every review row already declares, not on
+ * a workflow or task name. Scoped to the ONE sibling task being reviewed (same run, same subject,
+ * the step this row's own `depends_on[0]` names) — not every PR the whole run has ever recorded,
+ * which would leak another repo's PR into a review row backed by `scaffold-repo`'s inline fan-out.
+ */
+export async function reviewedDeliverablePr(taskId: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_run_id, subject_ref, workflow_step_id").eq("id", taskId).maybeSingle();
+  if (!task?.workflow_run_id) return null;
+
+  const { data: step } = task.workflow_step_id
+    ? await sb.from("workflow_step").select("depends_on").eq("id", task.workflow_step_id).maybeSingle()
+    : { data: null };
+  const reviewedTaskName = (step?.depends_on as string[] | null)?.[0] ?? null;
+  if (!reviewedTaskName) return null;
+
+  // Every sibling this row's run shares a subject with — the same materialization that put this
+  // review row and the row it reviews side by side (plain tasks sharing one run, not a child run).
+  const { data: siblings } = await sb.from("work_task")
+    .select("id, workflow_step_id")
+    .eq("workflow_run_id", task.workflow_run_id)
+    .eq("subject_ref", task.subject_ref ?? "");
+  const stepIds = [...new Set((siblings ?? []).map((s) => s.workflow_step_id as string | null).filter((id): id is string => !!id))];
+  const { data: steps } = stepIds.length
+    ? await sb.from("workflow_step").select("id, task").in("id", stepIds)
+    : { data: [] };
+  const reviewedStepId = (steps ?? []).find((s) => s.task === reviewedTaskName)?.id as string | undefined;
+  const reviewedTask = (siblings ?? []).find((s) => s.workflow_step_id === reviewedStepId);
+  if (!reviewedTask) return null;
+
+  const { data: events } = await sb.from("event")
+    .select("payload").eq("verb", "agent.run.finished").eq("subject_id", reviewedTask.id as string);
+  const pr = (events ?? [])
+    .map((e) => (e.payload as { pr?: string | null } | null)?.pr ?? null)
+    .find((u): u is string => !!u && /\/pull\/\d+/.test(u));
+  return pr ?? null;
+}
+
 /** The live version of what this task produces, with each section's citations resolved. */
 export async function draftOf(actor: Actor, path: string | null): Promise<Draft | null> {
   const sb = supabaseAdmin();

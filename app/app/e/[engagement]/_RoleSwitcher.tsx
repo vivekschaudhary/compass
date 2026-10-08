@@ -10,7 +10,7 @@
 // It shows PEOPLE, not role codes. Switching to Rafi should feel like looking over someone's
 // shoulder, not like changing a filter.
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Avatar } from "../../_ui/primitives";
 
 export type SwitchableRole = {
@@ -22,7 +22,6 @@ export type SwitchableRole = {
 
 export function RoleSwitcher({ engagement, roles }: { engagement: string; roles: SwitchableRole[] }) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const active = params.get("role") ?? roles[0]?.code;
 
@@ -34,10 +33,10 @@ export function RoleSwitcher({ engagement, roles }: { engagement: string; roles:
     );
   }
 
+  // Always lands on the engagement's jobs-to-do list for the chosen person. Keeping the current page
+  // would carry a job from the previous person's list into the new role's view.
   function pick(code: string) {
-    const next = new URLSearchParams(params.toString());
-    next.set("role", code);
-    router.replace(`${pathname}?${next}`, { scroll: false });
+    router.replace(`/e/${engagement}/jobs?role=${encodeURIComponent(code)}`, { scroll: false });
   }
 
   return (

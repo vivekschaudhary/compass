@@ -5,6 +5,7 @@ import { evaluateConnector } from "./evaluators/connector";
 import { evaluateTicket } from "./evaluators/ticket";
 import { evaluateBacklog } from "./evaluators/backlog";
 import { evaluateNested } from "./evaluators/nested";
+import { evaluateCiChecks } from "./evaluators/ci";
 
 type Evaluator = (
   actor: Actor,
@@ -23,6 +24,7 @@ const registry = new Map<string, Evaluator>([
   ["ticket", evaluateTicket],
   ["backlog", evaluateBacklog],
   ["nested", (_actor, c, taskId) => evaluateNested(c, taskId)],
+  ["ci", evaluateCiChecks],
 ]);
 
 /**

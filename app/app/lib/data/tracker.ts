@@ -185,7 +185,7 @@ export async function mirrorNested(
   }
 
   const { data: rows } = await sb.from("work_task")
-    .select("id, title, role_code, state, ticket_key, workflow_step(ord)")
+    .select("id, title, role_code, state, ticket_key, subject_ref, workflow_step(ord)")
     .eq("workflow_run_id", runId);
   const tasks = sortByStep(rows ?? []);
   // Recorded before anything is attempted: `stories.length` alone cannot say whether four is all of
@@ -213,13 +213,20 @@ export async function mirrorNested(
   for (const t of tasks) {
     if (t.ticket_key) { out.stories.push({ taskId: t.id, key: t.ticket_key, title: t.title }); continue; }
 
+    // Several siblings in this ONE run can share the SAME step title — a materialized per-subject
+    // fan-out (`scaffold-repo`'s inline mode) gives "Accept the repo scaffold" to every repo alike.
+    // Without the subject in the summary, every one of those tickets reads identically in Jira, and
+    // telling them apart means opening each and reading its description — which is exactly how
+    // CT-275 and CT-276 got cross-matched live. The row is the instruction; the ticket has to say
+    // which row.
+    const summary = t.subject_ref ? `${t.title} — ${t.subject_ref}` : t.title;
     const created = await createIssue(creds, {
-      type, summary: t.title, parentKey: parent.ticket_key as string,
-      description: `${t.title}.\n\n_Part of ${parent.ticket_key}._`,
+      type, summary, parentKey: parent.ticket_key as string,
+      description: `${summary}.\n\n_Part of ${parent.ticket_key}._`,
       labels: [t.role_code],
     });
     if (!created) {
-      out.problems.push(`Could not create a sub-task for "${t.title}".`);
+      out.problems.push(`Could not create a sub-task for "${summary}".`);
       out.reason = "story-refused";
       continue;
     }
@@ -227,7 +234,7 @@ export async function mirrorNested(
     // Jira first, then the local row: a key is stored only once it exists, which is what lets this
     // re-run with no bookkeeping to say what it did last time.
     await sb.from("work_task").update({ ticket_key: created.key }).eq("id", t.id);
-    out.stories.push({ taskId: t.id, key: created.key, title: t.title });
+    out.stories.push({ taskId: t.id, key: created.key, title: summary });
 
     const user = await resolve(t.role_code);
     if (user) await updateIssue(creds, created.key, { assignee: { accountId: user.accountId } });

@@ -155,29 +155,6 @@ class TestResolveChecksSplitDirs(unittest.TestCase):
         self.assertEqual(R._read_stack_from_config(fw), "nextjs-ts")
 
 
-class TestScaffoldChecksWarning(unittest.TestCase):
-    """#122: scaffold-foundation owns leaving the project verifiable. A miss surfaces at
-    setup time (warn, re-runnable) rather than at the first code run (halt, #123)."""
-
-    def _proj(self, config_text):
-        d = Path(tempfile.mkdtemp())
-        (d / "compass").mkdir()
-        (d / "compass" / "config.yaml").write_text(config_text)
-        return d
-
-    def test_silent_when_checks_resolve(self):
-        d = self._proj("checks:\n  - make verify\n")
-        self.assertIsNone(R._scaffold_checks_warning(d, d / "compass"))
-
-    def test_warns_and_names_the_config_when_empty(self):
-        d = self._proj("framework_version: 1.0.0\n")
-        warn = R._scaffold_checks_warning(d, d / "compass")
-        self.assertIsNotNone(warn)
-        self.assertIn("SETUP INCOMPLETE", warn)
-        self.assertIn("config.yaml", warn)
-        self.assertIn("halts", warn)
-
-
 class TestDirtyPrNote(unittest.TestCase):
     """#109: on a FAILED check gate the halt message must not falsely claim 'no dirty
     PR' when an agent (against #92) already opened one. _dirty_pr_note detects it."""

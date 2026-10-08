@@ -66,6 +66,10 @@ vi.mock("./code-run", () => ({
   runCode: (...a: unknown[]) => runCode(...a),
   storyFor: async () => null,
 }));
+const runScaffold = vi.fn();
+vi.mock("./generate-run", () => ({
+  runScaffold: (...a: unknown[]) => runScaffold(...a),
+}));
 vi.mock("../jira", () => ({
   jiraForEngagement: async () => null, addRemoteLink: async () => {}, addComment: async () => {},
 }));
@@ -188,6 +192,7 @@ beforeEach(() => {
   taskState = "running";
   dispatch.mockReset();
   runCode.mockReset();
+  runScaffold.mockReset();
   buildContext.mockReset();
   buildContext.mockResolvedValue({ ...baseCtx });
   process.env.ANTHROPIC_API_KEY = "test";
@@ -358,6 +363,82 @@ describe("code — the build hand-off", () => {
     expect(out).toEqual({ kind: "error", message: "No repo configured." });
   });
 });
+
+describe("scaffold — a shipped run closes itself, judgment moved to its reviewer", () => {
+  const scaffoldCall = { name: "scaffold", input: { summary: "art-swap-backend", framework: "nextjs-ts", options: "" } };
+  const backendRecord = {
+    path: "scaffold-record", version: 1,
+    body: "## Repositories\n\n| key | name | framework |\n|---|---|---|\n"
+      + "| backend | art-swap-backend | nextjs-ts |\n",
+  };
+
+  beforeEach(() => {
+    buildContext.mockResolvedValue({
+      ...baseCtx, output: "scaffold", subject: { ref: "backend", key: null }, inputs: [backendRecord],
+    });
+  });
+
+  it("on shipped: records intent then outcome, measures, approves with no confirmations, and releases clean — no hand-over", async () => {
+    runScaffold.mockResolvedValue({
+      version: 1, status: "shipped", branch: "feat/scaffold-backend",
+      pr_url: "https://github.com/o/r/pull/1", files_changed: 12,
+      checks: { ran: ["npm ci", "npm run build"], failed: null, tail: null },
+      refusal: null, log_ref: "l", usage: null,
+    });
+    replyWith(scaffoldCall);
+
+    const out = await runAgent(actor as never, "t1");
+
+    expect(runScaffold).toHaveBeenCalledTimes(1);
+    // No "mirror:hitl": a shipped scaffold has only machine criteria left (ci green, PR linked —
+    // see migration 20261007073000), so it closes itself the way a supplied row does. It never
+    // reaches the hand-over a judged row would.
+    expect(log).toEqual([
+      ...OPENING,
+      "turn.insert", // intent — written before the generator runs
+      "turn.insert", // outcome
+      "release:ok",
+      "emit:agent.run.finished(scaffolded)",
+    ]);
+    expect(out).toMatchObject({ kind: "drafted", path: "https://github.com/o/r/pull/1" });
+  });
+
+  it("refuses a scaffold call for a repo the accepted record never named, without spawning the generator", async () => {
+    buildContext.mockResolvedValue({
+      ...baseCtx,
+      output: "scaffold",
+      subject: { ref: "app", key: null },
+      inputs: [{
+        path: "scaffold-record", version: 1,
+        body: "## Repositories\n\n| key | name | framework |\n|---|---|---|\n"
+          + "| backend | art-swap-backend | nextjs-ts |\n",
+      }],
+    });
+    replyWith(scaffoldCall);
+
+    const out = await runAgent(actor as never, "t1");
+
+    expect(runScaffold).not.toHaveBeenCalled();
+    expect(log.slice(-2)).toEqual(["turn.insert", "release:failed"]);
+    expect(out.kind).toBe("error");
+    expect((out as { message: string }).message).toMatch(/not listed in the accepted/);
+  });
+
+    it("on checks_failed: hands over to a person, same as a failed build", async () => {
+    runScaffold.mockResolvedValue({
+      version: 1, status: "checks_failed", branch: "feat/scaffold-backend", pr_url: null,
+      files_changed: 0, checks: { ran: ["npm ci", "npm run build"], failed: "npm run build", tail: "x" },
+      refusal: null, log_ref: "l", usage: null,
+    });
+    replyWith(scaffoldCall);
+
+    const out = await runAgent(actor as never, "t1");
+
+    expect(log.slice(-3)).toEqual(["release:hitl", "mirror:hitl", "emit:agent.run.finished(scaffold-failed)"]);
+    expect(out.kind).toBe("error");
+  });
+});
+
 
 describe("other exits", () => {
   it("QUIRK: a model refusal records the turn and releases, with no `finished` event", async () => {

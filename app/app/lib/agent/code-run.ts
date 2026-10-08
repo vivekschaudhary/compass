@@ -68,11 +68,20 @@ type Placement = {
   runId: string | null;
   /** `build`, `fix`, … — which graph the orchestrator walks. Never assumed. */
   workflow: string | null;
+  /**
+   * True when no EARLIER `renders: code` row exists in this same workflow version — the step
+   * that must cut a fresh branch. It is NOT the same test as `ord === 1`: a code row preceded by
+   * doc rows has a high `ord` and is still the first code row. `ord > 1` sent such a row down the
+   * RESUME path; `_prior_run_branch` found no branch to recover (nothing ran before it) and fell
+   * back to "stay on the current branch" — no worktree, no new branch, the agent committing wherever
+   * HEAD already was. On a real repo that is `main`.
+   */
+  isFirstCodeStep: boolean;
 };
 
 async function placementOf(taskId: string): Promise<Placement> {
   const sb = supabaseAdmin();
-  const none: Placement = { story: null, ord: null, runId: null, workflow: null };
+  const none: Placement = { story: null, ord: null, runId: null, workflow: null, isFirstCodeStep: true };
   if (!sb) return none;
 
   const { data: task } = await sb.from("work_task")
@@ -85,8 +94,19 @@ async function placementOf(taskId: string): Promise<Placement> {
     ? await sb.from("workflow").select("code").eq("id", run.workflow_id).maybeSingle()
     : { data: null };
   const { data: step } = task.workflow_step_id
-    ? await sb.from("workflow_step").select("ord").eq("id", task.workflow_step_id).maybeSingle()
+    ? await sb.from("workflow_step")
+        .select("ord, workflow_version_id").eq("id", task.workflow_step_id).maybeSingle()
     : { data: null };
+
+  let isFirstCodeStep = true;
+  if (step?.workflow_version_id && step.ord != null) {
+    const { data: earlierCodeRows } = await sb.from("workflow_step")
+      .select("id")
+      .eq("workflow_version_id", step.workflow_version_id as string)
+      .eq("renders", "code")
+      .lt("ord", step.ord as number);
+    isFirstCodeStep = !(earlierCodeRows ?? []).length;
+  }
 
   return {
     // The TRACKER's key, never the agent's ref. `--story` is passed to a process that looks the
@@ -95,6 +115,7 @@ async function placementOf(taskId: string): Promise<Placement> {
     ord: (step?.ord as number | null) ?? null,
     runId: (run?.id as string | null) ?? null,
     workflow: (wf?.code as string | null) ?? null,
+    isFirstCodeStep,
   };
 }
 
@@ -115,7 +136,7 @@ export async function runCode(
 ): Promise<CodeRun> {
   const empty = { ok: false, exit: null, branch: null, prUrl: null, log: "", repoName: null };
 
-  const { story, ord, runId, workflow } = await placementOf(taskId);
+  const { story, ord, runId, workflow, isFirstCodeStep } = await placementOf(taskId);
   if (!story) {
     return {
       ...empty,
@@ -160,8 +181,14 @@ export async function runCode(
   // cover on another, and a pull request containing neither.
   //
   // Both filters apply independently (run.py:2650-2653), so `--step N --from-step N` runs exactly
-  // step N AND takes the reuse path. Step 1 omits `--from-step` because there is no prior branch to
-  // recover; it is the one that records it.
+  // step N AND takes the reuse path. The FIRST code row of a workflow omits `--from-step` because
+  // there is no prior branch to recover; it is the one that records it.
+  //
+  // GATED ON "first code row of THIS workflow", never on `ord` directly. `ord === 1` and "first code
+  // row" are the same test only while every workflow's code rows start at 1; a code row that follows
+  // doc rows would be sent down the RESUME path with nothing to resume, and the orchestrator would
+  // fall back to "stay on the current branch" — committing wherever HEAD already is, on a real repo
+  // `main`. `isFirstCodeStep` looks for an EARLIER `renders: code` row in the same workflow version.
   //
   // THE RUN ID IS DERIVED, NOT STORED. `_prior_run_branch` (run.py:463) finds the branch by scanning
   // for a RUN_START carrying this exact id, so every step of one workflow run must pass the same
@@ -185,11 +212,12 @@ export async function runCode(
     // nothing saying what it was. Passing the agent's own summary makes it `feat/KAN-42-saved-
     // report-definitions`, readable in a branch list without opening the ticket.
     //
-    // Only step 1 uses it. Steps 2-4 recover the recorded branch through `--from-step`, so a
-    // different summary on a later step cannot rename the branch out from under the work.
+    // Only the first code row uses it. Later code rows recover the recorded branch through
+    // `--from-step`, so a different summary on a later step cannot rename the branch out from
+    // under the work.
     ...(opts.context ? ["--context", opts.context] : []),
     "--step", String(ord),
-    ...(ord > 1 ? ["--from-step", String(ord)] : []),
+    ...(isFirstCodeStep ? [] : ["--from-step", String(ord)]),
     "--run-id", orchestratorRunId,
     // The app spawns this headless. Without it the orchestrator prompts for per-step context and
     // `input()` deadlocks the run at step 2 with no stdin to answer it.

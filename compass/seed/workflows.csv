@@ -5,6 +5,7 @@ timeline,Timeline & Milestones,Delivery,Discovery,delivery-manager,,TRUE,TRUE,so
 resources,Resources,Delivery,Discovery,delivery-manager,,TRUE,TRUE,"sow, requirements",resource-plan
 feature-architecture,Feature architecture,Engineering,Build,staff-engineer,,TRUE,TRUE,"product-brief,features,foundational-architecture",feature-architecture
 foundation-architecture,Workflow: /foundation-architecture,Engineering,Discovery,staff-engineer,,TRUE,FALSE,"product-brief,features","foundational-architecture,scaffold-record"
+scaffold-repo,Scaffold one repo,Engineering,Discovery,staff-engineer,,TRUE,TRUE,scaffold-record,scaffold/{repo}@scm
 feature,Feature,Product,Build,product-owner,,TRUE,TRUE,product-brief,features
 product-brief,Workflow: /product-brief,Product,Discovery,product-owner,,TRUE,FALSE,"sow, requirements",product-brief
 build,Workflow: /build,Engineering,Build,engineer,,TRUE,TRUE,,

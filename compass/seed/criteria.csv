@@ -1,1 +1,10 @@
 workflow,task,kind,text,subject_kind,subject_ref,operator,value
+foundation-architecture,scaffold-foundation,done,"Names the target stack precisely enough to write real build, lint and test commands for it: language, framework, package manager, test runner.",,,,
+foundation-architecture,scaffold-foundation,done,"States the exact commands that belong in the project's compass/config.yaml checks: list, the same commands the CI-parity gate runs before any pull request can open.",,,,
+foundation-architecture,scaffold-foundation,done,"Lists every repo to create, each with a key, a name and an area (backend, mobile, frontend), as a closed list the next row registers.",,,,
+foundation-architecture,scaffold-foundation,done,"Lists every top-level file and directory execute-scaffold will create: a plan to carry out, not only a description of the architecture.",,,,
+foundation-architecture,scaffold-foundation,done,"Names what each repo exposes or consumes across repos (for example the API surface a client repo depends on), because each execute run sees only its own repo.",,,,
+scaffold-repo,execute-scaffold,done,"Writes compass/config.yaml with the checks: list the accepted scaffold-record specified for this repo, and a .github/workflows file that runs those same checks on pull_request — CI is what verifies this pull request, since there is no local checkout to verify it in.",,,,
+scaffold-repo,execute-scaffold,done,Every file created matches what the accepted scaffold-record said it would create: no scope drift between the accepted plan and what lands in the pull request.,,,,
+foundation-architecture,accept-scaffold,done,"Every repo the accepted scaffold plan lists is created on GitHub and registered on the engagement with its key, name, area and GitHub URL — a local checkout follows later, once build or fix needs one; the scaffold itself writes through the GitHub API.",,,,
+scaffold-repo,execute-scaffold,done,Every check run on the pull request passed.,ci,green,is,green

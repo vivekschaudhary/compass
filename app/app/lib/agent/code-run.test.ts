@@ -28,6 +28,7 @@ vi.mock("../supabase", () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, val: unknown) => { rows = rows.filter((r) => r[col] === val); return chain; },
+        lt: (col: string, val: unknown) => { rows = rows.filter((r) => (r[col] as number) < (val as number)); return chain; },
         order: () => chain,
         maybeSingle: async () => ({ data: rows[0] ?? null }),
         then: (res: (v: { data: Row[] }) => unknown) => res({ data: rows }),
@@ -59,9 +60,20 @@ vi.mock("child_process", () => ({
 
 const { runCode } = await import("./code-run");
 
-function seed(opts: { subjectKey?: string | null; localPath?: string | null; ord?: number; workflow?: string } = {}) {
+function seed(opts: {
+  subjectKey?: string | null; localPath?: string | null; ord?: number; workflow?: string;
+  // Which earlier ords, in this same workflow, are themselves `renders: code` rows — what
+  // `isFirstCodeStep` is computed from. Defaults to "every ord before this one" so build's
+  // existing tests (ords 1-4, all consecutive code rows of one PR) keep working unchanged.
+  codeOrdsBefore?: number[];
+} = {}) {
+  const ord = opts.ord ?? 1;
+  const codeOrdsBefore = opts.codeOrdsBefore ?? Array.from({ length: Math.max(0, ord - 1) }, (_, i) => i + 1);
   state.tasks = [{ id: "t1", workflow_run_id: "r1", workflow_step_id: "s1" }];
-  state.steps = [{ id: "s1", ord: opts.ord ?? 1 }];
+  state.steps = [
+    { id: "s1", ord, workflow_version_id: "wv1" },
+    ...codeOrdsBefore.map((o, i) => ({ id: `prior${i}`, ord: o, workflow_version_id: "wv1", renders: "code" })),
+  ];
   state.workflows = [{ id: "w1", code: opts.workflow ?? "build" }];
   state.runs = [{ id: "r1", workflow_id: "w1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
   state.repos = opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
@@ -212,6 +224,25 @@ describe("what the branch gets called", () => {
     await runCode("e1", "t1", { context: "something else entirely" });
     const args = proc.spawned[0];
     expect(args).toEqual(expect.arrayContaining(["--from-step", "3"]));
+  });
+});
+
+// ── the first code row of a workflow ────────────────────────────────────────────────────────────
+//
+// `isFirstCodeStep` is what decides whether a step cuts a fresh branch or takes the resume path,
+// and it is deliberately NOT `ord === 1`: a workflow whose code row is preceded by doc rows has a
+// high `ord` and must still cut fresh. `ord > 1` sent such a row down the RESUME path, and
+// `_prior_run_branch` found no branch to recover — the orchestrator fell back to "stay on the
+// current branch", meaning no worktree, no new branch, committing wherever HEAD already was. On a
+// real repo that is `main`.
+describe("the first code row of a workflow", () => {
+  it("cuts a fresh branch for a code row that follows doc rows, whatever its ord", async () => {
+    seed({ ord: 5, codeOrdsBefore: [] });
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1");
+    const args = proc.spawned[0];
+    expect(args).not.toContain("--from-step");
+    expect(args).toEqual(expect.arrayContaining(["--step", "5"]));
   });
 });
 

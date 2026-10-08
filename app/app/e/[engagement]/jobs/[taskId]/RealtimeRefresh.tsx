@@ -85,6 +85,11 @@ export function RealtimeRefresh({
           // already-answered one, which `Composer` already handles locally without any refresh.
           () => router.refresh(),
         )
+        // Sent by the server the moment a run returns (see notify-run-ended.ts) — the signal that
+        // does not depend on the database's change feed or the page's own polling at all. A run's
+        // end changes what's mounted (ApprovePanel, NestedRunPanel) the same way a state row change
+        // does, so it gets the same full refresh.
+        .on("broadcast", { event: "run-ended" }, () => { router.refresh(); void refreshTurns(); })
         .subscribe((status) => {
           if (cancelled) return;
           if (status === "SUBSCRIBED") {

@@ -244,6 +244,41 @@ export const TOOLS: Anthropic.Tool[] = [
     strict: true,
   },
   {
+    name: "scaffold",
+    description:
+      "Scaffold ONE repo with a real project generator. You choose the framework from the closed list " +
+      "and say what the repo should be in `options`; the app runs the pinned generator, runs the " +
+      "project's checks, and opens the pull request only if they pass. You write no files: a generator " +
+      "produces the boilerplate, and you are not asked to type it.\n\n" +
+      "You scaffold the repo this run is about, not the whole product: the accepted scaffold plan lists " +
+      "every repo, and the run names which one is yours. Choose the framework the plan names for that " +
+      "repo, and put only what the plan says about it in `options`.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "What this repo is, in a few sentences. It becomes the pull request description. Note " +
+            "anything the plan left open and what you assumed.",
+        },
+        framework: {
+          type: "string",
+          enum: ["nextjs-ts"],
+          description: "The generator to run. Only the frameworks in this list exist.",
+        },
+        options: {
+          type: "string",
+          description:
+            "Free text recorded in the pull request description. It is never interpreted as a command.",
+        },
+      },
+      required: ["summary", "framework", "options"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "sprint",
     description:
       "Plan ONE sprint: commit to a set of stories that already exist on the board, and say which " +
@@ -424,14 +459,12 @@ export const TOOL_FOR: Record<string, string> = {
   sprint: "sprint",
   roster: "roster",
   code: "code",
-  // A step whose own `output` is more specific than plain `code` — `execute-scaffold`'s is
-  // `scaffold`, the row's own name for "this is a code-output step that builds a repo scaffold" —
-  // still dispatches through the SAME `code` tool; there is no separate scaffold tool to call. Left
-  // unrecognized, this fell through to the `GENERAL` default below (`ask`/`draft`, neither of which
-  // fits "build a repo"), and the model settled on an empty `ask` every single run: reproducible,
-  // confirmed live, not a one-off. The label stays `scaffold` in the data — the row's own vocabulary
-  // is worth keeping — only the CODE gained the alias.
-  scaffold: "code",
+  // `scaffold` has its own tool, not an alias to `code` — `code`'s handler requires a Jira story
+  // (storyFor/placementOf) and treats its output as a diff against code that already exists.
+  // Neither is true of a greenfield scaffold: no story, nothing to diff against. The earlier fix
+  // aliased it to `code` and produced "this build run has no story on the tracker" on every live
+  // run; this is the corrected version, with `scaffold`'s own handler in run.ts.
+  scaffold: "scaffold",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
   // by a person must not be able to write it, and the reliable way to stop a model doing something

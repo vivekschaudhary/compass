@@ -69,6 +69,15 @@ export async function pinInputs(taskId: string, engagementId: string): Promise<n
  * silently rewrite what a finished draft was derived from, which is the failure pinning exists to
  * prevent. So this resolves absences and never re-resolves a reading.
  */
+/** The registered name for a repo key, so the prompt can say "kt-api", not just "api". */
+async function repoNameFor(engagementId: string, key: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data } = await sb.from("repo").select("name")
+    .eq("engagement_id", engagementId).eq("key", key).maybeSingle();
+  return (data?.name as string | null) ?? key;
+}
+
 async function resolveEmptyPins(taskId: string, engagementId: string): Promise<number> {
   const sb = supabaseAdmin();
   if (!sb) return 0;
@@ -467,6 +476,11 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     }
   }
 
+  // The run's own subject, for display — a `scaffold` row has no per-subject `produces` path to
+  // resolve through (its deliverable is a pull request, not a document), so this is the only place
+  // the repo key reaches the prompt. See `scaffoldPrompt` in `./prompts`.
+  const subject = task.workflow_step_id ? await subjectOfRun(task.workflow_run_id as string | null) : null;
+
   return {
     taskId: task.id,
     engagementId: actor.engagementId,
@@ -478,6 +492,10 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     unresolvedProduces,
     renders,
     reviewPath,
+    subject,
+    repoName: output === "scaffold" && subject?.ref
+      ? await repoNameFor(actor.engagementId, subject.ref)
+      : null,
     hasWebSearch: actor.capabilities.includes("web-search"),
     destination,
     output,

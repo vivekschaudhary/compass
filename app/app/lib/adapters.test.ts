@@ -70,6 +70,15 @@ describe("resolvePath", () => {
       .toBe("03-architecture/epic/KAN-12-review");
   });
 
+  it("fills {repo} from the subject, which is the repo's key", () => {
+    expect(resolvePath("scaffold/{repo}", { ref: "api", key: null })).toBe("scaffold/api");
+    expect(resolvePath("scaffold/{repo}", { ref: "ios", key: null })).toBe("scaffold/ios");
+  });
+
+  it("returns null for {repo} with no subject, rather than filing at the literal path", () => {
+    expect(resolvePath("scaffold/{repo}", null)).toBeNull();
+  });
+
   // The second real fan-out kind (`scaffold-repos` → `execute-scaffold`'s own `produces`) — must
   // stay in sync by hand with `FAN_OUT_KINDS` in `data/phases/nested.ts`; see that file's own
   // comment. A repo's own key, not a Jira key — there is no tracker for a repo the way there is

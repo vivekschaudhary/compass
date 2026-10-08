@@ -212,7 +212,7 @@ const STEP_KINDS = ["agent", "hitl", "machine", "workflow"];
 // Moves in the SAME commit as the database's `workflow_step_output_known`. Adding `code` to only
 // one of these made the dry run green and the apply a 500, after `applyPlan` had already published
 // the new version — leaving `build` with zero steps. See migration 060's header.
-const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied"];
+const STEP_OUTPUTS = ["roster", "backlog", "sprint", "code", "supplied", "scaffold", "scaffold-plan"];
 // CLOSED, and required on every row — see `StepRow.renders`. Not inferred from `produces`/`kind`
 // because the app must not guess which panel a row wants; a row says so.
 const RENDERS = ["doc", "code", "doc-review", "code-review", "none"];
@@ -299,22 +299,15 @@ function readSteps(csv: string): StepRow[] {
  * a path the dependency already supplies is harmless rather than an error.
  */
 export function deriveReads(steps: StepRow[]): StepRow[] {
-  // The PATH a step produces, never the decorated `produces` string. A step may name where its
-  // deliverable goes (`02-scope/deliverables@tickets`) and that suffix is routing — it belongs to
-  // the producer alone. Copied into a dependent's `reads` it would become a path no document ever
-  // has, and the agent downstream would be told it reads something that does not exist.
-  const producerOf = new Map<string, Map<string, string>>();   // workflow → task → path
-  for (const s of steps) {
-    const path = destinationOf(s.produces)?.path;
-    if (!path) continue;
-    const m = producerOf.get(s.workflow) ?? new Map();
-    m.set(s.task, path);
-    producerOf.set(s.workflow, m);
-  }
-
   return steps.map((s) => {
-    const mine = producerOf.get(s.workflow) ?? new Map<string, string>();
-    const fromDeps = s.dependsOn.map((d) => mine.get(d)).filter((p): p is string => Boolean(p));
+    // Walks THROUGH a dependency that produces nothing — `nearestProduced` (below), the same
+    // resolver `deriveCriteria` uses for the same reason. A direct-dependency-only lookup used to
+    // sit here, and it stopped exactly where a `hitl` row (a review) produces nothing itself: the
+    // row depending on a review — the approval that follows it — resolved to no reads at all, and
+    // an approve-the-scaffold gate was left reviewing nothing it could see. `nearestProduced`
+    // already existed to fix this for criteria; it was never wired back into the function its own
+    // doc comment names as the one that breaks.
+    const fromDeps = nearestProduced(steps, s.workflow, s.task).map((p) => p.path);
     // Everything the author listed, kept as a PATH for the same reason `fromDeps` is one: a read
     // decorated with its routing slot (`deliverables@tickets`) names a path no document ever has,
     // and the agent would be told it reads something that does not exist.
@@ -550,13 +543,16 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
       const dep = siblings.find((x) => x.task === s.dependsOn[0]);
       if (dep) {
         const wantCode = s.renders === "code-review";
-        if (wantCode !== (dep.output === "code"))
+        // `scaffold` is a change too — a pull request the app opened rather than the orchestrator —
+        // so a `code-review` panel is the right shape for it, same as `code`.
+        const isCode = dep.output === "code" || dep.output === "scaffold";
+        if (wantCode !== isCode)
           add("workflow-steps.csv", i + 2,
             `Step ${s.workflow}/${s.ord} renders '${s.renders}' but depends on '${dep.task}', whose ` +
             `output is ${dep.output ? `'${dep.output}'` : "an ordinary document"}.`,
             wantCode
-              ? "code-review reviews a change — the dependency should declare output 'code'."
-              : "doc-review reviews a document — the dependency should not declare output 'code'.");
+              ? "code-review reviews a change — the dependency should declare output 'code' or 'scaffold'."
+              : "doc-review reviews a document — the dependency should not declare output 'code' or 'scaffold'.");
       }
     }
   });
@@ -861,7 +857,8 @@ function deriveCriteria(
 
   /** The ticket checks a produced KIND implies — keyed on `output`, never on a path an author renames. */
   const TICKETS: Record<string, { ref: string; why: string }[]> = {
-    code:   [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
+    code:     [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
+    scaffold: [{ ref: "pr-linked", why: "A pull request is linked on the ticket." }],
     sprint: [
       { ref: "committed-have-epic", why: "Every committed story belongs to an epic." },
       { ref: "on-board", why: "Every committed story is on the board with an owner." },
@@ -896,7 +893,13 @@ function deriveCriteria(
       // aggregate of nothing. criteria.csv carried that gate by hand; when the gates became derived
       // the row silently lost it, and `build` and `fix` have been in the same state ever since,
       // every one of their `{subject}@scm` rows ungated.
-      const own = destinationOf(s.produces)?.path;
+      //
+      // NOT for a row whose destination is the source-control slot. Its deliverable is a branch and a
+      // pull request, and a code run files no document — a `{subject}` or `{repo}` "published" gate
+      // there reads "No document at …" forever and the row can never close. The PR is what its
+      // ticket gate (`pr-linked`) measures instead.
+      const dest = destinationOf(s.produces);
+      const own = dest?.slot === "scm" ? undefined : dest?.path;
       if (own) {
         published(wf.code, s.task, own, `${own} is published.`);
       }
@@ -926,7 +929,13 @@ function deriveCriteria(
               `${pathOf(output)} is published — ${s.nests} produces it.`);
           }
           // What the child's own steps promise the tracker travels up with the deliverable.
-          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output)) {
+          //
+          // Except `code` and `scaffold`. A pull request belongs to ONE child run, so "a pull request
+          // is linked" on the parent asks a question with no answer — which run's? — and a fan-out row
+          // has no story of its own to read it from, so it would sit unmeasurable and the row could
+          // never close. Each child gates its own PR, and the `nested` check below covers that every
+          // child ran.
+          for (const cs of steps.filter((x) => x.workflow === s.nests && x.output && x.output !== "code" && x.output !== "scaffold")) {
             ticketsFor(wf.code, s.task, cs.output);
           }
           emit({
@@ -949,7 +958,12 @@ function deriveCriteria(
       // Per-subject paths included, for the reason given at 1: `nearestProduced` never leaves this
       // workflow, so every path it returns was filed by a sibling row of the SAME run and resolves
       // against the same subject. A reviewer whose document is per-epic is reviewing an epic.
-      for (const { path } of upstream) {
+      //
+      // Not when the row upstream delivers a pull request (`@scm`): there is no document to have been
+      // published, so the gate would read "No document at …" forever and the approval could never
+      // close. What the reviewer checks there is the PR, and the independence gate below still applies.
+      for (const { path, by } of upstream) {
+        if (destinationOf(by.produces)?.slot === "scm") continue;
         published(wf.code, s.task, path, `${path} is published.`);
       }
 

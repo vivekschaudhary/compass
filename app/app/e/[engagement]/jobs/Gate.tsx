@@ -146,7 +146,8 @@ export function Gate({
                 {describeCriterion(s)}
                 {s.detail && <span className="gate-detail">{s.detail}</span>}
               </span>
-              <span className="gate-when">
+              {/* "ago" reads the clock, so the server and the browser can disagree by a minute. */}
+              <span className="gate-when" suppressHydrationWarning>
                 {s.satisfied === null
                   ? "—"
                   : `${s.source ?? "?"} · ${ago(s.measuredAt)}`}

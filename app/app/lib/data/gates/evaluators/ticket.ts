@@ -5,6 +5,52 @@ import type { Actor } from "../../actor";
 import type { CriterionRow, Verdict } from "../types";
 
 /**
+ * Every pull request URL the given run recorded when it finished (`agent.run.finished` events).
+ *
+ * Shared with `evaluators/ci.ts`: both need "what PR is this run about" for a run that has a
+ * subject but no ticket, and neither should re-derive it differently.
+ */
+export async function recordedPrsOf(runId: string): Promise<string[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+  const { data: tasks } = await sb.from("work_task").select("id").eq("workflow_run_id", runId);
+  const ids = (tasks ?? []).map((t) => t.id as string);
+  if (!ids.length) return [];
+  const { data: events } = await sb
+    .from("event")
+    .select("payload")
+    .eq("verb", "agent.run.finished")
+    .in("subject_id", ids);
+  return [...new Set(
+    (events ?? [])
+      .map((e) => (e.payload as { pr?: string | null } | null)?.pr ?? null)
+      .filter((u): u is string => !!u && /\/pull\/\d+/.test(u)),
+  )];
+}
+
+/**
+ * `pr-linked` for a run with a subject and no ticket — `scaffold-repo`, whose subject is a repo
+ * key, not a Jira story. There is no issue to ask, so this reads the pull request the run itself
+ * recorded when it finished. Weaker than asking the tracker (it trusts the app's own write instead
+ * of reading it back), and it says so via `source: "compass"` rather than `"tracker"`. Still a real
+ * bar: the app opens that PR only when the scaffold's own checks pass.
+ */
+async function evaluateRecordedPr(runId: string, subject: string): Promise<Verdict> {
+  const prs = await recordedPrsOf(runId);
+  return prs.length
+    ? {
+        state: "satisfied",
+        source: "compass",
+        detail: `${subject}: the run recorded ${prs.length} pull request(s): ${prs.join(", ")}.`,
+      }
+    : {
+        state: "unsatisfied",
+        source: "compass",
+        detail: `${subject}: the run recorded no pull request — nothing shipped.`,
+      };
+}
+
+/**
  * A criterion about the ONE story a run is the subject of.
  *
  * `pr-linked` is the build's real bar and it is deliberately indirect: the orchestrator opens a
@@ -22,17 +68,27 @@ async function evaluateStoryTicket(
 
   const { data: task } = await sb
     .from("work_task")
-    .select("workflow_run_id")
+    .select("workflow_run_id, subject_ref")
     .eq("id", taskId)
     .maybeSingle();
   const { data: run } = task?.workflow_run_id
     ? await sb
         .from("workflow_run")
-        .select("subject_key")
+        .select("subject_key, subject_ref")
         .eq("id", task.workflow_run_id)
         .maybeSingle()
     : { data: null };
   const key = (run?.subject_key as string | null) ?? null;
+  // The TASK's own subject wins over the run's — a materialized per-repo task (`scaffold-repo`'s
+  // inline fan-out) sits inside a run whose own subject is unrelated (the foundation-architecture
+  // run has none), so reading only `run.subject_ref` found nothing and reported "no story on the
+  // tracker" for a row that plainly names a repo. Same preference `subjectOfRun` already gives
+  // `agent/context.ts` and the materializer.
+  const subjectRef = (task?.subject_ref as string | null) ?? (run?.subject_ref as string | null) ?? null;
+  // A run about a repo (`scaffold-repo`) has a subject and no story. Its pull request was never
+  // put on a ticket — there is none — so the record is what the run itself wrote when it finished.
+  if (!key && subjectRef && c.subjectRef === "pr-linked" && task?.workflow_run_id)
+    return evaluateRecordedPr(task.workflow_run_id as string, subjectRef);
   if (!key) {
     // Not unsatisfied: a run with no story is misconfigured, not a build that failed. Blaming the
     // engineer for it would send someone to read a diff that was never produced.

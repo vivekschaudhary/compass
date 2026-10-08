@@ -1298,23 +1298,6 @@ def _resolve_checks(project_dir, compass_dir):
                 _read_stack_from_config(compass_dir, project_dir) or "", [])))
 
 
-def _scaffold_checks_warning(project_dir, compass_dir):
-    """#122: after `scaffold-foundation`, the project must be able to VERIFY its own code.
-    That task owns writing `stack:` + `checks:`; when it didn't, say so HERE — at setup
-    time, where the fix is one config edit — instead of at the first `/build` or `/fix`,
-    which halts (#123). Returns the warning text, or None when checks resolve.
-
-    Warn, not halt: setup is legitimately re-runnable and a human gate follows it."""
-    if _resolve_checks(project_dir, compass_dir):
-        return None
-    config = Path(project_dir) / "compass" / "config.yaml"
-    return ("⚠ SETUP INCOMPLETE — scaffold-foundation finished but "
-            f"{config} still resolves ZERO CI-parity checks. Add a top-level `checks:` "
-            "block mirroring the CI workflow just scaffolded (or a `stack:` naming a "
-            "shipped profile for its default suite). Until then EVERY /build and /fix on "
-            "this project halts — a code run must be verifiable (#122/#123).")
-
-
 def _no_checks_halt_message(project_dir, compass_dir, workflow_name,
                             resume_step=None, allow_write=True) -> str:
     """#123: the halt text for a code workflow that resolved ZERO CI-parity checks.
@@ -2405,14 +2388,6 @@ def _run_workflow(
                     print(f"[PR opened on green checks → {pr}]")
                     emit(ev.NOTE, text=f"PR opened on green checks → {pr}")
 
-        # #122: setup owns leaving the project verifiable. Surface a miss at setup time,
-        # not at the first code run (which halts, #123) — [fail-loud-not-silent], and the
-        # cheapest possible moment to fix it.
-        if step.task == "scaffold-foundation" and allow_write and not no_write:
-            _setup_warn = _scaffold_checks_warning(project_dir, compass_dir)
-            if _setup_warn:
-                print("\n" + _setup_warn, file=sys.stderr)
-                emit(ev.NOTE, text=_setup_warn)
 
     # #145: a write-mode run that did real work but left it uncommitted hasn't
     # DELIVERED it (no commit → no PR → no deploy — the "I didn't see a deployment"

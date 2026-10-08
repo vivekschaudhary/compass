@@ -892,6 +892,74 @@ describe("nested workflow contract", () => {
  * asserted here with task names that say the OPPOSITE of their role, so a regression to name
  * matching fails loudly.
  */
+describe("what a row reads, derived from the graph", () => {
+  const bundleOf = (steps: string): Bundle => ({
+    workstreams: "code,label\nDelivery,Delivery\n",
+    roles:
+      "code,label,tier,scope,workstream\n" +
+      "author,The Author,practitioner,mine,Delivery\n" +
+      "checker,The Checker,oversight,everyone,Delivery\n",
+    workflows: "code,label,workstream,inputs,outputs\nw,W,Delivery,,\n",
+    steps, criteria: "workflow,task,kind,text\n",
+  });
+  const stepsOf = (steps: string) => {
+    const r = planImport(bundleOf(steps), empty);
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    return r.plan.workflows.find((w) => w.row.code === "w")!.steps;
+  };
+  const readsOf = (steps: ReturnType<typeof stepsOf>, task: string) =>
+    steps.find((s) => s.task === task)!.reads;
+
+  // THE BUG: a row depending on a review sees nothing, because the review itself produces no
+  // document — the direct-dependency-only lookup stopped exactly there. `nearestProduced` already
+  // existed to walk through a non-producing row for criteria; this asserts it does the same for
+  // reads, which is what an approve-scaffold row facing an empty <missing> block on a live
+  // engagement traced back to.
+  it("walks through a hitl that produces nothing, to the document it is reviewing", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+      "w,1,agent,author,make,the-doc,,\n" +
+      "w,2,hitl,author,review,,,make\n" +      // reviews `make`'s output; produces nothing itself
+      "w,3,hitl,checker,accept,,,review\n",    // the approval — must still see `the-doc`
+    );
+    expect(readsOf(steps, "accept")).toEqual(["the-doc"]);
+    expect(readsOf(steps, "review")).toEqual(["the-doc"]);
+  });
+
+  // The common case, unchanged: a direct dependency that DOES produce something needs no walk.
+  it("still reads straight off a direct dependency that produces something", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+      "w,1,agent,author,make,the-doc,,\n" +
+      "w,2,hitl,checker,accept,,,make\n",
+    );
+    expect(readsOf(steps, "accept")).toEqual(["the-doc"]);
+  });
+
+  // Two hitls in a row is not automatically a review chain about ONE document — this must not
+  // invent a read for a workflow-level gate that never had a producing dependency at all.
+  it("stays empty when nothing upstream ever produced anything", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on\n" +
+      "w,1,hitl,author,review,,,\n" +
+      "w,2,hitl,checker,accept,,,review\n",
+    );
+    expect(readsOf(steps, "accept")).toEqual([]);
+  });
+
+  // An author-listed read survives alongside whatever the walk finds — the two are unioned, not
+  // one replacing the other.
+  it("keeps an explicitly authored read alongside a derived one", () => {
+    const steps = stepsOf(
+      "workflow,ord,kind,role,task,produces,output,depends_on,reads\n" +
+      "w,1,agent,author,make,the-doc,,,\n" +
+      "w,2,hitl,author,review,,,make,\n" +
+      "w,3,hitl,checker,accept,,,review,other-doc\n",
+    );
+    expect(new Set(readsOf(steps, "accept"))).toEqual(new Set(["the-doc", "other-doc"]));
+  });
+});
+
 describe("criteria derived from workflows and steps", () => {
   const bundleOf = (steps: string, criteria = "workflow,task,kind,text\n"): Bundle => ({
     workstreams: "code,label\nDelivery,Delivery\n",
@@ -979,6 +1047,50 @@ describe("criteria derived from workflows and steps", () => {
     expect(doc).toHaveLength(1);
     expect(doc[0].text).toBe("The draft is filed");
     expect(doc[0].generated).toBeUndefined();
+  });
+
+  // A code run files no document. Its destination is the source-control slot, its deliverable a pull
+  // request, and a "{subject} is published" gate on it read "No document at …" forever — the row
+  // could never close. The ticket gate is what measures the PR.
+  it("does not gate a source-control row on a document it can never file", () => {
+    const code = gates("workflow,ord,kind,role,task,produces,output,depends_on\nw,1,agent,author,build,x@scm,code,\n");
+    expect(on(code, "build").some((c) => c.subjectKind === "document")).toBe(false);
+    expect(on(code, "build")).toContainEqual(expect.objectContaining({ subjectKind: "ticket", subjectRef: "pr-linked" }));
+    // Only the slot decides: the same path routed to the doc store is still a document.
+    const doc = gates("workflow,ord,kind,role,task,produces,output,depends_on\nw,1,agent,author,build,x@docs,,\n");
+    expect(on(doc, "build")).toContainEqual(expect.objectContaining({ subjectKind: "document", subjectRef: "x" }));
+  });
+
+  // The same fact seen from the row after it: an approval of a pull request has no document to be
+  // "published", and the row that nests a per-repo run has no story to read a PR from.
+  it("does not gate an approval, or a nesting row, on a document or ticket a code run cannot have", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const sr = r.plan.workflows.find((w) => w.row.code === "scaffold-repo")!;
+    const approve = sr.criteria.filter((c) => c.stepTask === "approve-repo-scaffold");
+    expect(approve.some((c) => c.subjectKind === "document")).toBe(false);
+    expect(approve.some((c) => c.text.startsWith("Accepted by"))).toBe(true);
+    const fa = r.plan.workflows.find((w) => w.row.code === "foundation-architecture")!;
+    expect(fa.criteria.some((c) => c.stepTask === "scaffold-repos" && c.subjectRef === "pr-linked")).toBe(false);
+  });
+
+  it("gives the shipped scaffold-repo code row a pull-request gate and no document gate", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const sr = r.plan.workflows.find((w) => w.row.code === "scaffold-repo");
+    expect(sr, "scaffold-repo must ship in the seed").toBeDefined();
+    const mine = sr!.criteria.filter((c) => c.stepTask === "execute-scaffold");
+    expect(mine.some((c) => c.subjectKind === "document")).toBe(false);
+    expect(mine).toContainEqual(expect.objectContaining({ subjectKind: "ticket", subjectRef: "pr-linked" }));
+  });
+
+  it("gates the row that nests scaffold-repo on every run having closed, not on a per-repo path", () => {
+    const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
+    if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
+    const fa = r.plan.workflows.find((w) => w.row.code === "foundation-architecture")!;
+    const nest = fa.criteria.filter((c) => c.stepTask === "scaffold-repos");
+    expect(nest).toContainEqual(expect.objectContaining({ subjectKind: "nested", subjectRef: "scaffold-repo" }));
+    expect(nest.some((c) => c.subjectRef.includes("{"))).toBe(false);
   });
 
   // The failure that produced 391 refusals: a criterion aimed at a path no step writes.
