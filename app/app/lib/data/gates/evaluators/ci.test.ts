@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../../../supabase", () => ({ supabaseAdmin: () => null }));
-vi.mock("../../../agent/handoff-call", () => ({ latestHandoffCall: async () => null }));
+vi.mock("../../handoff-call", () => ({ latestHandoffCall: async () => null }));
 
 const { verdictOfHandoff } = await import("./ci");
 

@@ -13,8 +13,8 @@ import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 import { resolve } from "path";
 import { supabaseAdmin } from "../supabase";
-import { parseResult, type GenerateResult } from "./generate-contract";
-import { openHandoffCall, closeHandoffCall } from "./handoff-call";
+import { parseResult, type GenerateResult } from "../data/generate-contract";
+import { openHandoffCall, closeHandoffCall } from "../data/handoff-call";
 
 const REPO = process.env.COMPASS_REPO || resolve(process.cwd(), "..");
 const TIMEOUT_MS = 45 * 60 * 1000;

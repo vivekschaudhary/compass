@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "../../../supabase";
 import type { Actor } from "../../actor";
 import type { CriterionRow, Verdict } from "../types";
-import { latestRanHandoffCall, type HandoffCallRow } from "../../../agent/handoff-call";
+import { latestRanHandoffCall, type HandoffCallRow } from "../../handoff-call";
 
 /**
  * `ci is green` for a scaffold row. The generator runs the project's checks in its own checkout and

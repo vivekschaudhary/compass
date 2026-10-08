@@ -7,8 +7,12 @@
 
 export const CONTRACT_VERSION = 1;
 
-export const FRAMEWORKS = ["nextjs-ts"] as const;
-export type Framework = (typeof FRAMEWORKS)[number];
+// Lives in lib/data: lib/data must not import lib/agent, and scaffold-repos.ts (the record parser,
+// data layer) needs this same list, and this file has itself moved to lib/data too — see below.
+// Re-exported here so every existing `from "./generate-contract"` import of it keeps working, and
+// imported too since this file still uses both names itself below.
+import { FRAMEWORKS, type Framework } from "./scaffold-frameworks";
+export { FRAMEWORKS, type Framework };
 
 export const STATUSES = ["shipped", "checks_failed", "generator_failed", "refused"] as const;
 export type Status = (typeof STATUSES)[number];

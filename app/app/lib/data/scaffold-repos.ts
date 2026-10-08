@@ -4,7 +4,7 @@
 // the whole table reads cleanly. A row that does not parse is a problem reported to the person, not a
 // row skipped, because a skipped repo is a repo that quietly never gets scaffolded.
 
-import { FRAMEWORKS } from "../agent/generate-contract";
+import { FRAMEWORKS } from "./scaffold-frameworks";
 
 export type ScaffoldRepo = { key: string; name: string; framework: string };
 
