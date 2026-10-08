@@ -25,6 +25,7 @@ const stream = (result: unknown, extra: Record<string, unknown> = {}) =>
       is_error: false,
       stop_reason: "end_turn",
       total_cost_usd: 0.24,
+      usage: { input_tokens: 2, output_tokens: 13, cache_creation_input_tokens: 44953, cache_read_input_tokens: 0 },
       result: typeof result === "string" ? result : JSON.stringify(result),
       ...extra,
     }),
@@ -159,10 +160,17 @@ describe("toHostResult", () => {
     expect(r.toolCall?.name).toBe("ask");
   });
 
-  // Never a fabricated figure. The CLI reports total_cost_usd, but it is an API-EQUIVALENT number,
-  // and writing it here would make a flat-cost run look metered and false-trip any cost guard.
-  it("reports no usage even though the CLI reports a cost", () => {
+  // The CLI's own token counts, for visibility — comparing CLI-side volume against the API host's.
+  // Not a charge: a subscription run costs nothing marginal regardless of what these say.
+  it("reports the CLI's own token counts", () => {
     const r = toHostResult(stream({ tool: "draft", input: { summary: "s", sections: [] } }));
+    expect(r.usage).toEqual({ inputTokens: 2, outputTokens: 13 });
+  });
+
+  it("reports no usage when the result event carries none", () => {
+    const r = toHostResult(
+      stream({ tool: "draft", input: { summary: "s", sections: [] } }, { usage: undefined }),
+    );
     expect(r.usage).toBeNull();
   });
 

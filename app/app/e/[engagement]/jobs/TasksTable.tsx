@@ -82,8 +82,11 @@ export function TasksTable({
                         ⚠ Stuck
                       </span>
                     )}
+                    {/* Same suffix convention as "Workflows you own" (`workflows-view.ts`) —
+                        without it, sibling tasks for different subjects (two repos' "Scaffold
+                        the repo") render as identical, indistinguishable cards. */}
                     <a href={href} className="title">
-                      {t.title}
+                      {t.runSubject ? `${t.title} — ${t.runSubject}` : t.title}
                     </a>
                     {t.ticketKey && (
                       <span className="ticket">{t.ticketKey}</span>

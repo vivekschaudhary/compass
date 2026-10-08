@@ -6,6 +6,10 @@ import type { Turn } from "@/app/lib/data/job";
 import { useOptimisticTurns } from "./OptimisticTurns";
 import { mergeTurns } from "./optimistic-turns";
 
+// No `turns` prop — this reads the conversation from `OptimisticTurnsProvider` directly, the same
+// place `Composer` gets `addPending`/`removePending`. The provider owns the real list now (see its
+// own header for why), not just the pending overlay merged in here.
+
 /**
  * The conversation, as a conversation.
  *
@@ -18,11 +22,9 @@ import { mergeTurns } from "./optimistic-turns";
  * single message past a few hundred characters clamps with its own control. The default view is
  * "what just happened", which is what someone opening a job actually wants.
  */
-export function Conversation({ turns: real }: { turns: Turn[] }) {
+export function Conversation() {
   const [showAll, setShowAll] = useState(false);
-  // The optimistic echo of a message THIS tab just sent — merged in here, not held by `Composer`,
-  // because that's the sibling that actually renders the conversation. See `optimistic-turns.ts`.
-  const { pending } = useOptimisticTurns();
+  const { turns: real, pending } = useOptimisticTurns();
   const turns = mergeTurns(real, pending);
 
   if (!turns.length) {

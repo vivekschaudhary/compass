@@ -351,15 +351,15 @@ describe("code — the build hand-off", () => {
     expect(out.kind).toBe("error");
   });
 
-  it("QUIRK: a refused build releases the claim BEFORE it records why, and emits no `finished`", async () => {
+  it("a refused build records why, releases, and closes the log — same order as every other exit", async () => {
     runCode.mockResolvedValue({ refusal: "No repo configured." });
     replyWith(codeCall);
 
     const out = await runAgent(actor as never, "t1");
 
-    // Every other path records the turn, then releases. This one is the reverse.
-    expect(log).toEqual([...OPENING, "turn.insert", "release:failed", "turn.insert"]);
-    expect(log.some((l) => l.startsWith("emit:agent.run.finished"))).toBe(false);
+    expect(log).toEqual([
+      ...OPENING, "turn.insert", "turn.insert", "release:failed", "emit:agent.run.finished(build-refused)",
+    ]);
     expect(out).toEqual({ kind: "error", message: "No repo configured." });
   });
 });

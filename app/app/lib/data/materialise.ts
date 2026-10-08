@@ -231,8 +231,12 @@ async function materialiseScaffoldPlan(actor: Actor, markdown: string, taskId: s
 
   // Loaded here, not at the top: phases.ts pulls in the whole task and agent graph, and every other
   // materializer (and the tests that mock them) should not pay for it.
-  const { fanOutInline } = await import("./phases");
-  const fan = await fanOutInline(actor, nesting.id as string, parsed.repos.map((r) => ({ ref: r.key })));
+  //
+  // openNestedFanOut, not a bespoke call: the repo rows are already upserted above, so the real
+  // fan-out's own `reposOfRun` (reading the SAME `repo` table) finds exactly the subjects this
+  // approval just registered — no second path that could disagree with the first.
+  const { openNestedFanOut } = await import("./phases");
+  const fan = await openNestedFanOut(actor, nesting.id as string);
   if (!fan.ok) problems.push(fan.error);
   return { path, created, updated, problems };
 }
@@ -333,7 +337,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
   // a subject (`…/{epic}`) is filled from the run, exactly as the write side filled it.
   const path = resolvePath(
     destinationOf(source.produces)?.path,
-    await subjectOfRun(task.workflow_run_id as string | null, (task.subject_ref as string | null) ?? null),
+    await subjectOfRun(task.workflow_run_id as string | null, task.subject_ref as string | null),
   );
   if (!path) return null;
 

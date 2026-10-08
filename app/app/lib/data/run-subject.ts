@@ -10,6 +10,12 @@ import { supabaseAdmin } from "../supabase";
  * Lives in the data layer, not with the agent's context loader, because the gates and the
  * materialiser resolve paths from it too: keeping it in `agent/context` made `data` import `agent`
  * while `agent` imports `data`.
+ *
+ * `taskSubjectRef` — the TASK's own `work_task.subject_ref`, when the caller already has it. Wins
+ * over the run's subject: inline-materialized tasks (`scaffold-repos`' per-repo pairs) share one run
+ * across several subjects, so the run can no longer answer "what is THIS task about" — only the task
+ * itself can. Every run still answering for all of its own tasks (every case before scaffold) passes
+ * `null` here and nothing changes.
  */
 export async function subjectOfRun(
   runId: string | null,

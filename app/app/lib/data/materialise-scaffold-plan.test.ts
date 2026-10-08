@@ -11,8 +11,8 @@ vi.mock("./actor", async (importOriginal) => {
   return { ...actual, holdersOn: async () => [] };
 });
 vi.mock("./run-subject", () => ({ subjectOfRun: async () => null }));
-const fanOutInline = vi.fn(async () => ({ ok: true as const, runs: [] }));
-vi.mock("./phases", () => ({ fanOutInline }));
+const openNestedFanOut = vi.fn(async () => ({ ok: true as const, runs: [] }));
+vi.mock("./phases", () => ({ openNestedFanOut }));
 
 type Row = Record<string, unknown>;
 const db: Record<string, Row[]> = { work_task: [], workflow_step: [], document: [], document_section: [], repo: [] };
@@ -81,7 +81,7 @@ function seed(opts: { nesting?: boolean; existingRepos?: Row[] } = {}) {
 
 /** The fake keys steps by id; `maybeSingle` on work_task returns the accepting task. */
 beforeEach(() => {
-  fanOutInline.mockClear();
+  openNestedFanOut.mockClear();
   sections = RECORD(["| app | Web app | nextjs-ts |", "| api | API | nextjs-ts |"]);
   seed();
 });
@@ -103,10 +103,9 @@ describe("approving an accepted scaffold record", () => {
     expect(r?.created).toBe(2);
     expect(db.repo.map((x) => x.key)).toEqual(["app", "api"]);
     expect(db.repo.every((x) => x.local_path === undefined || x.local_path === null)).toBe(true);
-    expect(fanOutInline).toHaveBeenCalledTimes(1);
-    const [, nestingId, subjects] = fanOutInline.mock.calls[0] as unknown as [unknown, string, { ref: string }[]];
+    expect(openNestedFanOut).toHaveBeenCalledTimes(1);
+    const [, nestingId] = openNestedFanOut.mock.calls[0] as unknown as [unknown, string];
     expect(nestingId).toBe("t-nest");
-    expect(subjects.map((s) => s.ref)).toEqual(["app", "api"]);
   });
 
   it("updates an existing repo's name rather than creating a second row for the same key", async () => {
@@ -127,7 +126,7 @@ describe("approving an accepted scaffold record", () => {
     const r = await materialiseFrom(ACTOR, "t-accept");
     expect(r?.problems.join(" ")).toMatch(/framework 'rails'/);
     expect(db.repo).toEqual([]);
-    expect(fanOutInline).not.toHaveBeenCalled();
+    expect(openNestedFanOut).not.toHaveBeenCalled();
   });
 
   it("creates nothing and refuses when the run has no scaffold-repo row to fan out from", async () => {
@@ -136,13 +135,13 @@ describe("approving an accepted scaffold record", () => {
     const r = await materialiseFrom(ACTOR, "t-accept");
     expect(r?.problems.join(" ")).toMatch(/no row that nests the scaffold-repo workflow/);
     expect(db.repo).toEqual([]);
-    expect(fanOutInline).not.toHaveBeenCalled();
+    expect(openNestedFanOut).not.toHaveBeenCalled();
   });
 
   it("reports a failed fan-out, rather than reporting the approval clean", async () => {
     seed();
     withEmbeds();
-    fanOutInline.mockResolvedValueOnce({ ok: false, error: "nested workflow has no steps" } as never);
+    openNestedFanOut.mockResolvedValueOnce({ ok: false, error: "nested workflow has no steps" } as never);
     const r = await materialiseFrom(ACTOR, "t-accept");
     expect(r?.problems).toContain("nested workflow has no steps");
     expect(db.repo).toHaveLength(2);

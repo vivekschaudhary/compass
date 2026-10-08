@@ -137,8 +137,12 @@ export default async function JobPage(
     }));
 
   return (
+    <OptimisticTurnsProvider
+      engagement={engagement} role={roleCode} taskId={taskId} holderId={actor.holderId}
+      initialTurns={turns}
+    >
     <div className="job">
-      <RealtimeRefresh taskId={taskId} />
+      <RealtimeRefresh taskId={taskId} pollWhileRunning={running} />
       <div className="job-head">
         <Link
           href={`/e/${engagement}/jobs${role ? `?role=${role}` : ""}`}
@@ -187,8 +191,7 @@ export default async function JobPage(
         {/* <DocTreeNav engagement={engagement} roleCode={roleCode} tree={tree} produces={ctx.produces} /> */}
 
         <section className="chat-col">
-          <OptimisticTurnsProvider realCount={turns.length}>
-          <Conversation turns={turns} />
+          <Conversation />
 
           {/* Pinned below the scrolling conversation, not carried away with it — the approve
               checklist is the actual next action on a hitl row, and "I keep telling the agent
@@ -246,7 +249,6 @@ export default async function JobPage(
               </>
             )}
           </div>
-          </OptimisticTurnsProvider>
         </section>
 
         <DraftPanel
@@ -268,5 +270,6 @@ export default async function JobPage(
         />
       </div>
     </div>
+    </OptimisticTurnsProvider>
   );
 }

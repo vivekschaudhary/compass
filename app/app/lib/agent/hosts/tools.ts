@@ -459,6 +459,11 @@ export const TOOL_FOR: Record<string, string> = {
   sprint: "sprint",
   roster: "roster",
   code: "code",
+  // `scaffold` has its own tool, not an alias to `code` — `code`'s handler requires a Jira story
+  // (storyFor/placementOf) and treats its output as a diff against code that already exists.
+  // Neither is true of a greenfield scaffold: no story, nothing to diff against. The earlier fix
+  // aliased it to `code` and produced "this build run has no story on the tracker" on every live
+  // run; this is the corrected version, with `scaffold`'s own handler in run.ts.
   scaffold: "scaffold",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
