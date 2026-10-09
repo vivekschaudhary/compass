@@ -20,7 +20,34 @@ export type Comment = {
   authorUserId: string | null;
   status: "open" | "resolved";
   createdAt: string;
+  /** Set on a reply; null on a top-level comment. A reply answers one top-level comment, never another reply. */
+  parentId: string | null;
+  /** On an agent's answer: would it change the text, or not. Null on everything else. */
+  stance: "change" | "no_change" | null;
+  /** Other comments the same fix would cover. */
+  overlapsWith: string[];
+  /** What was decided about an answer. Null until someone decides, and always null off an answer. */
+  decision: "accepted" | "declined" | null;
+  decidedBy: string | null;
+  /** Replies, oldest first. Always empty on a reply itself. */
+  replies: Comment[];
 };
+
+// One literal, not a concatenation: the client types a select from its string, and a built string
+// degrades every row to an error type.
+const COLUMNS = "id, document_section_id, parent_id, quote, body, author_kind, author_role_code, author_user_id, status, stance, overlaps_with, decision, decided_by, created_at" as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toComment(c: any): Comment {
+  return {
+    id: c.id, quote: c.quote, body: c.body,
+    authorKind: c.author_kind, authorRoleCode: c.author_role_code, authorUserId: c.author_user_id,
+    status: c.status, createdAt: c.created_at,
+    parentId: c.parent_id ?? null, stance: c.stance ?? null, overlapsWith: c.overlaps_with ?? [],
+    decision: c.decision ?? null, decidedBy: c.decided_by ?? null,
+    replies: [],
+  };
+}
 
 /**
  * The section's document must be in the actor's engagement — three lookups rather than one
@@ -65,7 +92,7 @@ export async function addComment(
     author_kind: "human",
     author_role_code: actor.roleCode,
     author_user_id: who,
-  }).select("id, quote, body, author_kind, author_role_code, author_user_id, status, created_at").single();
+  }).select(COLUMNS).single();
   if (error || !data) return { ok: false, error: error?.message ?? "Could not save the comment." };
 
   await emit({
@@ -79,33 +106,32 @@ export async function addComment(
     payload: { commentId: data.id, quote: q },
   });
 
-  return {
-    ok: true,
-    comment: {
-      id: data.id, quote: data.quote, body: data.body,
-      authorKind: data.author_kind, authorRoleCode: data.author_role_code, authorUserId: data.author_user_id,
-      status: data.status, createdAt: data.created_at,
-    },
-  };
+  return { ok: true, comment: toComment(data) };
 }
 
-/** Every comment on a set of sections, oldest first — the shape `DraftPanel` reads per section. */
+/**
+ * Every top-level comment on a set of sections, oldest first, each carrying its replies — the shape
+ * `DraftPanel` reads per section. A reply never appears at the top level: it is part of the
+ * conversation under the comment it answers.
+ */
 export async function commentsForSections(sectionIds: string[]): Promise<Map<string, Comment[]>> {
   const sb = supabaseAdmin();
   const out = new Map<string, Comment[]>();
   if (!sb || !sectionIds.length) return out;
 
   const { data } = await sb.from("document_comment")
-    .select("id, document_section_id, quote, body, author_kind, author_role_code, author_user_id, status, created_at")
-    .in("document_section_id", sectionIds).order("created_at");
+    .select(COLUMNS).in("document_section_id", sectionIds).order("created_at");
 
-  for (const c of data ?? []) {
-    const entry: Comment = {
-      id: c.id, quote: c.quote, body: c.body,
-      authorKind: c.author_kind, authorRoleCode: c.author_role_code, authorUserId: c.author_user_id,
-      status: c.status, createdAt: c.created_at,
-    };
-    out.set(c.document_section_id, [...(out.get(c.document_section_id) ?? []), entry]);
+  const rows = data ?? [];
+  const repliesOf = new Map<string, Comment[]>();
+  for (const r of rows) {
+    if (!r.parent_id) continue;
+    repliesOf.set(r.parent_id, [...(repliesOf.get(r.parent_id) ?? []), toComment(r)]);
+  }
+  for (const r of rows) {
+    if (r.parent_id) continue;
+    const entry = { ...toComment(r), replies: repliesOf.get(r.id) ?? [] };
+    out.set(r.document_section_id, [...(out.get(r.document_section_id) ?? []), entry]);
   }
   return out;
 }
