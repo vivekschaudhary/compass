@@ -17,6 +17,8 @@ let tables: Record<string, Row[]> = {};
 let versionAfterRun: string | null = null;
 let ranModel = false;
 let modelReply: { stopReason?: string | null; toolCall: { name: string; input: unknown } | null; text?: string } = { toolCall: null };
+/** When set, each dispatch takes the next reply from here instead of `modelReply`. */
+let modelReplies: (typeof modelReply)[] = [];
 let dispatched: { system: string; content: string }[] = [];
 
 vi.mock("../supabase", () => ({
@@ -59,7 +61,7 @@ vi.mock("./hosts/select", () => ({
     dispatch: async (req: { system: string; messages: { content: string }[] }) => {
       ranModel = true;
       dispatched.push({ system: req.system, content: req.messages[0].content });
-      return { stopReason: "end_turn", refusalExplanation: null, text: "", usage: null, ...modelReply };
+      return { stopReason: "end_turn", refusalExplanation: null, text: "", usage: null, ...(modelReplies.shift() ?? modelReply) };
     },
   }),
 }));
@@ -83,7 +85,7 @@ const answers = (...ids: string[]) => ({
 
 beforeEach(() => {
   emitted.length = 0; inserted.length = 0; taskWrites.length = 0; dispatched = [];
-  ranModel = false; versionAfterRun = null; modelReply = { toolCall: null };
+  ranModel = false; versionAfterRun = null; modelReply = { toolCall: null }; modelReplies = [];
   ctx = { renders: "doc", produces: "02/sow", agentFile: "# PM agent", roleCode: "pm" };
   tables = {
     document: [{ id: "d1", engagement_id: "e1", path: "02/sow", current_version_id: "v2" }],
@@ -171,6 +173,43 @@ describe("respondToComments", () => {
     expect(dispatched[0].content).toContain("wording is contractual");
   });
 
+  it("asks ONCE more when an answer ran over the limit, saying which and by how much", async () => {
+    const long = (id: string) => ({ ref: id, stance: "change", answer: "x".repeat(460), overlaps_with: [] });
+    modelReplies = [
+      { toolCall: { name: "comment_answers", input: { answers: [long("c1"), { ref: "c2", stance: "change", answer: "fine", overlaps_with: [] }] } } },
+      answers("c1", "c2"),
+    ];
+
+    const r = await respondToComments(ACTOR, "t1");
+
+    expect(r).toEqual({ ok: true, answered: 2 });
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched[0].content).not.toContain("previous attempt");
+    expect(dispatched[1].content).toMatch(/previous attempt was refused[\s\S]*`c1` was 460[\s\S]*at most 400/);
+    expect(inserted).toHaveLength(1);
+  });
+
+  it("refuses, writing nothing, when it is STILL over the limit on the second try", async () => {
+    const long = { toolCall: { name: "comment_answers", input: { answers: ["c1", "c2"].map((id) => ({ ref: id, stance: "change", answer: "x".repeat(500), overlaps_with: [] })) } } };
+    modelReplies = [long, long];
+
+    const r = await respondToComments(ACTOR, "t1");
+
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toMatch(/in 500 characters \(limit 400\)/);
+    expect(dispatched).toHaveLength(2);
+    expect(inserted).toEqual([]);
+  });
+
+  it("does NOT retry a problem saying it again cannot fix", async () => {
+    modelReplies = [answers("c1"), answers("c1", "c2")]; // c2 left unanswered — not a length problem
+
+    const r = await respondToComments(ACTOR, "t1");
+
+    expect(r.ok).toBe(false);
+    expect(dispatched).toHaveLength(1);
+  });
+
   it("ignores resolved comments, and says so when nothing is left", async () => {
     tables.document_comment = [comment("c1", { status: "resolved" })];
 
@@ -219,6 +258,19 @@ describe("validateAnswers", () => {
   it("names EVERY problem at once, not just the first", () => {
     const r = validateAnswers([{ ...good, ref: "zz" }, { ...good, ref: "c1", answer: "  " }], ["c1", "c2"]);
     expect(r.ok === false && r.error).toMatch(/not asked about.*empty answer.*left `c2` unanswered/);
+  });
+
+  it("reports an over-long answer as over-long ONLY — it did answer, so it is not also 'unanswered'", () => {
+    const r = validateAnswers([{ ...good, answer: "x".repeat(460) }], ["c1"]);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toMatch(/in 460 characters \(limit 400\)/);
+    expect(r.ok === false && r.error).not.toMatch(/unanswered/);
+    expect(r.ok === false && r.retry).toEqual([{ id: "c1", length: 460 }]);
+  });
+
+  it("offers a retry ONLY when length is the sole problem", () => {
+    const r = validateAnswers([{ ...good, answer: "x".repeat(460) }, { ...good, ref: "zz" }], ["c1"]);
+    expect(r.ok === false && r.retry).toBeUndefined();
   });
 
   it.each([
