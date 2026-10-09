@@ -23,6 +23,7 @@ import { Tag } from "../../../../_ui/primitives";
 import { Markdown } from "../../../../_ui/Markdown";
 import {
   editSectionAction, addCommentAction, respondToCommentsAction, decideAnswerAction, applyAcceptedAnswersAction,
+  setCommentStatusAction,
 } from "./actions";
 import type { Draft } from "@/app/lib/data/job";
 import type { Comment, DocComment } from "@/app/lib/data/comments";
@@ -434,6 +435,11 @@ function CommentsRail({ comments, numbers, currentVersion, engagement, role, hol
     return { ...r, text: `${filed}Resolved ${r.resolved ?? 0}.${r.note ? ` ${r.note}` : ""}` };
   });
 
+  const setStatus = (commentId: string, to: "resolved" | "open") => run(`status-${commentId}`, async () => {
+    const r = await setCommentStatusAction(engagement, role, taskId, commentId, to, holderId);
+    return { ...r, text: to === "resolved" ? "Resolved." : "Reopened." };
+  });
+
   const accept = (answerId: string) => run(`accept-${answerId}`, async () => {
     const r = await decideAnswerAction(engagement, role, taskId, answerId, "accepted", undefined, holderId);
     return { ...r, text: "Accepted. It applies with the next version." };
@@ -539,7 +545,14 @@ function CommentsRail({ comments, numbers, currentVersion, engagement, role, hol
             </p>
           ))}
 
-          <button className="comment-card-jump" onClick={() => jump(c)}>Jump to anchor →</button>
+          <div className="comment-card-foot">
+            <button className="comment-card-jump" onClick={() => jump(c)}>Jump to anchor →</button>
+            {/* Anyone looking at the document may resolve or reopen — a review row included, since the
+                reviewer is the one who knows whether the point was met. */}
+            {c.status === "open"
+              ? <button className="comment-card-jump" onClick={() => setStatus(c.id, "resolved")} disabled={pending}>Resolve</button>
+              : <button className="comment-card-jump" onClick={() => setStatus(c.id, "open")} disabled={pending}>Reopen</button>}
+          </div>
         </div>
       ))}
     </div>

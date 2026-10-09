@@ -21,6 +21,8 @@ let ops: string[] = [];
 /** Everything emitted, in order — events and refusals share one timeline with the writes. */
 let timeline: string[] = [];
 let closeError: string | null = null;
+/** What `task_open_comments` answers — a number, or null for "it could not be asked". */
+let openComments: number | null = 0;
 /** What the board says when asked to close. */
 let move: { ok: boolean; failed?: boolean; note?: string } = { ok: true };
 
@@ -75,6 +77,13 @@ vi.mock("../supabase", async (importOriginal) => ({
       return chain;
     },
     rpc: async (name: string) => {
+      // The comment-count question is asked before anything is written, and is kept OUT of the
+      // timeline so the ordering assertions below still read as before it existed.
+      if (name === "task_open_comments") {
+        return openComments === null
+          ? { data: null, error: { message: "boom" } }
+          : { data: openComments, error: null };
+      }
       timeline.push(`rpc:${name}`);
       return { data: null, error: closeError ? { message: closeError } : null };
     },
@@ -96,6 +105,7 @@ beforeEach(() => {
   ops = [];
   timeline = [];
   closeError = null;
+  openComments = 0;
   move = { ok: true };
   db.work_task = [{
     id: "t1", engagement_id: "eng", state: "closed", workflow_step_id: "s1",
@@ -198,5 +208,34 @@ describe("approve — the two ways a close is refused", () => {
     expect(r).toEqual({ ok: false, error: "That task is not in your engagement." });
     expect(ops).toEqual([]);
     expect(timeline).toEqual([]);
+  });
+
+  describe("open comments on the document", () => {
+    it("refuses BEFORE writing anything or moving the ticket, and records why", async () => {
+      openComments = 2;
+
+      const r = await approve(actor, "t1", ["c-yes"]);
+
+      expect(r).toEqual({ ok: false, error: "2 open comments on the document must be resolved before this can be approved." });
+      expect(ops).toEqual([]);
+      expect(timeline).toEqual(["refuse:task.close_blocked_by_comments"]);
+    });
+
+    it("says 'comment', singular, for one", async () => {
+      openComments = 1;
+      const r = await approve(actor, "t1", ["c-yes"]);
+      expect(r.ok === false && r.error).toMatch(/^1 open comment on the document/);
+    });
+
+    it("refuses when the count could not be read — never reads that as nothing open", async () => {
+      openComments = null;
+
+      const r = await approve(actor, "t1", ["c-yes"]);
+
+      expect(r.ok).toBe(false);
+      expect(r.ok === false && r.error).toMatch(/Could not check for open comments.*Nothing was approved/);
+      expect(ops).toEqual([]);
+      expect(timeline).toEqual([]);
+    });
   });
 });

@@ -80,7 +80,8 @@ vi.mock("../supabase", async (importOriginal) => ({
       };
       return chain;
     },
-    rpc: async () => ({ data: null, error: null }),
+    // `approve` first asks how many comments are open; zero here, so these tests keep exercising the close.
+    rpc: async (name: string) => ({ data: name === "task_open_comments" ? 0 : null, error: null }),
   }),
 }));
 

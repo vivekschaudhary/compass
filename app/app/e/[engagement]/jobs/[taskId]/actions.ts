@@ -13,6 +13,7 @@ import { addComment } from "@/app/lib/data/comments";
 import { respondToComments } from "@/app/lib/agent/comment-respond";
 import { applyAcceptedAnswers } from "@/app/lib/agent/comment-revise";
 import { decideAnswer } from "@/app/lib/data/comment-decide";
+import { resolveComment, reopenComment } from "@/app/lib/data/comment-status";
 
 /** Answer the agent's questions. The write itself lives in lib/data, which owns the scope check. */
 export async function answerAction(
@@ -145,6 +146,24 @@ export async function applyAcceptedAnswersAction(
   revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, version: result.version, resolved: result.resolved, note: result.note };
+}
+
+/**
+ * Mark a comment resolved, or open it again. Anyone on the engagement may; who did it is recorded.
+ * A task cannot be approved while any comment on its document is open.
+ */
+export async function setCommentStatusAction(
+  engagement: string, role: string, taskId: string, commentId: string,
+  to: "resolved" | "open",
+  holderId?: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = to === "resolved" ? await resolveComment(actor, commentId) : await reopenComment(actor, commentId);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 /**

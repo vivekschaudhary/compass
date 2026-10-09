@@ -44,6 +44,32 @@ export async function approve(
   const parentRunId = runId ? await parentRunOf(runId) : null;
 
   const who = actor.holder ?? actor.roleCode;
+
+  // OPEN COMMENTS HOLD THE APPROVAL, and are asked about FIRST. `close_task` enforces this in the
+  // database whatever calls it; this is the early, quiet refusal so a blocked approval does not first
+  // write attestations and move the ticket to Done on the board only to be put back. An answer that
+  // cannot be read refuses too — "could not check" must never come back as "nothing open".
+  const { data: open, error: openErr } = await sb.rpc("task_open_comments", { p_task_id: taskId });
+  if (openErr || typeof open !== "number") {
+    return {
+      ok: false,
+      error: `Could not check for open comments${openErr ? `: ${openErr.message}` : ""}. Nothing was approved.`,
+    };
+  }
+  if (open > 0) {
+    const error = `${open} open comment${open === 1 ? "" : "s"} on the document must be resolved before this can be approved.`;
+    await emitRefusal({
+      engagementId: actor.engagementId,
+      subjectType: "task",
+      subjectId: taskId,
+      verb: "task.close_blocked_by_comments",
+      actorRoleCode: actor.roleCode,
+      actorUserId: who,
+      reason: error,
+      payload: { open },
+    });
+    return { ok: false, error };
+  }
   const criteria = await criteriaForTask(taskId);
   const done = criteria.filter((c) => c.kind === "done");
 
