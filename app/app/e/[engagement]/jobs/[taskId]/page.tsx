@@ -263,10 +263,11 @@ export default async function JobPage(
           role={roleCode}
           holderId={actor.holderId}
           taskId={taskId}
-          // A review renders read-only regardless of the task's own state — a reviewer signs off
-          // on what the document says, they do not silently rewrite it out from under the row
-          // they are gating.
-          closed={state === "closed" || ctx.renders === "doc-review" || ctx.renders === "code-review"}
+          // Only a REVIEW row is read-only — a reviewer signs off on what the document says, they
+          // do not silently rewrite it out from under the row they are gating. A closed authoring
+          // row may still correct its own document: the edit files a new version and republishes,
+          // and does not reopen the task.
+          closed={ctx.renders === "doc-review" || ctx.renders === "code-review"}
         />
       </div>
     </div>

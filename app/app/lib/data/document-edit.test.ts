@@ -3,6 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("./events", () => ({ emit: async () => {} }));
 
+const published: string[] = [];
+let publishResult: { ok: true; url: string; id: string } | { ok: false; error: string } =
+  { ok: true, url: "u", id: "i" };
+vi.mock("./publish", () => ({
+  publishToDocs: async (_e: string, versionId: string) => { published.push(versionId); return publishResult; },
+}));
+
 type Section = { id: string; heading: string; body: string; ord: number; edited: boolean };
 
 const state: {
@@ -11,7 +18,9 @@ const state: {
   updates: { table: string; patch: Record<string, unknown>; headings?: string[] }[];
   /** The calling task's own `renders` — overridden per test to exercise the review-row refusal. */
   renders: string | null;
-} = { sections: [], rpc: [], updates: [], renders: null };
+  /** Whether the version being replaced reached the doc store. */
+  prevPublished: boolean;
+} = { sections: [], rpc: [], updates: [], renders: null, prevPublished: false };
 
 vi.mock("../supabase", () => ({
   supabaseAdmin: () => ({
@@ -34,7 +43,9 @@ vi.mock("../supabase", () => ({
             return { data: { id: "d1", title: "SOW", current_version_id: "v1", owner_role_code: "pmo-analyst" } };
           }
           if (table === "engagement") return { data: { org_id: "org1" } };
-          if (table === "document_version") return { data: { version: "2.0" } };
+          if (table === "document_version") {
+            return { data: { version: "2.0", published_to_docs_at: state.prevPublished ? "2026-10-01" : null } };
+          }
           // The calling task's own renders — "doc" (an authoring row) unless a test overrides it,
           // so the new "a review row cannot edit" guard passes through for every existing case.
           if (table === "work_task") return { data: { workflow_step_id: "s1" } };
@@ -75,6 +86,9 @@ beforeEach(() => {
   state.rpc = [];
   state.updates = [];
   state.renders = null;
+  state.prevPublished = false;
+  published.length = 0;
+  publishResult = { ok: true, url: "u", id: "i" };
   state.sections = [
     { id: "s1", heading: "Purpose", body: "old purpose", ord: 0, edited: false },
     { id: "s2", heading: "Scope", body: "old scope", ord: 1, edited: true },
@@ -157,5 +171,28 @@ describe("editSection", () => {
     const r = await editSection(actor as never, "t1", "02-scope/sow", "s1", "new purpose");
     expect(r.ok).toBe(false);
     expect(state.rpc).toHaveLength(0);
+  });
+
+  describe("publishing after an edit", () => {
+    it("republishes the new version when the one it replaced was published", async () => {
+      state.prevPublished = true;
+      const r = await editSection(actor as never, "t1", "02-scope/sow", "s1", "new purpose");
+      expect(r.ok).toBe(true);
+      expect(published).toEqual(["v2"]);
+    });
+
+    it("does not publish an edit to a draft that never was", async () => {
+      const r = await editSection(actor as never, "t1", "02-scope/sow", "s1", "new purpose");
+      expect(r.ok).toBe(true);
+      expect(published).toHaveLength(0);
+    });
+
+    it("says so when the doc store refuses, rather than reporting success", async () => {
+      state.prevPublished = true;
+      publishResult = { ok: false, error: "no space" };
+      const r = await editSection(actor as never, "t1", "02-scope/sow", "s1", "new purpose");
+      expect(r.ok).toBe(false);
+      expect(r.ok === false && r.error).toMatch(/filed as v2.*publishing it to the doc store failed: no space/);
+    });
   });
 });
