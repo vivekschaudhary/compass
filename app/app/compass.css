@@ -2110,42 +2110,121 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   gap: var(--space-2);
   align-items: center;
 }
-.comment-thread {
-  margin-top: var(--space-2);
+/* The document and its comments side by side: the text takes what is left, the rail is a fixed
+   width. `flex-wrap` stacks the rail under the document when the pane is too narrow for both. */
+.draft-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+.draft-main {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.comments-rail {
+  flex: 0 0 240px;
+  width: 240px;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-divider);
 }
-.comment-thread-item {
-  padding: 7px 10px;
-  border-radius: var(--radius-md);
-  background: var(--color-accent-2-100);
+@media (max-width: 700px) {
+  .comments-rail { position: static; flex-basis: 100%; width: auto; padding-left: 0; border-left: 0; }
 }
-.comment-thread-head {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  font-size: 10.5px;
+.comments-rail-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--color-neutral-600);
 }
-.comment-thread-author {
+.comments-rail-empty {
+  margin: 0;
+  font-size: 11.5px;
+}
+.comment-card {
+  padding: 10px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: 10px;
+  background: var(--color-neutral-0, #fff);
+}
+.comment-card[data-status="resolved"] {
+  opacity: 0.55;
+}
+.comment-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.comment-card-author {
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--color-text);
 }
-.comment-thread-quote {
-  font-style: italic;
+.comment-card-body {
+  margin: 6px 0 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
 }
-.comment-thread-body {
-  margin: 3px 0 0;
-  font-size: 12px;
+.comment-card-jump {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: #8a4a22;
 }
-/* The re-highlighted selection itself, inside the rendered markdown — a plain `<mark>`, styled
-   down from the browser default so it reads as an annotation, not shouting. */
+.comment-card-jump:hover {
+  text-decoration: underline;
+}
+
+/* Tones: --cc is the badge, --ct the tint behind the anchored text. */
+.comment-tone-0 { --cc: #b9714a; --ct: #fbe3d6; }
+.comment-tone-1 { --cc: #5b6444; --ct: #e6eed2; }
+.comment-tone-2 { --cc: #4f6b86; --ct: #dce8f2; }
+.comment-tone-3 { --cc: #7d5577; --ct: #efdcec; }
+
+/* The anchored selection itself, re-found in the rendered markdown by its quote. */
 .comment-highlight {
-  background: var(--color-accent-2-200);
+  background: var(--ct);
   color: inherit;
-  border-radius: 2px;
-  cursor: help;
+  border-radius: 3px;
+  padding: 1px 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.comment-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--cc);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: text-top;
+  user-select: none;
+}
+.comment-badge-static {
+  margin-left: 0;
+  vertical-align: baseline;
+}
+@keyframes comment-flash {
+  from { box-shadow: 0 0 0 4px var(--cc, #b9714a); }
+  to { box-shadow: 0 0 0 4px transparent; }
+}
+.comment-flash {
+  animation: comment-flash 1.4s ease-out;
 }
 
 .draft-cites {

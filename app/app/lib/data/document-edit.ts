@@ -19,6 +19,7 @@
 import "server-only";
 import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
+import { publishToDocs } from "./publish";
 import type { Actor } from "./actor";
 
 export type EditResult =
@@ -82,6 +83,14 @@ export async function editSection(
     .eq("document_version_id", doc.current_version_id)
     .order("ord");
   if (!sections?.length) return { ok: false, error: "That version has no sections." };
+
+  // Whether the version being replaced reached the doc store. A closed task's document was
+  // published when it closed, and nothing else will publish this edit — the doc store would keep
+  // showing the text a person just corrected. A draft that was never published stays unpublished:
+  // editing it must not be what first sends it out.
+  const { data: prior } = await sb
+    .from("document_version").select("published_to_docs_at").eq("id", doc.current_version_id).maybeSingle();
+  const wasPublished = Boolean(prior?.published_to_docs_at);
 
   const target = sections.find((s) => s.id === sectionId);
   if (!target) {
@@ -160,6 +169,18 @@ export async function editSection(
         `recorded: ${(attrErr ?? flagErr)!.message}. The version exists and may be attributed ` +
         `to the agent.`,
     };
+  }
+
+  if (wasPublished) {
+    const published = await publishToDocs(actor.engagementId, versionId as string);
+    if (!published.ok) {
+      return {
+        ok: false,
+        error:
+          `The edit was filed as v${filed?.version ?? "?"}, but publishing it to the doc store ` +
+          `failed: ${published.error}. The version exists in Compass; the doc store still shows the old text.`,
+      };
+    }
   }
 
   return { ok: true, version: (filed?.version as string) ?? "?" };

@@ -33,7 +33,7 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
   /** Which of `role`'s several holders (if more than one) is acting — see `resolveActor`. */
   holderId?: string | null;
   taskId: string;
-  /** A closed row's document is the record of what was approved. It is not edited here. */
+  /** A review row reads a document it does not author, so it is never edited here. */
   closed?: boolean;
 }) {
   // Per-viewer convenience, not state: it never leaves this browser and nothing else depends on it.
@@ -62,6 +62,13 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
 
   if (!path) return null;
 
+  // One number per comment across the WHOLE document, in reading order — the badge in the text and
+  // the card in the rail share it, which is what lets the eye cross between them.
+  const numbers: Record<string, number> = {};
+  const ordered: Comment[] = [];
+  for (const sec of draft?.sections ?? [])
+    for (const c of comments[sec.id] ?? []) { numbers[c.id] = ordered.length + 1; ordered.push(c); }
+
   return (
     <aside className={wide ? "draft-col draft-col-wide" : "draft-col"}>
       <div className="draft-head">
@@ -87,12 +94,15 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
       )}
 
       {draft && (
+       <div className="draft-layout">
+        <div className="draft-main">
         <div className="draft-sections">
           {draft.sections.map((s) => (
             <SectionView
               key={s.id}
               section={s}
               comments={comments[s.id] ?? []}
+              numbers={numbers}
               path={path}
               engagement={engagement}
               role={role}
@@ -102,14 +112,19 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
             />
           ))}
         </div>
+        </div>
+        <CommentsRail comments={ordered} numbers={numbers} sectionOf={Object.fromEntries(
+          draft.sections.flatMap((sec) => (comments[sec.id] ?? []).map((c) => [c.id, sec.id])),
+        )} />
+       </div>
       )}
     </aside>
   );
 }
 
-function SectionView({ section, comments, path, engagement, role, holderId, taskId, editable }: {
+function SectionView({ section, comments, numbers, path, engagement, role, holderId, taskId, editable }: {
   section: Draft["sections"][number];
-  comments: Comment[];
+  comments: Comment[]; numbers: Record<string, number>;
   path: string; engagement: string; role: string; holderId?: string | null; taskId: string; editable: boolean;
 }) {
   const router = useRouter();
@@ -134,7 +149,7 @@ function SectionView({ section, comments, path, engagement, role, holderId, task
   );
 
   return (
-    <section className="draft-item">
+    <section className="draft-item" id={`section-${section.id}`}>
       {editing ? (
         <>
           <div className="draft-item-head">
@@ -171,7 +186,7 @@ function SectionView({ section, comments, path, engagement, role, holderId, task
         // line is selectable but never triggers the comment button.
         <CommentableBody
           heading={section.heading} editButton={editButton}
-          body={section.body} comments={comments}
+          body={section.body} comments={comments} numbers={numbers}
           sectionId={section.id} engagement={engagement} role={role} holderId={holderId} taskId={taskId}
         />
       )}
@@ -205,9 +220,9 @@ function SectionView({ section, comments, path, engagement, role, holderId, task
  * what keeps this simple in the face of scrolling and viewport edges — a popover chasing a popover
  * is where this kind of feature usually goes wrong.
  */
-function CommentableBody({ heading, editButton, body, comments, sectionId, engagement, role, holderId, taskId }: {
+function CommentableBody({ heading, editButton, body, comments, numbers, sectionId, engagement, role, holderId, taskId }: {
   heading: string; editButton: ReactNode;
-  body: string; comments: Comment[]; sectionId: string; engagement: string; role: string;
+  body: string; comments: Comment[]; numbers: Record<string, number>; sectionId: string; engagement: string; role: string;
   holderId?: string | null; taskId: string;
 }) {
   const router = useRouter();
@@ -263,10 +278,12 @@ function CommentableBody({ heading, editButton, body, comments, sectionId, engag
     for (const c of comments) {
       const quote = c.quote;
       if (!quote) continue;
+      if (root.querySelector(`[data-comment-id="${c.id}"]`)) continue; // already marked
+      const n = numbers[c.id];
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       let node: Text | null;
       while ((node = walker.nextNode() as Text | null)) {
-        if (node.parentElement?.closest(".comment-highlight")) continue; // don't re-wrap
+        if (node.parentElement?.closest(".comment-highlight, .comment-badge")) continue; // don't re-wrap
         const idx = node.data.indexOf(quote);
         if (idx === -1) continue;
         try {
@@ -274,15 +291,19 @@ function CommentableBody({ heading, editButton, body, comments, sectionId, engag
           range.setStart(node, idx);
           range.setEnd(node, idx + quote.length);
           const mark = document.createElement("mark");
-          mark.className = "comment-highlight";
-          mark.title = c.body;
+          mark.className = `comment-highlight ${commentTone(n)}`;
+          mark.dataset.commentId = c.id;
           range.surroundContents(mark);
-        } catch { /* crosses a node boundary the Range API cannot wrap — skip, list still shows it */ }
+          const badge = document.createElement("span");
+          badge.className = `comment-badge ${commentTone(n)}`;
+          badge.textContent = String(n);
+          mark.after(badge);
+        } catch { /* crosses a node boundary the Range API cannot wrap — skip, the rail still shows it */ }
         break;
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comments, body]);
+     
+  }, [comments, body, numbers]);
 
   return (
     <div className="commentable">
@@ -330,19 +351,49 @@ function CommentableBody({ heading, editButton, body, comments, sectionId, engag
         </div>
       )}
 
-      {comments.length > 0 && (
-        <div className="comment-thread">
-          {comments.map((c) => (
-            <div key={c.id} className="comment-thread-item">
-              <div className="comment-thread-head">
-                <span className="comment-thread-author">{c.authorUserId ?? c.authorRoleCode ?? "someone"}</span>
-                <span className="comment-thread-quote">on “{c.quote.length > 60 ? `${c.quote.slice(0, 60)}…` : c.quote}”</span>
-              </div>
-              <p className="comment-thread-body">{c.body}</p>
-            </div>
-          ))}
-        </div>
+    </div>
+  );
+}
+
+/** Four tones, cycled — terracotta, olive, slate, plum. The number alone picks it, so the badge in the text and the card in the rail always agree. */
+function commentTone(n: number): string {
+  return `comment-tone-${(n - 1) % 4}`;
+}
+
+/**
+ * The comments, in a fixed-width column beside the document. Each card's "Jump to anchor" scrolls
+ * to the highlight in the text; a comment whose quote can no longer be found (see the re-match note
+ * in `CommentableBody`) falls back to its section, so the button never does nothing.
+ */
+function CommentsRail({ comments, numbers, sectionOf }: {
+  comments: Comment[]; numbers: Record<string, number>; sectionOf: Record<string, string>;
+}) {
+  function jump(c: Comment) {
+    const target =
+      document.querySelector(`[data-comment-id="${c.id}"]`) ??
+      document.getElementById(`section-${sectionOf[c.id]}`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("comment-flash");
+    setTimeout(() => target.classList.remove("comment-flash"), 1400);
+  }
+
+  return (
+    <div className="comments-rail">
+      <h6 className="comments-rail-title">Comments · {comments.length}</h6>
+      {comments.length === 0 && (
+        <p className="text-muted comments-rail-empty">Select text in the document to comment on it.</p>
       )}
+      {comments.map((c) => (
+        <div key={c.id} className="comment-card" data-status={c.status}>
+          <div className="comment-card-head">
+            <span className={`comment-badge comment-badge-static ${commentTone(numbers[c.id])}`}>{numbers[c.id]}</span>
+            <span className="comment-card-author">{c.authorUserId ?? c.authorRoleCode ?? "someone"}</span>
+          </div>
+          <p className="comment-card-body">{c.body}</p>
+          <button className="comment-card-jump" onClick={() => jump(c)}>Jump to anchor →</button>
+        </div>
+      ))}
     </div>
   );
 }
