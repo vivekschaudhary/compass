@@ -109,29 +109,68 @@ export async function addComment(
   return { ok: true, comment: toComment(data) };
 }
 
+/** A top-level comment as the document panel shows it: where it was made, and where it lands now. */
+export type DocComment = Comment & {
+  /** The heading of the section it was made on, on the version it was made on. */
+  heading: string;
+  /** The version it was made on. A comment from an earlier version is carried forward, not re-made. */
+  version: string;
+  /**
+   * The CURRENT version's section with the same heading — where its highlight can go. Null when that
+   * section no longer exists; the comment still shows in the list, just without a highlight.
+   */
+  sectionId: string | null;
+};
+
 /**
- * Every top-level comment on a set of sections, oldest first, each carrying its replies — the shape
- * `DraftPanel` reads per section. A reply never appears at the top level: it is part of the
- * conversation under the comment it answers.
+ * Every top-level comment on a document, from ANY of its versions, oldest first, each with its replies.
+ *
+ * Across versions because a comment survives the edit it prompted: it stays until someone resolves it,
+ * and an edit that did not settle it must not make it vanish from the page. Sections are recreated per
+ * version, so a comment is matched to the current version by HEADING — the same way `editSection`
+ * carries `edited` forward, and with the same limit: a renamed section no longer matches.
+ *
+ * A reply never appears at the top level; it is part of the conversation under its comment.
  */
-export async function commentsForSections(sectionIds: string[]): Promise<Map<string, Comment[]>> {
+export async function commentsForDocument(actor: Actor, path: string | null): Promise<DocComment[]> {
   const sb = supabaseAdmin();
-  const out = new Map<string, Comment[]>();
-  if (!sb || !sectionIds.length) return out;
+  if (!sb || !path) return [];
+
+  const { data: doc } = await sb.from("document")
+    .select("id, current_version_id").eq("engagement_id", actor.engagementId).eq("path", path).maybeSingle();
+  if (!doc) return [];
+
+  const { data: versions } = await sb.from("document_version").select("id, version").eq("document_id", doc.id);
+  const versionOf = new Map((versions ?? []).map((v) => [v.id as string, v.version as string]));
+  if (!versionOf.size) return [];
+
+  const { data: sections } = await sb.from("document_section")
+    .select("id, heading, document_version_id").in("document_version_id", [...versionOf.keys()]);
+  const sectionRows = sections ?? [];
+  const meta = new Map(sectionRows.map((s) => [s.id as string, s]));
+  const currentByHeading = new Map(
+    sectionRows.filter((s) => s.document_version_id === doc.current_version_id).map((s) => [s.heading as string, s.id as string]),
+  );
+  if (!meta.size) return [];
 
   const { data } = await sb.from("document_comment")
-    .select(COLUMNS).in("document_section_id", sectionIds).order("created_at");
-
+    .select(COLUMNS).in("document_section_id", [...meta.keys()]).order("created_at");
   const rows = data ?? [];
+
   const repliesOf = new Map<string, Comment[]>();
   for (const r of rows) {
     if (!r.parent_id) continue;
     repliesOf.set(r.parent_id, [...(repliesOf.get(r.parent_id) ?? []), toComment(r)]);
   }
-  for (const r of rows) {
-    if (r.parent_id) continue;
-    const entry = { ...toComment(r), replies: repliesOf.get(r.id) ?? [] };
-    out.set(r.document_section_id, [...(out.get(r.document_section_id) ?? []), entry]);
-  }
-  return out;
+
+  return rows.filter((r) => !r.parent_id).map((r) => {
+    const sec = meta.get(r.document_section_id)!;
+    return {
+      ...toComment(r),
+      replies: repliesOf.get(r.id) ?? [],
+      heading: sec.heading as string,
+      version: versionOf.get(sec.document_version_id as string) ?? "",
+      sectionId: currentByHeading.get(sec.heading as string) ?? null,
+    };
+  });
 }

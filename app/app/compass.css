@@ -2172,6 +2172,60 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   font-size: 12.5px;
   line-height: 1.45;
 }
+.comments-rail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.comments-rail-status {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--color-neutral-600);
+}
+.comment-from {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--color-neutral-600);
+}
+.comment-answer {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-neutral-200);
+}
+.comment-answer-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.comment-answer-text {
+  margin: 4px 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.comment-answer-meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-neutral-600);
+}
+.comment-answer-actions,
+.comment-decline-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.comment-decline-form {
+  flex-direction: column;
+}
+.comment-reply {
+  margin: 6px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--color-divider);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
 .comment-card-jump {
   background: none;
   border: 0;

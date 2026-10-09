@@ -25,7 +25,7 @@ import { nestedWorkflowOf, childRunsOf } from "@/app/lib/data/phases";
 import { storedStatusFor } from "@/app/lib/data/gates";
 import { isStale, lastSign } from "@/app/lib/agent/heartbeat-config";
 import { documentTree } from "@/app/lib/data/documents";
-import { commentsForSections } from "@/app/lib/data/comments";
+import { commentsForDocument } from "@/app/lib/data/comments";
 import { readyAllMet } from "../Gate";
 import { describeCriterion } from "../../../../_ui/criterion";
 import { Tag } from "../../../../_ui/primitives";
@@ -90,8 +90,8 @@ export default async function JobPage(
     childRunsOf(actor, taskId),
     documentTree(actor),
   ]);
-  // Depends on `draft`'s own section ids, so it cannot join the batch above.
-  const comments = await commentsForSections(draft?.sections.map((s) => s.id) ?? []);
+  // Every version's comments, not just the current one — a comment outlives the edit it prompted.
+  const comments = await commentsForDocument(actor, ctx.reviewPath ?? ctx.produces);
   const state = taskRow?.state ?? null;
 
   // A code-review row's reviewed deliverable is a pull request, not a document — `draft` stays
@@ -254,11 +254,7 @@ export default async function JobPage(
         <DraftPanel
           path={ctx.reviewPath ?? ctx.produces}
           draft={effectiveDraft}
-          // A plain object, not the `Map` `commentsForSections` returns — a client component prop
-          // crossing the server/client boundary sticks to plain values, same as `statuses`/
-          // `doneCriteria` below being read out of the `gates` Map server-side rather than handed
-          // the Map itself.
-          comments={Object.fromEntries(comments)}
+          comments={comments}
           engagement={engagement}
           role={roleCode}
           holderId={actor.holderId}
