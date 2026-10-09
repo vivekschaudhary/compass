@@ -23,7 +23,7 @@ type Verdict = "none" | "ok" | "no";
  *
  * A rejection without a reason is refused. The agent has to act on it, and "no" is not actionable.
  */
-export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isReview }: {
+export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isReview, openComments }: {
   engagement: string; role: string;
   /** Which of `role`'s several holders (if more than one) is doing the confirming — see
    *  `resolveActor`. Undefined/null falls back to the first holder, same as before this existed. */
@@ -36,6 +36,12 @@ export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isR
    * work before sending it on, and the two must not read the same way.
    */
   isReview: boolean;
+  /**
+   * How many comments on the document are still open — approval is refused while any are (the
+   * database enforces it; this says so before the click). Null means the count could not be read,
+   * which blocks too: "could not check" must not look like "nothing open".
+   */
+  openComments: number | null;
 }) {
   const router = useRouter();
   // A criterion a CHECK already satisfied is not something to pre-tick. Pre-ticking it made a
@@ -56,6 +62,7 @@ export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isR
   const confirmed = mine.filter((c) => verdicts[c.id] === "ok");
   const rejected = mine.filter((c) => verdicts[c.id] === "no");
   const allOk = confirmed.length === mine.length;
+  const commentsBlock = openComments === null || openComments > 0;
 
   return (
     <div className={rejected.length ? "approve approve-sending-back" : "approve"}>
@@ -134,7 +141,7 @@ export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isR
           </button>
         ) : (
           <button
-            className="btn btn-primary" disabled={pending || confirmed.length === 0}
+            className="btn btn-primary" disabled={pending || confirmed.length === 0 || commentsBlock}
             onClick={() => startTransition(async () => {
               setError(null);
               const r = await approveAction(engagement, role, taskId, confirmed.map((c) => c.id), holderId);
@@ -152,6 +159,10 @@ export function ApprovePanel({ engagement, role, holderId, taskId, criteria, isR
         <span className="text-muted approve-note">
           {rejected.length
             ? "The agent reads your reasons and revises — it keeps what you did not object to."
+            : commentsBlock
+              ? openComments === null
+                ? "Could not check for open comments, so approval is held."
+                : `${openComments} open comment${openComments === 1 ? "" : "s"} must be resolved first.`
             : allOk ? "Every criterion confirmed." : `${mine.length - confirmed.length} untouched — nobody looked at these yet.`}
         </span>
         {error && <span className="start-error">{error}</span>}

@@ -2226,6 +2226,11 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   font-size: 12px;
   white-space: pre-wrap;
 }
+.comment-card-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
 .comment-card-jump {
   background: none;
   border: 0;

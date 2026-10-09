@@ -26,6 +26,7 @@ import { storedStatusFor } from "@/app/lib/data/gates";
 import { isStale, lastSign } from "@/app/lib/agent/heartbeat-config";
 import { documentTree } from "@/app/lib/data/documents";
 import { commentsForDocument } from "@/app/lib/data/comments";
+import { openCommentsBlocking } from "@/app/lib/data/comment-status";
 import { readyAllMet } from "../Gate";
 import { describeCriterion } from "../../../../_ui/criterion";
 import { Tag } from "../../../../_ui/primitives";
@@ -92,6 +93,8 @@ export default async function JobPage(
   ]);
   // Every version's comments, not just the current one — a comment outlives the edit it prompted.
   const comments = await commentsForDocument(actor, ctx.reviewPath ?? ctx.produces);
+  // The database's own count of what stands between this task and approval — null if it could not be asked.
+  const openComments = await openCommentsBlocking(actor, taskId);
   const state = taskRow?.state ?? null;
 
   // A code-review row's reviewed deliverable is a pull request, not a document — `draft` stays
@@ -207,6 +210,7 @@ export default async function JobPage(
                 holderId={actor.holderId}
                 taskId={taskId}
                 criteria={doneCriteria}
+                openComments={openComments}
                 isReview={ctx.renders === "doc-review" || ctx.renders === "code-review"}
               />
             )}
