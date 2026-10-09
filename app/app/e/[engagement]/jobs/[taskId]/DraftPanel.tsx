@@ -474,6 +474,16 @@ function CommentsRail({ comments, numbers, currentVersion, engagement, role, hol
           </button>
         </div>
       )}
+      {/* Said in words as well as on the button: the model call takes many seconds, and a label on a
+          small button is easy to miss. Cleared the moment the call returns. */}
+      {busy === "respond" && (
+        <p className="comments-rail-working">
+          Asking the agent to answer {toAnswer} comment{toAnswer === 1 ? "" : "s"} — this can take up to a minute.
+        </p>
+      )}
+      {busy === "apply" && (
+        <p className="comments-rail-working">Applying the accepted answers as a new version — this can take up to a minute.</p>
+      )}
       {message && (
         <p className={message.failed ? "start-error" : "comments-rail-status"}>{message.text}</p>
       )}

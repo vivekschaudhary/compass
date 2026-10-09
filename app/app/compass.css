@@ -2177,6 +2177,16 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   flex-wrap: wrap;
   gap: 6px;
 }
+@keyframes comments-working-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.comments-rail-working {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--color-text);
+  animation: comments-working-pulse 1.4s ease-in-out infinite;
+}
 .comments-rail-status {
   margin: 0;
   font-size: 11.5px;
