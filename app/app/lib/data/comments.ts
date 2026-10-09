@@ -53,7 +53,7 @@ function toComment(c: any): Comment {
  * The section's document must be in the actor's engagement — three lookups rather than one
  * embedded query, matching how `draftOf` walks the same chain (document → version → section).
  */
-async function sectionInScope(
+export async function sectionInScope(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>, actor: Actor, sectionId: string,
 ): Promise<boolean> {
   const { data: section } = await sb.from("document_section")

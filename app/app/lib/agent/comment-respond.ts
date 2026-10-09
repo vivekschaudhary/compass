@@ -276,16 +276,31 @@ export async function respondToComments(actor: Actor, taskId: string): Promise<R
   return { ok: true, answered: checked.answers.length };
 }
 
+/** A top-level comment with everything said under it, as stored. */
+export type Thread = {
+  id: string;
+  sectionId: string;
+  heading: string;
+  quote: string;
+  body: string;
+  author: string;
+  status: "open" | "resolved";
+  replies: {
+    id: string; author: string; kind: "human" | "agent" | "system"; body: string;
+    stance: "change" | "no_change" | null; decision: "accepted" | "declined" | null; decidedBy: string | null;
+  }[];
+};
+
 /**
- * Open top-level comments on ANY version of the document that are waiting for an answer, oldest first.
+ * Every top-level comment on ANY version of a document, oldest first, with its replies.
  *
  * Across versions on purpose: a comment survives the edit it prompted, and one that still stands
  * must still be answered. Walks document → versions → sections → comments in separate reads for
  * the same reason `sectionInScope` does.
  */
-async function openCommentsFor(
+export async function loadThreads(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>, documentId: string,
-): Promise<OpenComment[]> {
+): Promise<Thread[]> {
   const { data: versions } = await sb.from("document_version").select("id").eq("document_id", documentId);
   const versionIds = (versions ?? []).map((v) => v.id as string);
   if (!versionIds.length) return [];
@@ -296,40 +311,49 @@ async function openCommentsFor(
   if (!headingOf.size) return [];
 
   const { data: rows } = await sb.from("document_comment")
-    .select("id, document_section_id, parent_id, quote, body, author_kind, author_user_id, author_role_code, status, stance, decision, created_at")
+    .select("id, document_section_id, parent_id, quote, body, author_kind, author_user_id, author_role_code, status, stance, decision, decided_by, created_at")
     .in("document_section_id", [...headingOf.keys()]).order("created_at");
 
   const all = rows ?? [];
-  const repliesOf = new Map<string, typeof all>();
+  const who = (r: { author_user_id: unknown; author_role_code: unknown }) =>
+    (r.author_user_id ?? r.author_role_code ?? "someone") as string;
+
+  const repliesOf = new Map<string, Thread["replies"]>();
   for (const r of all) {
-    if (r.parent_id) repliesOf.set(r.parent_id as string, [...(repliesOf.get(r.parent_id as string) ?? []), r]);
+    if (!r.parent_id) continue;
+    repliesOf.set(r.parent_id as string, [...(repliesOf.get(r.parent_id as string) ?? []), {
+      id: r.id as string, author: who(r), kind: r.author_kind as "human" | "agent" | "system",
+      body: r.body as string, stance: (r.stance as "change" | "no_change" | null) ?? null,
+      decision: (r.decision as "accepted" | "declined" | null) ?? null, decidedBy: (r.decided_by as string | null) ?? null,
+    }]);
   }
 
-  const out: OpenComment[] = [];
-  for (const r of all) {
-    if (r.parent_id || r.status !== "open") continue;
-    const replies = repliesOf.get(r.id as string) ?? [];
+  return all.filter((r) => !r.parent_id).map((r) => ({
+    id: r.id as string,
+    sectionId: r.document_section_id as string,
+    heading: headingOf.get(r.document_section_id as string) ?? "",
+    quote: r.quote as string,
+    body: r.body as string,
+    author: who(r),
+    status: r.status as "open" | "resolved",
+    replies: repliesOf.get(r.id as string) ?? [],
+  }));
+}
 
-    // A live answer is one nobody has declined: still undecided (waiting on a person), or accepted
-    // and not yet applied (the comment resolves when the revision is filed). Either way, do not
-    // stack another.
-    const live = replies.some((x) => x.stance && x.decision !== "declined");
-    if (live) continue;
-
-    out.push({
-      id: r.id as string,
-      sectionId: r.document_section_id as string,
-      heading: headingOf.get(r.document_section_id as string) ?? "",
-      quote: r.quote as string,
-      body: r.body as string,
-      author: (r.author_user_id ?? r.author_role_code ?? "someone") as string,
-      thread: replies.map((x) => ({
-        author: (x.author_user_id ?? x.author_role_code ?? "someone") as string,
-        kind: x.author_kind as "human" | "agent" | "system",
-        body: x.body as string,
-        decision: (x.decision as "accepted" | "declined" | null) ?? null,
-      })),
-    });
-  }
-  return out;
+/**
+ * Open comments waiting for an answer.
+ *
+ * A live answer is one nobody has declined: still undecided (waiting on a person), or accepted and
+ * not yet applied (the comment resolves when the revision is filed). Either way, do not stack
+ * another.
+ */
+async function openCommentsFor(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>, documentId: string,
+): Promise<OpenComment[]> {
+  return (await loadThreads(sb, documentId))
+    .filter((t) => t.status === "open" && !t.replies.some((x) => x.stance && x.decision !== "declined"))
+    .map((t) => ({
+      id: t.id, sectionId: t.sectionId, heading: t.heading, quote: t.quote, body: t.body, author: t.author,
+      thread: t.replies.map((x) => ({ author: x.author, kind: x.kind, body: x.body, decision: x.decision })),
+    }));
 }
