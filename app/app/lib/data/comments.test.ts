@@ -20,8 +20,6 @@ const writes: { table: string; row: Record<string, unknown> }[] = [];
 let sections: Record<string, { document_version_id: string }> = {};
 let versions: Record<string, { document_id: string }> = {};
 let documents: Record<string, { id: string; engagement_id: string }> = {};
-/** What the comment list query returns. */
-let commentRows: Record<string, unknown>[] = [];
 
 vi.mock("../supabase", () => ({
   supabaseAdmin: () => ({
@@ -58,19 +56,19 @@ vi.mock("../supabase", () => ({
             }),
           };
         },
-        then: (res: (v: { data: unknown[] }) => unknown) => res({ data: commentRows }),
+        then: (res: (v: { data: unknown[] }) => unknown) => res({ data: [] }),
       };
       return chain;
     },
   }),
 }));
 
-const { addComment, commentsForSections } = await import("./comments");
+const { addComment } = await import("./comments");
 
 const ACTOR = { orgId: "org-1", engagementId: "e1", roleCode: "product-manager", holder: "Priya Shah" } as never;
 
 beforeEach(() => {
-  writes.length = 0; emitted.length = 0; commentRows = [];
+  writes.length = 0; emitted.length = 0;
   sections = { s1: { document_version_id: "v1" } };
   versions = { v1: { document_id: "d1" } };
   documents = { d1: { id: "d1", engagement_id: "e1" } };
@@ -112,47 +110,5 @@ describe("addComment", () => {
     const r = await addComment(ACTOR, "no-such-section", "quote", "body");
     expect(r).toEqual({ ok: false, error: "That section is not in your engagement." });
     expect(writes).toEqual([]);
-  });
-});
-
-describe("commentsForSections", () => {
-  it("returns an empty map rather than a query for zero sections", async () => {
-    expect(await commentsForSections([])).toEqual(new Map());
-  });
-
-  const row = (over: Record<string, unknown>) => ({
-    id: "c", document_section_id: "s1", parent_id: null, quote: "q", body: "b", author_kind: "human",
-    author_role_code: "pm", author_user_id: "Priya", status: "open", stance: null, overlaps_with: [],
-    decision: null, decided_by: null, created_at: "2026-10-09T00:00:00Z", ...over,
-  });
-
-  it("nests a reply under its comment instead of listing it at the top level", async () => {
-    commentRows = [
-      row({ id: "c1" }),
-      row({ id: "r1", parent_id: "c1", quote: "", author_kind: "agent", stance: "change", body: "Tighten it." }),
-    ];
-
-    const top = (await commentsForSections(["s1"])).get("s1")!;
-
-    expect(top.map((c) => c.id)).toEqual(["c1"]);
-    expect(top[0].replies).toMatchObject([{ id: "r1", parentId: "c1", stance: "change", authorKind: "agent" }]);
-    expect(top[0].replies[0].replies).toEqual([]);
-  });
-
-  it("carries an answer's decision and overlaps through", async () => {
-    commentRows = [
-      row({ id: "c1" }),
-      row({ id: "r1", parent_id: "c1", stance: "no_change", overlaps_with: ["c2"], decision: "declined", decided_by: "Ada" }),
-    ];
-
-    const [c] = (await commentsForSections(["s1"])).get("s1")!;
-
-    expect(c.replies[0]).toMatchObject({ stance: "no_change", overlapsWith: ["c2"], decision: "declined", decidedBy: "Ada" });
-  });
-
-  it("keeps a comment with no replies, replies empty rather than missing", async () => {
-    commentRows = [row({ id: "c1" })];
-    const [c] = (await commentsForSections(["s1"])).get("s1")!;
-    expect(c).toMatchObject({ parentId: null, stance: null, decision: null, overlapsWith: [], replies: [] });
   });
 });

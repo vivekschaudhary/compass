@@ -21,14 +21,18 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { useRouter } from "next/navigation";
 import { Tag } from "../../../../_ui/primitives";
 import { Markdown } from "../../../../_ui/Markdown";
-import { editSectionAction, addCommentAction } from "./actions";
+import {
+  editSectionAction, addCommentAction, respondToCommentsAction, decideAnswerAction, applyAcceptedAnswersAction,
+} from "./actions";
 import type { Draft } from "@/app/lib/data/job";
-import type { Comment } from "@/app/lib/data/comments";
+import type { Comment, DocComment } from "@/app/lib/data/comments";
 
 const WIDE_KEY = "compass.draft.wide";
 
 export function DraftPanel({ path, draft, comments, engagement, role, holderId, taskId, closed = false }: {
-  path: string | null; draft: Draft | null; comments: Record<string, Comment[]>;
+  path: string | null; draft: Draft | null;
+  /** Every top-level comment on the document, from any version, each with its replies. */
+  comments: DocComment[];
   engagement: string; role: string;
   /** Which of `role`'s several holders (if more than one) is acting — see `resolveActor`. */
   holderId?: string | null;
@@ -65,9 +69,9 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
   // One number per comment across the WHOLE document, in reading order — the badge in the text and
   // the card in the rail share it, which is what lets the eye cross between them.
   const numbers: Record<string, number> = {};
-  const ordered: Comment[] = [];
-  for (const sec of draft?.sections ?? [])
-    for (const c of comments[sec.id] ?? []) { numbers[c.id] = ordered.length + 1; ordered.push(c); }
+  comments.forEach((c, i) => { numbers[c.id] = i + 1; });
+  const bySection: Record<string, DocComment[]> = {};
+  for (const c of comments) if (c.sectionId) (bySection[c.sectionId] ??= []).push(c);
 
   return (
     <aside className={wide ? "draft-col draft-col-wide" : "draft-col"}>
@@ -101,7 +105,7 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
             <SectionView
               key={s.id}
               section={s}
-              comments={comments[s.id] ?? []}
+              comments={(bySection[s.id] ?? []).filter((c) => c.status === "open")}
               numbers={numbers}
               path={path}
               engagement={engagement}
@@ -113,9 +117,11 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
           ))}
         </div>
         </div>
-        <CommentsRail comments={ordered} numbers={numbers} sectionOf={Object.fromEntries(
-          draft.sections.flatMap((sec) => (comments[sec.id] ?? []).map((c) => [c.id, sec.id])),
-        )} />
+        <CommentsRail
+          comments={comments} numbers={numbers} currentVersion={draft.version}
+          engagement={engagement} role={role} holderId={holderId} taskId={taskId}
+          canRespond={!closed}
+        />
        </div>
       )}
     </aside>
@@ -360,37 +366,179 @@ function commentTone(n: number): string {
   return `comment-tone-${(n - 1) % 4}`;
 }
 
+/** Is this comment waiting for an answer? Open, and no answer that is undecided or accepted. */
+function needsAnswer(c: DocComment): boolean {
+  return c.status === "open" && !c.replies.some((r) => r.stance && r.decision !== "declined");
+}
+
+/** The accepted answer waiting to be applied, if this comment has one. */
+function acceptedAnswer(c: DocComment): Comment | undefined {
+  if (c.status !== "open") return undefined;
+  return [...c.replies].reverse().find((r) => r.stance && r.decision === "accepted");
+}
+
 /**
  * The comments, in a fixed-width column beside the document. Each card's "Jump to anchor" scrolls
  * to the highlight in the text; a comment whose quote can no longer be found (see the re-match note
  * in `CommentableBody`) falls back to its section, so the button never does nothing.
+ *
+ * On a drafting row (`canRespond`) the column also carries the loop for closing them: ask the agent
+ * for a short answer to every open comment, accept or decline each answer, then apply everything
+ * accepted as one new version. None of it reopens the task — see `comment-respond.ts`.
  */
-function CommentsRail({ comments, numbers, sectionOf }: {
-  comments: Comment[]; numbers: Record<string, number>; sectionOf: Record<string, string>;
+function CommentsRail({ comments, numbers, currentVersion, engagement, role, holderId, taskId, canRespond }: {
+  comments: DocComment[]; numbers: Record<string, number>; currentVersion: string;
+  engagement: string; role: string; holderId?: string | null; taskId: string; canRespond: boolean;
 }) {
-  function jump(c: Comment) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
+  const [declining, setDeclining] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [next, setNext] = useState("");
+
+  const toAnswer = comments.filter(needsAnswer).length;
+  const toApply = comments.filter((c) => acceptedAnswer(c)).length;
+  const numberOf = (id: string) => numbers[id];
+
+  function jump(c: DocComment) {
     const target =
       document.querySelector(`[data-comment-id="${c.id}"]`) ??
-      document.getElementById(`section-${sectionOf[c.id]}`);
+      (c.sectionId ? document.getElementById(`section-${c.sectionId}`) : null);
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     target.classList.add("comment-flash");
     setTimeout(() => target.classList.remove("comment-flash"), 1400);
   }
 
+  function run(label: string, work: () => Promise<{ ok: boolean; error?: string; text?: string }>) {
+    startTransition(async () => {
+      setBusy(label);
+      setMessage(null);
+      const r = await work();
+      setBusy(null);
+      setMessage({ text: r.ok ? (r.text ?? "Done.") : (r.error ?? "That did not work."), failed: !r.ok });
+      if (r.ok) router.refresh();
+    });
+  }
+
+  const respond = () => run("respond", async () => {
+    const r = await respondToCommentsAction(engagement, role, taskId, holderId);
+    return { ...r, text: `Answered ${r.answered ?? 0} comment${r.answered === 1 ? "" : "s"}.` };
+  });
+
+  const apply = () => run("apply", async () => {
+    const r = await applyAcceptedAnswersAction(engagement, role, taskId, holderId);
+    const filed = r.version ? `Filed v${r.version}. ` : "";
+    return { ...r, text: `${filed}Resolved ${r.resolved ?? 0}.${r.note ? ` ${r.note}` : ""}` };
+  });
+
+  const accept = (answerId: string) => run(`accept-${answerId}`, async () => {
+    const r = await decideAnswerAction(engagement, role, taskId, answerId, "accepted", undefined, holderId);
+    return { ...r, text: "Accepted. It applies with the next version." };
+  });
+
+  const decline = (answerId: string) => run(`decline-${answerId}`, async () => {
+    const r = await decideAnswerAction(engagement, role, taskId, answerId, "declined", { reason, next }, holderId);
+    if (r.ok) { setDeclining(null); setReason(""); setNext(""); }
+    return { ...r, text: "Declined. The agent will see why." };
+  });
+
   return (
     <div className="comments-rail">
       <h6 className="comments-rail-title">Comments · {comments.length}</h6>
+
+      {canRespond && comments.length > 0 && (
+        <div className="comments-rail-actions">
+          <button className="btn btn-secondary btn-compact" onClick={respond} disabled={pending || toAnswer === 0}>
+            {busy === "respond" ? "Thinking…" : `Suggest responses (${toAnswer})`}
+          </button>
+          <button className="btn btn-primary btn-compact" onClick={apply} disabled={pending || toApply === 0}>
+            {busy === "apply" ? "Applying…" : `Apply accepted (${toApply})`}
+          </button>
+        </div>
+      )}
+      {message && (
+        <p className={message.failed ? "start-error" : "comments-rail-status"}>{message.text}</p>
+      )}
+
       {comments.length === 0 && (
         <p className="text-muted comments-rail-empty">Select text in the document to comment on it.</p>
       )}
+
       {comments.map((c) => (
         <div key={c.id} className="comment-card" data-status={c.status}>
           <div className="comment-card-head">
-            <span className={`comment-badge comment-badge-static ${commentTone(numbers[c.id])}`}>{numbers[c.id]}</span>
+            <span className={`comment-badge comment-badge-static ${commentTone(numberOf(c.id))}`}>{numberOf(c.id)}</span>
             <span className="comment-card-author">{c.authorUserId ?? c.authorRoleCode ?? "someone"}</span>
+            {c.version !== currentVersion && <span className="comment-from">from v{c.version}</span>}
           </div>
           <p className="comment-card-body">{c.body}</p>
+
+          {c.replies.map((r) => r.stance ? (
+            <div key={r.id} className="comment-answer">
+              <div className="comment-answer-label">
+                Suggested · {r.stance === "change" ? "would change the text" : "no change"}
+              </div>
+              <p className="comment-answer-text">{r.body}</p>
+              {r.overlapsWith.length > 0 && (
+                <p className="comment-answer-meta">
+                  Same fix as {r.overlapsWith.map((id) => `#${numberOf(id) ?? "?"}`).join(", ")}
+                </p>
+              )}
+              {r.decision === null && canRespond && c.status === "open" && (
+                declining === r.id ? (
+                  <div className="comment-decline-form">
+                    <textarea
+                      className="input comment-composer-input" rows={2} placeholder="Why not?"
+                      value={reason} onChange={(e) => setReason(e.target.value)} autoFocus
+                    />
+                    <textarea
+                      className="input comment-composer-input" rows={2} placeholder="What should happen instead?"
+                      value={next} onChange={(e) => setNext(e.target.value)}
+                    />
+                    <div className="comment-composer-actions">
+                      <button
+                        className="btn btn-primary btn-compact" onClick={() => decline(r.id)}
+                        disabled={pending || !reason.trim() || !next.trim()}
+                      >
+                        Decline
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-compact" disabled={pending}
+                        onClick={() => { setDeclining(null); setReason(""); setNext(""); }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="comment-answer-actions">
+                    <button className="btn btn-primary btn-compact" onClick={() => accept(r.id)} disabled={pending}>
+                      Accept
+                    </button>
+                    <button className="btn btn-secondary btn-compact" onClick={() => setDeclining(r.id)} disabled={pending}>
+                      Decline
+                    </button>
+                  </div>
+                )
+              )}
+              {r.decision === "accepted" && (
+                <p className="comment-answer-meta">
+                  {c.status === "open" ? `Accepted by ${r.decidedBy ?? "someone"} — applies with the next version.` : `Accepted by ${r.decidedBy ?? "someone"}.`}
+                </p>
+              )}
+              {r.decision === "declined" && (
+                <p className="comment-answer-meta">Declined by {r.decidedBy ?? "someone"}.</p>
+              )}
+            </div>
+          ) : (
+            <p key={r.id} className="comment-reply">
+              <span className="comment-card-author">{r.authorUserId ?? r.authorRoleCode ?? "someone"}</span> {r.body}
+            </p>
+          ))}
+
           <button className="comment-card-jump" onClick={() => jump(c)}>Jump to anchor →</button>
         </div>
       ))}
