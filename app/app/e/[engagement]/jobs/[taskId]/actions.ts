@@ -10,6 +10,9 @@ import {
 import { approve, reject } from "@/app/lib/data/gates";
 import { editSection } from "@/app/lib/data/document-edit";
 import { addComment } from "@/app/lib/data/comments";
+import { respondToComments } from "@/app/lib/agent/comment-respond";
+import { applyAcceptedAnswers } from "@/app/lib/agent/comment-revise";
+import { decideAnswer } from "@/app/lib/data/comment-decide";
 
 /** Answer the agent's questions. The write itself lives in lib/data, which owns the scope check. */
 export async function answerAction(
@@ -92,6 +95,56 @@ export async function addCommentAction(
   revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
+}
+
+/**
+ * Have the drafter's agent answer every open comment on this task's document, briefly. Does not
+ * reopen the task, claim it, or file a version — it writes one reply per comment and stops; see
+ * `comment-respond.ts` for why it is not a run.
+ */
+export async function respondToCommentsAction(
+  engagement: string, role: string, taskId: string,
+  holderId?: string | null,
+): Promise<{ ok: boolean; error?: string; answered?: number }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await respondToComments(actor, taskId);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, answered: result.answered };
+}
+
+/** Accept the agent's answer to a comment, or decline it with a reason and a next step. */
+export async function decideAnswerAction(
+  engagement: string, role: string, taskId: string, answerId: string,
+  decision: "accepted" | "declined", note?: { reason: string; next: string },
+  holderId?: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await decideAnswer(actor, answerId, decision, note);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/**
+ * Apply every accepted answer as ONE new version of the document, and resolve what it settled. Does
+ * not reopen the task — see `comment-revise.ts`.
+ */
+export async function applyAcceptedAnswersAction(
+  engagement: string, role: string, taskId: string,
+  holderId?: string | null,
+): Promise<{ ok: boolean; error?: string; version?: string | null; resolved?: number; note?: string }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await applyAcceptedAnswers(actor, taskId);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, version: result.version, resolved: result.resolved, note: result.note };
 }
 
 /**
