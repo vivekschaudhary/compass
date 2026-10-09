@@ -10,6 +10,7 @@ import {
 import { approve, reject } from "@/app/lib/data/gates";
 import { editSection } from "@/app/lib/data/document-edit";
 import { addComment } from "@/app/lib/data/comments";
+import { respondToComments } from "@/app/lib/agent/comment-respond";
 
 /** Answer the agent's questions. The write itself lives in lib/data, which owns the scope check. */
 export async function answerAction(
@@ -92,6 +93,24 @@ export async function addCommentAction(
   revalidatePath(`/e/${engagement}/jobs/${taskId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
+}
+
+/**
+ * Have the drafter's agent answer every open comment on this task's document, briefly. Does not
+ * reopen the task, claim it, or file a version — it writes one reply per comment and stops; see
+ * `comment-respond.ts` for why it is not a run.
+ */
+export async function respondToCommentsAction(
+  engagement: string, role: string, taskId: string,
+  holderId?: string | null,
+): Promise<{ ok: boolean; error?: string; answered?: number }> {
+  const actor = await resolveActor(engagement, role, holderId);
+  if (!actor) return { ok: false, error: "That role does not exist on this engagement." };
+
+  const result = await respondToComments(actor, taskId);
+  revalidatePath(`/e/${engagement}/jobs/${taskId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, answered: result.answered };
 }
 
 /**
