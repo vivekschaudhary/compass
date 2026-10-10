@@ -82,11 +82,14 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
           {draft
             ? <Tag tone={draft.status === "published" ? "accent-2" : "outline"}>{draft.status} v{draft.version}</Tag>
             : <span className="text-muted draft-none">not drafted yet</span>}
-          {draft && (
-            <button className="draft-expand" onClick={toggleWide} title={wide ? "Narrow" : "Widen"}>
-              {wide ? "⇥" : "⇤"}
-            </button>
-          )}
+          {/* Not gated on a draft: the width is the viewer's layout choice, and an empty panel is
+              exactly when they may want the chat narrower or wider. */}
+          <button
+            className="draft-expand" onClick={toggleWide}
+            title={wide ? "Narrow" : "Widen"} aria-label={wide ? "Narrow the draft panel" : "Widen the draft panel"}
+          >
+            {wide ? "⇥" : "⇤"}
+          </button>
         </div>
       </div>
 
