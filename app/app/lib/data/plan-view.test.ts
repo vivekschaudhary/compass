@@ -43,6 +43,13 @@ function table(rows: Row[]) {
       filtered = filtered.filter((r) => (val === null ? r[col] == null : r[col] === val));
       return q;
     },
+    // PostgREST's `or("a.eq.x,a.is.null")` — only the two shapes `planFor` uses.
+    or: (expr: string) => {
+      const clauses = expr.split(",").map((c) => c.split("."));
+      filtered = filtered.filter((r) =>
+        clauses.some(([col, op, val]) => (op === "is" && val === "null" ? r[col] == null : r[col] === val)));
+      return q;
+    },
     not: (col: string, _op: string, val: null) => {
       filtered = filtered.filter((r) => (val === null ? r[col] != null : true));
       return q;
@@ -122,7 +129,7 @@ describe("planFor: which workflow is a phase's own root", () => {
 describe("planFor: the phase boundary stops recursion at a cross-phase nested workflow", () => {
   it("recurses into timeline (Discovery, matches) but leaves feature (Build) a leaf", async () => {
     const runs: Row[] = [
-      { id: "run-s0", workflow_id: "w-s0", state: "open", subject_ref: null, opened_at: "2026-01-01", parent_task_id: null },
+      { engagement_id: "e1", id: "run-s0", workflow_id: "w-s0", state: "open", subject_ref: null, opened_at: "2026-01-01", parent_task_id: null },
     ];
     const tasks: Row[] = [
       {
@@ -156,8 +163,8 @@ describe("planFor: the phase boundary stops recursion at a cross-phase nested wo
 describe("planFor: a root run's own phase_tag overrides its workflow's catalog phase", () => {
   it("buckets a tagged `build` run into a NEW lane this org has never catalogued", async () => {
     const runs: Row[] = [
-      { id: "run-build-1", workflow_id: "w-build", state: "closed", subject_ref: "KAN-1", opened_at: "2026-01-01", parent_task_id: null, phase_tag: "Hypercare" },
-      { id: "run-build-2", workflow_id: "w-build", state: "open", subject_ref: "KAN-2", opened_at: "2026-01-02", parent_task_id: null, phase_tag: null },
+      { engagement_id: "e1", id: "run-build-1", workflow_id: "w-build", state: "closed", subject_ref: "KAN-1", opened_at: "2026-01-01", parent_task_id: null, phase_tag: "Hypercare" },
+      { engagement_id: "e1", id: "run-build-2", workflow_id: "w-build", state: "open", subject_ref: "KAN-2", opened_at: "2026-01-02", parent_task_id: null, phase_tag: null },
     ];
     mockSupabase({ runs, tasks: [] });
     const { planFor } = await import("./plan-view");
@@ -184,8 +191,8 @@ describe("planFor: a closed run reports its own real state, not \"available to r
     // `timeline` is nested, not a root — reached only via sprint-0's `draft-timeline` step, same
     // shape as the cross-phase fixture above.
     const runs: Row[] = [
-      { id: "run-s0", workflow_id: "w-s0", state: "open", subject_ref: null, opened_at: "2026-01-01", parent_task_id: null, phase_tag: null },
-      { id: "run-tl", workflow_id: "w-tl", state: "closed", subject_ref: null, opened_at: "2026-01-01", parent_task_id: "t-nests-timeline", phase_tag: null },
+      { engagement_id: "e1", id: "run-s0", workflow_id: "w-s0", state: "open", subject_ref: null, opened_at: "2026-01-01", parent_task_id: null, phase_tag: null },
+      { engagement_id: "e1", id: "run-tl", workflow_id: "w-tl", state: "closed", subject_ref: null, opened_at: "2026-01-01", parent_task_id: "t-nests-timeline", phase_tag: null },
     ];
     const tasks: Row[] = [
       { id: "t-nests-timeline", workflow_run_id: "run-s0", role_code: "delivery-manager", state: "closed", title: "Draft the timeline", workflow_step: { ord: 1, nests_workflow_code: "timeline" } },
@@ -200,5 +207,68 @@ describe("planFor: a closed run reports its own real state, not \"available to r
     expect(timelineNode.closedCount).toBe(1);
     expect(timelineNode.totalCount).toBe(1);
     expect(timelineNode.state).toBe("closed"); // NOT "idle"/"available" — timeline is repeatable
+  });
+});
+
+describe("planFor: scoped to the engagement it is asked about", () => {
+  it("does not list another engagement's run of the same workflow", async () => {
+    // `build` is defined once for the org, so both engagements' runs share `workflow_id`.
+    const runs: Row[] = [
+      { engagement_id: "e1", id: "run-mine", workflow_id: "w-build", state: "open", subject_ref: "KAN-1", opened_at: "2026-01-02", parent_task_id: null, phase_tag: null },
+      { engagement_id: "e2", id: "run-theirs", workflow_id: "w-build", state: "open", subject_ref: "ZZZ-9", opened_at: "2026-01-03", parent_task_id: null, phase_tag: null },
+    ];
+    mockSupabase({ runs });
+    const { planFor } = await import("./plan-view");
+
+    const mine = (await planFor("e1")).find((p) => p.code === "Build")!;
+    expect(mine.roots.map((r) => r.runId)).toEqual(["run-mine"]);
+
+    const theirs = (await planFor("e2")).find((p) => p.code === "Build")!;
+    expect(theirs.roots.map((r) => r.runId)).toEqual(["run-theirs"]);
+  });
+
+  it("an engagement with no runs of its own sees none of the org's other runs", async () => {
+    const runs: Row[] = [
+      { engagement_id: "e2", id: "run-theirs", workflow_id: "w-build", state: "open", subject_ref: "ZZZ-9", opened_at: "2026-01-03", parent_task_id: null, phase_tag: null },
+    ];
+    mockSupabase({ runs });
+    const { planFor } = await import("./plan-view");
+
+    const build = (await planFor("e1")).find((p) => p.code === "Build")!;
+    // The workflow still appears (it is defined for the org) — as a not-yet-opened placeholder.
+    expect(build.roots).toHaveLength(1);
+    expect(build.roots[0].runId).toBeNull();
+  });
+});
+
+describe("planFor: an engagement's own workflow definition wins over the org default", () => {
+  it("uses the engagement's row for a code both define, and the org row for the rest", async () => {
+    const workflows: Row[] = [
+      ...WORKFLOWS,
+      { id: "w-build-e1", code: "build", label: "Our build", phase_code: "Build", owner_role_code: "engineer", repeatable: true, org_id: "org1", enabled: true, engagement_id: "e1" },
+    ];
+    vi.resetModules();
+    vi.doMock("../supabase", () => ({
+      supabaseAdmin: () => ({
+        from: (name: string) => {
+          if (name === "workflow") return table(workflows);
+          if (name === "workflow_version") return table(VERSIONS);
+          if (name === "workflow_step") return table(NESTING_STEPS);
+          if (name === "workflow_run") return table([]);
+          if (name === "work_task") return table([]);
+          if (name === "phase") return table(CATALOG);
+          return table([]);
+        },
+      }),
+    }));
+    const { planFor } = await import("./plan-view");
+
+    const e1 = await planFor("e1");
+    expect(e1.find((p) => p.code === "Build")!.roots[0].label).toBe("Our build");
+    expect(e1.find((p) => p.code === "Discovery")!.roots[0].label).toBe("Discovery"); // org default
+
+    // Another engagement does not see e1's override.
+    const e2 = await planFor("e2");
+    expect(e2.find((p) => p.code === "Build")!.roots[0].label).toBe("Workflow: /build");
   });
 });

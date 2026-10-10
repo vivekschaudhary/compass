@@ -112,6 +112,7 @@ const MAX_DEPTH = 6;
 
 async function stepsOfRun(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  engagementId: string,
   runId: string,
   byCode: Map<string, WorkflowRow>,
   phase: string,
@@ -142,7 +143,7 @@ async function stepsOfRun(
     // seed row) resolves to no match and is left a leaf, same as a genuine cross-phase one.
     const target = r.nestsCode ? byCode.get(r.nestsCode) : null;
     if (target && target.phase_code === phase && depth < MAX_DEPTH) {
-      nested = await runsOfWorkflow(sb, target, byCode, depth + 1, r.taskId, phase);
+      nested = await runsOfWorkflow(sb, engagementId, target, byCode, depth + 1, r.taskId, phase);
     }
     out.push({
       taskId: r.taskId, ord: r.ord, title: r.title, roleCode: r.roleCode, state: r.state,
@@ -162,6 +163,7 @@ async function stepsOfRun(
  */
 async function runsOfWorkflow(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  engagementId: string,
   wf: WorkflowRow,
   byCode: Map<string, WorkflowRow>,
   depth: number,
@@ -171,6 +173,9 @@ async function runsOfWorkflow(
   let q = sb
     .from("workflow_run")
     .select("id, state, subject_ref, opened_at, phase_tag")
+    // The ENGAGEMENT filter is not optional: a workflow is defined once per org, so two engagements
+    // running it share a `workflow_id`, and without this each one's plan listed the other's runs.
+    .eq("engagement_id", engagementId)
     .eq("workflow_id", wf.id)
     .order("opened_at", { ascending: false });
   q = parentTaskId ? q.eq("parent_task_id", parentTaskId) : q.is("parent_task_id", null);
@@ -195,7 +200,7 @@ async function runsOfWorkflow(
     const phase = parentTaskId
       ? fallbackPhase
       : ((r.phase_tag as string | null) ?? wf.phase_code ?? fallbackPhase);
-    const steps = await stepsOfRun(sb, r.id as string, byCode, phase, depth);
+    const steps = await stepsOfRun(sb, engagementId, r.id as string, byCode, phase, depth);
     const total = steps.length;
     const closed = steps.filter((s) => s.state === "closed").length;
     out.push({
@@ -222,12 +227,24 @@ export async function planFor(engagementId: string): Promise<PlanPhase[]> {
   if (!orgId) return [];
 
   const [{ data: wfRows }, { data: catalogRows }] = await Promise.all([
-    sb.from("workflow").select("id, code, label, phase_code, owner_role_code, repeatable")
-      .eq("org_id", orgId).eq("enabled", true),
+    // Engagement override first, org default second — the precedence `resolveActor` reads `role`
+    // with. A bare `org_id` read ignored an engagement's own definition of a workflow; a flat
+    // `engagement_id` filter would drop every org-wide default for an engagement with no override.
+    // Both are fetched and one is kept per code, below.
+    sb.from("workflow")
+      .select("id, code, label, phase_code, owner_role_code, repeatable, engagement_id")
+      .eq("org_id", orgId).eq("enabled", true)
+      .or(`engagement_id.eq.${engagementId},engagement_id.is.null`),
     sb.from("phase").select("code, label, ord, cycles")
       .eq("org_id", orgId).is("engagement_id", null).eq("enabled", true).order("ord"),
   ]);
-  const workflows = (wfRows ?? []) as WorkflowRow[];
+  const byWorkflowCode = new Map<string, WorkflowRow>();
+  for (const w of (wfRows ?? []) as (WorkflowRow & { engagement_id: string | null })[]) {
+    const have = byWorkflowCode.get(w.code) as (WorkflowRow & { engagement_id: string | null }) | undefined;
+    // The engagement's own row wins; otherwise the first (org default) stands.
+    if (!have || (w.engagement_id && !have.engagement_id)) byWorkflowCode.set(w.code, w);
+  }
+  const workflows = [...byWorkflowCode.values()];
   const byCode = new Map(workflows.map((w) => [w.code, w]));
   const catalog = new Map((catalogRows ?? []).map((p) => [p.code as string, p as PhaseCatalogRow]));
 
@@ -246,7 +263,7 @@ export async function planFor(engagementId: string): Promise<PlanPhase[]> {
   const roots = workflows.filter((w) => !nestedCodes.has(w.code));
   const nodesByPhase = new Map<string, PlanWorkflowNode[]>();
   for (const root of roots) {
-    const nodes = await runsOfWorkflow(sb, root, byCode, 0, null, root.phase_code ?? "");
+    const nodes = await runsOfWorkflow(sb, engagementId, root, byCode, 0, null, root.phase_code ?? "");
     for (const node of nodes) {
       const list = nodesByPhase.get(node.phase) ?? [];
       list.push(node);
