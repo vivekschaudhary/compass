@@ -841,6 +841,27 @@ describe("nested workflow contract", () => {
     });
   });
 
+  // The `{repo}` token's fan-out `mode` is `inline` (`fan-out-kinds.ts`), unlike `{epic}`'s `nest`
+  // above — the two kinds must not get the same Done criterion shape, or one of them is wrong.
+  it("gates a {repo}-token nesting row on its inline siblings, not on a child run", () => {
+    const perRepo: Bundle = {
+      ...base,
+      workflows:
+        "code,label,workstream,inputs,outputs\n" +
+        "parent,Parent,Delivery,,\n" +
+        "child,Child,Delivery,the-brief,scaffold/{repo}@scm\n",
+      steps:
+        "workflow,ord,kind,role,task,produces,nests\n" +
+        "parent,1,workflow,po,run-child,,child\n" +
+        "child,1,agent,po,draft,scaffold/{repo}@scm,\n",
+    };
+    const all = gates(perRepo);
+    expect(all.filter((c) => c.subjectKind === "nested")).toHaveLength(0);
+    expect(all).toContainEqual(
+      expect.objectContaining({ subjectKind: "inline-fanout", subjectRef: "child" }),
+    );
+  });
+
   it("leaves an authored criterion alone rather than doubling it", () => {
     const b = {
       ...base,
@@ -1084,12 +1105,22 @@ describe("criteria derived from workflows and steps", () => {
     expect(mine).toContainEqual(expect.objectContaining({ subjectKind: "ticket", subjectRef: "pr-linked" }));
   });
 
-  it("gates the row that nests scaffold-repo on every run having closed, not on a per-repo path", () => {
+  // `scaffold-repo`'s fan-out `mode` is `inline` (`fan-out-kinds.ts`) — Jira caps nesting one level
+  // below an epic, and `scaffold-repos` already sits nested under `foundation-architecture`, so its
+  // repos are materialized as sibling tasks in the SAME run rather than a second-level child run.
+  // The `nested` shape (`evaluateNested`) answers "has every child run closed?", which this row can
+  // never answer because it never opens one — that mismatch is exactly how this row got stuck open
+  // with every one of its materialized repo pairs already closed. It must get the `inline-fanout`
+  // shape instead, which reads its siblings.
+  it("gates the row that nests scaffold-repo on its materialized siblings having closed, inline-mode, not on a per-repo path", () => {
     const r = planImport(seedBundle(), { ...empty, agents: realAgents() });
     if (!r.ok) throw new Error(r.problems.map((p) => p.message).join("; "));
     const fa = r.plan.workflows.find((w) => w.row.code === "foundation-architecture")!;
     const nest = fa.criteria.filter((c) => c.stepTask === "scaffold-repos");
-    expect(nest).toContainEqual(expect.objectContaining({ subjectKind: "nested", subjectRef: "scaffold-repo" }));
+    expect(nest).toContainEqual(
+      expect.objectContaining({ subjectKind: "inline-fanout", subjectRef: "scaffold-repo" }),
+    );
+    expect(nest.some((c) => c.subjectKind === "nested")).toBe(false);
     expect(nest.some((c) => c.subjectRef.includes("{"))).toBe(false);
   });
 
