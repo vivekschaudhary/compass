@@ -392,8 +392,11 @@ function CommentsRail({ comments, numbers, currentVersion, engagement, role, hol
   engagement: string; role: string; holderId?: string | null; taskId: string; canRespond: boolean;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  // A plain `busy` flag, not `useTransition`: updates made inside an async transition are held back
+  // until the whole action finishes, so "Thinking…" never appeared while the model ran — the button
+  // just sat there for the length of the call.
   const [busy, setBusy] = useState<string | null>(null);
+  const pending = busy !== null;
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
   const [declining, setDeclining] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -413,15 +416,21 @@ function CommentsRail({ comments, numbers, currentVersion, engagement, role, hol
     setTimeout(() => target.classList.remove("comment-flash"), 1400);
   }
 
-  function run(label: string, work: () => Promise<{ ok: boolean; error?: string; text?: string }>) {
-    startTransition(async () => {
-      setBusy(label);
-      setMessage(null);
+  async function run(label: string, work: () => Promise<{ ok: boolean; error?: string; text?: string }>) {
+    if (busy) return;
+    setBusy(label);
+    setMessage(null);
+    try {
       const r = await work();
-      setBusy(null);
       setMessage({ text: r.ok ? (r.text ?? "Done.") : (r.error ?? "That did not work."), failed: !r.ok });
       if (r.ok) router.refresh();
-    });
+    } catch (e) {
+      // A thrown action (network, server crash) must clear the busy state and say so, not leave the
+      // buttons disabled with nothing on screen.
+      setMessage({ text: e instanceof Error ? e.message : "That did not work.", failed: true });
+    } finally {
+      setBusy(null);
+    }
   }
 
   const respond = () => run("respond", async () => {
@@ -464,6 +473,16 @@ function CommentsRail({ comments, numbers, currentVersion, engagement, role, hol
             {busy === "apply" ? "Applying…" : `Apply accepted (${toApply})`}
           </button>
         </div>
+      )}
+      {/* Said in words as well as on the button: the model call takes many seconds, and a label on a
+          small button is easy to miss. Cleared the moment the call returns. */}
+      {busy === "respond" && (
+        <p className="comments-rail-working">
+          Asking the agent to answer {toAnswer} comment{toAnswer === 1 ? "" : "s"} — this can take up to a minute.
+        </p>
+      )}
+      {busy === "apply" && (
+        <p className="comments-rail-working">Applying the accepted answers as a new version — this can take up to a minute.</p>
       )}
       {message && (
         <p className={message.failed ? "start-error" : "comments-rail-status"}>{message.text}</p>

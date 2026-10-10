@@ -107,31 +107,37 @@ const ANSWER_TOOL = {
  * Pure, so every refusal path is testable without a model. Returns the answers, or ONE reason that
  * names everything wrong — a run that reports only the first problem makes the operator fix and
  * re-run once per problem.
+ *
+ * LENGTH IS A BRIEF, NOT AN INTEGRITY RULE, so it is reported apart. An answer that runs over the limit
+ * still ANSWERED its comment — saying it was also "left unanswered" is false and buries the real
+ * problem. When length is the ONLY thing wrong, `retry` names the offenders so the caller can ask
+ * once more with that said; any other problem (an invented ref, a bad stance, a missing comment) is
+ * not something saying it again would fix, and carries no `retry`.
  */
 export function validateAnswers(
   raw: unknown, asked: string[],
-): { ok: true; answers: Answer[] } | { ok: false; error: string } {
+): { ok: true; answers: Answer[] } | { ok: false; error: string; retry?: { id: string; length: number }[] } {
   if (!Array.isArray(raw)) return { ok: false, error: "The model returned no answers." };
 
   const known = new Set(asked);
   const problems: string[] = [];
+  const tooLong: { id: string; length: number }[] = [];
   const answers = new Map<string, Answer>();
+  const seen = new Set<string>();
 
   for (const entry of raw) {
     const e = (entry ?? {}) as { ref?: unknown; stance?: unknown; answer?: unknown; overlaps_with?: unknown };
     const ref = String(e.ref ?? "");
     if (!known.has(ref)) { problems.push(`answered a comment that was not asked about (\`${ref || "empty ref"}\`)`); continue; }
-    if (answers.has(ref)) { problems.push(`answered \`${ref}\` twice`); continue; }
+    if (seen.has(ref)) { problems.push(`answered \`${ref}\` twice`); continue; }
+    seen.add(ref);
 
     const stance = e.stance;
     if (stance !== "change" && stance !== "no_change") { problems.push(`gave \`${ref}\` no valid stance`); continue; }
 
     const text = String(e.answer ?? "").trim();
     if (!text) { problems.push(`gave \`${ref}\` an empty answer`); continue; }
-    if (text.length > MAX_ANSWER_CHARS) {
-      problems.push(`answered \`${ref}\` in ${text.length} characters (limit ${MAX_ANSWER_CHARS})`);
-      continue;
-    }
+    if (text.length > MAX_ANSWER_CHARS) { tooLong.push({ id: ref, length: text.length }); continue; }
 
     const overlaps = Array.isArray(e.overlaps_with) ? e.overlaps_with.map(String) : [];
     const bad = overlaps.filter((o) => !known.has(o) || o === ref);
@@ -140,9 +146,16 @@ export function validateAnswers(
     answers.set(ref, { commentId: ref, stance, answer: text, overlapsWith: [...new Set(overlaps)] });
   }
 
-  for (const id of asked) if (!answers.has(id)) problems.push(`left \`${id}\` unanswered`);
+  for (const id of asked) if (!seen.has(id)) problems.push(`left \`${id}\` unanswered`);
 
-  if (problems.length) return { ok: false, error: `The model's answers were refused — it ${problems.join("; ")}.` };
+  const lengthProblems = tooLong.map((t) => `answered \`${t.id}\` in ${t.length} characters (limit ${MAX_ANSWER_CHARS})`);
+  if (problems.length || lengthProblems.length) {
+    return {
+      ok: false,
+      error: `The model's answers were refused — it ${[...problems, ...lengthProblems].join("; ")}.`,
+      ...(!problems.length ? { retry: tooLong } : {}),
+    };
+  }
   return { ok: true, answers: asked.map((id) => answers.get(id)!) };
 }
 
@@ -208,36 +221,48 @@ export async function respondToComments(actor: Actor, taskId: string): Promise<R
 
   const current = await loadDocumentText(actor.engagementId, ctx.produces);
 
-  let result;
-  try {
-    // Through the host seam, never a client built here — see `select.ts`.
-    result = await selectHost().dispatch({
-      model: MODEL,
-      maxTokens: 8000,
-      system: ctx.agentFile,
-      tools: [ANSWER_TOOL],
-      messages: [{
-        role: "user",
-        content: `${inputPrompt(ctx)}\n\n---\n\n${commentsPrompt(current.body ?? "", open)}`,
-      }],
-    });
-  } catch (e) {
-    return { ok: false, error: `Could not reach a model host: ${e instanceof Error ? e.message : String(e)}` };
-  }
+  const body = `${inputPrompt(ctx)}\n\n---\n\n${commentsPrompt(current.body ?? "", open)}`;
 
-  if (result.stopReason === "refusal") {
-    return { ok: false, error: `The model declined to answer. ${result.refusalExplanation ?? "No explanation given."}` };
-  }
-  const call = result.toolCall;
-  if (!call || call.name !== ANSWER_TOOL.name) {
-    return {
-      ok: false,
-      error: `The model answered without using \`${ANSWER_TOOL.name}\`${result.text ? `: ${result.text.slice(0, 300)}` : "."}`,
-    };
-  }
+  // Asked at most twice, and ONLY because answers ran over the length limit — the one problem saying it
+  // again can fix. Anything else (a refusal, no tool call, an invented ref) is reported at once.
+  let checked: ReturnType<typeof validateAnswers> | null = null;
+  let retryNote = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let result;
+    try {
+      // Through the host seam, never a client built here — see `select.ts`.
+      result = await selectHost().dispatch({
+        model: MODEL,
+        maxTokens: 8000,
+        system: ctx.agentFile,
+        tools: [ANSWER_TOOL],
+        messages: [{ role: "user", content: body + retryNote }],
+      });
+    } catch (e) {
+      return { ok: false, error: `Could not reach a model host: ${e instanceof Error ? e.message : String(e)}` };
+    }
 
-  const checked = validateAnswers((call.input as { answers?: unknown })?.answers, open.map((c) => c.id));
-  if (!checked.ok) return checked;
+    if (result.stopReason === "refusal") {
+      return { ok: false, error: `The model declined to answer. ${result.refusalExplanation ?? "No explanation given."}` };
+    }
+    const call = result.toolCall;
+    if (!call || call.name !== ANSWER_TOOL.name) {
+      return {
+        ok: false,
+        error: `The model answered without using \`${ANSWER_TOOL.name}\`${result.text ? `: ${result.text.slice(0, 300)}` : "."}`,
+      };
+    }
+
+    checked = validateAnswers((call.input as { answers?: unknown })?.answers, open.map((c) => c.id));
+    if (checked.ok || !checked.retry?.length) break;
+
+    retryNote =
+      `\n\nYour previous attempt was refused because ${checked.retry.length === 1 ? "an answer" : "answers"} ran over ` +
+      `${MAX_ANSWER_CHARS} characters: ` +
+      checked.retry.map((t) => `\`${t.id}\` was ${t.length}`).join(", ") +
+      `. Answer every comment again, with each answer at most ${MAX_ANSWER_CHARS} characters — one or two sentences.`;
+  }
+  if (!checked || !checked.ok) return { ok: false, error: checked?.error ?? "The model returned no answers." };
 
   // The run took a while. If someone filed a new version meanwhile, these answers were written
   // against text that is gone — refuse rather than attach them to the wrong draft.
