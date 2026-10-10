@@ -5,6 +5,8 @@ import { remeasureRun } from "../gates";
 import { mirrorNested, mirrorState } from "../tracker";
 import { startTask } from "../tasks";
 import { mirrorAndCompose } from "./lifecycle";
+import { FAN_OUT_MODE, fanOutKindOf } from "../../fan-out-kinds";
+import { resolveNestedVersion } from "../nested-version";
 import type { BoardResult, FanOutResult } from "./types";
 
 /**
@@ -186,12 +188,12 @@ type FanOutSubject = { ref: string };
  * subject this opens a run WITH still can't be filled INTO the path — the two lists are kept in
  * sync by hand, same as `MAX_RUN_ATTEMPTS` between `run.ts` and the SQL sweep.
  *
- * `mode` is declared HERE, per kind, rather than as a column a workflow authors separately.
- * `subjectsOf` already decides how a kind's subjects are discovered; `mode` is the same
- * classification, not a second one — splitting it into its own field (tried, then reverted while
- * designing this) would mean the SAME question ("what kind of fan-out is this") answered in two
- * places that could disagree, which is the exact `subject_ref`/`subject_key`/`ticket_key` trap this
- * whole fix exists to get out of.
+ * `mode` is NOT declared here — it comes from `FAN_OUT_MODE` (`../../fan-out-kinds.ts`), the one
+ * place both this file and `import/plan.ts` read it from. `subjectsOf` already decides how a
+ * kind's subjects are discovered; splitting `mode` into a second, separately-maintained field
+ * either here or there would mean the SAME question ("what kind of fan-out is this") answered in
+ * two places that could disagree — which is exactly how `scaffold-repos` ended up with a Done
+ * criterion only a `nest`-mode evaluator could read. See that file's comment for the full story.
  */
 const FAN_OUT_KINDS: Record<
   string,
@@ -206,81 +208,20 @@ const FAN_OUT_KINDS: Record<
     emptyError:
       "This row opens one technical design per epic, and this run has no epics. " +
       "Nothing was opened — draft and approve the epics first.",
-    mode: "nest",
+    mode: FAN_OUT_MODE.epic,
   },
   repo: {
     subjectsOf: reposOfRun,
     emptyError:
       "This row opens one scaffold run per repo, and no repos are registered on this " +
       "engagement. Nothing was opened — register the repos first.",
-    mode: "inline",
+    mode: FAN_OUT_MODE.repo,
   },
 };
 
-/**
- * The published version of the workflow a task's row nests, resolved the engagement-override-wins
- * way `open_workflow_run` does. Shared by `nestedFanOutKind` and `materializeInlinePerSubject` so
- * there is one place this resolution happens, not two that could disagree on which version a run
- * is actually using.
- */
-async function resolveNestedVersion(taskId: string): Promise<{
-  orgId: string;
-  engagementId: string;
-  runId: string | null;
-  code: string;
-  versionId: string;
-  ownerRoleCode: string | null;
-  workstreamCode: string | null;
-} | null> {
-  const sb = supabaseAdmin();
-  if (!sb) return null;
-
-  const { data: task } = await sb
-    .from("work_task")
-    .select("org_id, engagement_id, workflow_run_id, workflow_step_id")
-    .eq("id", taskId)
-    .maybeSingle();
-  if (!task?.workflow_step_id) return null;
-
-  const { data: step } = await sb
-    .from("workflow_step")
-    .select("nests_workflow_code")
-    .eq("id", task.workflow_step_id)
-    .maybeSingle();
-  const code = step?.nests_workflow_code as string | null;
-  if (!code) return null;
-
-  // The engagement's override wins over the org default — reading the org copy here would answer
-  // for a workflow this run is not using.
-  const { data: wf } = await sb
-    .from("workflow")
-    .select("id, owner_role_code, workstream_code")
-    .eq("org_id", task.org_id)
-    .eq("code", code)
-    .or(`engagement_id.eq.${task.engagement_id},engagement_id.is.null`)
-    .order("engagement_id", { nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-  if (!wf) return null;
-
-  const { data: ver } = await sb
-    .from("workflow_version")
-    .select("id")
-    .eq("workflow_id", wf.id)
-    .eq("status", "published")
-    .maybeSingle();
-  if (!ver) return null;
-
-  return {
-    orgId: task.org_id as string,
-    engagementId: task.engagement_id as string,
-    runId: (task.workflow_run_id as string | null) ?? null,
-    code,
-    versionId: ver.id as string,
-    ownerRoleCode: (wf.owner_role_code as string | null) ?? null,
-    workstreamCode: (wf.workstream_code as string | null) ?? null,
-  };
-}
+// `resolveNestedVersion` moved to `../nested-version.ts` — see that file's comment for why
+// (breaking a cycle an evaluator reusing it would otherwise close). `nestedFanOutKind` and
+// `materializeInlinePerSubject` below still call it, just from its new home.
 
 /** Which fan-out kind (if any) the nested workflow's own steps declare, from its published version. */
 async function nestedFanOutKind(taskId: string): Promise<string | null> {
@@ -294,12 +235,7 @@ async function nestedFanOutKind(taskId: string): Promise<string | null> {
     .from("workflow_step")
     .select("produces")
     .eq("workflow_version_id", resolved.versionId);
-  const produces = (steps ?? []).map((s) => s.produces as string | null);
-
-  for (const kind of Object.keys(FAN_OUT_KINDS)) {
-    if (produces.some((p) => p?.includes(`{${kind}}`))) return kind;
-  }
-  return null;
+  return fanOutKindOf((steps ?? []).map((s) => s.produces as string | null));
 }
 
 /**
