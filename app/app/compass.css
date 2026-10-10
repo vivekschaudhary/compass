@@ -1949,16 +1949,21 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   align-items: center;
 }
 .draft-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: none;
-  border: 0;
+  border: 1px solid var(--color-neutral-300, currentColor);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11.5px;
   line-height: 1;
-  color: var(--color-neutral-600);
-  padding: 2px 4px;
+  color: var(--color-neutral-700);
+  padding: 4px 8px;
 }
 .draft-expand:hover {
   color: var(--color-accent-700);
+  border-color: var(--color-accent-700);
 }
 .draft-author {
   font-size: 11px;
