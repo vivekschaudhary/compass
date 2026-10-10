@@ -13,6 +13,7 @@
 // and gap are part of the card, not something every caller must remember. Page composition is the
 // caller's job, in Tailwind.
 
+import { PendingLink } from "./pending/PendingLink";
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
@@ -179,7 +180,7 @@ export function JobCard({ glyph, title, href, related, meta, subtitle, reads, ac
       <Glyph>{glyph}</Glyph>
       <div className="job-card-main">
         <div className="job-card-head">
-          <span className="job-card-title">{href ? <a href={href} className="job-card-link">{title}</a> : title}</span>
+          <span className="job-card-title">{href ? <PendingLink href={href} className="job-card-link">{title}</PendingLink> : title}</span>
           {related && <Tag tone="neutral">{related}</Tag>}
           {meta && <Tag tone="accent-2">{meta}</Tag>}
         </div>

@@ -8,6 +8,7 @@
 
 import type { TaskCard } from "@/app/lib/data/tasks";
 import type { StoredStatus } from "@/app/lib/data/gates";
+import { PendingLink } from "@/app/_ui/pending/PendingLink";
 import { controlFor } from "./row-control";
 import { GateDot, readyAllMet } from "./Gate";
 import { isStale, lastSign } from "@/app/lib/agent/heartbeat-config";
@@ -85,9 +86,9 @@ export function TasksTable({
                     {/* Same suffix convention as "Workflows you own" (`workflows-view.ts`) —
                         without it, sibling tasks for different subjects (two repos' "Scaffold
                         the repo") render as identical, indistinguishable cards. */}
-                    <a href={href} className="title">
+                    <PendingLink href={href} className="title">
                       {t.runSubject ? `${t.title} — ${t.runSubject}` : t.title}
-                    </a>
+                    </PendingLink>
                     {t.ticketKey && (
                       <span className="ticket">{t.ticketKey}</span>
                     )}

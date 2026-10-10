@@ -17,6 +17,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./organic.css";
 import "./compass.css";
+import { TopProgress } from "./_ui/pending/TopProgress";
 
 // Fonts come from Organic's own `@import`, not from next/font. That is deliberate: the token sheet
 // names the families literally ("Caprasimo", "Figtree") and next/font generates hashed family names
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="en" className="h-full" suppressHydrationWarning>
       <body className="min-h-full" suppressHydrationWarning>
         <div className="compass">
+          <TopProgress />
           {/* The rail's collapsed state, applied before first paint. Read in an inline script rather
               than in an effect because an effect runs after the browser has already drawn: the rail
               would render open and snap shut on every navigation, which reads as a glitch rather

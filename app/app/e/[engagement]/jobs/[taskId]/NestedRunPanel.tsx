@@ -17,9 +17,9 @@
 // The second is the answer to "I started it and nothing happened". Something did happen — rows
 // opened, owned by other roles, on a queue this person may not be looking at.
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import Link from "next/link";
+import { useAction } from "../../../../_ui/pending/useAction";
+import { PendingLink as Link } from "../../../../_ui/pending/PendingLink";
 import { Button, Tag } from "../../../../_ui/primitives";
 import { startWorkflowAction } from "../actions";
 import { CloseNestedButton } from "../CloseNestedButton";
@@ -59,8 +59,7 @@ export function NestedRunPanel({
   nests: string;
   runs: ChildRun[];
 }) {
-  const router = useRouter();
-  const [opening, setOpening] = useState(false);
+  const { run, pending: opening } = useAction();
   const [error, setError] = useState<string | null>(null);
 
   // Every run this row opened has finished, so the row's own work is over — whether its gate agrees
@@ -69,25 +68,21 @@ export function NestedRunPanel({
   const allChildrenClosed =
     runs.length > 0 && runs.every((r) => r.state === "closed");
 
-  async function open() {
-    setOpening(true);
+  function open() {
     setError(null);
+    run(async () => {
     // The SAME action the queue card uses. Not a second opening path: `openNestedFanOut` stays the
     // only way a child run is born, so one row can never open a run the other surface would not.
     const r = await startWorkflowAction(engagement, role, taskId);
     if (!r.ok) {
       setError(r.error ?? "Could not open it.");
-      setOpening(false);
       return;
     }
     // Same rule as the queue card's own button: a same-role auto-start goes straight to the task
     // that started, rather than refreshing this panel to show a link to it one click away.
-    if (r.startedTaskId) {
-      router.push(`/e/${engagement}/jobs/${r.startedTaskId}?role=${role}`);
-      return;
-    }
-    router.refresh();
-    setOpening(false);
+    if (r.startedTaskId) return { href: `/e/${engagement}/jobs/${r.startedTaskId}?role=${role}` };
+    return { refresh: true };
+    });
   }
 
   return (

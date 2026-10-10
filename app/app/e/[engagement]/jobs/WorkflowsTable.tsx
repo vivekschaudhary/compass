@@ -8,7 +8,7 @@
 // See `workflows-view.ts` for why "available" and "open" read ownership off different fields.
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useAction } from "../../../_ui/pending/useAction";
 import type { WorkflowCard } from "@/app/lib/data/workflows-view";
 import { initiatePhaseAction, startWorkflowAction } from "./actions";
 
@@ -75,17 +75,20 @@ export function WorkflowsTable({
   role: string;
   workflows: WorkflowCard[];
 }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
+  const { run, pending } = useAction();
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  // Pending until the refreshed queue has rendered, not merely until the action returned.
+  const busy = pending ? openKey : null;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { line, seconds, reset } = useProgress(engagement, role, busy !== null);
 
   if (!workflows.length) return null;
 
-  async function open(w: WorkflowCard) {
+  function open(w: WorkflowCard) {
     setErrors((e) => ({ ...e, [w.key]: "" }));
     reset();
-    setBusy(w.key);
+    setOpenKey(w.key);
+    run(async () => {
     try {
       const r = w.taskId
         ? await startWorkflowAction(engagement, role, w.taskId)
@@ -100,12 +103,11 @@ export function WorkflowsTable({
       // server-side (see `openNested`), so nothing about that convenience is lost — it just shows
       // up as a "started" row in the Tasks table below, for the person to click themselves, rather
       // than yanking their browser there for them.
-      router.refresh();
+      return { refresh: true };
     } catch {
       setErrors((e) => ({ ...e, [w.key]: `Could not open ${w.label}. The request did not complete.` }));
-    } finally {
-      setBusy(null);
     }
+    });
   }
 
   return (
