@@ -7,10 +7,12 @@
 // attribute on its parent.
 
 import Link, { useLinkStatus } from "next/link";
-import type { ComponentProps } from "react";
+import { useEffect, type ComponentProps } from "react";
+import { progressStore } from "./progress-store";
 
 function Indicator() {
   const { pending } = useLinkStatus();
+  useEffect(() => (pending ? progressStore.begin() : undefined), [pending]);
   return pending ? <span className="spinner link-pending" aria-hidden /> : null;
 }
 
