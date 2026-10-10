@@ -13,8 +13,10 @@ import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { tasksFor, startedCounts, queueNotices } from "@/app/lib/data/tasks";
 import { storedStatusFor } from "@/app/lib/data/gates";
 import { workflowsFor } from "@/app/lib/data/workflows-view";
+import { history } from "@/app/lib/data/history";
 import { WorkflowsTable } from "./WorkflowsTable";
 import { TasksTable } from "./TasksTable";
+import { HistoryTable } from "./HistoryTable";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,7 @@ export default async function JobsPage(
 
   const tasks = await tasksFor(actor);
   const workflows = await workflowsFor(actor);
+  const done = await history(actor);
 
   const myRole = actor.roleCode;
 
@@ -143,6 +146,8 @@ export default async function JobsPage(
       ) : (
         <TasksTable tasks={tasks} engagement={engagement} myRole={myRole} gates={gates} />
       )}
+
+      <HistoryTable jobs={done} engagement={engagement} myRole={myRole} />
     </div>
   );
 }
