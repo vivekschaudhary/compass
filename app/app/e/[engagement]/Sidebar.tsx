@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { PendingLink as Link } from "../../_ui/pending/PendingLink";
+import { useNavigate } from "../../_ui/pending/useNavigate";
 import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 
@@ -76,7 +77,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
   org: string;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const { go, pending: switching } = useNavigate();
   const params = useSearchParams();
   const activeCode = params.get("role") ?? fallbackRole;
   const activeRole = roles.find((r) => r.code === activeCode) ?? null;
@@ -99,7 +100,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
     // A stale holder id from whatever role was active before must not carry over — the new
     // role's own first holder (or none) is what `resolveActor` falls back to without one.
     q.delete("holder");
-    router.push(`${pathname}?${q.toString()}`);
+    go(`${pathname}?${q.toString()}`);
   }
 
   /** Same as `pickRole`, naming WHICH of that role's several holders is acting. */
@@ -108,7 +109,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
     const q = new URLSearchParams(params.toString());
     q.set("role", code);
     q.set("holder", holderId);
-    router.push(`${pathname}?${q.toString()}`);
+    go(`${pathname}?${q.toString()}`);
   }
 
   return (
@@ -194,7 +195,7 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
           <button
             className="rail-role-button" onClick={() => setMenuOpen(!menuOpen)}
             title={collapsed ? `Working as ${activeHolder?.name ?? activeRole?.label ?? "—"}` : undefined}
-            aria-expanded={menuOpen} aria-haspopup="menu"
+            aria-expanded={menuOpen} aria-haspopup="menu" aria-busy={switching || undefined}
           >
             <span className="avatar avatar-active">{activeHolder?.initials ?? activeRole?.initials ?? "—"}</span>
             {!collapsed && (
@@ -203,7 +204,9 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
                 <span className="rail-role-name">{activeHolder?.name ?? activeRole?.label ?? "nobody"}</span>
               </span>
             )}
-            {!collapsed && <span className="rail-caret" aria-hidden>{menuOpen ? "▾" : "▸"}</span>}
+            {switching
+              ? <span className="spinner" aria-hidden />
+              : !collapsed && <span className="rail-caret" aria-hidden>{menuOpen ? "▾" : "▸"}</span>}
           </button>
 
           {menuOpen && (

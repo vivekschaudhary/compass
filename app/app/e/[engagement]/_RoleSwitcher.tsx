@@ -10,8 +10,9 @@
 // It shows PEOPLE, not role codes. Switching to Rafi should feel like looking over someone's
 // shoulder, not like changing a filter.
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Avatar } from "../../_ui/primitives";
+import { useSearchParams } from "next/navigation";
+import { useNavigate } from "../../_ui/pending/useNavigate";
+import { Avatar, cx } from "../../_ui/primitives";
 
 export type SwitchableRole = {
   code: string;
@@ -21,7 +22,7 @@ export type SwitchableRole = {
 };
 
 export function RoleSwitcher({ engagement, roles }: { engagement: string; roles: SwitchableRole[] }) {
-  const router = useRouter();
+  const { go, pendingKey } = useNavigate();
   const params = useSearchParams();
   const active = params.get("role") ?? roles[0]?.code;
 
@@ -36,23 +37,26 @@ export function RoleSwitcher({ engagement, roles }: { engagement: string; roles:
   // Always lands on the engagement's jobs-to-do list for the chosen person. Keeping the current page
   // would carry a job from the previous person's list into the new role's view.
   function pick(code: string) {
-    router.replace(`/e/${engagement}/jobs?role=${encodeURIComponent(code)}`, { scroll: false });
+    go(`/e/${engagement}/jobs?role=${encodeURIComponent(code)}`, { replace: true, scroll: false, key: code });
   }
 
   return (
     <div className="role-switcher">
       {roles.map((r) => {
         const on = r.code === active;
+        const waiting = pendingKey === r.code;
         return (
           <button
             key={r.code}
             onClick={() => pick(r.code)}
             aria-current={on ? "true" : undefined}
-            className={on ? "role-chip role-chip-on" : "role-chip"}
+            className={cx(on ? "role-chip role-chip-on" : "role-chip", waiting && "role-chip-pending")}
+            aria-busy={waiting || undefined}
             title={r.label}
           >
             <Avatar initials={r.initials} active={on} />
             <span>{(r.holder ?? r.label).split(" ")[0]}</span>
+            {waiting && <span className="spinner" aria-hidden />}
           </button>
         );
       })}

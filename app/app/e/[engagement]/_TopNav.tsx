@@ -7,8 +7,8 @@
 // decoration: without it the top bar gives no answer to "where am I", which is the one question a
 // nav exists to answer.
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PendingLink as Link } from "../../_ui/pending/PendingLink";
 
 const DESTINATIONS = [
   { slug: "jobs", label: "Jobs to do" },

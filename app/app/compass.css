@@ -3482,3 +3482,25 @@ textarea.verdict-reason {
   font-size: 13.5px;
   line-height: 1.65;
 }
+
+/* ── pending feedback (app/_ui/pending) ─────────────────────────────────────
+   A route's loading.tsx, and a control that has been clicked and is waiting on the server. */
+.skeleton { min-height: 40vh; }
+.skeleton-bar {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-text) 9%, transparent);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+.skeleton-title { height: 28px; width: 40%; margin-bottom: 12px; }
+.skeleton-sub { height: 14px; width: 65%; margin-bottom: 28px; }
+.skeleton-block { margin-bottom: 24px; }
+.skeleton-row { height: 54px; margin-bottom: 10px; }
+@keyframes skeleton-pulse {
+  50% { opacity: 0.45; }
+}
+a:has(> .link-pending) { opacity: 0.6; pointer-events: none; }
+.link-pending { margin: 0 0 0 7px; }
+.role-chip-pending { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar { animation: none; }
+}

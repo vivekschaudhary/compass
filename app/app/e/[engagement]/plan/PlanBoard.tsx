@@ -16,6 +16,7 @@
 import { useState } from "react";
 import type { PlanPhase, PlanWorkflowNode, PlanCycle, PlanTaskNode } from "@/app/lib/data/plan-view";
 import { Tag } from "@/app/_ui/primitives";
+import { PendingLink } from "@/app/_ui/pending/PendingLink";
 
 const STATE_LABEL: Record<string, string> = {
   idle: "not started", open: "in progress", closed: "closed",
@@ -104,7 +105,7 @@ function TaskDetailRow({ task, engagement }: { task: PlanTaskNode; engagement: s
   const href = `/e/${engagement}/jobs/${task.taskId}${task.roleCode ? `?role=${task.roleCode}` : ""}`;
   return (
     <tr className="row">
-      <td><a href={href} className="plan-row-title">{task.title}</a></td>
+      <td><PendingLink href={href} className="plan-row-title">{task.title}</PendingLink></td>
       <td>{task.roleCode ?? "—"}</td>
       <td><StateChip state={task.state} /></td>
     </tr>
