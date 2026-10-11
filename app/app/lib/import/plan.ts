@@ -10,6 +10,7 @@
 
 import { parseRecords, parseList, parseBool } from "./csv";
 import { destinationOf } from "../adapters";
+import { FAN_OUT_MODE, fanOutKindOf } from "../fan-out-kinds";
 import type { Refusal } from "../envelope";
 
 /* ── what a bundle contains ──────────────────────────────────────────────── */
@@ -938,12 +939,29 @@ function deriveCriteria(
           for (const cs of steps.filter((x) => x.workflow === s.nests && x.output && x.output !== "code" && x.output !== "scaffold")) {
             ticketsFor(wf.code, s.task, cs.output);
           }
-          emit({
-            workflow: wf.code, stepTask: s.task, kind: "done",
-            text: `Every ${s.nests} run this row opened has closed.`,
-            subjectKind: "nested", subjectRef: s.nests, operator: "is", value: "closed",
-            generated: true,
-          });
+          // `nest` opens a child `workflow_run` per subject — `evaluateNested`'s question ("has
+          // every child run closed?") has an answer. `inline` (see `fan-out-kinds.ts`) never opens
+          // one: the nested workflow's steps are materialized as sibling tasks in THIS run instead,
+          // so that question has no answer and the row could never close — `scaffold-repos` did
+          // exactly this until this branch existed. A nesting row with no `{kind}` token in its
+          // child's outputs is a plain 1:1 nest (`openNestedSingle`), which is `nest` mode too.
+          const kind = fanOutKindOf(child.outputs);
+          const mode = kind ? FAN_OUT_MODE[kind] : "nest";
+          emit(
+            mode === "inline"
+              ? {
+                  workflow: wf.code, stepTask: s.task, kind: "done",
+                  text: `Every ${s.nests} row this row materialized has closed.`,
+                  subjectKind: "inline-fanout", subjectRef: s.nests, operator: "is", value: "closed",
+                  generated: true,
+                }
+              : {
+                  workflow: wf.code, stepTask: s.task, kind: "done",
+                  text: `Every ${s.nests} run this row opened has closed.`,
+                  subjectKind: "nested", subjectRef: s.nests, operator: "is", value: "closed",
+                  generated: true,
+                },
+          );
         }
       }
 

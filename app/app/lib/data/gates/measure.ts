@@ -3,7 +3,30 @@ import { emit, emitRefusal } from "../events";
 import { mirrorState, moveFailed } from "../tracker";
 import type { Actor } from "../actor";
 import { evaluate } from "./registry";
+import { resolveNestedVersion } from "../nested-version";
+import { FAN_OUT_MODE, fanOutKindOf } from "../../fan-out-kinds";
 import type { CriterionRow, CriterionStatus, NestedClose } from "./types";
+
+/**
+ * The fan-out `mode` (`../../fan-out-kinds.ts`) of the workflow a nesting task's row nests — `nest`
+ * when nothing else is known, same default `plan.ts` uses for a 1:1 nest with no `{kind}` token.
+ *
+ * Imports `../nested-version`, not `../phases/nested` (which has the SAME lookup baked into
+ * `nestedFanOutKind`): that file pulls in `../gates` for `remeasureRun`, and this module is itself
+ * part of `../gates` — importing it here would close that exact cycle.
+ */
+async function fanOutModeOf(taskId: string): Promise<"nest" | "inline"> {
+  const resolved = await resolveNestedVersion(taskId);
+  if (!resolved) return "nest";
+  const sb = supabaseAdmin();
+  if (!sb) return "nest";
+  const { data: steps } = await sb
+    .from("workflow_step")
+    .select("produces")
+    .eq("workflow_version_id", resolved.versionId);
+  const kind = fanOutKindOf((steps ?? []).map((s) => s.produces as string | null));
+  return kind ? FAN_OUT_MODE[kind] : "nest";
+}
 
 /* ── reading the criteria that apply to a task ───────────────────────────── */
 
@@ -292,17 +315,28 @@ export async function closeNestingRowIfSatisfied(
   if (!nests)
     return no("That row is not satisfied by a nested workflow — approve it.");
 
-  // The child run has to exist AND be finished. An aggregate over zero rows is the classic false
-  // green: with no runs at all "every run has closed" is vacuously true, and this would close a
-  // nesting row whose work had never been opened.
-  const { data: runs } = await sb
-    .from("workflow_run")
-    .select("id, state")
-    .eq("parent_task_id", taskId);
-  const children = runs ?? [];
-  if (!children.length) return no(`No ${nests} run has been opened yet.`);
-  if (children.some((r) => r.state !== "closed"))
-    return no(`The ${nests} run is still open.`);
+  // `nest` mode: the child run has to exist AND be finished. An aggregate over zero rows is the
+  // classic false green: with no runs at all "every run has closed" is vacuously true, and this
+  // would close a nesting row whose work had never been opened.
+  //
+  // `inline` mode has no child run to check here at all (`materializeInlinePerSubject` never opens
+  // one) — skipping straight to the Done-criteria check below, which `evaluateInlineFanOut` reads
+  // from the row's materialized siblings instead, and which carries its own zero-rows refusal.
+  // Checking for a child run unconditionally here is exactly how `scaffold-repos` stayed stuck even
+  // after its Done criterion was fixed: this function refused before ever reaching it.
+  // Empty for `inline` mode — there is no child run to list, and the event below says so with
+  // `runs: []` rather than omitting the field.
+  let children: { id: string; state: string }[] = [];
+  if ((await fanOutModeOf(taskId)) === "nest") {
+    const { data: runs } = await sb
+      .from("workflow_run")
+      .select("id, state")
+      .eq("parent_task_id", taskId);
+    children = runs ?? [];
+    if (!children.length) return no(`No ${nests} run has been opened yet.`);
+    if (children.some((r) => r.state !== "closed"))
+      return no(`The ${nests} run is still open.`);
+  }
 
   // Every Done criterion, measured and satisfied. Same set `close_task` will check — asking here
   // first is what keeps a doomed attempt out of the log and off the tracker.
