@@ -26,13 +26,15 @@ const db: {
   work_task: Row[];
   workflow_run: Row[];
   workflow_step: Row[];
+  workflow: Row[];
+  workflow_version: Row[];
   criterion: Row[];
   document: Row[];
   document_version: Row[];
   measurement: Row[];
 } = {
-  work_task: [], workflow_run: [], workflow_step: [], criterion: [],
-  document: [], document_version: [], measurement: [],
+  work_task: [], workflow_run: [], workflow_step: [], workflow: [], workflow_version: [],
+  criterion: [], document: [], document_version: [], measurement: [],
 };
 
 /** Which tasks were measured, in order. */
@@ -76,6 +78,13 @@ vi.mock("../supabase", async (importOriginal) => ({
         eq: (col: string, v: unknown) => { rows = rows.filter((r) => r[col] === v); return chain; },
         neq: (col: string, v: unknown) => { rows = rows.filter((r) => r[col] !== v); return chain; },
         in: (col: string, vs: unknown[]) => { rows = rows.filter((r) => vs.includes(r[col])); return chain; },
+        not: () => chain,
+        // `fanOutModeOf`'s `resolveNestedVersion` call reads `workflow` with an `.or()` to let the
+        // engagement's override win over the org default — this suite's fixtures never need that
+        // choice made, so passing the rows through unfiltered is enough to let a real `workflow`
+        // row be found (or, for every scenario that sets no `workflow` row at all, to stay empty
+        // and fall back to `nest` mode, exactly as before this function existed).
+        or: () => chain,
         order: () => chain,
         limit: () => chain,
         delete: () => { deleting = true; return chain; },
@@ -120,6 +129,11 @@ const actor = { engagementId: "eng", orgId: "org", roleCode: "delivery-manager",
  * that child produced — published, as it is by the time anything re-measures.
  */
 function seed() {
+  // Empty by default: no `workflow` row means `resolveNestedVersion` (inside `fanOutModeOf`) finds
+  // nothing and falls back to `nest` mode, same as every scenario behaved before that function
+  // existed. The one test that needs otherwise sets its own rows.
+  db.workflow = [];
+  db.workflow_version = [];
   db.document = [{ id: "d1", engagement_id: "eng", path: "timeline", current_version_id: "v1" }];
   db.document_version = [{ id: "v1", version: "1.0", status: "published" }];
   db.workflow_step = [
@@ -279,5 +293,74 @@ describe("closing a nesting row by hand", () => {
       { task: "t-nest", to: "hitl" },
     ]);
     expect(refusals.map((x) => x.verb)).toContain("task.child_run_closed_gate_not_met");
+  });
+});
+
+// `scaffold-repos` on the live engagement: fan-out `mode: "inline"` (`fan-out-kinds.ts`) never
+// opens a child `workflow_run` at all — its repos are materialized as sibling tasks in the SAME
+// run. Before `fanOutModeOf` existed, the check just above ("says so when the nested run is still
+// open" / "will not close a row that has opened no run at all") ran unconditionally and refused
+// this row forever: zero child runs, by design, not by accident. This is the inline counterpart —
+// it must close on its siblings, with no `workflow_run` in the picture anywhere.
+describe("closing an INLINE fan-out row — no child run exists, by design", () => {
+  function seedInline() {
+    db.workflow = [{ id: "wf-scaffold-repo", org_id: "org", code: "scaffold-repo" }];
+    db.workflow_version = [{ id: "wv-scaffold-repo", workflow_id: "wf-scaffold-repo", status: "published" }];
+    db.workflow_step.push(
+      { id: "s-nest-inline", task: "scaffold-repos", nests_workflow_code: "scaffold-repo" },
+      // The CHILD workflow's own steps — their `produces` carries the `{repo}` token
+      // `fanOutKindOf` reads to tell this fan-out apart from `timeline`'s plain 1:1 nest above.
+      { id: "s-child-1", task: "execute-scaffold", workflow_version_id: "wv-scaffold-repo",
+        produces: "scaffold/{repo}@scm" },
+      { id: "s-child-2", task: "approve-repo-scaffold", workflow_version_id: "wv-scaffold-repo",
+        produces: null },
+    );
+    db.criterion.push({
+      id: "c-inline", workflow_version_id: "wv1", kind: "done", step_task: "scaffold-repos", ord: 2,
+      statement: "Every scaffold-repo row this row materialized has closed.",
+      subject_kind: "inline-fanout", subject_ref: "scaffold-repo", operator: "is", value: "closed",
+    });
+    db.work_task.push({
+      id: "t-nest-inline", state: "running", role_code: "staff-engineer",
+      workflow_step_id: "s-nest-inline", engagement_id: "eng", org_id: "org",
+      workflow_run: { workflow_version_id: "wv1" }, workflow_run_id: "run-inline",
+    });
+  }
+  /** One repo's materialized pair, sharing the nesting row's own `workflow_run_id`. */
+  const sibling = (repo: string, task: string, state: string) => ({
+    id: `t-${repo}-${task}`, state, subject_ref: repo, workflow_run_id: "run-inline",
+    engagement_id: "eng", workflow_step: { task },
+  });
+
+  // Driven through `remeasureRun`, not called directly: the point is the WHOLE retry path, real
+  // `evaluateInlineFanOut` included — not just that `closeNestingRowIfSatisfied` skips a check.
+  it("closes once every materialized repo pair has closed, with no workflow_run anywhere", async () => {
+    seedInline();
+    db.work_task.push(
+      sibling("backend", "execute-scaffold", "closed"),
+      sibling("backend", "approve-repo-scaffold", "closed"),
+    );
+    // No `workflow_run` row names THIS task as its parent — unlike every `nest`-mode case above.
+    expect(db.workflow_run.some((r) => r.parent_task_id === "t-nest-inline")).toBe(false);
+    await remeasureRun(actor, "run-inline");
+    expect(measured).toContain("t-nest-inline");
+    expect(closed.map((c) => c.task)).toEqual(["t-nest-inline"]);
+  });
+
+  it("does not close while a materialized repo pair is still open", async () => {
+    seedInline();
+    db.work_task.push(
+      sibling("backend", "execute-scaffold", "closed"),
+      sibling("backend", "approve-repo-scaffold", "running"),
+    );
+    await remeasureRun(actor, "run-inline");
+    expect(closed).toEqual([]);
+  });
+
+  // Rule 11 again, for the inline shape: nothing materialized yet is not the same as satisfied.
+  it("does not close before anything has been materialized", async () => {
+    seedInline();
+    await remeasureRun(actor, "run-inline");
+    expect(closed).toEqual([]);
   });
 });
