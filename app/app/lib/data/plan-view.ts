@@ -41,6 +41,7 @@ import { supabaseAdmin } from "../supabase";
 import { orgIdFor } from "./events";
 import { jiraForEngagement, searchIssues } from "../jira";
 import { sprintJql, maxSprintNo } from "./sprint";
+import { FAN_OUT_MODE, fanOutKindOf } from "../fan-out-kinds";
 
 export type PlanTaskNode = {
   taskId: string;
@@ -161,6 +162,100 @@ async function stepsOfRun(
  * is computed per-run below, from that run's own `phase_tag`, and THAT is what its children walk
  * under instead.
  */
+/** This workflow's own fan-out `mode` (`../fan-out-kinds.ts`), from the `{kind}` token (if any)
+ *  in its published version's own steps' `produces` — same detection `nestedFanOutKind`
+ *  (`phases/nested.ts`) uses, read independently here rather than imported: that file pulls in
+ *  `../gates`, and this one must stay free of it (a plan rendered mid-measurement is a plan that
+ *  can deadlock on itself). */
+async function fanOutModeOfWorkflow(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  wf: WorkflowRow,
+): Promise<"nest" | "inline"> {
+  const { data: ver } = await sb.from("workflow_version").select("id")
+    .eq("workflow_id", wf.id).eq("status", "published").maybeSingle();
+  if (!ver) return "nest";
+  const { data: steps } = await sb.from("workflow_step").select("produces")
+    .eq("workflow_version_id", ver.id);
+  const kind = fanOutKindOf((steps ?? []).map((s) => s.produces as string | null));
+  return kind ? FAN_OUT_MODE[kind] : "nest";
+}
+
+/**
+ * The nodes an INLINE fan-out nesting row renders — one per subject it has actually materialized,
+ * read from the sibling tasks `materializeInlinePerSubject` (`phases/nested.ts`) inserted into the
+ * SAME run, not a child `workflow_run`.
+ *
+ * `runsOfWorkflow`'s ordinary "not opened yet" fallback (below) answers a different question —
+ * has a child run opened — that an inline row's fan-out can never answer yes to, because it never
+ * opens one. Without this, `scaffold-repo` read `idle, 0/0` under a CLOSED `scaffold-repos` row on
+ * the live engagement regardless of how many repos it had actually scaffolded: the two facts never
+ * met, because nothing here read the siblings that carried the real one.
+ */
+async function inlineFanOutNodes(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  wf: WorkflowRow,
+  parentTaskId: string,
+  phase: string,
+): Promise<PlanWorkflowNode[]> {
+  const { data: parentTask } = await sb.from("work_task")
+    .select("workflow_run_id").eq("id", parentTaskId).maybeSingle();
+  const runId = parentTask?.workflow_run_id as string | null;
+  if (!runId) return [];
+
+  const { data: ver } = await sb.from("workflow_version").select("id")
+    .eq("workflow_id", wf.id).eq("status", "published").maybeSingle();
+  if (!ver) return [];
+  const { data: templateSteps } = await sb.from("workflow_step")
+    .select("id, ord, task, title, role_code")
+    .eq("workflow_version_id", ver.id).order("ord");
+  const stepIds = (templateSteps ?? []).map((s) => s.id as string);
+  if (!stepIds.length) return [];
+  const byStepId = new Map((templateSteps ?? []).map((s) => [s.id as string, s]));
+
+  const { data: siblings } = await sb.from("work_task")
+    .select("id, state, title, role_code, subject_ref, workflow_step_id")
+    .eq("workflow_run_id", runId)
+    .in("workflow_step_id", stepIds);
+
+  const bySubject = new Map<string, NonNullable<typeof siblings>>();
+  for (const t of siblings ?? []) {
+    const subj = t.subject_ref as string | null;
+    if (!subj) continue; // the nesting row itself carries no subject — not one of its own children
+    (bySubject.get(subj) ?? bySubject.set(subj, []).get(subj)!).push(t);
+  }
+  // Registered, but no subject has reached this row yet — the same "nothing to click into" state
+  // `runsOfWorkflow`'s own fallback reports for `nest` mode, read consistently here.
+  if (!bySubject.size) {
+    return [{
+      code: wf.code, label: wf.label, ownerRole: wf.owner_role_code ?? "",
+      state: "idle", phase: wf.phase_code ?? phase,
+      subject: null, runId: null, taskId: parentTaskId,
+      closedCount: 0, totalCount: 0, steps: [],
+    }];
+  }
+
+  return [...bySubject.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([subject, tasks]) => {
+    const steps: PlanTaskNode[] = tasks
+      .map((t) => {
+        const step = byStepId.get(t.workflow_step_id as string);
+        return {
+          taskId: t.id as string, ord: (step?.ord as number | null) ?? 0,
+          title: t.title as string, roleCode: (t.role_code as string | null) ?? null,
+          state: t.state as string, nestsCode: null, nested: [],
+        };
+      })
+      .sort((a, b) => a.ord - b.ord);
+    const total = steps.length;
+    const closed = steps.filter((s) => s.state === "closed").length;
+    return {
+      code: wf.code, label: `${wf.label} — ${subject}`, ownerRole: wf.owner_role_code ?? "",
+      state: total > 0 && closed === total ? "closed" : "open",
+      phase, subject, runId: null, taskId: parentTaskId,
+      closedCount: closed, totalCount: total, steps,
+    };
+  });
+}
+
 async function runsOfWorkflow(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>,
   engagementId: string,
@@ -182,6 +277,15 @@ async function runsOfWorkflow(
   const { data: runs } = await q;
 
   if (!runs?.length) {
+    // `inline` mode (`fan-out-kinds.ts`) never opens a child run AT ALL, closed or not — its
+    // subjects are materialized as sibling tasks in the parent's own run instead, so "no runs"
+    // here means nothing about whether the row has done anything. Read those siblings instead of
+    // falling through to the "not opened yet" placeholder below, which would otherwise be true of
+    // a fully closed inline row for the rest of its life.
+    if (parentTaskId && (await fanOutModeOfWorkflow(sb, wf)) === "inline") {
+      const nodes = await inlineFanOutNodes(sb, wf, parentTaskId, fallbackPhase);
+      if (nodes.length) return nodes;
+    }
     // Not opened yet. For a genuine standalone (no parent task at all) there is nothing to point
     // at; for a nesting row, the row itself — still idle — is what a viewer would click. No run
     // exists to carry a tag, so this falls back to the workflow's own catalog phase.
