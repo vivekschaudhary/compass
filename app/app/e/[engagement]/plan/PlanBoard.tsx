@@ -193,7 +193,7 @@ export function PlanBoard({ phases, engagement }: {
                 ) : (
                   cards.map((node) => (
                     <WorkflowCard
-                      key={node.runId ?? node.taskId ?? node.code}
+                      key={node.runId ?? `${node.taskId ?? node.code}:${node.subject ?? ""}`}
                       node={node}
                       engagement={engagement}
                       onOpen={() => setSelected({ kind: "workflow", node })}
