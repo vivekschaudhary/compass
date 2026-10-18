@@ -54,6 +54,10 @@ function table(rows: Row[]) {
       filtered = filtered.filter((r) => (val === null ? r[col] != null : true));
       return q;
     },
+    // `fanOutModeOfWorkflow` resolves a published version by `.maybeSingle()` — none of this
+    // file's fixtures declare an `inline`-mode workflow, so every call here returns the first (or
+    // no) row and the mode falls back to `nest`, exactly as before that function existed.
+    maybeSingle: async () => ({ data: filtered[0] ?? null, error: null }),
     then: (res: (v: { data: Row[]; error: null }) => void) => res({ data: filtered, error: null }),
   };
   return q;
@@ -65,11 +69,25 @@ const WORKFLOWS: Row[] = [
   { id: "w-tl", code: "timeline", label: "Timeline", phase_code: "Discovery", owner_role_code: "delivery-manager", repeatable: true, org_id: "org1", enabled: true },
   { id: "w-feat", code: "feature", label: "Feature", phase_code: "Build", owner_role_code: "product-owner", repeatable: true, org_id: "org1", enabled: true },
   { id: "w-build", code: "build", label: "Workflow: /build", phase_code: "Build", owner_role_code: "engineer", repeatable: true, org_id: "org1", enabled: true },
+  // `scaffold-repo` — the live `inline`-fan-out case (`fan-out-kinds.ts`): its own steps'
+  // `produces` carries `{repo}`, and it is never a root, only ever reached by a nesting row.
+  { id: "w-sr", code: "scaffold-repo", label: "Scaffold one repo", phase_code: "Discovery", owner_role_code: "staff-engineer", repeatable: true, org_id: "org1", enabled: true },
 ];
-const VERSIONS: Row[] = [{ id: "v-s0", workflow_id: "w-s0" }];
+const VERSIONS: Row[] = [
+  { id: "v-s0", workflow_id: "w-s0" },
+  { id: "v-sr", workflow_id: "w-sr", status: "published" },
+];
 const NESTING_STEPS: Row[] = [
   { workflow_version_id: "v-s0", nests_workflow_code: "timeline" },
   { workflow_version_id: "v-s0", nests_workflow_code: "feature" },
+  { workflow_version_id: "v-s0", nests_workflow_code: "scaffold-repo" },
+];
+/** `scaffold-repo`'s own template steps — what a `scaffold-repos` nesting row materializes once
+ *  per repo. Its own `workflow_step` table, kept apart from `NESTING_STEPS`: a real `workflow_step`
+ *  row carries both shapes' columns at once, but this file's two existing tables never needed to. */
+const SCAFFOLD_REPO_STEPS: Row[] = [
+  { id: "s-exec", workflow_version_id: "v-sr", ord: 1, task: "execute-scaffold", title: "Scaffold the repo", role_code: "staff-engineer", produces: "scaffold/{repo}@scm" },
+  { id: "s-appr", workflow_version_id: "v-sr", ord: 2, task: "approve-repo-scaffold", title: "Accept the repo scaffold", role_code: "principal-engineer", produces: null },
 ];
 const CATALOG: Row[] = [
   { code: "New", label: "Setup", ord: 10, cycles: false, org_id: "org1", engagement_id: null, enabled: true },
@@ -86,7 +104,7 @@ function mockSupabase(opts: { runs?: Row[]; tasks?: Row[]; catalog?: Row[] } = {
       from: (name: string) => {
         if (name === "workflow") return table(WORKFLOWS);
         if (name === "workflow_version") return table(VERSIONS);
-        if (name === "workflow_step") return table(NESTING_STEPS);
+        if (name === "workflow_step") return table([...NESTING_STEPS, ...SCAFFOLD_REPO_STEPS]);
         if (name === "workflow_run") return table(opts.runs ?? []);
         if (name === "work_task") return table(opts.tasks ?? []);
         if (name === "phase") return table(opts.catalog ?? CATALOG);
@@ -207,6 +225,61 @@ describe("planFor: a closed run reports its own real state, not \"available to r
     expect(timelineNode.closedCount).toBe(1);
     expect(timelineNode.totalCount).toBe(1);
     expect(timelineNode.state).toBe("closed"); // NOT "idle"/"available" — timeline is repeatable
+  });
+});
+
+// The live regression: `client1-osbl`'s `scaffold-repos` row closed, both repos it scaffolded
+// (`backend`, `app`) fully closed, and `scaffold-repo` still rendered `idle, 0/0` on the Plan page
+// regardless. `scaffold-repo` is `inline` fan-out (`fan-out-kinds.ts`) — its steps are materialized
+// as sibling tasks in the SAME run, never a child `workflow_run` — and `runsOfWorkflow`'s normal
+// "no runs ⇒ not opened yet" fallback can never see anything else for it. These tests are the
+// Plan-page counterpart to `nested-close-retry.test.ts`'s inline-mode cases: same bug family, this
+// file's own corner of it.
+describe("planFor: an INLINE fan-out nesting row reads its materialized siblings, not a child run", () => {
+  const nestingTask = (state: string): Row => ({
+    id: "t-sr", workflow_run_id: "run-s0", role_code: "staff-engineer", state,
+    title: "Scaffold each repo", workflow_step: { ord: 1, nests_workflow_code: "scaffold-repo" },
+  });
+  const sibling = (repo: string, stepId: string, title: string, role: string, state: string, id: string): Row => ({
+    id, workflow_run_id: "run-s0", workflow_step_id: stepId, subject_ref: repo,
+    role_code: role, state, title,
+  });
+  const runs: Row[] = [
+    { engagement_id: "e1", id: "run-s0", workflow_id: "w-s0", state: "open", subject_ref: null, opened_at: "2026-01-01", parent_task_id: null, phase_tag: null },
+  ];
+
+  it("reports one node per repo it actually materialized, each closed on its own siblings", async () => {
+    const tasks: Row[] = [
+      nestingTask("closed"),
+      sibling("backend", "s-exec", "Scaffold the repo", "staff-engineer", "closed", "t-b-exec"),
+      sibling("backend", "s-appr", "Accept the repo scaffold", "principal-engineer", "closed", "t-b-appr"),
+      sibling("app", "s-exec", "Scaffold the repo", "staff-engineer", "closed", "t-a-exec"),
+      sibling("app", "s-appr", "Accept the repo scaffold", "principal-engineer", "running", "t-a-appr"),
+    ];
+    mockSupabase({ runs, tasks });
+    const { planFor } = await import("./plan-view");
+    const discovery = (await planFor("e1")).find((p) => p.code === "Discovery")!;
+    const scaffoldStep = discovery.roots[0].steps.find((s) => s.title === "Scaffold each repo")!;
+
+    expect(scaffoldStep.state).toBe("closed"); // the nesting row's OWN state — unaffected by this fix
+    const byRepo = Object.fromEntries(scaffoldStep.nested.map((n) => [n.subject, n]));
+    expect(Object.keys(byRepo).sort()).toEqual(["app", "backend"]);
+
+    expect(byRepo.backend).toMatchObject({ label: "Scaffold one repo — backend", state: "closed", closedCount: 2, totalCount: 2, runId: null });
+    // `app`'s pair is NOT both closed — this node must say so, not inherit the nesting row's.
+    expect(byRepo.app).toMatchObject({ label: "Scaffold one repo — app", state: "open", closedCount: 1, totalCount: 2 });
+  });
+
+  // Rule 11's Plan-page shape: no repo materialized yet is not the same as one finished with none.
+  it("falls back to the plain not-opened placeholder when nothing has been materialized", async () => {
+    mockSupabase({ runs, tasks: [nestingTask("running")] });
+    const { planFor } = await import("./plan-view");
+    const discovery = (await planFor("e1")).find((p) => p.code === "Discovery")!;
+    const scaffoldStep = discovery.roots[0].steps.find((s) => s.title === "Scaffold each repo")!;
+
+    expect(scaffoldStep.nested).toEqual([
+      expect.objectContaining({ code: "scaffold-repo", state: "idle", subject: null, closedCount: 0, totalCount: 0 }),
+    ]);
   });
 });
 
