@@ -18,7 +18,8 @@ vi.mock("./roster-rows", () => ({
   parseRoster: () => [{ roleLabel: "Product Owner", holder: "Om" }],
 }));
 vi.mock("./sprint-rows", () => ({ parseCommitments: () => ({ commitments: [], problems: [] }) }));
-vi.mock("./backlog", () => ({ backlogOf: async () => [] }));
+const backlogCalls: string[] = [];
+vi.mock("./backlog", () => ({ backlogOf: async (taskId: string) => { backlogCalls.push(taskId); return []; } }));
 vi.mock("./tracker", () => ({ mirrorBacklog: async () => ({ placed: [], problems: [] }), mirrorSprint: async () => ({ placed: [], problems: [] }) }));
 vi.mock("./run-subject", () => ({ subjectOfRun: async () => null }));
 
@@ -32,6 +33,8 @@ let steps: Record<string, {
 }> = {};
 /** Which step id (by task slug) `taskId` resolves to. */
 let taskStep: string = "propose";
+/** The closing task's run; null by default so the drafting-task lookup stays out of the way. */
+let closingRunId: string | null = null;
 const WORKFLOW_VERSION = "v1";
 
 let documentVersion: { current_version_id: string } | null = { current_version_id: "dv1" };
@@ -48,11 +51,16 @@ vi.mock("../supabase", () => ({
         select: () => chain,
         eq: (col: string, val: unknown) => { chain._eq.push([col, val]); return chain; },
         order: () => chain,
+        limit: () => chain,
         contains: (col: string, val: string[]) => { chain._eq.push([col, val[0]]); return chain; },
         insert: (row: Record<string, unknown>) => { writes.push({ table, row }); return { error: null }; },
         maybeSingle: async () => {
           const id = chain._eq.find(([c]) => c === "id")?.[1] as string | undefined;
-          if (table === "work_task") return { data: { workflow_step_id: taskStep, workflow_run_id: null } };
+          if (table === "work_task") {
+            // draftingTaskOf: looked up by run + step rather than by id.
+            if (chain._eq.some(([c]) => c === "workflow_step_id")) return { data: { id: "t-draft" } };
+            return { data: { workflow_step_id: taskStep, workflow_run_id: closingRunId } };
+          }
           if (table === "workflow_step") {
             // Own-step lookup: by id (the fake "step id" IS the task slug, for simplicity).
             if (id) return { data: steps[id] ?? null };
@@ -88,6 +96,8 @@ const ACTOR = { orgId: "org-1", engagementId: "e1", roleCode: "product-manager",
 beforeEach(() => {
   emitted.length = 0;
   writes.length = 0;
+  backlogCalls.length = 0;
+  closingRunId = null;
   documentVersion = { current_version_id: "dv1" };
   sections = [{ heading: "Roster", body: "| Role | Holder |\n|---|---|\n| Product Owner | Om |" }];
 });
@@ -163,5 +173,35 @@ describe("the scaffold chain materialises on acceptance only", () => {
     expect(r?.path).toBe("scaffold-record");
     expect(r?.problems.join(" ")).toMatch(/no Repositories table/);
     expect(writes.filter((w) => w.table === "repo")).toEqual([]);
+  });
+});
+
+// The bug this pins: approving "Review and approve the epics" closed Done and put NOTHING on the
+// board. The backlog rows are keyed by the task that DRAFTED them, and the runner was handed the
+// reviewer's own id — so it looked under a task that drafted nothing and reported "no backlog rows".
+describe("a backlog materialised on a review's close", () => {
+  beforeEach(() => {
+    steps = {
+      draft: { id: "s-draft", task: "draft", produces: "deliverables@tickets", output: "backlog", renders: "doc", depends_on: [], workflow_version_id: WORKFLOW_VERSION },
+      approve: { task: "approve", produces: null, output: null, renders: "doc-review", depends_on: ["draft"], workflow_version_id: WORKFLOW_VERSION },
+    } as typeof steps;
+    taskStep = "approve";
+    closingRunId = "run-1";
+  });
+
+  it("reads the backlog under the DRAFTING task, not the reviewer's", async () => {
+    await materialiseFrom(ACTOR, "t-approve");
+    expect(backlogCalls).toEqual(["t-draft"]);
+  });
+
+  it("still reports the close against the reviewer's own task", async () => {
+    await materialiseFrom(ACTOR, "t-approve");
+    expect(emitted.find((e) => e.verb === "document.materialised")).toBeTruthy();
+  });
+
+  it("falls back to the task it was handed when the drafting task cannot be found", async () => {
+    closingRunId = null;
+    await materialiseFrom(ACTOR, "t-approve");
+    expect(backlogCalls).toEqual(["t-approve"]);
   });
 });

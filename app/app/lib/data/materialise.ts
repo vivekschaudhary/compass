@@ -257,21 +257,36 @@ const REGISTRY: Record<
  */
 async function producingStep(
   sb: NonNullable<ReturnType<typeof supabaseAdmin>>, workflowVersionId: string, dependsOnTask: string,
-): Promise<{ produces: string | null; output: string | null } | null> {
+): Promise<{ produces: string | null; output: string | null; id: string } | null> {
   // A review authors nothing, so the thing it reviews may be a review too (accept-scaffold reviews
   // review-scaffold, which reviews scaffold-foundation). Walk back to the row that drafted something.
   let task = dependsOnTask;
   for (let depth = 0; depth < 8 && task; depth++) {
     const { data } = await sb.from("workflow_step")
-      .select("produces, output, renders, depends_on")
+      .select("id, produces, output, renders, depends_on")
       .eq("workflow_version_id", workflowVersionId).eq("task", task)
       .maybeSingle();
     if (!data) return null;
-    if (data.produces) return { produces: data.produces as string, output: data.output as string | null };
+    if (data.produces) return { produces: data.produces as string, output: data.output as string | null, id: data.id as string };
     if (data.renders !== "doc-review" && data.renders !== "code-review") return null;
     task = ((data.depends_on as string[] | null) ?? [])[0] ?? "";
   }
   return null;
+}
+
+/**
+ * The task of `stepId` in this run — the row whose close drafted what a review is now accepting.
+ * A fan-out step has one task per subject, so the reviewer's own subject picks which. Null when it
+ * cannot be found, and the caller falls back to the task it was handed rather than guessing.
+ */
+async function draftingTaskOf(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>, runId: string | null, stepId: string, subjectRef: string | null,
+): Promise<string | null> {
+  if (!runId) return null;
+  let q = sb.from("work_task").select("id").eq("workflow_run_id", runId).eq("workflow_step_id", stepId);
+  if (subjectRef) q = q.eq("subject_ref", subjectRef);
+  const { data } = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return (data?.id as string | undefined) ?? null;
 }
 
 /**
@@ -325,8 +340,16 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
       : await producingStep(sb, step.workflow_version_id as string, (step.depends_on as string[] | null)?.[0] ?? "")
     : laterReviewer
       ? null
-      : { produces: step.produces as string | null, output: step.output as string | null };
+      : { produces: step.produces as string | null, output: step.output as string | null, id: null as string | null };
   if (!source) return null;
+
+  // Rows a materialiser reads are keyed by the task that DRAFTED them. When the close that triggers
+  // this is a review's, `taskId` is the reviewer's — which drafted nothing — so a backlog was looked
+  // up under the wrong task, found no rows, and an approved set of epics reached the board as
+  // nothing while the review closed Done. Hand the runner the drafting task of the same run.
+  const draftingTaskId = reviewing && source.id
+    ? await draftingTaskOf(sb, task.workflow_run_id as string | null, source.id, task.subject_ref as string | null)
+    : null;
 
   // The declared output decides WHAT happens; the path only says where the document is read from.
   // A step that declares nothing materialises nothing, which is the common case.
@@ -349,7 +372,7 @@ export async function materialiseFrom(actor: Actor, taskId: string): Promise<Mat
     .select("heading, body").eq("document_version_id", doc.current_version_id).order("ord");
   const markdown = (sections ?? []).map((s) => `## ${s.heading}\n${s.body}`).join("\n\n");
 
-  const result = await run(actor, markdown, taskId);
+  const result = await run(actor, markdown, draftingTaskId ?? taskId);
 
   await emit({
     engagementId: actor.engagementId, subjectType: "task", subjectId: taskId,
