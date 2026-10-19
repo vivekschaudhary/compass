@@ -25,6 +25,7 @@ function chainFor(table: string) {
   const chain: Record<string, unknown> = {};
   chain.select = () => chain;
   chain.order = () => chain;
+  chain.limit = () => chain;
   chain.contains = (col: string, vals: unknown[]) => {
     rows = rows.filter((r) => Array.isArray(r[col]) && (r[col] as unknown[]).includes(vals[0]));
     return chain;
