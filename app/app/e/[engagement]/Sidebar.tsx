@@ -95,21 +95,17 @@ export function Sidebar({ engagement, engagementName, sprint, roles, fallbackRol
 
   function pickRole(code: string) {
     setMenuOpen(false);
-    const q = new URLSearchParams(params.toString());
-    q.set("role", code);
-    // A stale holder id from whatever role was active before must not carry over — the new
-    // role's own first holder (or none) is what `resolveActor` falls back to without one.
-    q.delete("holder");
-    go(`${pathname}?${q.toString()}`);
+    // Always lands on the jobs-to-do list: staying on the current page would carry a job from the
+    // previous person's list into a role that may not be able to see it. No other query parameter
+    // and no stale holder id carries over — the new role's own first holder (or none) is what
+    // `resolveActor` falls back to without one.
+    go(`/e/${engagement}/jobs?role=${encodeURIComponent(code)}`, { replace: true, scroll: false });
   }
 
   /** Same as `pickRole`, naming WHICH of that role's several holders is acting. */
   function pickHolder(code: string, holderId: string) {
     setMenuOpen(false);
-    const q = new URLSearchParams(params.toString());
-    q.set("role", code);
-    q.set("holder", holderId);
-    go(`${pathname}?${q.toString()}`);
+    go(`/e/${engagement}/jobs?role=${encodeURIComponent(code)}&holder=${encodeURIComponent(holderId)}`, { replace: true, scroll: false });
   }
 
   return (
