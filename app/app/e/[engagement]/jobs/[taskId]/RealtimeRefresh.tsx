@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/app/lib/supabase-browser";
 import { useOptimisticTurns } from "./OptimisticTurns";
 import { backoffMs } from "./realtime-backoff";
+import { releaseChannel, whenReleased } from "./realtime-channel";
 
 const POLL_MS = 45_000;
 
@@ -55,10 +56,15 @@ export function RealtimeRefresh({
     // current, not the one captured at mount.
     let channel: ReturnType<typeof sb.channel> | null = null;
 
-    function open() {
+    const topic = `task-${taskId}`;
+
+    // Async because the previous channel on this topic may still be mid-release — see
+    // `realtime-channel.ts`. `channel(topic)` would hand that one back and `.on()` would throw.
+    async function open() {
+      await whenReleased(topic);
       if (cancelled) return;
       channel = sb!
-        .channel(`task-${taskId}`)
+        .channel(topic)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "work_task", filter: `id=eq.${taskId}` },
@@ -101,19 +107,19 @@ export function RealtimeRefresh({
             retries++;
             const dead = channel;
             timer = setTimeout(() => {
-              if (dead) sb!.removeChannel(dead);
-              open();
+              if (dead) void releaseChannel(sb!, topic, dead);
+              void open();
             }, delay);
           }
         });
     }
 
-    open();
+    void open();
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      if (channel) sb!.removeChannel(channel);
+      if (channel) void releaseChannel(sb!, topic, channel);
     };
   }, [taskId, router, refreshTurns]);
 
