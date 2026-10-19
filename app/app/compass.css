@@ -1629,9 +1629,14 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
 .job-body:has(.draft-col-wide) {
   grid-template-columns: minmax(0, 0.45fr) minmax(0, 1.55fr);
 }
+/* The step below the even split: the draft a third of the width, the chat the other two. */
+.job-body:has(.draft-col-narrow) {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
 @media (max-width: 1200px) {
   .job-body,
-  .job-body:has(.draft-col-wide) {
+  .job-body:has(.draft-col-wide),
+  .job-body:has(.draft-col-narrow) {
     grid-template-columns: minmax(0, 1fr);
   }
   /* Stacked, not side by side — each pane's own scrollbar would mean two independent scroll
@@ -1670,10 +1675,16 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
       1.55fr
     );
 }
+.job-body-3:has(.draft-col-narrow) {
+  grid-template-columns: minmax(160px, 200px) minmax(0, 2fr) minmax(0, 1fr);
+}
 @media (max-width: 1400px) {
   .job-body-3,
   .job-body-3:has(.draft-col-wide) {
     grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+  }
+  .job-body-3:has(.draft-col-narrow) {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   }
   .doc-nav {
     display: none;
@@ -1681,7 +1692,8 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
 }
 @media (max-width: 1200px) {
   .job-body-3,
-  .job-body-3:has(.draft-col-wide) {
+  .job-body-3:has(.draft-col-wide),
+  .job-body-3:has(.draft-col-narrow) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1961,7 +1973,11 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
   color: var(--color-neutral-700);
   padding: 4px 8px;
 }
-.draft-expand:hover {
+.draft-expand:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.draft-expand:hover:not(:disabled) {
   color: var(--color-accent-700);
   border-color: var(--color-accent-700);
 }

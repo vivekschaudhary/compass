@@ -28,7 +28,15 @@ import {
 import type { Draft } from "@/app/lib/data/job";
 import type { Comment, DocComment } from "@/app/lib/data/comments";
 
-const WIDE_KEY = "compass.draft.wide";
+// Three widths, narrowest first: the draft a third of the page with the chat leading, the even
+// split it has always opened at, and the reading mode where the document leads. Stored by NAME so a
+// fourth step can be added without renumbering what a viewer already chose.
+const SIZES = ["narrow", "normal", "wide"] as const;
+type Size = (typeof SIZES)[number];
+const SIZE_KEY = "compass.draft.size";
+// Written before there were three widths, as "true" / "false". Read once so a viewer who chose
+// wide keeps it; never written again.
+const LEGACY_WIDE_KEY = "compass.draft.wide";
 
 export function DraftPanel({ path, draft, comments, engagement, role, holderId, taskId, closed = false }: {
   path: string | null; draft: Draft | null;
@@ -46,22 +54,27 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
   // Read AFTER mount rather than in a lazy initialiser. The server renders this component too, and
   // it has no `localStorage` — an initialiser that read it would make the first client render
   // disagree with the server's HTML, which React treats as a hydration error. So the panel always
-  // starts narrow and widens a frame later if that is what this viewer chose.
+  // starts at the normal width and moves a frame later if that is what this viewer chose.
   //
-  // Both accesses are wrapped: storage throws in a private window and is simply absent on a first
+  // Every access is wrapped: storage throws in a private window and is simply absent on a first
   // visit, and neither is a reason for the document not to render.
-  const [wide, setWide] = useState(false);
+  const [size, setSize] = useState<Size>("normal");
   useEffect(() => {
     // Deliberate: this MUST run after mount (see above), and the lint rule cannot tell that from the
     // cascading-render case it exists to catch.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    try { setWide(localStorage.getItem(WIDE_KEY) === "true"); } catch { /* absent is fine */ }
+    try {
+      const saved = localStorage.getItem(SIZE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved && (SIZES as readonly string[]).includes(saved)) setSize(saved as Size);
+      else if (localStorage.getItem(LEGACY_WIDE_KEY) === "true") setSize("wide");
+    } catch { /* absent is fine */ }
   }, []);
 
-  const toggleWide = () => {
-    setWide((w) => {
-      try { localStorage.setItem(WIDE_KEY, String(!w)); } catch { /* not worth a failure */ }
-      return !w;
+  const step = (by: -1 | 1) => {
+    setSize((cur) => {
+      const next = SIZES[Math.min(SIZES.length - 1, Math.max(0, SIZES.indexOf(cur) + by))];
+      try { localStorage.setItem(SIZE_KEY, next); } catch { /* not worth a failure */ }
+      return next;
     });
   };
 
@@ -75,7 +88,7 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
   for (const c of comments) if (c.sectionId) (bySection[c.sectionId] ??= []).push(c);
 
   return (
-    <aside className={wide ? "draft-col draft-col-wide" : "draft-col"}>
+    <aside className={size === "normal" ? "draft-col" : `draft-col draft-col-${size}`}>
       <div className="draft-head">
         <h6>{path}</h6>
         <div className="draft-head-right">
@@ -85,16 +98,24 @@ export function DraftPanel({ path, draft, comments, engagement, role, holderId, 
           {/* Not gated on a draft: the width is the viewer's layout choice, and an empty panel is
               exactly when they may want the chat narrower or wider. */}
           <button
-            className="draft-expand" onClick={toggleWide}
-            title={wide ? "Narrow" : "Widen"} aria-label={wide ? "Narrow the draft panel" : "Widen the draft panel"}
+            className="draft-expand" onClick={() => step(-1)} disabled={size === "narrow"}
+            title="Narrow" aria-label="Narrow the draft panel"
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              {wide
-                ? <path d="M3 12h7M7 8l4 4-4 4M21 12h-7M17 8l-4 4 4 4" />
-                : <path d="M10 12H3M7 8l-4 4 4 4M14 12h7M17 8l4 4-4 4" />}
+              <path d="M10 12H3M7 8l-4 4 4 4M14 12h7M17 8l4 4-4 4" />
             </svg>
-            <span>{wide ? "Narrow" : "Widen"}</span>
+            <span>Narrow</span>
+          </button>
+          <button
+            className="draft-expand" onClick={() => step(1)} disabled={size === "wide"}
+            title="Widen" aria-label="Widen the draft panel"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 12h7M7 8l4 4-4 4M21 12h-7M17 8l-4 4 4 4" />
+            </svg>
+            <span>Widen</span>
           </button>
         </div>
       </div>
