@@ -474,6 +474,27 @@ export async function mirrorBacklog(
   // remaining stories under the epic that DID get created rather than skipping them.
   const keyOf = new Map(rows.filter((r) => r.ticketKey).map((r) => [r.ref, r.ticketKey as string]));
 
+  // A story may belong to an epic THIS task did not draft — `refine-stories` files stories under
+  // epics a different run put on the board. Their keys are looked up across the engagement, only for
+  // the parents actually needed, and the latest backlog to use a handle wins. Without this such a
+  // story is reported as "its epic is not on the board" while the epic sits in plain view.
+  // Epics THIS task drafts are not looked up: they are created in the pass below, and a refused one
+  // must still refuse its stories rather than be rescued by an older backlog's epic of the same handle.
+  const ownEpics = new Set(rows.filter((r) => r.kind === "epic").map((r) => r.ref));
+  const wanted = [...new Set(
+    pending.filter((r) => r.kind === "story" && r.parentRef && !keyOf.has(r.parentRef) && !ownEpics.has(r.parentRef))
+      .map((r) => r.parentRef as string),
+  )];
+  if (wanted.length) {
+    const { data: parents } = await sb.from("backlog_item")
+      .select("ref, ticket_key")
+      .eq("engagement_id", engagementId).eq("kind", "epic").in("ref", wanted)
+      .not("ticket_key", "is", null).order("created_at", { ascending: false });
+    for (const p of parents ?? []) {
+      if (!keyOf.has(p.ref as string)) keyOf.set(p.ref as string, p.ticket_key as string);
+    }
+  }
+
   // Epics first, in one pass, so every story has a parent to point at by the time it is created.
   for (const item of pending.filter((r) => r.kind === "epic")) {
     const created = await createIssue(creds, {

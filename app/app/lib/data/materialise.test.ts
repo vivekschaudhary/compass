@@ -19,9 +19,21 @@ vi.mock("./roster-rows", () => ({
 }));
 vi.mock("./sprint-rows", () => ({ parseCommitments: () => ({ commitments: [], problems: [] }) }));
 const backlogCalls: string[] = [];
-vi.mock("./backlog", () => ({ backlogOf: async (taskId: string) => { backlogCalls.push(taskId); return []; } }));
-vi.mock("./tracker", () => ({ mirrorBacklog: async () => ({ placed: [], problems: [] }), mirrorSprint: async () => ({ placed: [], problems: [] }) }));
-vi.mock("./run-subject", () => ({ subjectOfRun: async () => null }));
+const storyRows = vi.hoisted(() => ({ n: 0 }));
+vi.mock("./backlog", () => ({
+  backlogOf: async (taskId: string) => {
+    backlogCalls.push(taskId);
+    return Array.from({ length: storyRows.n }, (_, i) => ({ id: `r${i}`, ref: `S${i}` }));
+  },
+}));
+const { mirrorBacklog } = vi.hoisted(() => ({
+  mirrorBacklog: vi.fn<(...a: unknown[]) => Promise<{ epics: never[]; stories: { ref: string; key: string; title: string }[]; expected: number; problems: string[] }>>(
+    async () => ({ epics: [], stories: [{ ref: "S1", key: "CT-9", title: "t" }], expected: 1, problems: [] }),
+  ),
+}));
+vi.mock("./tracker", () => ({ mirrorBacklog, mirrorSprint: async () => ({ placed: [], problems: [] }) }));
+const runSubject = vi.hoisted(() => ({ value: null as { ref: string | null; key: string | null } | null }));
+vi.mock("./run-subject", () => ({ subjectOfRun: async () => runSubject.value }));
 
 type Emitted = { verb: string; payload: Record<string, unknown> };
 const emitted: Emitted[] = [];
@@ -98,6 +110,7 @@ beforeEach(() => {
   writes.length = 0;
   backlogCalls.length = 0;
   closingRunId = null;
+  runSubject.value = null;
   documentVersion = { current_version_id: "dv1" };
   sections = [{ heading: "Roster", body: "| Role | Holder |\n|---|---|\n| Product Owner | Om |" }];
 });
@@ -203,5 +216,42 @@ describe("a backlog materialised on a review's close", () => {
     closingRunId = null;
     await materialiseFrom(ACTOR, "t-approve");
     expect(backlogCalls).toEqual(["t-approve"]);
+  });
+});
+
+// `refine-stories` produces `stories/{epic}`; its reviewer's close files them to the board under the
+// epic. The reviewer drafted nothing, so — as for a backlog — the rows are read from the drafting task.
+describe("stories materialised on a review's close", () => {
+  beforeEach(() => {
+    steps = {
+      draft: { id: "s-draft", task: "draft", produces: "stories/{epic}", output: "stories", renders: "doc", depends_on: [], workflow_version_id: WORKFLOW_VERSION },
+      approve: { task: "approve", produces: null, output: null, renders: "doc-review", depends_on: ["draft"], workflow_version_id: WORKFLOW_VERSION },
+    } as typeof steps;
+    taskStep = "approve";
+    closingRunId = "run-1";
+    storyRows.n = 2;
+    runSubject.value = { ref: "ACC-E1", key: "CT-288" };
+    mirrorBacklog.mockClear();
+  });
+
+  it("files the drafting task's stories to the board", async () => {
+    const r = await materialiseFrom(ACTOR, "t-approve");
+    expect(mirrorBacklog).toHaveBeenCalledWith("e1", "t-draft", "product-manager");
+    expect(r?.created).toBe(1);
+    expect(r?.problems).toEqual([]);
+  });
+
+  it("says so when the run added no stories, rather than reporting a clean filing", async () => {
+    storyRows.n = 0;
+    const r = await materialiseFrom(ACTOR, "t-approve");
+    expect(mirrorBacklog).not.toHaveBeenCalled();
+    expect(r?.created).toBe(0);
+    expect(r?.problems.join(" ")).toMatch(/no stories/);
+  });
+
+  it("does not file anything on the drafter's own close — the reviewer's close is the trigger", async () => {
+    taskStep = "draft";
+    expect(await materialiseFrom(ACTOR, "t-draft")).toBeNull();
+    expect(mirrorBacklog).not.toHaveBeenCalled();
   });
 });

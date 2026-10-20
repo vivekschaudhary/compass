@@ -422,6 +422,33 @@ describe("output: supplied", () => {
   });
 });
 
+describe("output: stories", () => {
+  const base: Bundle = {
+    workstreams: "code,label\nProduct,Product\n",
+    roles: "code,label,tier,scope,workstream\nproduct-owner,Product Owner,practitioner,mine,Product\n" +
+      "product-manager,Product Manager,practitioner,mine,Product\n",
+    workflows: "code,label,workstream,owner_role,repeatable\nrefine,Refine,Product,product-owner,TRUE\n",
+    steps: "workflow,ord,kind,role,task,produces,output,renders,depends_on\n" +
+      "refine,1,agent,product-owner,draft-stories,stories/{epic},stories,doc,\n" +
+      "refine,2,hitl,product-manager,approve-stories,,,doc-review,draft-stories\n",
+    criteria: "workflow,task,kind,text\nrefine,approve-stories,done,Each story can be tested\n",
+  };
+  const agents = { ...empty, agents: ["product-owner", "product-manager"] };
+
+  it("is an output the app knows", () => {
+    expect(planImport(base, agents).ok).toBe(true);
+  });
+
+  it("makes the tracker a Ready gate, because approval files the stories to it", () => {
+    const r = planImport(base, agents);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const wf = r.plan.workflows.find((w) => w.row.code === "refine");
+    const ready = (wf?.criteria ?? []).filter((c) => c.kind === "ready").map((c) => c.subjectRef);
+    expect(ready).toContain("tickets");
+  });
+});
+
 describe("guards against checks that never evaluate", () => {
   const base: Bundle = {
     workstreams: "code,label\nEngineering,Engineering\n",

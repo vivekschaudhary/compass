@@ -1,6 +1,6 @@
 import { describeTemplate } from "../../render/template";
 import type { ResolvedTemplate } from "../../data/templates";
-import { ASK_BATCH, ASK_ROUNDS_MAX, type AgentContext, type SprintContext } from "./types";
+import { ASK_BATCH, ASK_ROUNDS_MAX, type AgentContext, type SprintContext, type StoriesContext } from "./types";
 
 /**
  * The agent file minus its task catalogue.
@@ -237,11 +237,39 @@ export function inputPrompt(ctx: AgentContext): string {
   }
 
   if (ctx.sprint) parts.push(sprintPrompt(ctx.sprint));
+  if (ctx.stories) parts.push(storiesPrompt(ctx.stories));
   if (ctx.template) parts.push(templatePrompt(ctx.template));
   if (ctx.output === "supplied") parts.push(suppliedPrompt(ctx));
   if (ctx.output === "scaffold") parts.push(scaffoldPrompt(ctx));
 
   return parts.join("\n\n");
+}
+
+/**
+ * The epic being refined, and what is already under it.
+ *
+ * "Add, never override" is said to the model, not only enforced afterwards: a model that is told
+ * only the epic redrafts the whole decomposition and relies on a filter to throw most of it away,
+ * and the filter can only catch a title that repeats exactly.
+ */
+function storiesPrompt(s: StoriesContext): string {
+  const have = s.existing.length
+    ? s.existing.map((e) => `- \`${e.ref}\` — ${e.title}`).join("\n")
+    : "- None yet. This is the first decomposition of this epic.";
+  return [
+    `<epic ref="${s.epic.ref}"${s.epic.ticketKey ? ` ticket="${s.epic.ticketKey}"` : ""}>`,
+    `You are drafting stories for ONE epic: ${s.epic.title}.`,
+    ``,
+    s.epic.body || "(The epic has no description. Say so rather than inventing one.)",
+    ``,
+    `Stories this epic already has. They stay exactly as they are. Draft only what is still missing,`,
+    `and do not repeat or reword any of these:`,
+    have,
+    ``,
+    `If the epic is already fully covered, return no stories and say so in the summary. If the person`,
+    `who started this run told you what to focus on, follow it.`,
+    `</epic>`,
+  ].join("\n");
 }
 
 /**

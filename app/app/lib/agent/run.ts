@@ -316,7 +316,7 @@ export async function runAgent(
   if (call.name === "ask") return handleAsk(turn);
   if (call.name === "code") return handleCode(turn);
   if (call.name === "scaffold") return handleScaffold(turn);
-  if (["draft", "backlog", "sprint", "roster"].includes(call.name)) return handleDocument(turn);
+  if (["draft", "backlog", "stories", "sprint", "roster"].includes(call.name)) return handleDocument(turn);
 
   await releaseExecutor(taskId, ctx, { failed: true });
   return { kind: "error", message: `Unknown tool: ${call.name}` };

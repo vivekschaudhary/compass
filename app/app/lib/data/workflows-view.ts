@@ -31,6 +31,7 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { orgIdFor } from "./events";
+import { fanOutKindOf } from "../fan-out-kinds";
 
 export type WorkflowCard = {
   /** A run's id once open; the nesting task's own id before it is. Stable across a render either way. */
@@ -45,7 +46,66 @@ export type WorkflowCard = {
   taskId: string | null;
   closedCount: number;
   totalCount: number;
+  /**
+   * Set on the card that STARTS a workflow which is about one thing (`refine-stories`: one epic).
+   * Starting it needs a choice, so the card offers a picker instead of a bare button.
+   */
+  needsSubject?: "epic";
 };
+
+/** An epic a per-epic workflow can be started for — one the board already has. */
+export type EpicChoice = { ref: string; title: string; ticketKey: string; stories: number };
+
+/**
+ * The epics a per-epic workflow may be started for: those on the board (a story drafted for an epic
+ * with no ticket would have no parent to be filed under), each with how many stories it has so the
+ * person can see what has been refined and what has not.
+ */
+export async function epicChoicesFor(actor: Actor): Promise<EpicChoice[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+  const { data } = await sb.from("backlog_item")
+    .select("kind, ref, title, ticket_key, parent_ref, created_at, ord")
+    .eq("engagement_id", actor.engagementId)
+    .order("created_at", { ascending: false });
+  const epics = new Map<string, { ref: string; title: string; ticketKey: string; ord: number }>();
+  const stories = new Map<string, number>();
+  for (const r of data ?? []) {
+    if (r.kind === "epic" && r.ticket_key && !epics.has(r.ref as string)) {
+      epics.set(r.ref as string, {
+        ref: r.ref as string, title: r.title as string, ticketKey: r.ticket_key as string, ord: r.ord as number,
+      });
+    }
+    if (r.kind === "story" && r.parent_ref) {
+      stories.set(r.parent_ref as string, (stories.get(r.parent_ref as string) ?? 0) + 1);
+    }
+  }
+  return [...epics.values()]
+    .sort((a, b) => a.ord - b.ord)
+    .map((e) => ({ ref: e.ref, title: e.title, ticketKey: e.ticketKey, stories: stories.get(e.ref) ?? 0 }));
+}
+
+/** Which of these workflows are about one thing, by what their published version produces. */
+async function subjectWorkflows(workflowIds: string[]): Promise<Set<string>> {
+  const sb = supabaseAdmin();
+  if (!sb || !workflowIds.length) return new Set();
+  const { data: versions } = await sb.from("workflow_version")
+    .select("id, workflow_id").in("workflow_id", workflowIds).eq("status", "published");
+  if (!versions?.length) return new Set();
+  const { data: steps } = await sb.from("workflow_step")
+    .select("workflow_version_id, produces").in("workflow_version_id", versions.map((v) => v.id as string));
+  const byVersion = new Map<string, (string | null)[]>();
+  for (const st of steps ?? []) {
+    const list = byVersion.get(st.workflow_version_id as string) ?? [];
+    list.push(st.produces as string | null);
+    byVersion.set(st.workflow_version_id as string, list);
+  }
+  const out = new Set<string>();
+  for (const v of versions) {
+    if (fanOutKindOf(byVersion.get(v.id as string) ?? []) === "epic") out.add(v.workflow_id as string);
+  }
+  return out;
+}
 
 export async function workflowsFor(actor: Actor): Promise<WorkflowCard[]> {
   const sb = supabaseAdmin();
@@ -89,7 +149,7 @@ export async function workflowsFor(actor: Actor): Promise<WorkflowCard[]> {
   const { data: standaloneRuns } = standalone.length
     ? await sb
         .from("workflow_run")
-        .select("id, workflow_id, state, opened_at")
+        .select("id, workflow_id, state, opened_at, subject_ref, subject_key")
         .eq("engagement_id", actor.engagementId)
         .in(
           "workflow_id",
@@ -98,8 +158,12 @@ export async function workflowsFor(actor: Actor): Promise<WorkflowCard[]> {
         .is("parent_task_id", null)
         .order("opened_at", { ascending: false })
     : { data: [] };
+  const subjectIds = await subjectWorkflows(standalone.map((w) => w.id as string));
+  // A run about one epic is its own line; it must not stand in for "the" run of its workflow, or one
+  // epic's run would hide whether the workflow can be started for another.
+  const subjectRuns = (standaloneRuns ?? []).filter((r) => r.subject_ref);
   const latestByWorkflow = new Map<string, { id: string; state: string }>();
-  for (const r of standaloneRuns ?? []) {
+  for (const r of (standaloneRuns ?? []).filter((x) => !x.subject_ref)) {
     if (!latestByWorkflow.has(r.workflow_id as string))
       latestByWorkflow.set(r.workflow_id as string, { id: r.id as string, state: r.state as string });
   }
@@ -122,8 +186,19 @@ export async function workflowsFor(actor: Actor): Promise<WorkflowCard[]> {
     }
   }
   await countsFor((standaloneRuns ?? []).map((r) => r.id as string));
+  const wfById = new Map(standalone.map((w) => [w.id as string, w]));
 
   for (const w of standalone) {
+    if (subjectIds.has(w.id as string)) {
+      // About one epic: a card to start it for a chosen epic (always offered — it repeats), then one
+      // card per run below. Never a single "latest run" for the whole workflow.
+      cards.push({
+        key: w.id as string, code: w.code as string, label: w.label as string,
+        state: "available", subject: null, runId: null, taskId: null,
+        closedCount: 0, totalCount: 0, needsSubject: "epic",
+      });
+      continue;
+    }
     const run = latestByWorkflow.get(w.id as string);
     const counts = run ? countsByRun.get(run.id) ?? { closed: 0, total: 0 } : { closed: 0, total: 0 };
     cards.push({
@@ -142,6 +217,19 @@ export async function workflowsFor(actor: Actor): Promise<WorkflowCard[]> {
       taskId: null,
       closedCount: counts.closed,
       totalCount: counts.total,
+    });
+  }
+
+  for (const r of subjectRuns) {
+    const w = wfById.get(r.workflow_id as string);
+    if (!w) continue;
+    const counts = countsByRun.get(r.id as string) ?? { closed: 0, total: 0 };
+    cards.push({
+      key: r.id as string, code: w.code as string,
+      label: `${w.label as string} — ${(r.subject_key as string | null) ?? (r.subject_ref as string)}`,
+      state: r.state === "closed" ? "closed" : "open",
+      subject: r.subject_ref as string, runId: r.id as string, taskId: null,
+      closedCount: counts.closed, totalCount: counts.total,
     });
   }
 

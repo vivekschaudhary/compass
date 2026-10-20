@@ -133,6 +133,34 @@ async function materialiseBacklog(actor: Actor, _markdown: string, taskId: strin
 }
 
 /**
+ * One epic's refined stories → Stories on the client's board, under the epic.
+ *
+ * The rows are the stories THIS run added; stories the epic already had are not touched, and
+ * `mirrorBacklog` only ever files rows that have no ticket yet. The parent is looked up across the
+ * engagement, since the epic was put on the board by a different run.
+ */
+async function materialiseStories(actor: Actor, _markdown: string, taskId: string): Promise<Materialised> {
+  const out: Materialised = { path: "stories", created: 0, updated: 0, problems: [] };
+
+  const rows = await backlogOf(taskId);
+  if (!rows.length) {
+    return {
+      ...out,
+      problems: [
+        "This run added no stories, so nothing was created on the board.",
+      ],
+    };
+  }
+
+  const mirrored = await mirrorBacklog(actor.engagementId, taskId, actor.roleCode);
+  return {
+    ...out,
+    created: mirrored.stories.length,
+    problems: mirrored.problems,
+  };
+}
+
+/**
  * Put the sprint on the board: the committed stories labelled `sprint-N` and assigned.
  *
  * Reads the MARKDOWN, unlike `materialiseBacklog`, and the difference is the point. A backlog's
@@ -246,6 +274,7 @@ const REGISTRY: Record<
 > = {
   roster: materialiseRoster,
   backlog: materialiseBacklog,
+  stories: materialiseStories,
   sprint: materialiseSprint,
   "scaffold-plan": materialiseScaffoldPlan,
 };

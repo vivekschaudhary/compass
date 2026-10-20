@@ -5,6 +5,7 @@ import { normaliseBacklog, sectionsOf, recordBacklog } from "../../data/backlog"
 import { commitmentsSection, overviewSection } from "../../data/sprint-rows";
 import { normaliseRosterRows, rosterSection } from "../../data/roster-rows";
 import { resolveCommitments } from "../../data/sprint";
+import { planStoriesFor, existingStoriesOf, recordStories, type StoriesPlan } from "../../data/stories";
 import { missingSections } from "../../render/template";
 import type { AgentContext } from "../context";
 import { asSections, recordTurn } from "./turn-context";
@@ -29,8 +30,9 @@ export async function handleDocument({ actor, taskId, ctx, message, text, call, 
   const isBacklog = call.name === "backlog";
   const isSprint = call.name === "sprint";
   const isRoster = call.name === "roster";
+  const isStories = call.name === "stories";
   const input = call.input as {
-    summary?: string; sections?: unknown; epics?: unknown;
+    summary?: string; sections?: unknown; epics?: unknown; stories?: unknown;
     goal?: string; starts?: string; ends?: string; commitments?: unknown; rows?: unknown;
   };
 
@@ -40,6 +42,25 @@ export async function handleDocument({ actor, taskId, ctx, message, text, call, 
   const { epics, problems: backlogProblems } = isBacklog
     ? normaliseBacklog(input.epics)
     : { epics: [], problems: [] as string[] };
+
+  // One epic's stories. The epic is the run's subject; without it there is nothing to attach them to
+  // and nowhere to file them, so that is refused before the model's work is thrown at a wrong parent.
+  let storiesPlan: StoriesPlan | null = null;
+  if (isStories) {
+    if (!ctx.stories) {
+      await releaseExecutor(taskId, ctx, { failed: true });
+      return {
+        kind: "error",
+        message:
+          "This run has no epic to draft stories for. Start it from an epic — nothing was filed.",
+      };
+    }
+    storiesPlan = planStoriesFor(
+      ctx.stories.epic.ref,
+      await existingStoriesOf(ctx.engagementId, ctx.stories.epic.ref, taskId),
+      input.stories,
+    );
+  }
 
   // A sprint plan is a readable page AND a set of commitments. The page is what the agent wrote;
   // the commitments are rendered from the tool's structure into one section, never written
@@ -62,7 +83,12 @@ export async function handleDocument({ actor, taskId, ctx, message, text, call, 
   // would mean a plan that committed or staffed nothing still produced a section, and the "no
   // document was produced" check below — which counts sections — would never fire on the one
   // outcome that most needs to halt.
-  const sections = isBacklog
+  // The stories document is the epic's WHOLE set — what it already had, then what this run added —
+  // but only when this run added something. A run that added nothing files nothing: re-filing the
+  // same stories as a new version would look like a change and record none.
+  const sections = isStories
+    ? (storiesPlan?.added.length ? storiesPlan.sections : [])
+    : isBacklog
     ? sectionsOf(epics)
     : isSprint
       ? (commitments.length
@@ -104,6 +130,8 @@ export async function handleDocument({ actor, taskId, ctx, message, text, call, 
       ? `_Committing to the sprint:_\n${sprintProblems.map((p) => `- ${p}`).join("\n")}`
       : "", rosterProblems.length
       ? `_Reading the roster:_\n${rosterProblems.map((p) => `- ${p}`).join("\n")}`
+      : "", storiesPlan?.problems.length
+      ? `_Reading the stories:_\n${storiesPlan.problems.map((p) => `- ${p}`).join("\n")}`
       : ""].filter(Boolean).join("\n\n"),
     ctx,
   );
@@ -112,10 +140,18 @@ export async function handleDocument({ actor, taskId, ctx, message, text, call, 
     // An EMPTY array is not unreadable output — it parsed perfectly and contained nothing. Saying
     // "could not be read" sends someone to debug a parser when the actual cause is usually that
     // the model ran out of room after writing its summary. Name which one it was.
-    const returned = isBacklog ? input.epics : isSprint ? input.commitments : isRoster ? input.rows : input.sections;
-    const noun = isBacklog ? "epics" : isSprint ? "commitments" : isRoster ? "rows" : "sections";
+    const returned = isStories ? input.stories : isBacklog ? input.epics : isSprint ? input.commitments : isRoster ? input.rows : input.sections;
+    const noun = isStories ? "stories" : isBacklog ? "epics" : isSprint ? "commitments" : isRoster ? "rows" : "sections";
     const why = truncated
       ? "It hit the token limit after writing its summary, so the document itself never came. Run it again — the budget is larger now."
+      : isStories && storiesPlan
+        // Three different situations that all arrive as an empty list, said apart: running again
+        // helps with exactly one of them.
+        ? storiesPlan.problems.length
+          ? "Every story it drafted was dropped (the reasons are above), so nothing new was filed. Run it again."
+          : storiesPlan.existing.length
+            ? `It found nothing to add: this epic already has ${storiesPlan.existing.length} stories, and they were left exactly as they are.`
+            : "It returned no stories for this epic, having written a summary. Run it again."
       : Array.isArray(returned)
         ? `It returned an empty list of ${noun}, having written a summary. Running again usually resolves it.`
         : `Its ${noun} came back in a shape that could not be read; the raw output is below.`;
@@ -262,6 +298,22 @@ export async function handleDocument({ actor, taskId, ctx, message, text, call, 
   }
 
   await recordCitations(versionId as string, sections, ctx);
+
+  // The new stories as rows, kept beside the document — with no ticket keys, so the person approving
+  // is looking at what will become issues. Only what THIS run added is written; every story the epic
+  // already had is untouched, in the table as it was in the document.
+  if (isStories && storiesPlan && ctx.stories) {
+    const recorded = await recordStories(
+      org?.org_id ?? actor.orgId, actor.engagementId, taskId, ctx.stories.epic.ref, storiesPlan.added,
+    );
+    if (recorded.problems.length) {
+      await recordTurn(
+        taskId,
+        `Filed the stories, with a note:\n` + recorded.problems.map((p) => `- ${p}`).join("\n"),
+        ctx,
+      );
+    }
+  }
 
   // The backlog's STRUCTURE, kept beside the document it was just filed as.
   //

@@ -20,10 +20,19 @@ vi.mock("./backlog", () => ({ backlogOf: async () => rows() }));
 
 // Only two reads matter here: the engagement (for creds) and the update that stores a ticket key.
 const updated: { id: string; key: string }[] = [];
+// The epics ON THE BOARD from other tasks, as the engagement-wide parent lookup reads them.
+const boardEpics = vi.fn((): { ref: string; ticket_key: string }[] => []);
 vi.mock("../supabase", () => ({
   supabaseAdmin: () => ({
     from: (table: string) => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { jira_project: "CT" } }) }) }),
+      select: () => {
+        const chain: Record<string, unknown> = {
+          eq: () => chain, in: () => chain, not: () => chain,
+          order: async () => ({ data: boardEpics() }),
+          maybeSingle: async () => ({ data: { jira_project: "CT" } }),
+        };
+        return chain;
+      },
       update: (patch: { ticket_key: string }) => ({
         eq: async (_col: string, id: string) => {
           if (table === "backlog_item") updated.push({ id, key: patch.ticket_key });
@@ -46,6 +55,7 @@ const row = (over: Record<string, unknown>) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   updated.length = 0;
+  boardEpics.mockReturnValue([]);
   creds = { baseUrl: "https://x", email: "e", token: "t", project: "CT" };
   let n = 0;
   createIssue.mockImplementation(async () => ({ key: `CT-${++n}` }));
@@ -130,3 +140,42 @@ describe("mirrorBacklog", () => {
     expect(backlogIncomplete(out)).toBe(false);
   });
 });
+
+// `refine-stories` files stories under an epic a DIFFERENT run put on the board. The parent has to be
+// found across the engagement, or every such story is reported as "its epic is not on the board"
+// while the epic sits in plain view.
+describe("mirrorBacklog — stories under an epic from another run", () => {
+  const story = (over: Record<string, unknown> = {}) =>
+    row({ id: "s1", kind: "story", ref: "ACC-E1-S1", parentRef: "ACC-E1", title: "Sign in", ord: 0, ...over });
+
+  it("hangs the story under the epic's existing key", async () => {
+    rows.mockReturnValue([story()]);
+    boardEpics.mockReturnValue([{ ref: "ACC-E1", ticket_key: "CT-288" }]);
+
+    const out = await mirrorBacklog("eng", "task", "pm");
+
+    expect(out.problems).toEqual([]);
+    expect(out.stories).toHaveLength(1);
+    expect((createIssue.mock.calls[0][1] as { parentKey?: string }).parentKey).toBe("CT-288");
+  });
+
+  it("refuses a story whose epic is on no board, and says which", async () => {
+    rows.mockReturnValue([story()]);
+    const out = await mirrorBacklog("eng", "task", "pm");
+    expect(createIssue).not.toHaveBeenCalled();
+    expect(out.problems.join(" ")).toMatch(/ACC-E1/);
+  });
+
+  it("does not go looking for an epic this same task is about to create", async () => {
+    rows.mockReturnValue([
+      row({ id: "e1", ref: "E1" }),
+      story({ id: "s1", ref: "E1-S1", parentRef: "E1" }),
+    ]);
+    boardEpics.mockReturnValue([{ ref: "E1", ticket_key: "CT-OLD" }]);
+
+    await mirrorBacklog("eng", "task", "pm");
+
+    expect((createIssue.mock.calls[1][1] as { parentKey?: string }).parentKey).toBe("CT-1");
+  });
+});
+

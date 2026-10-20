@@ -134,6 +134,8 @@ export type AgentContext = {
   rejections: { criterion: string; reason: string; by: string }[];
   /** Set only on a step that plans a sprint. Null everywhere else. */
   sprint: SprintContext | null;
+  /** The epic a `stories` row is about, and the stories it already has. Null on every other row. */
+  stories?: StoriesContext | null;
 };
 
 /**
@@ -156,6 +158,18 @@ export type SprintContext = {
   roster: { role: string; holders: string[] }[];
   /** False when the tracker could not be reached, so `committable` is unknown rather than empty. */
   reachedTracker: boolean;
+};
+
+/**
+ * What a row that drafts one epic's stories needs beyond its pinned documents.
+ *
+ * The epic is the run's SUBJECT, so it is stated rather than left for the model to find in a
+ * document of nineteen. The existing stories are stated so a run never drafts what is already
+ * there — running the workflow again for an epic only ever adds.
+ */
+export type StoriesContext = {
+  epic: { ref: string; title: string; body: string; ticketKey: string | null };
+  existing: { ref: string; title: string }[];
 };
 
 export type PhaseRow = {

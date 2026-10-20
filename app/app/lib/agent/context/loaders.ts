@@ -10,7 +10,8 @@ import { sortByStep } from "../../data/steps";
 import { subjectOfRun } from "../../data/run-subject";
 import { withoutTaskCatalogue } from "./prompts";
 import { resolveReviewedTask } from "./resolve-reviewed-task";
-import type { AgentContext, PhaseRow, PinnedInput, SprintContext, WorkflowSummary } from "./types";
+import type { AgentContext, PhaseRow, PinnedInput, SprintContext, StoriesContext, WorkflowSummary } from "./types";
+import { existingStoriesOf } from "../../data/stories";
 
 /**
  * Record what this task reads, with the versions that were live when it started.
@@ -510,6 +511,38 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     sprint: produces === SPRINT_PLAN_PATH
       ? await loadSprintContext(actor.engagementId, taskId)
       : null,
+    stories: output === "stories" && subject?.ref
+      ? await loadStoriesContext(actor.engagementId, taskId, subject.ref)
+      : null,
+  };
+}
+
+/**
+ * The epic this run is about, and the stories it already has.
+ *
+ * Null when the epic cannot be found, which `handleDocument` turns into a refusal: drafting stories
+ * for an epic nobody can name is how a story ends up under the wrong parent on the board.
+ */
+async function loadStoriesContext(
+  engagementId: string, taskId: string, epicRef: string,
+): Promise<StoriesContext | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data: rows } = await sb.from("backlog_item")
+    .select("ref, title, body, ticket_key, created_at")
+    .eq("engagement_id", engagementId).eq("kind", "epic").eq("ref", epicRef)
+    .order("created_at", { ascending: false });
+  // Several backlogs may have used one handle; the one that reached the board is the epic.
+  const epic = (rows ?? []).find((r) => r.ticket_key) ?? rows?.[0];
+  if (!epic) return null;
+  const existing = await existingStoriesOf(engagementId, epicRef, taskId);
+  return {
+    epic: {
+      ref: epicRef, title: epic.title as string,
+      body: (epic.body as string | null) ?? "",
+      ticketKey: (epic.ticket_key as string | null) ?? null,
+    },
+    existing: existing.map((s) => ({ ref: s.ref, title: s.title })),
   };
 }
 

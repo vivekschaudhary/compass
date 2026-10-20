@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAction } from "../../../_ui/pending/useAction";
-import type { WorkflowCard } from "@/app/lib/data/workflows-view";
+import type { WorkflowCard, EpicChoice } from "@/app/lib/data/workflows-view";
 import { initiatePhaseAction, startWorkflowAction } from "./actions";
 
 /**
@@ -70,21 +70,31 @@ export function WorkflowsTable({
   engagement,
   role,
   workflows,
+  epics = [],
 }: {
   engagement: string;
   role: string;
   workflows: WorkflowCard[];
+  /** The epics a per-epic workflow can be started for. Empty when none is on the board yet. */
+  epics?: EpicChoice[];
 }) {
   const { run, pending } = useAction();
   const [openKey, setOpenKey] = useState<string | null>(null);
   // Pending until the refreshed queue has rendered, not merely until the action returned.
   const busy = pending ? openKey : null;
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Which epic each per-epic card is set to start for. Not preselected: starting a run for an epic
+  // nobody chose is a run nobody asked for.
+  const [chosen, setChosen] = useState<Record<string, string>>({});
   const { line, seconds, reset } = useProgress(engagement, role, busy !== null);
 
   if (!workflows.length) return null;
 
   function open(w: WorkflowCard) {
+    if (w.needsSubject && !chosen[w.key]) {
+      setErrors((e) => ({ ...e, [w.key]: `Choose which ${w.needsSubject} to start ${w.label} for.` }));
+      return;
+    }
     setErrors((e) => ({ ...e, [w.key]: "" }));
     reset();
     setOpenKey(w.key);
@@ -92,7 +102,10 @@ export function WorkflowsTable({
     try {
       const r = w.taskId
         ? await startWorkflowAction(engagement, role, w.taskId)
-        : await initiatePhaseAction(engagement, role, w.code);
+        : await initiatePhaseAction(
+            engagement, role, w.code, undefined,
+            w.needsSubject ? chosen[w.key] : undefined,
+          );
       if (!r.ok) {
         setErrors((e) => ({ ...e, [w.key]: r.error ?? `Could not open ${w.label}.` }));
         return;
@@ -146,12 +159,28 @@ export function WorkflowsTable({
               <td className="cell-action">
                 {w.state === "available" ? (
                   <div className="start-control">
+                    {w.needsSubject && (
+                      <select
+                        id={`subject-${w.key}`}
+                        aria-label={`Epic to start ${w.label} for`}
+                        value={chosen[w.key] ?? ""}
+                        disabled={busy !== null}
+                        onChange={(e) => setChosen((c) => ({ ...c, [w.key]: e.target.value }))}
+                      >
+                        <option value="">{epics.length ? "Choose an epic…" : "No epics on the board yet"}</option>
+                        {epics.map((e) => (
+                          <option key={e.ref} value={e.ref}>
+                            {e.ticketKey} · {e.title} ({e.stories} {e.stories === 1 ? "story" : "stories"})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <button
                       className="btn btn-primary btn-compact"
-                      disabled={busy !== null}
+                      disabled={busy !== null || (w.needsSubject !== undefined && !epics.length)}
                       onClick={() => open(w)}
                     >
-                      {busy === w.key ? "Opening…" : `Open ${w.label}`}
+                      {busy === w.key ? "Opening…" : w.needsSubject ? `Start ${w.label}` : `Open ${w.label}`}
                     </button>
                     {busy === w.key && (
                       <p className="phases-progress" aria-live="polite">

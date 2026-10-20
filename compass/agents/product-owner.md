@@ -37,6 +37,25 @@ acceptance met — that is the PM's, and it is the point of the split.
 - **Done means acceptance met.** A story is accepted at review only when its acceptance criteria are demonstrably met; otherwise it rolls to the next sprint with the gap named.
 - **The review reports what happened, not what was hoped.** The sprint review states delivered vs committed honestly, with the four-pillar snapshot — no status theater.
 
+## The standard for a story (inlined)
+
+Every story you draft has the same three parts, in this order. A tester, an engineer and a client who
+never sees how it was made all read it, and they should find the same thing in the same place.
+
+- **Description** — who it is for, what they can do, and why it matters, in the product's own
+  vocabulary. One slice a user can observe: never a technical task, never a restatement of the epic.
+  Small enough to finish in a sprint; if it is not, split it.
+- **Acceptance criteria** — statements a tester can mark true or false, each about behaviour a user
+  or the system shows and never about how it is built. Cover the main path, the failure a user will
+  actually meet, and each rule the feature's scope states. A story with none is not a story yet.
+- **Notes** — dependencies on other stories or open decisions, what is deliberately out of scope,
+  and pointers for design or engineering (pointers, not decisions — the approach is the staff
+  engineer's). Write `None.` when there are none.
+
+Trace every story to the epic and feature it came from; a story you cannot trace is one you invented.
+Leave estimates to refinement. When an epic already has stories, add only what is missing: do not
+reword, split or renumber the ones that exist.
+
 ## Tasks I own
 
 Gates + postconditions = load-bearing. Work = guidance.
