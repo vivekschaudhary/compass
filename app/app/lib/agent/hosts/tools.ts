@@ -198,6 +198,67 @@ export const TOOLS: Anthropic.Tool[] = [
     strict: true,
   },
   {
+    name: "stories",
+    description:
+      "Produce the stories for ONE epic: the epic you were given, and only that epic. Use this " +
+      "instead of `draft` when the deliverable is the epic's stories — they become real issues on " +
+      "the client's board under the epic, so they have to come back as structure.\n\n" +
+      "Return only the stories the epic STILL NEEDS. Stories it already has are listed in your " +
+      "instructions; they stay exactly as they are, and a story that repeats one is dropped. Each " +
+      "story is one shippable, user-observable slice of the epic — never a technical task, never a " +
+      "restatement of the epic, and small enough to finish in a sprint. Every story carries a " +
+      "description, acceptance criteria and notes. Acceptance criteria are things a tester can check " +
+      "as true or false; a story without any is dropped. Same evidence rule as `draft`: every story " +
+      "traces to a document you were given, and what you do not have you say rather than invent.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description:
+            "The chat message a person reads, not a second copy of the stories. Plain language — " +
+            "explain it the way you'd explain it to a smart 12-year-old, no jargon. Lead with what " +
+            "you produced for this epic and what needs a look; then note any input that was missing " +
+            "and what it cost.",
+        },
+        stories: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "What the user can do, in the product's vocabulary." },
+              description: {
+                type: "string",
+                description: "Markdown. Who it is for, what they can do and why it matters.",
+              },
+              acceptance_criteria: {
+                type: "array",
+                items: { type: "string" },
+                description: "Each one a statement a tester can check as true or false. At least one.",
+              },
+              notes: {
+                type: "string",
+                description:
+                  "Markdown. Dependencies, open questions, out-of-scope points, design or technical " +
+                  "pointers. Say `None.` if there are none.",
+              },
+              cites: {
+                type: "array",
+                items: { type: "string" },
+                description: "Document paths this story was derived from.",
+              },
+            },
+            required: ["title", "description", "acceptance_criteria", "notes", "cites"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["summary", "stories"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
     name: "code",
     description:
       "Build the story: state what you are about to change and why, then hand off to the " +
@@ -456,6 +517,7 @@ export const TOOLS: Anthropic.Tool[] = [
  */
 export const TOOL_FOR: Record<string, string> = {
   backlog: "backlog",
+  stories: "stories",
   sprint: "sprint",
   roster: "roster",
   code: "code",

@@ -6,6 +6,7 @@ import { measureTask, evaluate, type CriterionRow } from "../gates";
 import { mirrorPhase, type Mirrored } from "../tracker";
 import { composeTicketBodies } from "../ticket-body";
 import { startTask } from "../tasks";
+import { fanOutKindOf } from "../../fan-out-kinds";
 import type { BoardResult, Initiated } from "./types";
 
 /**
@@ -54,7 +55,69 @@ async function putOnBoard(
   runId: string,
   roleCode: string,
 ): Promise<BoardResult> {
+  // A directly started run about ONE thing (refining one epic's stories) is not put on the board as
+  // a run. `mirrorPhase` would open a Jira epic for it — one per epic refined — and `ticket-body`
+  // would then write that epic's description; the work it does is what lands on the board (the
+  // stories), not the two rows that produce them. "Nothing owed", so `no-tracker`, not an error.
+  if (await isSubjectRun(runId)) {
+    return { epic: null, stories: [], expected: 0, problems: [], reason: "no-tracker" };
+  }
   return mirrorAndCompose(engagementId, runId, roleCode, () => mirrorPhase(engagementId, runId, roleCode));
+}
+
+/** A top-level run opened about one thing. Nested runs carry a subject too and are NOT this. */
+async function isSubjectRun(runId: string): Promise<boolean> {
+  const sb = supabaseAdmin();
+  if (!sb) return false;
+  const { data } = await sb.from("workflow_run")
+    .select("subject_ref, parent_task_id").eq("id", runId).maybeSingle();
+  return Boolean(data?.subject_ref) && !data?.parent_task_id;
+}
+
+/**
+ * The fan-out kind a workflow's PUBLISHED version declares in its produced paths (`{epic}`), or null
+ * for a workflow that covers its whole engagement.
+ */
+async function subjectKindOf(workflowId: string): Promise<string | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data: ver } = await sb.from("workflow_version")
+    .select("id").eq("workflow_id", workflowId).eq("status", "published").maybeSingle();
+  if (!ver) return null;
+  const { data: steps } = await sb.from("workflow_step")
+    .select("produces").eq("workflow_version_id", ver.id);
+  return fanOutKindOf((steps ?? []).map((s) => s.produces as string | null));
+}
+
+/**
+ * Is `ref` an epic this engagement has, and is it on the board?
+ *
+ * On the board matters: the stories drafted for it are filed under its Jira key on approval, and an
+ * epic with no key would leave them pending with nowhere to go. Said plainly at the start instead
+ * of discovered at the end.
+ */
+export async function usableEpic(
+  engagementId: string, ref: string,
+): Promise<{ ok: true; epic: { ref: string; title: string; ticketKey: string } } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+  const { data } = await sb.from("backlog_item")
+    .select("ref, title, ticket_key, created_at")
+    .eq("engagement_id", engagementId).eq("kind", "epic").eq("ref", ref)
+    .order("created_at", { ascending: false });
+  if (!data?.length) return { ok: false, error: `This engagement has no epic '${ref}'.` };
+  // Several backlogs may have used the same handle; the one that reached the board is the epic.
+  const onBoard = data.find((r) => r.ticket_key);
+  if (!onBoard) {
+    return {
+      ok: false,
+      error: `Epic '${ref}' (${data[0].title}) is not on the board yet — approve the epics first.`,
+    };
+  }
+  return {
+    ok: true,
+    epic: { ref, title: onBoard.title as string, ticketKey: onBoard.ticket_key as string },
+  };
 }
 
 async function tasksOfRun(runId: string) {
@@ -164,9 +227,16 @@ export async function initiatePhase(
    * run (the idempotent branch just above) does not retroactively reclassify it.
    */
   phaseTag?: string,
+  /**
+   * What this run is ABOUT — an epic's ref, for a workflow whose produced paths name `{epic}`.
+   * Required for such a workflow and refused for one that has no use for it: a run without its
+   * subject cannot fill its own path, and a subject nothing reads is a mistake worth saying.
+   */
+  subjectRef?: string | null,
 ): Promise<Initiated> {
   const sb = supabaseAdmin();
   if (!sb) return { ok: false, error: "Supabase is not configured." };
+  const subject = subjectRef?.trim() || null;
 
   const orgId = await orgIdFor(actor.engagementId);
   const { data: wf } = await sb
@@ -181,6 +251,26 @@ export async function initiatePhase(
       ok: false,
       error: `No workflow '${workflowCode}' in this organisation.`,
     };
+
+  const kind = await subjectKindOf(wf.id as string);
+  if (kind && !subject) {
+    return {
+      ok: false,
+      error: `${wf.label} is about one ${kind}. Choose which ${kind} to start it for.`,
+    };
+  }
+  if (subject && !kind) {
+    return { ok: false, error: `${wf.label} does not take a subject; start it without one.` };
+  }
+  if (subject && kind !== "epic") {
+    return { ok: false, error: `Starting a ${wf.label} run for a ${kind} is not supported yet.` };
+  }
+  let epicInfo: { ref: string; title: string; ticketKey: string } | null = null;
+  if (subject) {
+    const epic = await usableEpic(actor.engagementId, subject);
+    if (!epic.ok) return { ok: false, error: epic.error };
+    epicInfo = epic.epic;
+  }
 
   const blocked = await unmetEntryGate(actor, wf.id);
   if (blocked.length) {
@@ -203,13 +293,17 @@ export async function initiatePhase(
     };
   }
 
-  const { data: open } = await sb
+  // Per subject: the open run for THIS epic is returned; another epic's is not this one. Without a
+  // subject, a run that covers the engagement is what is looked for — never a subject run of the
+  // same workflow, which would otherwise be picked up arbitrarily.
+  const openQuery = sb
     .from("workflow_run")
     .select("id")
     .eq("engagement_id", actor.engagementId)
     .eq("workflow_id", wf.id)
     .eq("state", "open")
-    .is("parent_task_id", null)
+    .is("parent_task_id", null);
+  const { data: open } = await (subject ? openQuery.eq("subject_ref", subject) : openQuery.is("subject_ref", null))
     .order("opened_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -235,6 +329,7 @@ export async function initiatePhase(
     p_workflow_code: workflowCode,
     p_actor: actor.holder ?? actor.roleCode,
     p_actor_role: actor.roleCode,
+    p_subject_ref: subject,
   });
   if (error) {
     await emitRefusal({
@@ -245,13 +340,27 @@ export async function initiatePhase(
       actorRoleCode: actor.roleCode,
       actorUserId: actor.holder ?? null,
       reason: error.message,
-      payload: { workflow: workflowCode, at: "open" },
+      payload: { workflow: workflowCode, at: "open", subject },
     });
     return { ok: false, error: error.message };
   }
 
   if (phaseTag) {
     await sb.from("workflow_run").update({ phase_tag: phaseTag }).eq("id", runId as string);
+  }
+
+  // A run about one epic names it. `subject_key` is the tracker's name for it, and it is what fills
+  // `{epic}` in the run's paths (see `resolvePath`) — a page called `CT-288` is findable by someone
+  // holding the ticket. And the run's rows say WHICH epic: nineteen runs of the same workflow would
+  // otherwise be nineteen identical lines on the Jobs page.
+  if (subject && epicInfo) {
+    await sb.from("workflow_run").update({ subject_key: epicInfo.ticketKey }).eq("id", runId as string);
+    const { data: own } = await sb.from("work_task").select("id, title").eq("workflow_run_id", runId as string);
+    for (const t of own ?? []) {
+      await sb.from("work_task")
+        .update({ title: `${t.title} — ${epicInfo.ref} ${epicInfo.title}` })
+        .eq("id", t.id as string);
+    }
   }
 
   const tasks = await tasksOfRun(runId as string);
@@ -264,7 +373,7 @@ export async function initiatePhase(
     actorKind: "human",
     actorRoleCode: actor.roleCode,
     actorUserId: actor.holder ?? null,
-    payload: { workflow: workflowCode, rows: tasks.length, phaseTag: phaseTag ?? null },
+    payload: { workflow: workflowCode, rows: tasks.length, phaseTag: phaseTag ?? null, subject },
   });
 
   for (const t of tasks) {

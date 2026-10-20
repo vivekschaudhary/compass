@@ -160,6 +160,8 @@ export async function initiatePhaseAction(
   workflowCode: string,
   /** Reporting bucket for a repeating phase (`sprint`) — see `initiatePhase`. */
   phaseTag?: string,
+  /** The epic a per-epic workflow (`refine-stories`) is started for — see `initiatePhase`. */
+  subjectRef?: string | null,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -170,7 +172,7 @@ export async function initiatePhaseAction(
   if (!actor)
     return { ok: false, error: "That role does not exist on this engagement." };
 
-  const result = await initiatePhase(actor, workflowCode, phaseTag);
+  const result = await initiatePhase(actor, workflowCode, phaseTag, subjectRef);
   revalidatePath(`/e/${engagement}/jobs`);
   if (!result.ok) return { ok: false, error: result.error };
 

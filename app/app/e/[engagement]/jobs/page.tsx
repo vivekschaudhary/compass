@@ -12,7 +12,7 @@ import { notFound } from "next/navigation";
 import { resolveActor, rolesOnEngagement } from "@/app/lib/data/actor";
 import { tasksFor, startedCounts, queueNotices } from "@/app/lib/data/tasks";
 import { storedStatusFor } from "@/app/lib/data/gates";
-import { workflowsFor } from "@/app/lib/data/workflows-view";
+import { workflowsFor, epicChoicesFor } from "@/app/lib/data/workflows-view";
 import { history } from "@/app/lib/data/history";
 import { WorkflowsTable } from "./WorkflowsTable";
 import { TasksTable } from "./TasksTable";
@@ -65,6 +65,8 @@ export default async function JobsPage(
 
   const tasks = await tasksFor(actor);
   const workflows = await workflowsFor(actor);
+  // Only read when some workflow here is about one epic — every other role's page pays nothing.
+  const epics = workflows.some((w) => w.needsSubject) ? await epicChoicesFor(actor) : [];
   const done = await history(actor);
 
   const myRole = actor.roleCode;
@@ -103,7 +105,7 @@ export default async function JobsPage(
         </p>
       )}
 
-      <WorkflowsTable engagement={engagement} role={actor.roleCode} workflows={workflows} />
+      <WorkflowsTable engagement={engagement} role={actor.roleCode} workflows={workflows} epics={epics} />
 
       {notice.empty === "all-done" && workflows.length === 0 ? (
         // An engagement that has finished its work presents exactly like one that has not begun —
