@@ -24,13 +24,22 @@ export async function pinInputs(taskId: string, engagementId: string): Promise<n
   if (!sb) return 0;
 
   const { data: task } = await sb.from("work_task")
-    .select("workflow_step_id").eq("id", taskId).maybeSingle();
+    .select("workflow_step_id, workflow_run_id, subject_ref").eq("id", taskId).maybeSingle();
   if (!task?.workflow_step_id) return 0;
 
   const { data: step } = await sb.from("workflow_step")
     .select("reads").eq("id", task.workflow_step_id).maybeSingle();
-  const paths = step?.reads ?? [];
-  if (!paths.length) return 0;
+  const declared: string[] = step?.reads ?? [];
+  if (!declared.length) return 0;
+
+  // A declared read may name the run's subject (`stories/{epic}`). It is pinned under the path it
+  // RESOLVES to: pinned as written, no document has that name, and the agent is told its input was
+  // never drafted while the page — which resolves the same path for its review panel — shows it.
+  // An unresolvable one keeps its literal form, so the absence is reported with the token visible.
+  const subject = await subjectOfRun(
+    (task.workflow_run_id as string | null) ?? null, (task.subject_ref as string | null) ?? null,
+  );
+  const paths = declared.map((p) => (p.includes("{") ? resolvePath(p, subject) ?? p : p));
 
   const { data: docs } = await sb.from("document")
     .select("path, current_version_id").eq("engagement_id", engagementId).in("path", paths);
@@ -77,6 +86,47 @@ async function repoNameFor(engagementId: string, key: string): Promise<string | 
   const { data } = await sb.from("repo").select("name")
     .eq("engagement_id", engagementId).eq("key", key).maybeSingle();
   return (data?.name as string | null) ?? key;
+}
+
+/**
+ * Re-point pins that were recorded with the subject still unfilled.
+ *
+ * Pins written before `pinInputs` resolved a subject carry the literal path (`stories/{epic}`), and
+ * a task that already has pins is never pinned again, so without this they stay absent for the life
+ * of the task however many times the document is filed. Only the PATH moves, and only to the one the
+ * run's own subject gives it; a pin that already names a version is left alone, as everywhere else.
+ */
+async function healSubjectPins(taskId: string): Promise<number> {
+  const sb = supabaseAdmin();
+  if (!sb) return 0;
+
+  const { data: pins } = await sb.from("task_input")
+    .select("document_path, document_version").eq("task_id", taskId);
+  const literal = (pins ?? []).filter(
+    (p) => (p.document_path as string).includes("{") && !p.document_version,
+  );
+  if (!literal.length) return 0;
+
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_run_id, subject_ref").eq("id", taskId).maybeSingle();
+  const subject = await subjectOfRun(
+    (task?.workflow_run_id as string | null) ?? null, (task?.subject_ref as string | null) ?? null,
+  );
+
+  let moved = 0;
+  for (const pin of literal) {
+    const resolved = resolvePath(pin.document_path as string, subject);
+    if (!resolved || resolved === pin.document_path) continue;
+    const taken = (pins ?? []).some((p) => p.document_path === resolved);
+    if (taken) {
+      await sb.from("task_input").delete().eq("task_id", taskId).eq("document_path", pin.document_path);
+    } else {
+      await sb.from("task_input").update({ document_path: resolved })
+        .eq("task_id", taskId).eq("document_path", pin.document_path);
+    }
+    moved++;
+  }
+  return moved;
 }
 
 async function resolveEmptyPins(taskId: string, engagementId: string): Promise<number> {
@@ -130,7 +180,10 @@ async function ensureInputs(taskId: string, engagementId: string): Promise<Pinne
   const { count } = await sb.from("task_input")
     .select("*", { count: "exact", head: true }).eq("task_id", taskId);
   if (!count) await pinInputs(taskId, engagementId);
-  else await resolveEmptyPins(taskId, engagementId);
+  else {
+    await healSubjectPins(taskId);
+    await resolveEmptyPins(taskId, engagementId);
+  }
 
   return loadInputs(taskId, engagementId);
 }
