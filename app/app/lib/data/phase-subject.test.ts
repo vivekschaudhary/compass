@@ -14,8 +14,10 @@ vi.mock("./gates", () => ({
 }));
 vi.mock("./tasks", () => ({ startTask: async () => ({ ok: false, error: "not this test" }) }));
 const mirrorPhase = vi.fn();
+const mirrorEpicTasks = vi.fn();
 vi.mock("./tracker", () => ({
   mirrorPhase: (...a: unknown[]) => mirrorPhase(...a),
+  mirrorEpicTasks: (...a: unknown[]) => mirrorEpicTasks(...a),
   mirrorNested: vi.fn(), mirrorState: vi.fn(),
 }));
 const composeTicketBodies = vi.fn(async () => ({ written: [], expected: 0, problems: [] }));
@@ -72,6 +74,7 @@ beforeEach(() => {
   rpcCalls.length = 0;
   nextRun = 0;
   mirrorPhase.mockReset().mockResolvedValue({ epic: "CT-1", stories: [], expected: 0, problems: [] });
+  mirrorEpicTasks.mockReset().mockResolvedValue({ epic: "CT-288", stories: [], expected: 2, problems: [] });
   db = {
     workflow: [
       { id: "wf-refine", code: "refine-stories", label: "Refine stories for each epic", org_id: "org1", enabled: true },
@@ -133,11 +136,11 @@ describe("opening a run for an epic", () => {
     expect(db.workflow_run[0].subject_key).toBe("CT-288");
   });
 
-  it("says which epic on each task, so nineteen runs are not nineteen identical lines", async () => {
+  it("names the epic by its Jira key on each task, so nineteen runs are not nineteen identical lines", async () => {
     await initiatePhase(actor, "refine-stories", undefined, "ACC-E1");
     expect(db.work_task.map((t) => t.title)).toEqual([
-      "Create stories for an epic — ACC-E1 Sign-in and account creation",
-      "Approve the epic stories — ACC-E1 Sign-in and account creation",
+      "Create stories for an epic — CT-288 Sign-in and account creation",
+      "Approve the epic stories — CT-288 Sign-in and account creation",
     ]);
   });
 
@@ -162,11 +165,21 @@ describe("opening a run for an epic", () => {
     expect(rpcCalls).toHaveLength(2);
   });
 
-  it("is not put on the board as a run — its stories are what reach the board", async () => {
+  it("hangs its tasks under the epic it is about — it does not open an epic of its own", async () => {
     const r = await initiatePhase(actor, "refine-stories", undefined, "ACC-E1");
     expect(r.ok).toBe(true);
+    expect(mirrorEpicTasks).toHaveBeenCalledWith("e1", "run-1", "product-owner");
+    // `mirrorPhase` would open a Jira epic per run and compose a body over the real epic's.
     expect(mirrorPhase).not.toHaveBeenCalled();
     expect(composeTicketBodies).not.toHaveBeenCalled();
+  });
+
+  it("hands back what the board did, so a refused task is not mistaken for a mirrored one", async () => {
+    mirrorEpicTasks.mockResolvedValue({
+      epic: "CT-288", stories: [], expected: 2, problems: ['Could not create the task "x" under CT-288.'], reason: "story-refused",
+    });
+    const r = await initiatePhase(actor, "refine-stories", undefined, "ACC-E1");
+    expect(r.ok && r.mirrored?.reason).toBe("story-refused");
   });
 });
 

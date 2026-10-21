@@ -196,3 +196,65 @@ export async function recordStories(
   if (error) return { written: 0, problems: [`Recording the stories failed: ${error.message}`] };
   return { written: added.length, problems: [] };
 }
+
+/** Where an epic's refinement stands, for the line at the top of its tasks. */
+export type EpicRound = {
+  epicRef: string;
+  epicKey: string | null;
+  epicTitle: string | null;
+  /** Stories the epic had before this run — drafted earlier, on the board, possibly in a sprint. */
+  existing: number;
+  /** Stories this run drafted. */
+  added: number;
+};
+
+/** "3 existing stories, 4 new in this round" — said the same way on every task of the run. */
+export function describeRound(r: Pick<EpicRound, "existing" | "added">): string {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  const parts = [
+    r.existing ? `${n(r.existing, "story", "stories")} already` : "no stories yet",
+    r.added ? `${r.added} new in this round` : "none drafted in this round",
+  ];
+  return parts.join(" · ");
+}
+
+/**
+ * The epic a task's run is about, and how many of its stories were there before this run and how
+ * many this run added. Null for a task whose run is not about an epic, which is nearly all of them,
+ * so the common path is two small reads that return nothing.
+ *
+ * "This run" is every task of the run: the drafting row wrote the rows, but the person looking at the
+ * review row needs the same answer, so it is asked of the run and not of the task.
+ */
+export async function epicRoundOf(engagementId: string, taskId: string): Promise<EpicRound | null> {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const { data: task } = await sb.from("work_task")
+    .select("workflow_run_id").eq("id", taskId).maybeSingle();
+  if (!task?.workflow_run_id) return null;
+  const { data: run } = await sb.from("workflow_run")
+    .select("subject_ref, subject_key, parent_task_id").eq("id", task.workflow_run_id).maybeSingle();
+  if (!run?.subject_ref || run.parent_task_id) return null;
+
+  const { data: runTasks } = await sb.from("work_task")
+    .select("id").eq("workflow_run_id", task.workflow_run_id);
+  const ours = new Set((runTasks ?? []).map((t) => t.id as string));
+
+  const { data: items } = await sb.from("backlog_item")
+    .select("kind, title, task_id, ticket_key, created_at")
+    .eq("engagement_id", engagementId).eq("parent_ref", run.subject_ref).eq("kind", "story");
+  const { data: epics } = await sb.from("backlog_item")
+    .select("title, ticket_key, created_at")
+    .eq("engagement_id", engagementId).eq("kind", "epic").eq("ref", run.subject_ref)
+    .order("created_at", { ascending: false });
+  const epic = (epics ?? []).find((e) => e.ticket_key) ?? epics?.[0];
+
+  const added = (items ?? []).filter((i) => ours.has(i.task_id as string)).length;
+  return {
+    epicRef: run.subject_ref as string,
+    epicKey: (run.subject_key as string | null) ?? (epic?.ticket_key as string | null) ?? null,
+    epicTitle: (epic?.title as string | null) ?? null,
+    existing: (items ?? []).length - added,
+    added,
+  };
+}

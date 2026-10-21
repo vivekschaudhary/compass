@@ -1607,6 +1607,11 @@ tr.row.parent:has(.row-expand-input:not(:checked)) + tr.child-group-row {
 .job-title-row h2 {
   margin: 0;
 }
+/* Which epic this run is about and how far its stories have got — one quiet line under the title. */
+.job-epic-round {
+  margin: var(--space-1) 0 0;
+  font-size: 12.5px;
+}
 
 /* Chat and document, side by side.
    The document column was 300px — enough for a list of headings, not enough to READ. It is now a

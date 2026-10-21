@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("../supabase", () => ({ supabaseAdmin: () => null }));
 
-const { planStoriesFor, storyBody, storyNumber } = await import("./stories");
+const { planStoriesFor, storyBody, storyNumber, describeRound } = await import("./stories");
 
 const good = (over: Record<string, unknown> = {}) => ({
   title: "Sign in with Apple",
@@ -131,5 +131,23 @@ describe("helpers", () => {
     expect(storyBody({ description: "d", acceptance: ["a"], notes: "n" })).toBe(
       "## Description\nd\n\n## Acceptance criteria\n- a\n\n## Notes\nn",
     );
+  });
+});
+
+describe("describeRound", () => {
+  it("says what the epic had and what this round added", () => {
+    expect(describeRound({ existing: 3, added: 4 })).toBe("3 stories already · 4 new in this round");
+  });
+
+  it("uses the singular", () => {
+    expect(describeRound({ existing: 1, added: 1 })).toBe("1 story already · 1 new in this round");
+  });
+
+  it("says plainly when there is nothing yet, rather than printing zeroes", () => {
+    expect(describeRound({ existing: 0, added: 0 })).toBe("no stories yet · none drafted in this round");
+  });
+
+  it("says a first decomposition added things to an empty epic", () => {
+    expect(describeRound({ existing: 0, added: 5 })).toBe("no stories yet · 5 new in this round");
   });
 });

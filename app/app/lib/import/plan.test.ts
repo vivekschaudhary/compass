@@ -449,6 +449,37 @@ describe("output: stories", () => {
   });
 });
 
+describe("workflow trigger", () => {
+  const base = (trigger: string, produces = "stories/{epic}"): Bundle => ({
+    workstreams: "code,label\nProduct,Product\n",
+    roles: "code,label,tier,scope,workstream\nproduct-owner,Product Owner,practitioner,mine,Product\n",
+    workflows: `code,label,workstream,owner_role,trigger,repeatable\nrefine,Refine,Product,product-owner,${trigger},TRUE\n`,
+    steps: `workflow,ord,kind,role,task,produces,output,renders\nrefine,1,agent,product-owner,draft-stories,${produces},stories,doc\n`,
+    criteria: "workflow,task,kind,text\nrefine,draft-stories,done,Stories drafted\n",
+  });
+  const agents = { ...empty, agents: ["product-owner"] };
+
+  it("accepts epic-filed on a workflow that is about one epic", () => {
+    expect(planImport(base("epic-filed"), agents).ok).toBe(true);
+  });
+
+  it("accepts no trigger at all — a workflow a person starts", () => {
+    expect(planImport(base(""), agents).ok).toBe(true);
+  });
+
+  it("refuses a trigger the app never raises", () => {
+    const r = planImport(base("epic-approved"), agents);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.problems.map((p) => p.message).join(" ")).toContain("epic-approved");
+  });
+
+  it("refuses epic-filed on a workflow that produces nothing per epic", () => {
+    const r = planImport(base("epic-filed", "stories"), agents);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.problems.map((p) => p.message).join(" ")).toMatch(/produces nothing per epic/);
+  });
+});
+
 describe("guards against checks that never evaluate", () => {
   const base: Bundle = {
     workstreams: "code,label\nEngineering,Engineering\n",

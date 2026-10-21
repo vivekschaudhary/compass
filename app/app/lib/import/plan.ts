@@ -12,6 +12,7 @@ import { parseRecords, parseList, parseBool } from "./csv";
 import { destinationOf } from "../adapters";
 import { FAN_OUT_MODE, fanOutKindOf } from "../fan-out-kinds";
 import type { Refusal } from "../envelope";
+import { WORKFLOW_TRIGGERS } from "../workflow-triggers";
 
 /* ── what a bundle contains ──────────────────────────────────────────────── */
 
@@ -418,6 +419,19 @@ export function planImport(bundle: Bundle, existing: Existing): PlanResult {
     if (w.ownerRole && !knownRoles.has(w.ownerRole))
       add("workflows.csv", row, `Workflow '${w.code}' is owned by role '${w.ownerRole}', which does not exist.`,
         "Add it to roles.csv, or correct the spelling.");
+
+    // A trigger names an event the app emits. One it does not know is a workflow that promises to
+    // start itself and never will.
+    if (w.trigger && !(WORKFLOW_TRIGGERS as readonly string[]).includes(w.trigger))
+      add("workflows.csv", row, `Workflow '${w.code}' declares trigger '${w.trigger}'.`,
+        `Use one of: ${WORKFLOW_TRIGGERS.join(", ")} — or leave it empty for a workflow a person starts. ` +
+        `A trigger the app never raises is a workflow that waits for something that cannot happen.`);
+    // An `epic-filed` workflow is opened for ONE epic, so it has to be about one: without `{epic}`
+    // in a produced path, every epic would open the same run and fight over one document.
+    if (w.trigger === "epic-filed" &&
+        !steps.some((s) => s.workflow === w.code && s.produces.includes("{epic}")))
+      add("workflows.csv", row, `Workflow '${w.code}' is triggered by epic-filed but produces nothing per epic.`,
+        "Make a step produce a path naming {epic} (e.g. stories/{epic}), or remove the trigger.");
 
     // A promise the steps do not keep. `outputs` becomes the gate on every row that nests this
     // workflow, so an output nothing produces is a gate that can never pass — and one that is

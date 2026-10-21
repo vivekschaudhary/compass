@@ -26,8 +26,12 @@ vi.mock("./backlog", () => ({
     return Array.from({ length: storyRows.n }, (_, i) => ({ id: `r${i}`, ref: `S${i}` }));
   },
 }));
+const { openRunsForEpics } = vi.hoisted(() => ({
+  openRunsForEpics: vi.fn<(...a: unknown[]) => Promise<{ opened: unknown[]; problems: string[] }>>(async () => ({ opened: [], problems: [] })),
+}));
+vi.mock("./epic-runs", () => ({ openRunsForEpics }));
 const { mirrorBacklog } = vi.hoisted(() => ({
-  mirrorBacklog: vi.fn<(...a: unknown[]) => Promise<{ epics: never[]; stories: { ref: string; key: string; title: string }[]; expected: number; problems: string[] }>>(
+  mirrorBacklog: vi.fn<(...a: unknown[]) => Promise<{ epics: { ref: string; key: string; title: string }[]; stories: { ref: string; key: string; title: string }[]; expected: number; problems: string[] }>>(
     async () => ({ epics: [], stories: [{ ref: "S1", key: "CT-9", title: "t" }], expected: 1, problems: [] }),
   ),
 }));
@@ -253,5 +257,52 @@ describe("stories materialised on a review's close", () => {
     taskStep = "draft";
     expect(await materialiseFrom(ACTOR, "t-draft")).toBeNull();
     expect(mirrorBacklog).not.toHaveBeenCalled();
+  });
+});
+
+// Filing an epic opens the work that belongs to it. Only epics CREATED by this filing: a re-approval
+// files nothing new, and opening runs again for epics already on the board would be noise.
+describe("epics filed to the board", () => {
+  beforeEach(() => {
+    steps = {
+      draft: { id: "s-draft", task: "draft", produces: "deliverables@tickets", output: "backlog", renders: "doc", depends_on: [], workflow_version_id: WORKFLOW_VERSION },
+      approve: { task: "approve", produces: null, output: null, renders: "doc-review", depends_on: ["draft"], workflow_version_id: WORKFLOW_VERSION },
+    } as typeof steps;
+    taskStep = "approve";
+    closingRunId = "run-1";
+    storyRows.n = 2;
+    runSubject.value = null;
+    mirrorBacklog.mockReset();
+    openRunsForEpics.mockClear();
+  });
+
+  it("opens the triggered workflows for each epic just created", async () => {
+    mirrorBacklog.mockResolvedValue({
+      epics: [{ ref: "ACC-E1", key: "CT-288", title: "a" }, { ref: "LST-E1", key: "CT-290", title: "b" }],
+      stories: [], expected: 2, problems: [],
+    });
+    const r = await materialiseFrom(ACTOR, "t-approve");
+
+    expect(openRunsForEpics).toHaveBeenCalledTimes(1);
+    expect(openRunsForEpics.mock.calls[0][1]).toEqual([
+      { ref: "ACC-E1", key: "CT-288", title: "a" }, { ref: "LST-E1", key: "CT-290", title: "b" },
+    ]);
+    expect(r?.created).toBe(2);
+  });
+
+  it("opens nothing when the filing created no epic", async () => {
+    mirrorBacklog.mockResolvedValue({ epics: [], stories: [], expected: 0, problems: [] });
+    await materialiseFrom(ACTOR, "t-approve");
+    expect(openRunsForEpics).not.toHaveBeenCalled();
+  });
+
+  it("reports a run that would not open without undoing the filing", async () => {
+    mirrorBacklog.mockResolvedValue({ epics: [{ ref: "ACC-E1", key: "CT-288", title: "a" }], stories: [], expected: 1, problems: [] });
+    openRunsForEpics.mockResolvedValue({ opened: [], problems: ["ACC-E1: refine-stories did not open — not ready"] });
+
+    const r = await materialiseFrom(ACTOR, "t-approve");
+
+    expect(r?.created).toBe(1);
+    expect(r?.problems).toEqual(["ACC-E1: refine-stories did not open — not ready"]);
   });
 });

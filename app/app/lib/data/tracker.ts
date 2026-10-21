@@ -251,6 +251,96 @@ export async function mirrorNested(
 }
 
 /**
+ * Put a run that is ABOUT one epic on the board: one Task per row, under that epic.
+ *
+ * `mirrorPhase` opens an epic for a run, which would create a second epic beside the one the run is
+ * about and then write its description over the real one. A per-epic run has an epic already — its
+ * subject, stored on the run as `subject_key` once the epic reached the board — so its rows hang
+ * under that, as plain Tasks. The epic itself is never created, renamed or described here.
+ *
+ * Tasks, not Stories: the stories this run PRODUCES are filed under the same epic on approval, and
+ * two kinds of thing called "story" under one epic is exactly the confusion the type is for.
+ *
+ * Idempotent the same way the others are: a row that has a key is skipped, so re-running after a
+ * Jira outage creates only what is missing.
+ */
+export async function mirrorEpicTasks(
+  engagementId: string, runId: string, actorRole: string,
+): Promise<Mirrored> {
+  const out: Mirrored = { epic: null, stories: [], expected: 0, problems: [] };
+  const sb = supabaseAdmin();
+  if (!sb) return { ...out, reason: "no-supabase", problems: ["Supabase is not configured."] };
+
+  const creds = await credsFor(engagementId);
+  if (!creds) {
+    return {
+      ...out, reason: "no-tracker",
+      problems: ["No Jira configured for this engagement — nothing mirrored."],
+    };
+  }
+
+  const { data: run } = await sb.from("workflow_run")
+    .select("id, subject_ref, subject_key, parent_task_id").eq("id", runId).maybeSingle();
+  if (!run) return { ...out, reason: "no-run", problems: ["No such run."] };
+  if (!run.subject_key) {
+    // Said, never guessed: hanging the tasks under nothing would put them on the board as loose
+    // items that read as finished work.
+    return {
+      ...out, reason: "no-parent-ticket",
+      problems: [`This run's epic (${run.subject_ref ?? "unknown"}) has no ticket on the board, so its tasks have nothing to hang under.`],
+    };
+  }
+  out.epic = run.subject_key as string;
+
+  const { data: rows } = await sb.from("work_task")
+    .select("id, title, role_code, state, ticket_key, workflow_step(ord)").eq("workflow_run_id", runId);
+  const tasks = sortByStep(rows ?? []);
+  out.expected = tasks.length;
+
+  // One lookup per role, before the loop, so both rows of a run resolve a person the same way.
+  const roster = await holdersOn(engagementId);
+  const assigneeOf = new Map<string, { accountId: string; displayName: string } | null>();
+  const resolve = async (role: string) => {
+    if (assigneeOf.has(role)) return assigneeOf.get(role) ?? null;
+    const name = roster.find((h) => h.role === role)?.name;
+    const user = name ? await findUser(creds, name) : null;
+    if (!name) out.problems.push(`No one is on the roster as \`${role}\`, so its task is unassigned.`);
+    else if (!user) out.problems.push(`No single Jira user matches "${name}" (\`${role}\`), so its task is unassigned.`);
+    assigneeOf.set(role, user);
+    return user;
+  };
+
+  for (const t of tasks) {
+    if (t.ticket_key) { out.stories.push({ taskId: t.id, key: t.ticket_key, title: t.title }); continue; }
+
+    const created = await createIssue(creds, {
+      type: "Task", summary: t.title, parentKey: out.epic,
+      description: `${t.title}.\n\n_Part of ${out.epic}._`,
+      labels: [t.role_code],
+    });
+    if (!created) {
+      out.problems.push(`Could not create the task "${t.title}" under ${out.epic}.`);
+      out.reason = "story-refused";
+      continue;
+    }
+    await sb.from("work_task").update({ ticket_key: created.key }).eq("id", t.id);
+    out.stories.push({ taskId: t.id, key: created.key, title: t.title });
+
+    const user = await resolve(t.role_code);
+    if (user) await updateIssue(creds, created.key, { assignee: { accountId: user.accountId } });
+    if (t.state !== "idle") await mirrorState(engagementId, t.id, t.state, actorRole);
+  }
+
+  await emit({
+    engagementId, subjectType: "workflow_run", subjectId: runId,
+    verb: "run.mirrored", actorKind: "system", actorRoleCode: actorRole,
+    payload: { parent: out.epic, tasks: out.stories.length, expected: out.expected, problems: out.problems },
+  });
+
+  return out;
+}
+
+/**
  * Put a phase on the board: one epic, one story per task.
  *
  * Called after the phase's tasks exist, so every story has something local to point at.

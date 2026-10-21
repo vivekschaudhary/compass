@@ -3,7 +3,7 @@ import type { Actor } from "../actor";
 import { orgIdFor, emit, emitRefusal } from "../events";
 import { sortByStep } from "../steps";
 import { measureTask, evaluate, type CriterionRow } from "../gates";
-import { mirrorPhase, type Mirrored } from "../tracker";
+import { mirrorPhase, mirrorEpicTasks, type Mirrored } from "../tracker";
 import { composeTicketBodies } from "../ticket-body";
 import { startTask } from "../tasks";
 import { fanOutKindOf } from "../../fan-out-kinds";
@@ -55,12 +55,12 @@ async function putOnBoard(
   runId: string,
   roleCode: string,
 ): Promise<BoardResult> {
-  // A directly started run about ONE thing (refining one epic's stories) is not put on the board as
-  // a run. `mirrorPhase` would open a Jira epic for it — one per epic refined — and `ticket-body`
-  // would then write that epic's description; the work it does is what lands on the board (the
-  // stories), not the two rows that produce them. "Nothing owed", so `no-tracker`, not an error.
+  // A run about ONE epic is not put on the board as a run of its own. `mirrorPhase` would open a Jira
+  // epic for it — one per epic refined — and `ticket-body` would then write that epic's description
+  // over the real one. Its rows hang under the epic it is ABOUT, as Tasks, and no bodies are composed:
+  // the epic is not ours to describe.
   if (await isSubjectRun(runId)) {
-    return { epic: null, stories: [], expected: 0, problems: [], reason: "no-tracker" };
+    return mirrorEpicTasks(engagementId, runId, roleCode);
   }
   return mirrorAndCompose(engagementId, runId, roleCode, () => mirrorPhase(engagementId, runId, roleCode));
 }
@@ -349,7 +349,8 @@ export async function initiatePhase(
     await sb.from("workflow_run").update({ phase_tag: phaseTag }).eq("id", runId as string);
   }
 
-  // A run about one epic names it. `subject_key` is the tracker's name for it, and it is what fills
+  // A run about one epic names it, by the KEY the people reading the board know it by (CT-288), not the
+  // agent's internal handle (ACC-E1). `subject_key` is the tracker's name for it, and it is what fills
   // `{epic}` in the run's paths (see `resolvePath`) — a page called `CT-288` is findable by someone
   // holding the ticket. And the run's rows say WHICH epic: nineteen runs of the same workflow would
   // otherwise be nineteen identical lines on the Jobs page.
@@ -358,7 +359,7 @@ export async function initiatePhase(
     const { data: own } = await sb.from("work_task").select("id, title").eq("workflow_run_id", runId as string);
     for (const t of own ?? []) {
       await sb.from("work_task")
-        .update({ title: `${t.title} — ${epicInfo.ref} ${epicInfo.title}` })
+        .update({ title: `${t.title} — ${epicInfo.ticketKey} ${epicInfo.title}` })
         .eq("id", t.id as string);
     }
   }
