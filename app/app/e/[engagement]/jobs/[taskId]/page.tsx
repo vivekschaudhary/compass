@@ -39,6 +39,7 @@ import { NestedRunPanel } from "./NestedRunPanel";
 import { RealtimeRefresh } from "./RealtimeRefresh";
 import { OptimisticTurnsProvider } from "./OptimisticTurns";
 import { DocTreeNav } from "./DocTreeNav";
+import { epicRoundOf, describeRound } from "@/app/lib/data/stories";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +129,8 @@ export default async function JobPage(
   const running = Boolean(taskRow?.executor) && !stale;
   const stalled = Boolean(taskRow?.executor) && stale;
 
+  // Which epic this run is about and how far its stories have got — null for nearly every task.
+  const epicRound = await epicRoundOf(actor.engagementId, taskId);
   const statuses = gates.get(taskId) ?? [];
   const doneCriteria = statuses
     .filter((g) => g.kind === "done")
@@ -167,6 +170,14 @@ export default async function JobPage(
             {STATE_LABEL[state ?? ""] ?? state}
           </Tag>
         </div>
+        {epicRound && (
+          // The epic by the key people know it by, and what this round adds to what was already
+          // there — so a reviewer opening one of several per-epic rows knows which, and what is new.
+          <p className="job-epic-round text-muted">
+            Epic {epicRound.epicKey ?? epicRound.epicRef}
+            {epicRound.epicTitle ? ` · ${epicRound.epicTitle}` : ""} · {describeRound(epicRound)}
+          </p>
+        )}
       </div>
 
       {/* Everything the old left column held, folded into one line you can open. */}

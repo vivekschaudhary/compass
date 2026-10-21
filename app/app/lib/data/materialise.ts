@@ -125,10 +125,22 @@ async function materialiseBacklog(actor: Actor, _markdown: string, taskId: strin
   }
 
   const mirrored = await mirrorBacklog(actor.engagementId, taskId, actor.roleCode);
+
+  // Every epic that just reached the board gets the work that belongs to it opened beside it — the
+  // workflows that declare `trigger: epic-filed`. Only epics CREATED now: a re-approval files nothing
+  // new and so opens nothing. Imported lazily because opening a run reaches the gates, which reach
+  // this file; a top-level import would make a cycle of the three.
+  const problems = [...mirrored.problems];
+  if (mirrored.epics.length) {
+    const { openRunsForEpics } = await import("./epic-runs");
+    const opened = await openRunsForEpics(actor, mirrored.epics);
+    problems.push(...opened.problems);
+  }
+
   return {
     ...out,
     created: mirrored.epics.length + mirrored.stories.length,
-    problems: mirrored.problems,
+    problems,
   };
 }
 
