@@ -181,13 +181,6 @@ Generic to this runtime. Task-specific rules live in the agent files.
     one row without checking the row next to it — each is a true observation reported at a wider
     scope than the evidence covers, and it is indistinguishable from a verified fact to whoever
     reads it. Widen the check or narrow the sentence.
-16. **Do not write new triggers.** The owner is moving away from them and they keep getting added.
-    That means no new `workflow.trigger` value, no new Postgres `create trigger`, and no new "when X
-    happens, automatically do Y" hook. If a change seems to need one, stop and ask instead of adding
-    it. What exists stays until the owner says otherwise: the database triggers (`touch_audit`,
-    `track_current_version`, `task_event`, `run_closes`, `version_not_on_folder`,
-    `document_comment_check_parent`) and the one workflow trigger, `epic-filed`
-    (`app/app/lib/workflow-triggers.ts`). Do not copy their pattern for the next thing.
 
 ---
 
