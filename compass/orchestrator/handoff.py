@@ -4,7 +4,7 @@
 
 Every verb takes the same envelope in and returns the same envelope out, so a caller reads one
 shape and never a traceback. A verb not in VERBS is refused, so nothing is reachable from outside
-that is not listed here. `generate` is the first verb; `run_call` (build) joins it later.
+that is not listed here. `generate` is the first verb, `survey` the second; `run_call` (build) joins later.
 """
 
 from __future__ import annotations
@@ -15,12 +15,14 @@ from typing import Callable
 
 from .generate import generate_json
 from .generate_contract import CONTRACT_VERSION
+from .survey import survey_json
 
 # Error codes a caller can switch on. Anything else is a bug in this module.
 ERRORS = frozenset({"unknown_verb", "invalid_input", "internal"})
 
 VERBS: dict = {
     "generate": generate_json,
+    "survey": survey_json,
 }
 
 

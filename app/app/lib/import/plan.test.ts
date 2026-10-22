@@ -233,11 +233,12 @@ describe("the shipped seed", () => {
    * tell "we fixed this" from "we removed the row". This one fails if the workflow shrinks to a
    * single unreviewed step, or if the author regains the close.
    *
-   * TWO ROWS, not three. It asserted draft → review → approve until the process dropped the
-   * separate review row: an epic technical design is drafted by the staff engineer and accepted by
-   * the principal engineer, and the acceptance IS the review. What the test is really here to hold
-   * is unchanged and is the reason it was not simply deleted when it went red — every row gated,
-   * and the approver not the author. Only the row count moved.
+   * THREE ROWS: survey → draft → approve. The survey row exists because the app's agent has no tool
+   * that opens a file, so the design cannot name real modules unless something reads the code for
+   * it; it is gated like any other row (its findings document must be published), and the design
+   * row must read what it filed. The separate review row is still gone — the principal engineer's
+   * acceptance IS the review. What the test is really here to hold is unchanged: every row gated,
+   * and the approver not the author.
    *
    * `draft-epic-tech-design` is the case that makes the gate assertion worth having: it produces
    * `epic/{epic}`, and `deriveCriteria` used to skip generating a Done gate for any path holding a
@@ -249,8 +250,13 @@ describe("the shipped seed", () => {
     const wf = planned().workflows.find((w) => w.row.code === "tech-design");
     expect(wf, "tech-design is gone from the seed").toBeTruthy();
     expect(wf!.steps.map((s) => s.task)).toEqual([
-      "draft-epic-tech-design", "approve-epic-tech-design",
+      "survey-epic-code", "draft-epic-tech-design", "approve-epic-tech-design",
     ]);
+    const survey = wf!.steps.find((s) => s.task === "survey-epic-code")!;
+    expect(survey.output).toBe("survey");
+    const design = wf!.steps.find((s) => s.task === "draft-epic-tech-design")!;
+    expect(design.dependsOn, "the design must follow the survey").toContain("survey-epic-code");
+    expect(design.reads, "the design must read what the survey filed").toContain(survey.produces);
     for (const step of wf!.steps) {
       const gates = wf!.criteria.filter((c) => c.kind === "done" && c.stepTask === step.task);
       expect(gates.length, `${step.task} has no Done gate`).toBeGreaterThan(0);

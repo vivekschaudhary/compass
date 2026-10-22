@@ -48,8 +48,9 @@ edge twice.
 
 | # | task | dispatch | owner | produces | output | depends-on |
 |---|------|----------|-------|----------|--------|------------|
-| 1 | Epic technical design | `agent: staff-engineer.draft-epic-tech-design` | staff-engineer | `03-architecture/epic/{epic}` | — | — |
-| 2 | Accept the technical design | `hitl` | principal-engineer | `—` | — | 1 |
+| 1 | Survey the code | `agent: staff-engineer.survey-epic-code` | staff-engineer | `03-architecture/epic/{epic}/code-survey` | survey | — |
+| 2 | Epic technical design | `agent: staff-engineer.draft-epic-tech-design` | staff-engineer | `03-architecture/epic/{epic}` | — | 1 |
+| 3 | Accept the technical design | `hitl` | principal-engineer | `—` | — | 2 |
 
 ## Why it is these rows
 
@@ -64,9 +65,19 @@ it looks wrong.
 and approved their own design — the arrangement commit 75524da9 removed from every other workflow
 in the seed. The principal engineer accepts.
 
-**The design is grounded in the code, and that is gated.** The architect reads the real repository,
-and every claim about it cites a file that was read. A design written from what the code is assumed
-to look like is the one that survives review and fails at build.
+**The design is grounded in the code, and that is gated — by a row, not by a promise.** The app's
+agent has no tool that opens a file, so it cannot read the repository itself. Row 1 hands the
+reading to the Python orchestrator, the way `scaffold-repo` hands boilerplate to the generator: the
+agent says what the design depends on, `handoff survey` reads every registered checkout read-only
+(`Read`, `Glob`, `Grep` — named, so nothing can be edited), and the findings are filed as
+`code-survey` with a file behind every claim. Each cited path is looked up in the checkout and a
+path that does not exist fails the survey, so a module name the reader invented never reaches row 2.
+Row 2 designs from that page. A design written from what the code is assumed to look like is the
+one that survives review and fails at build.
+
+**A survey needs a checkout.** A repo that exists only on GitHub (the scaffold writes through the
+API) has no local path, and the survey is refused with the place to set one rather than run on
+nothing.
 
 **Departures are named, not taken quietly.** The two tiers above are the bar. An epic that needs
 something outside them is a decision for the foundation or the feature architecture, not something

@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GenerateResult } from "./generate-contract";
+import type { SurveyResult } from "./survey-contract";
 
 export type HandoffCallRow = {
   id: string;
@@ -17,7 +18,7 @@ export type HandoffCallRow = {
 
 export async function openHandoffCall(
   sb: SupabaseClient,
-  args: { id: string; orgId: string; engagementId: string; taskId: string; kind: "generate"; request: unknown },
+  args: { id: string; orgId: string; engagementId: string; taskId: string; kind: "generate" | "survey"; request: unknown },
 ): Promise<string> {
   const { data, error } = await sb
     .from("handoff_call")
@@ -44,6 +45,19 @@ export async function closeHandoffCall(sb: SupabaseClient, id: string, result: G
       pr_url: result.pr_url,
       closed_at: new Date().toISOString(),
     })
+    .eq("id", id);
+  if (error) throw new Error(`could not close the handoff record ${id}: ${error.message}`);
+}
+
+/**
+ * Close a SURVEY record. Its own function because a survey's statuses and result are not the
+ * generator's: no pull request, findings instead. `closeHandoffCall` stays typed to the generator so
+ * a pull-request rule cannot be applied to a survey, or skipped for a scaffold.
+ */
+export async function closeSurveyCall(sb: SupabaseClient, id: string, result: SurveyResult): Promise<void> {
+  const { error } = await sb
+    .from("handoff_call")
+    .update({ status: result.status, result, closed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(`could not close the handoff record ${id}: ${error.message}`);
 }

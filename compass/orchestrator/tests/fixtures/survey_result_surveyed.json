@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "status": "surveyed",
+  "sections": [{ "heading": "Sign-in", "body": "Handled in `src/auth.ts:10`." }],
+  "files_cited": ["src/auth.ts"],
+  "refusal": null,
+  "log_ref": "l",
+  "usage": { "input_tokens": 100, "output_tokens": 50 }
+}
