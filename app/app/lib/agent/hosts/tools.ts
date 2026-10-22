@@ -340,37 +340,6 @@ export const TOOLS: Anthropic.Tool[] = [
     strict: true,
   },
   {
-    name: "survey",
-    description:
-      "Read the existing codebase so the design you write can name real files. You cannot open a file " +
-      "yourself: you say what you need to know, and the app has the code read — read-only, by a separate " +
-      "reader that cites a real file for every claim and fails the whole survey if any cited path does " +
-      "not exist. The findings are filed as a document that your next step reads.\n\n" +
-      "Ask what the DESIGN depends on: the modules and entry points this epic touches, the existing " +
-      "patterns to follow (auth, data access, error handling, navigation), the data model and contracts " +
-      "it must stay compatible with, and how the code is tested. Ask about the code, not about what " +
-      "should be built — the reader reports what is there and proposes nothing.",
-    input_schema: {
-      type: "object",
-      properties: {
-        summary: {
-          type: "string",
-          description: "One or two sentences on what you are about to look for and why. A person reads this.",
-        },
-        focus: {
-          type: "string",
-          description:
-            "What to find out, as specific questions or areas, one per line. Name the epic's capabilities " +
-            "so the reader looks in the right places. Anything the code does not contain comes back as " +
-            "\"Not found\", which is a real answer.",
-        },
-      },
-      required: ["summary", "focus"],
-      additionalProperties: false,
-    },
-    strict: true,
-  },
-  {
     name: "sprint",
     description:
       "Plan ONE sprint: commit to a set of stories that already exist on the board, and say which " +
@@ -558,9 +527,6 @@ export const TOOL_FOR: Record<string, string> = {
   // aliased it to `code` and produced "this build run has no story on the tracker" on every live
   // run; this is the corrected version, with `scaffold`'s own handler in run.ts.
   scaffold: "scaffold",
-  // `survey` hands the reading of the code to a read-only reader, as `scaffold` hands the writing of
-  // boilerplate to a generator. The agent has no file tool; this is how a design row gets to cite one.
-  survey: "survey",
   // `supplied` maps to `ask` — which is already in every set — so the filter below yields ASK
   // ALONE. That is deliberate and is the entire mechanism: a row whose deliverable is handed over
   // by a person must not be able to write it, and the reliable way to stop a model doing something

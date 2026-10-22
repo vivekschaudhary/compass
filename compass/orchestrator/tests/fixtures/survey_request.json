@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "repos": [{ "key": "api", "local_path": "/tmp/checkouts/api" }],
-  "subject_ref": "KAN-12",
-  "focus": "How does sign-in work today, and which modules would an Apple sign-in touch?",
-  "context": "Epic ACC-E1: Sign-in and account creation.",
-  "caller": { "kind": "ts", "handoff_call_id": "11111111-2222-3333-4444-555555555555" }
-}

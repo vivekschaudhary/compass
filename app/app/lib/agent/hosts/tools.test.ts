@@ -23,16 +23,6 @@ describe("toolsFor", () => {
     expect(names).toEqual(["ask", "scaffold"]);
   });
 
-  it("offers its OWN tool (plus ask) for output: 'survey' — and no draft to file a design with", () => {
-    const names = toolsFor("survey").map((t) => t.name).sort();
-    expect(names).toEqual(["ask", "survey"]);
-  });
-
-  it("does not offer survey to a step that did not declare it", () => {
-    expect(toolsFor(null).map((t) => t.name)).not.toContain("survey");
-    expect(toolsFor("code").map((t) => t.name)).not.toContain("survey");
-  });
-
   it("falls back to ask/draft for an output with no special tool", () => {
     const names = toolsFor("something-unrecognised").map((t) => t.name).sort();
     expect(names).toEqual(["ask", "draft"]);

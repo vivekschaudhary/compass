@@ -241,7 +241,6 @@ export function inputPrompt(ctx: AgentContext): string {
   if (ctx.template) parts.push(templatePrompt(ctx.template));
   if (ctx.output === "supplied") parts.push(suppliedPrompt(ctx));
   if (ctx.output === "scaffold") parts.push(scaffoldPrompt(ctx));
-  if (ctx.output === "survey") parts.push(surveyPrompt(ctx));
 
   return parts.join("\n\n");
 }
@@ -443,29 +442,5 @@ function sprintPrompt(s: SprintContext): string {
     roster,
     caveat,
     `</sprint>`,
-  ].join("\n");
-}
-
-/**
- * That this row reads the code through a reader, and what to ask it.
- *
- * Said in the prompt because the model otherwise has no way to know it cannot open a file, and
- * answers a design row by asking the human for a file tree it could have had read. The tool is
- * offered only on this row; this tells the model why, and what the findings are for.
- */
-function surveyPrompt(ctx: AgentContext): string {
-  const subject = ctx.subject?.ref ?? "(unknown — this run has no subject)";
-  return [
-    `<survey subject="${subject}">`,
-    `You cannot open files. This row has the existing code READ for you: call \`survey\` once with what`,
-    `the design for ${subject} depends on. A separate read-only reader opens the repositories, reports`,
-    `what is there with a file behind every claim, and the app files its findings as the document the`,
-    `next row designs from. You write no design here, and you need not draft anything.`,
-    ``,
-    `Ask about the code as it is: the modules and entry points this epic touches, the patterns to`,
-    `follow, the data model and contracts to stay compatible with, and how it is tested. Take the`,
-    `epic's capabilities and the architecture documents above as the places to start. Do not ask the`,
-    `human for files — the reader has them.`,
-    `</survey>`,
   ].join("\n");
 }

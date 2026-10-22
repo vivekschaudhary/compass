@@ -46,9 +46,8 @@ epics,3,hitl,product-manager,approve-research,,,,,,Review and approve the covera
 epics,4,agent,product-owner,draft-epics,deliverables@tickets,backlog,"product-brief,features,timeline,epic-research",,,The epics,,approve-research,doc
 epics,6,hitl,product-manager,approve-epics,,,,,,Review and approve the epics,,draft-epics,doc-review
 epics,7,workflow,staff-engineer,design-epics-tech,,,deliverables,,tech-design,Technical design per epic,,approve-epics,none
-tech-design,1,agent,staff-engineer,survey-epic-code,epic/{epic}/code-survey,survey,"deliverables,features,foundational-architecture,feature-architecture",,,Survey the code,,,doc
-tech-design,2,agent,staff-engineer,draft-epic-tech-design,epic/{epic},,"deliverables,features,foundational-architecture,feature-architecture",,,Epic technical design,architecture,survey-epic-code,doc
-tech-design,3,hitl,principal-engineer,approve-epic-tech-design,,,,,,Accept the technical design,,draft-epic-tech-design,doc-review
+tech-design,1,agent,staff-engineer,draft-epic-tech-design,epic/{epic},design,"deliverables,features,foundational-architecture,feature-architecture",,,Epic technical design,architecture,,doc
+tech-design,2,hitl,principal-engineer,approve-epic-tech-design,,,,,,Accept the technical design,,draft-epic-tech-design,doc-review
 build,1,agent,engineer,implement-story,{subject}@scm,code,,,,Implement the story,,,code
 build,2,agent,automation,write-e2e-tests,{subject}@scm,code,,,,Automated tests for the story,,implement-story,code
 build,3,agent,reviewer,review-pr,{subject}@scm,code,,,,Review the change,,write-e2e-tests,code
