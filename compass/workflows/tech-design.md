@@ -64,9 +64,13 @@ it looks wrong.
 and approved their own design — the arrangement commit 75524da9 removed from every other workflow
 in the seed. The principal engineer accepts.
 
-**The design is grounded in the code, and that is gated.** The architect reads the real repository,
-and every claim about it cites a file that was read. A design written from what the code is assumed
-to look like is the one that survives review and fails at build.
+**The design is grounded in the architecture documents, not in the code.** The foundation and
+feature architecture are the source of truth and the row reads both, so the design names components
+as they define them and cites the document each fact came from. Build executes only what is
+documented, so there is no second authority to reconcile: a component the documents do not define is
+marked `new:` with the document that should record it, never guessed at. The architect has no
+codebase access and the app gives it none. This replaced an earlier requirement to name real files,
+which the agent could not meet and which would have made the code a rival source of truth.
 
 **Departures are named, not taken quietly.** The two tiers above are the bar. An epic that needs
 something outside them is a decision for the foundation or the feature architecture, not something

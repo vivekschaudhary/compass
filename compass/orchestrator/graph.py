@@ -103,7 +103,10 @@ def _load_table_steps(graph_text: str) -> list:
         if agent_m:
             steps.append(WorkflowStep(
                 number=ord_, title=title, agent=agent_m.group(1), task=agent_m.group(2),
-                agent_file=f'compass/agents/{agent_m.group(1)}.md', is_hitl=False))
+                # Bare file name, as the `### Step N.` form gives it: run.py joins this onto
+                # `<compass_dir>/agents/`, so a `compass/agents/` prefix here made every agent in a
+                # table-format workflow read "agent file not found" when the orchestrator ran it.
+                agent_file=f'{agent_m.group(1)}.md', is_hitl=False))
         elif nests_m:
             # A nested workflow is not an agent step. It carries its owner so the queue can show
             # who is accountable, and its target so a runner knows what to open.
