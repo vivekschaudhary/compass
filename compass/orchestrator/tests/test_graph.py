@@ -252,6 +252,37 @@ class TestRealWorkflows(unittest.TestCase):
         self.assertEqual((steps[6].agent, steps[6].task), ("support", "write-postmortem"))
 
 
+class TestEveryAgentStepResolves(unittest.TestCase):
+    """A step that names an agent must name a file run.py can open.
+
+    run.py resolves `<compass_dir>/agents/<step.agent_file>`. The table-format parser once returned
+    `compass/agents/<name>.md`, which resolves to nothing; the three phase files are executed by the
+    app, not this orchestrator, so nobody noticed until a step was handed to Python.
+    """
+
+    def test_table_format_agent_file_is_a_bare_name_that_exists(self):
+        steps = load_workflow(WORKFLOWS / "tech-design.md")
+        agent_steps = [s for s in steps if s.agent and s.task]
+        self.assertTrue(agent_steps, "tech-design declares no agent step")
+        for s in agent_steps:
+            self.assertEqual(s.agent_file, f"{s.agent}.md")
+            self.assertTrue((COMPASS_DIR / "agents" / s.agent_file).exists(), s.agent_file)
+
+    # Known and NOT fixed here: build step 5 (arbitrate-dispute) names `pm`, and the agent file is
+    # `product-manager.md`. Listed so it stays visible; the test below fails when it is fixed, so
+    # this entry cannot go stale.
+    KNOWN_MISSING = {"build.md step 5: pm.md"}
+
+    def test_no_real_workflow_names_an_agent_file_that_does_not_exist(self):
+        missing = set()
+        for wf in sorted(WORKFLOWS.glob("*.md")):
+            for s in load_workflow(wf):
+                if s.agent_file and not (COMPASS_DIR / "agents" / s.agent_file).exists():
+                    missing.add(f"{wf.name} step {s.number}: {s.agent_file}")
+        self.assertEqual(missing - self.KNOWN_MISSING, set(), "steps naming an agent file that does not exist")
+        self.assertEqual(self.KNOWN_MISSING - missing, set(), "fixed — remove it from KNOWN_MISSING")
+
+
 class TestRouteParsing(unittest.TestCase):
     def test_routes_parsed(self):
         steps = _parse(_wf(
