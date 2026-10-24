@@ -136,7 +136,11 @@ export async function resolveSpecFromTable(engagementId: string | null, path: st
   if (!sb) return null;
 
   const cols = "content, updated_at, updated_by, base_hash, base_content";
-  const toSpec = (row: any, tier: Tier): ResolvedSpec => ({
+  type Row = {
+    content: string; updated_at?: string; updated_by?: string;
+    base_hash?: string | null; base_content?: string | null;
+  };
+  const toSpec = (row: Row, tier: Tier): ResolvedSpec => ({
     path: p, content: row.content, tier, updatedAt: row.updated_at, updatedBy: row.updated_by,
     baseHash: row.base_hash, baseContent: row.base_content,
   });
