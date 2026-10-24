@@ -23,6 +23,11 @@ class WorkflowStep:
 
 
 def load_workflow_meta(workflow_file: Path) -> dict:
+    """Read a workflow file and parse its frontmatter. See `parse_workflow_meta`."""
+    return parse_workflow_meta(workflow_file.read_text())
+
+
+def parse_workflow_meta(text: str) -> dict:
     """
     Parse machine-readable workflow frontmatter without a YAML dependency.
 
@@ -31,7 +36,6 @@ def load_workflow_meta(workflow_file: Path) -> dict:
     gate redesign). Supports both inline (`requires_approved: [a, b]`) and
     block list forms. Paths may contain a `<epic-id>` placeholder.
     """
-    text = workflow_file.read_text()
     fm_match = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
     requires = []
     if fm_match:
@@ -127,13 +131,19 @@ def _load_table_steps(graph_text: str) -> list:
 
 
 def load_workflow(workflow_file: Path) -> list:
+    """Read a workflow file and parse its dispatch graph. See `parse_workflow`."""
+    return parse_workflow(workflow_file.read_text())
+
+
+def parse_workflow(text: str) -> list:
     """
-    Parse a dispatch-graph workflow .md file.
+    Parse the text of a dispatch-graph workflow .md file.
+
+    Takes TEXT, not a path: the text comes from the spec table (`spec_source`), not the disk.
 
     Extracts steps from '### Step N. ...' headers inside the ## Dispatch graph
     section. Returns an ordered list of WorkflowStep.
     """
-    text = workflow_file.read_text()
 
     # Scope parsing to the dispatch graph section so we don't pick up
     # illustrative references in Notes / Edge cases.
