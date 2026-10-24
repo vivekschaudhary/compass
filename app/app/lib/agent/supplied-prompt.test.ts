@@ -13,7 +13,7 @@ vi.mock("../data/templates", () => ({ templateFor: async () => null }));
 vi.mock("../jira", () => ({ resolveJira: () => null, searchIssues: async () => [] }));
 vi.mock("../data/sprint", () => ({ nextSprintNumber: async () => 1, committedJql: () => "" }));
 vi.mock("../data/actor", () => ({ holdersOn: async () => [] }));
-vi.mock("../specs", () => ({ resolveSpec: async () => null, COMPASS_DIR: "/nowhere" }));
+vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null, COMPASS_DIR: "/nowhere" }));
 
 const { inputPrompt, revisionPrompt } = await import("./context");
 

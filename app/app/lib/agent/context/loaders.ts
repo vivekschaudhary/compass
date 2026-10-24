@@ -1,4 +1,4 @@
-import { resolveSpec } from "../../specs";
+import { resolveSpecFromTable } from "../../specs";
 import { templateFor } from "../../data/templates";
 import type { ResolvedTemplate } from "../../data/templates";
 import { destinationOf, resolvePath } from "../../adapters";
@@ -408,15 +408,13 @@ export async function doneCriteriaFor(stepId: string): Promise<string[]> {
 /**
  * The markdown a role brings, ready to be a system prompt.
  *
- * Through the spec spine, not off the disk.
+ * From the `spec_file` TABLE, never the disk: engagement override, then org default. The repo's
+ * `compass/agents/` is only what `scripts/seed-specs.mts` loads from; once seeded, the table
+ * is the source and an edit there is what the next run reads. An empty table is a missing file,
+ * reported by every caller — it must not fall back to a checkout, which is how an unseeded table
+ * once looked healthy.
  *
- * Every framework file resolves in three tiers — engagement override, then org default, then what
- * compass/ ships — through `specs.ts`. The app was meant to read through that spine and instead read `compass/agents/<agent>.md` straight
- * from the filesystem, which silently dropped the first two tiers: an engagement that had
- * customised how its delivery manager works got the framework default and no error saying so.
- *
- * Null when the role has no `agent`, or when the file it names does not exist — `role.code = 'pm'`
- * points at `agents/pm.md`, which is not in the repo. A missing agent file is REPORTED by every
+ * Null when the role has no `agent`, or when no row exists for the file it names. A missing agent file is REPORTED by every
  * caller, never substituted. Inventing a role description would produce an agent that behaves
  * plausibly and follows none of the actual discipline.
  *
@@ -433,7 +431,7 @@ export async function agentMarkdown(
     .select("agent").eq("org_id", orgId).eq("code", roleCode).maybeSingle();
   if (!role?.agent) return null;
 
-  const resolved = await resolveSpec(engagementId, `agents/${role.agent}.md`);
+  const resolved = await resolveSpecFromTable(engagementId, `agents/${role.agent}.md`);
   return resolved ? withoutTaskCatalogue(resolved.content) : null;
 }
 

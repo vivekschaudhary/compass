@@ -5,7 +5,7 @@ import { test } from "vitest";
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { planImport, type Bundle, type Existing } from "./plan";
-import { readShippedDocTree } from "../doctree";
+import { parseDocTree } from "../doctree";
 
 const SEED = join(process.cwd(), "..", "compass", "seed");
 const FILES: Record<keyof Bundle, string> = {
@@ -34,7 +34,7 @@ test("plan the on-disk seed", () => {
   // `readExisting` falls back to on a fresh engagement.
   const existing: Existing = {
     workstreams: [], roles: [], agents, phases: [], ticketBriefs: [],
-    documents: readShippedDocTree().filter((n) => n.kind !== "folder").map((n) => n.path),
+    documents: parseDocTree(readFileSync(join(process.cwd(), "..", "compass", "templates", "doc-tree.md"), "utf-8")).filter((n) => n.kind !== "folder").map((n) => n.path),
     workflows: [],
   };
 

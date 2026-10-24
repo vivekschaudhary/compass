@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // workflow a declared read names the run's subject, and it has to be filled in the same way.
 
 vi.mock("server-only", () => ({}));
-vi.mock("../specs", () => ({ resolveSpec: async () => null, COMPASS_DIR: "/nowhere" }));
+vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null, COMPASS_DIR: "/nowhere" }));
 vi.mock("../adapters", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../adapters")>()),
   destinationOf: (p: string) => ({ path: p, slot: "docs" }),

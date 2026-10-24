@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // rewriting it would change what a finished draft was derived from.
 
 vi.mock("server-only", () => ({}));
-vi.mock("../specs", () => ({ resolveSpec: async () => null, COMPASS_DIR: "/nowhere" }));
+vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null, COMPASS_DIR: "/nowhere" }));
 vi.mock("../adapters", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../adapters")>()),
   destinationOf: (p: string) => ({ path: p, slot: "docs" }),
