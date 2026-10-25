@@ -1,7 +1,6 @@
 """The workflow and agent-file parsers take TEXT, so the text can come from the spec table.
 
-Two things are pinned: the text parser and the file wrapper agree on every real file, and the text
-parser does not read the disk at all (the wrapper is the only thing that does).
+Pinned: they accept every real file in `compass/`, and they do not read the disk at all.
 """
 import sys
 import unittest
@@ -19,21 +18,25 @@ def _steps(steps):
     return [(s.number, s.agent, s.task, s.is_hitl, s.agent_file, s.nests) for s in steps]
 
 
-class TestTextEqualsFile(unittest.TestCase):
-    def test_every_workflow_parses_the_same_from_text(self):
+class TestShippedFilesParse(unittest.TestCase):
+    """Every file the framework ships parses from its text — the product no longer has a Path reader
+    to compare against, so this pins that the parsers accept what is actually in `compass/`."""
+
+    def test_every_workflow_md_parses(self):
         for wf in sorted((COMPASS / "workflows").glob("*.md")):
             with self.subTest(wf.name):
-                self.assertEqual(_steps(graph.parse_workflow(wf.read_text())), _steps(graph.load_workflow(wf)))
-                self.assertEqual(graph.parse_workflow_meta(wf.read_text()), graph.load_workflow_meta(wf))
+                text = wf.read_text(encoding="utf-8")
+                self.assertIsInstance(graph.parse_workflow(text), list)
+                self.assertIn("requires_approved", graph.parse_workflow_meta(text))
 
-    def test_every_agent_frontmatter_parses_the_same_from_text(self):
+    def test_every_agent_frontmatter_parses(self):
         for f in sorted((COMPASS / "agents").glob("*.md")):
             text = f.read_text(encoding="utf-8")
             with self.subTest(f.name):
-                self.assertEqual(R.parse_preferred_hosts(text), R._read_preferred_hosts(f))
-                self.assertEqual(R.parse_agent_tools(text), R._read_agent_tools(f))
-                self.assertEqual(R.parse_model_tier(text), R._read_model_tier(f))
-                self.assertEqual(R.parse_reads_bet_catalog(text), R._reads_bet_catalog(f))
+                self.assertTrue(R.parse_preferred_hosts(text))          # defaults to ["claude"], never empty
+                self.assertIsInstance(R.parse_agent_tools(text), list)
+                self.assertIsInstance(R.parse_model_tier(text), str)
+                self.assertIsInstance(R.parse_reads_bet_catalog(text), bool)
 
 
 class TestTextParsersDoNotTouchTheDisk(unittest.TestCase):

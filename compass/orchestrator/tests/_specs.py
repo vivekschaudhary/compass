@@ -33,3 +33,40 @@ def workflows_from_md() -> list:
                           "title": st.title, "nests": st.nests, "depends_on": []})
         out.append({"code": f.stem, "engagement_id": None, "steps": steps})
     return out
+
+
+# ── file-reading conveniences for tests ─────────────────────────────────────────────────────────
+# The product parsers take TEXT (the text comes from the spec table). A test that parses one of the
+# repo's own files reads it here, so the Path-taking wrappers could be deleted from the product.
+
+def load_workflow(path):
+    return parse_workflow(Path(path).read_text(encoding="utf-8"))
+
+
+def load_workflow_meta(path):
+    from compass.orchestrator.graph import parse_workflow_meta
+    return parse_workflow_meta(Path(path).read_text(encoding="utf-8"))
+
+
+def _agent(path):
+    return Path(path).read_text(encoding="utf-8")
+
+
+def _read_preferred_hosts(path):
+    from compass.orchestrator.run import parse_preferred_hosts
+    return parse_preferred_hosts(_agent(path))
+
+
+def _read_agent_tools(path):
+    from compass.orchestrator.run import parse_agent_tools
+    return parse_agent_tools(_agent(path))
+
+
+def _read_model_tier(path):
+    from compass.orchestrator.run import parse_model_tier
+    return parse_model_tier(_agent(path))
+
+
+def _reads_bet_catalog(path):
+    from compass.orchestrator.run import parse_reads_bet_catalog
+    return parse_reads_bet_catalog(_agent(path))

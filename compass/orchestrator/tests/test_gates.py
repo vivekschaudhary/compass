@@ -16,7 +16,7 @@ from compass.orchestrator.connector import (
     read_frontmatter_status,
     set_frontmatter_status,
 )
-from compass.orchestrator.graph import load_workflow, load_workflow_meta
+from compass.orchestrator.tests._specs import load_workflow, load_workflow_meta
 import subprocess
 
 import os
