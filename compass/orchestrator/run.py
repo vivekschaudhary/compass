@@ -2455,6 +2455,25 @@ def _run_workflow(
 # CLI entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
+#: The spellings of COMPASS_CLAUDE_HOST, identical to the app's (`requestedHost` in
+#: app/app/lib/agent/hosts/select.ts). The app spawns this process with its own environment, so a
+#: value the app reads as "use the CLI" must not be read here as "use the API": that is a silent
+#: downgrade to the metered host, set by someone who set the variable to stop paying per token.
+_CLAUDE_HOST_CLI = frozenset({"1", "true", "on", "yes", "cli", "claude-code"})
+_CLAUDE_HOST_API = frozenset({"", "0", "false", "off", "no", "api"})
+
+
+def claude_host_requested(raw) -> bool:
+    """True when COMPASS_CLAUDE_HOST asks for the `claude` CLI. Raises ValueError for a value that
+    names neither host — the app halts on those, and a typo must not pass as the default."""
+    value = (raw or "").strip().lower()
+    if value in _CLAUDE_HOST_CLI:
+        return True
+    if value in _CLAUDE_HOST_API:
+        return False
+    raise ValueError(f"Unknown COMPASS_CLAUDE_HOST {raw!r}. It accepts 'cli'/1 or 'api'/0 (the default).")
+
+
 def _module_mismatch_warning(compass_dir, running=None) -> str:
     """#40: warn when the RUNNING orchestrator code is a VENDORED framework copy that
     differs from --compass-dir — the footgun where `python -m compass.orchestrator.run`
@@ -3037,8 +3056,11 @@ def main(argv=None):
 
     # #120: subscription CLI host — --claude-cli flag OR COMPASS_CLAUDE_HOST=cli
     # (the env var is how the dashboard opts in: spawned runs inherit os.environ).
-    claude_cli = args.claude_cli or os.environ.get(
-        "COMPASS_CLAUDE_HOST", "").lower() in ("cli", "claude-code")
+    try:
+        claude_cli = args.claude_cli or claude_host_requested(os.environ.get("COMPASS_CLAUDE_HOST"))
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     # #155: same opt-in shape for the Codex CLI host (makes the reviewer reachable
     # for a CLI-only operator) — --codex-cli flag OR COMPASS_CODEX_HOST=cli.
     codex_cli = args.codex_cli or os.environ.get(
