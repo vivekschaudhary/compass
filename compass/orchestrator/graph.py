@@ -22,6 +22,32 @@ class WorkflowStep:
                                            # workflows freely; only the row knows which it is.
 
 
+def steps_from_rows(rows: list) -> list:
+    """Build the dispatch steps from the published `workflow_step` rows (`spec_source.workflow_steps`).
+
+    The database's steps ARE the graph — `number` is the row's `ord`, which is what the app passes as
+    `--step`, so the two cannot drift the way a `.md` copy did (build: 8 steps there, 5 in the seed).
+
+    What the `.md` carried and the rows do not: routing-gate targets, `artifact_target` and the
+    `requires_approved` gate. The app gates each row itself (a task opens when its `depends_on` are
+    done), so the orchestrator is handed a single step, not a gated graph.
+    """
+    steps = []
+    for r in sorted(rows, key=lambda x: x["ord"]):
+        hitl = r["kind"] == "hitl"
+        agent = None if hitl or r.get("nests") else r.get("agent")
+        steps.append(WorkflowStep(
+            number=r["ord"],
+            title=r.get("title") or r.get("task") or "",
+            is_hitl=hitl,
+            agent=agent,
+            task=None if hitl or r.get("nests") else r.get("task"),
+            agent_file=f"{agent}.md" if agent else None,
+            nests=r.get("nests"),
+        ))
+    return steps
+
+
 def load_workflow_meta(workflow_file: Path) -> dict:
     """Read a workflow file and parse its frontmatter. See `parse_workflow_meta`."""
     return parse_workflow_meta(workflow_file.read_text())

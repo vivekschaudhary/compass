@@ -22,6 +22,7 @@ Resolution mirrors the app (`resolveSpecFromTable`, `templateFor`, `resolveActor
   spec      engagement override → org default (`org_id = 'default'`)
   template  engagement → org → default
   role      engagement → org
+  workflow  engagement → org (published version only)
 
 The tier rules are pure functions over rows (`pick_spec`, `pick_template`, `pick_role`) so a shared
 vector file can pin them from both languages; the DB source only fetches candidate rows.
@@ -103,6 +104,18 @@ def pick_role(rows: list, engagement_id: Optional[str], code: str) -> Optional[d
     return None
 
 
+def pick_workflow(rows: list, engagement_id: Optional[str], code: str) -> Optional[dict]:
+    """Engagement's own workflow, then the org's. `rows` are already scoped to the org and enabled."""
+    if engagement_id:
+        for r in rows:
+            if r.get("code") == code and r.get("engagement_id") == engagement_id:
+                return r
+    for r in rows:
+        if r.get("code") == code and not r.get("engagement_id"):
+            return r
+    return None
+
+
 # ── the interface ────────────────────────────────────────────────────────────────────────────
 
 class SpecSource:
@@ -124,12 +137,22 @@ class SpecSource:
         """The role row (`agent`, `hosts`, `capabilities`, ...). Raises `SpecMissing`."""
         raise NotImplementedError
 
+    def workflow_steps(self, code: str) -> list:
+        """The PUBLISHED version's steps, in `ord` order. Raises `SpecMissing`.
+
+        Each step is `{ord, kind, role_code, agent, task, title, nests, depends_on}`; `agent` is the
+        role's agent file stem (`role.agent`), resolved here so no caller has to know the mapping.
+        This is the dispatch graph — the `workflows/*.md` copy is not read.
+        """
+        raise NotImplementedError
+
 
 class InMemorySpecSource(SpecSource):
     """Rows held in lists, resolved by the same pure functions. For tests, and for the vectors."""
 
-    def __init__(self, specs=None, templates=None, roles=None, engagement_id=None, org_id=None):
+    def __init__(self, specs=None, templates=None, roles=None, engagement_id=None, org_id=None, workflows=None):
         self.specs, self.templates, self.roles = specs or [], templates or [], roles or []
+        self.workflows = workflows or []   # {code, engagement_id, steps: [normalised step, as workflow_steps returns]}
         self.engagement_id, self.org_id = engagement_id, org_id
 
     def spec(self, path):
@@ -153,6 +176,12 @@ class InMemorySpecSource(SpecSource):
         if hit is None:
             raise SpecMissing(f"no role row for {code!r}")
         return hit
+
+    def workflow_steps(self, code):
+        hit = pick_workflow(self.workflows, self.engagement_id, code)
+        if hit is None or not hit.get("steps"):
+            raise SpecMissing(f"no published workflow {code!r}")
+        return sorted(hit["steps"], key=lambda st: st["ord"])
 
 
 def _default_transport(method: str, url: str, headers: dict, body=None):
@@ -227,6 +256,12 @@ class DbSpecSource(SpecSource):
             raise SpecMissing(f"no document_template row for {name!r} at any scope")
         return hit
 
+    def _wf_scope(self) -> str:
+        return "(engagement_id.is.null" + (f",engagement_id.eq.{self.engagement_id})" if self.engagement_id else ")")
+
+    def workflow_steps(self, code):
+        return _steps_from_db(self, code)
+
     def role(self, code):
         scope = "(engagement_id.is.null" + (f",engagement_id.eq.{self.engagement_id})" if self.engagement_id else ")")
         rows = self._get("role", select="code,label,agent,hosts,capabilities,engagement_id",
@@ -235,6 +270,40 @@ class DbSpecSource(SpecSource):
         if hit is None:
             raise SpecMissing(f"no role row for {code!r}")
         return hit
+
+
+def _steps_from_db(src, code):
+    wfs = src._get("workflow", select="id,code,engagement_id", org_id=f"eq.{src._org()}",
+                   code=f"eq.{code}", enabled="eq.true", **{"or": src._wf_scope()})
+    wf = pick_workflow(wfs, src.engagement_id, code)
+    if wf is None:
+        raise SpecMissing(f"no workflow {code!r} (enabled) for this org. Workflows are imported from "
+                          "compass/seed/*.csv by the app's /api/import.")
+    vers = src._get("workflow_version", select="id,version", workflow_id=f"eq.{wf['id']}", status="eq.published")
+    if not vers:
+        raise SpecMissing(f"workflow {code!r} has no published version")
+    rows = src._get("workflow_step",
+                    select="ord,kind,role_code,task,title,nests_workflow_code,depends_on",
+                    workflow_version_id=f"eq.{vers[0]['id']}", order="ord.asc")
+    if not rows:
+        raise SpecMissing(f"workflow {code!r} version {vers[0]['version']} has no steps")
+    agents = {}
+    out = []
+    for r in rows:
+        agent = None
+        if r.get("role_code"):
+            if r["role_code"] not in agents:
+                try:
+                    agents[r["role_code"]] = src.role(r["role_code"]).get("agent")
+                except SpecMissing:
+                    if r["kind"] == "agent":
+                        raise     # a step an agent must run, for a role that does not exist
+                    agents[r["role_code"]] = None
+            agent = agents[r["role_code"]]
+        out.append({"ord": r["ord"], "kind": r["kind"], "role_code": r.get("role_code"), "agent": agent,
+                    "task": r.get("task"), "title": r.get("title"),
+                    "nests": r.get("nests_workflow_code"), "depends_on": r.get("depends_on") or []})
+    return out
 
 
 def from_env(engagement_id: Optional[str], env=None, transport=None) -> DbSpecSource:
