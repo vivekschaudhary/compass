@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from compass.orchestrator.graph import load_workflow, load_workflow_meta
+from compass.orchestrator.tests._specs import load_workflow, load_workflow_meta
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
 WORKFLOWS = COMPASS_DIR / "workflows"
@@ -350,7 +350,7 @@ class TestBetCatalog(unittest.TestCase):
     def test_reads_bet_catalog_flag(self):
         import tempfile
         from pathlib import Path
-        from compass.orchestrator.run import _reads_bet_catalog
+        from compass.orchestrator.tests._specs import _reads_bet_catalog
         on = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
         on.write("---\nname: support\nloads_bet_catalog: true\n---\nbody\n"); on.close()
         off = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
@@ -460,7 +460,7 @@ class TestCostControl(unittest.TestCase):
 
     def test_read_model_tier(self):
         import tempfile
-        from compass.orchestrator.run import _read_model_tier
+        from compass.orchestrator.tests._specs import _read_model_tier
         d = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
         d.write("---\nname: engineer\nmodel_tier: deep\n---\nbody\n"); d.close()
         p = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
@@ -769,7 +769,7 @@ class TestRepoReadingAgentHosts(unittest.TestCase):
     host-capability-validation: pm (#86), researcher (#137), designer + ux-writer (#168)."""
 
     def test_no_chatgpt_for_repo_readers(self):
-        from compass.orchestrator.run import _read_preferred_hosts
+        from compass.orchestrator.tests._specs import _read_preferred_hosts
         agents = Path(__file__).resolve().parents[2] / "agents"
         for agent in ("designer", "ux-writer", "product-manager", "researcher"):
             hosts = _read_preferred_hosts(agents / f"{agent}.md")

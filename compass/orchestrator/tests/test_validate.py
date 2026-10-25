@@ -16,6 +16,7 @@ from pathlib import Path
 
 from compass.orchestrator import graph, validate
 from compass.orchestrator import run as runmod
+from compass.orchestrator.tests import _specs
 
 REPO = Path(__file__).resolve().parents[3]
 COMPASS = REPO / "compass"
@@ -80,14 +81,14 @@ class TestCouplingToRunPy(unittest.TestCase):
 
     def test_agent_fields_match_the_real_readers(self):
         r = validate.validate_agent(AGENT.read_text(encoding="utf-8"))
-        self.assertEqual(r["preferred_hosts"], runmod._read_preferred_hosts(AGENT))
-        self.assertEqual(r["executor_tools"], runmod._read_agent_tools(AGENT))
-        self.assertEqual(r["model_tier"] or "", runmod._read_model_tier(AGENT))
-        self.assertEqual(r["loads_bet_catalog"], runmod._reads_bet_catalog(AGENT))
+        self.assertEqual(r["preferred_hosts"], _specs._read_preferred_hosts(AGENT))
+        self.assertEqual(r["executor_tools"], _specs._read_agent_tools(AGENT))
+        self.assertEqual(r["model_tier"] or "", _specs._read_model_tier(AGENT))
+        self.assertEqual(r["loads_bet_catalog"], _specs._reads_bet_catalog(AGENT))
 
     def test_workflow_steps_match_the_real_parser(self):
         r = validate.validate_workflow(WORKFLOW.read_text(encoding="utf-8"))
-        real = graph.load_workflow(WORKFLOW)
+        real = _specs.load_workflow(WORKFLOW)
         self.assertEqual([s["n"] for s in r["steps"]], [s.number for s in real])
         self.assertEqual([s["hitl"] for s in r["steps"]], [s.is_hitl for s in real])
         self.assertEqual([s["agent"] for s in r["steps"]], [s.agent for s in real])

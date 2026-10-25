@@ -17,7 +17,7 @@ researcher disappears from the workflow entirely, a step vanishes... **and the H
 unchanged**. Every total still looks right. So an editor cannot gate on counts; it has to show the
 author the parsed STRUCTURE and compare it to what was there before. That is what this prints.
 
-So: run the REAL parsers and print the result. Reusing `graph.load_workflow` and run.py's
+So: run the REAL parsers and print the result. Reusing `graph.parse_workflow` and run.py's
 frontmatter readers is the whole point — a second implementation of those regexes (in TypeScript,
 say) would drift from the thing it imitates, which is precisely the bug class being prevented.
 `compass/orchestrator/tests/test_validate.py` pins that coupling so a rename in run.py fails CI

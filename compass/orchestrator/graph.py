@@ -48,11 +48,6 @@ def steps_from_rows(rows: list) -> list:
     return steps
 
 
-def load_workflow_meta(workflow_file: Path) -> dict:
-    """Read a workflow file and parse its frontmatter. See `parse_workflow_meta`."""
-    return parse_workflow_meta(workflow_file.read_text())
-
-
 def parse_workflow_meta(text: str) -> dict:
     """
     Parse machine-readable workflow frontmatter without a YAML dependency.
@@ -154,11 +149,6 @@ def _load_table_steps(graph_text: str) -> list:
                 number=ord_, title=title, agent=None, task=None,
                 agent_file=None, is_hitl=False))
     return steps
-
-
-def load_workflow(workflow_file: Path) -> list:
-    """Read a workflow file and parse its dispatch graph. See `parse_workflow`."""
-    return parse_workflow(workflow_file.read_text())
 
 
 def parse_workflow(text: str) -> list:

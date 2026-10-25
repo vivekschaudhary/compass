@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from compass.orchestrator import run as R
-from compass.orchestrator.graph import load_workflow
+from compass.orchestrator.tests._specs import load_workflow
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / "workflows"
 

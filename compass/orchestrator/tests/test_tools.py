@@ -16,7 +16,7 @@ _HAS_ANTHROPIC = importlib.util.find_spec("anthropic") is not None
 
 from compass.orchestrator.hosts import tools
 from compass.orchestrator.hosts.claude import dispatch_with_tools
-from compass.orchestrator.run import _read_agent_tools
+from compass.orchestrator.tests._specs import _read_agent_tools
 
 
 class TestSandbox(unittest.TestCase):

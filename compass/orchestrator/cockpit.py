@@ -151,9 +151,9 @@ _STATUS_GLYPH = {"done": "✓", "failed": "✗", "running": "▶", "awaiting": "
 
 
 def compass_dir(override=None) -> Path:
-    """Resolve the framework dir holding workflows/ — --compass-dir, else
-    $COMPASS_FW/compass, else ./compass. Used to load workflow graphs so the
-    step view can show *pending* (not-yet-started) steps."""
+    """Resolve the directory holding config.yaml — --compass-dir, else $COMPASS_FW/compass, else
+    ./compass. Handed to the runs the cockpit launches; the workflow graphs the step view shows
+    come from the database, not from here."""
     if override:
         return Path(override)
     fw = os.environ.get("COMPASS_FW")

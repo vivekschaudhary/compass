@@ -84,11 +84,6 @@ class BudgetExceeded(RuntimeError):
     run cleanly with a resume hint instead of burning more budget."""
 
 
-def _read_preferred_hosts(agent_file: Path) -> list:
-    """Read an agent file and parse its `preferred_hosts`. See `parse_preferred_hosts`."""
-    return parse_preferred_hosts(agent_file.read_text(encoding="utf-8"))
-
-
 def parse_preferred_hosts(text: str) -> list:
     """Parse preferred_hosts from agent-file YAML frontmatter, given the file's TEXT."""
     fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
@@ -158,11 +153,6 @@ def _remap_codex_cli(preferred_hosts: list) -> list:
     return ["codex-cli" if h == "codex" else h for h in preferred_hosts]
 
 
-def _read_agent_tools(agent_file: Path) -> list:
-    """Read an agent file and parse its `executor_tools`. See `parse_agent_tools`."""
-    return parse_agent_tools(agent_file.read_text(encoding="utf-8"))
-
-
 def parse_agent_tools(text: str) -> list:
     """
     Parse the optional `executor_tools:` list from agent frontmatter (#87 slice 1).
@@ -183,11 +173,6 @@ def parse_agent_tools(text: str) -> list:
     return [t.strip() for t in t_match.group(1).split(",") if t.strip()]
 
 
-def _read_model_tier(agent_file: Path) -> str:
-    """Read an agent file and parse its `model_tier`. See `parse_model_tier`."""
-    return parse_model_tier(agent_file.read_text(encoding="utf-8"))
-
-
 def parse_model_tier(text: str) -> str:
     """Optional `model_tier:` frontmatter (#115). 'deep' → the frontier model
     (Opus for Claude); absent/anything else → the economy default (Sonnet).
@@ -197,11 +182,6 @@ def parse_model_tier(text: str) -> str:
         return ""
     m = re.search(r'^model_tier:\s*([\w-]+)', fm.group(1), re.MULTILINE)
     return (m.group(1).strip().lower() if m else "")
-
-
-def _reads_bet_catalog(agent_file: Path) -> bool:
-    """Read an agent file and parse `loads_bet_catalog`. See `parse_reads_bet_catalog`."""
-    return parse_reads_bet_catalog(agent_file.read_text(encoding="utf-8"))
 
 
 def parse_reads_bet_catalog(text: str) -> bool:
@@ -2537,9 +2517,9 @@ def main(argv=None):
         metavar="PATH",
         dest="compass_dir",
         help=(
-            "Path to the Compass framework directory (the folder containing "
-            "agents/, workflows/, framework/). Defaults to <project-dir>/compass. "
-            "Override this when Compass lives in a separate repo from your project."
+            "The directory holding `config.yaml` (checks, stack, connectors). Defaults to "
+            "<project-dir>/compass. Agent prompts, workflows and stack profiles are NOT read from "
+            "here — they come from the database (see --engagement)."
         ),
     )
     parser.add_argument(
