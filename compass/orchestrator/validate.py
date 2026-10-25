@@ -36,7 +36,6 @@ import argparse
 import json
 import re
 import sys
-import tempfile
 from pathlib import Path
 
 from . import graph
@@ -49,25 +48,10 @@ def _read_source(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-def _with_temp_file(content: str, fn):
-    """graph/run readers take a Path, so stdin content needs to land on disk briefly.
-
-    Suffixed .md because some readers key off the extension, and deleted in `finally` so a parse
-    that raises does not leave the draft sitting in the temp dir.
-    """
-    tmp = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
-    try:
-        tmp.write(content)
-        tmp.close()
-        return fn(Path(tmp.name))
-    finally:
-        Path(tmp.name).unlink(missing_ok=True)
-
-
 def validate_workflow(content: str) -> dict:
     """Steps, HITL gates and routes, exactly as the orchestrator would see them."""
-    steps = _with_temp_file(content, graph.load_workflow)
-    meta = _with_temp_file(content, graph.load_workflow_meta)
+    steps = graph.parse_workflow(content)
+    meta = graph.parse_workflow_meta(content)
 
     out = []
     for s in steps:
@@ -137,10 +121,10 @@ def validate_workflow(content: str) -> dict:
 
 def validate_agent(content: str) -> dict:
     """The frontmatter the orchestrator reads when it dispatches this agent."""
-    hosts = _with_temp_file(content, runmod._read_preferred_hosts)
-    tools = _with_temp_file(content, runmod._read_agent_tools)
-    tier = _with_temp_file(content, runmod._read_model_tier)
-    catalog = _with_temp_file(content, runmod._reads_bet_catalog)
+    hosts = runmod.parse_preferred_hosts(content)
+    tools = runmod.parse_agent_tools(content)
+    tier = runmod.parse_model_tier(content)
+    catalog = runmod.parse_reads_bet_catalog(content)
 
     warnings = []
     has_fm = bool(re.match(r"^---\n.*?\n---", content, re.DOTALL))

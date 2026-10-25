@@ -84,8 +84,12 @@ class BudgetExceeded(RuntimeError):
 
 
 def _read_preferred_hosts(agent_file: Path) -> list:
-    """Parse preferred_hosts from agent file YAML frontmatter."""
-    text = agent_file.read_text(encoding="utf-8")
+    """Read an agent file and parse its `preferred_hosts`. See `parse_preferred_hosts`."""
+    return parse_preferred_hosts(agent_file.read_text(encoding="utf-8"))
+
+
+def parse_preferred_hosts(text: str) -> list:
+    """Parse preferred_hosts from agent-file YAML frontmatter, given the file's TEXT."""
     fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
     if not fm_match:
         return ["claude"]
@@ -154,6 +158,11 @@ def _remap_codex_cli(preferred_hosts: list) -> list:
 
 
 def _read_agent_tools(agent_file: Path) -> list:
+    """Read an agent file and parse its `executor_tools`. See `parse_agent_tools`."""
+    return parse_agent_tools(agent_file.read_text(encoding="utf-8"))
+
+
+def parse_agent_tools(text: str) -> list:
     """
     Parse the optional `executor_tools:` list from agent frontmatter (#87 slice 1).
 
@@ -164,7 +173,6 @@ def _read_agent_tools(agent_file: Path) -> list:
     host supports tool-use, the agent runs a tool loop instead of a single-shot
     call. Absent → empty list → single-shot path (unchanged).
     """
-    text = agent_file.read_text(encoding="utf-8")
     fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
     if not fm_match:
         return []
@@ -175,10 +183,14 @@ def _read_agent_tools(agent_file: Path) -> list:
 
 
 def _read_model_tier(agent_file: Path) -> str:
+    """Read an agent file and parse its `model_tier`. See `parse_model_tier`."""
+    return parse_model_tier(agent_file.read_text(encoding="utf-8"))
+
+
+def parse_model_tier(text: str) -> str:
     """Optional `model_tier:` frontmatter (#115). 'deep' → the frontier model
     (Opus for Claude); absent/anything else → the economy default (Sonnet).
     No agent ships 'deep' — opt up here when an agent needs the frontier model."""
-    text = agent_file.read_text(encoding="utf-8")
     fm = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
     if not fm:
         return ""
@@ -187,6 +199,11 @@ def _read_model_tier(agent_file: Path) -> str:
 
 
 def _reads_bet_catalog(agent_file: Path) -> bool:
+    """Read an agent file and parse `loads_bet_catalog`. See `parse_reads_bet_catalog`."""
+    return parse_reads_bet_catalog(agent_file.read_text(encoding="utf-8"))
+
+
+def parse_reads_bet_catalog(text: str) -> bool:
     """
     True if the agent declares `loads_bet_catalog: true` in frontmatter (#109).
 
@@ -196,7 +213,6 @@ def _reads_bet_catalog(agent_file: Path) -> bool:
     bet a slice belongs to (`/create-story --bet <X>`) instead of reflexively
     routing every enhancement to `/create-brief`.
     """
-    text = agent_file.read_text(encoding="utf-8")
     fm_match = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
     if not fm_match:
         return False
