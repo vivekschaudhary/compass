@@ -22,6 +22,5 @@ Draft the release notes, the announcement and the positioning copy.
 ## Rows — not written yet
 
 The `## Dispatch graph` heading is deliberately absent until there are rows to put under it.
-`validate.py` refuses a file that declares the section and then has no steps — correctly, since a
-workflow that claims a graph and has none opens runs that create no tasks. The heading arrives with
-the first row.
+A file that declared the section and then had no steps would claim a graph and have none — and a
+workflow like that opens runs that create no tasks. The heading arrives with the first row.
