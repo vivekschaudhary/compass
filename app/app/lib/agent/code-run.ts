@@ -204,6 +204,9 @@ export async function runCode(
     // because both graphs have a step 2.
     "-m", "compass.orchestrator.run", workflow,
     "--project-dir", repo.path,
+    // The orchestrator reads its workflow graph, agent prompts and stack profile from `spec_file`;
+    // the engagement is what makes an engagement-tier row win over the org default.
+    "--engagement", engagementId,
     ...(vendored ? [] : ["--compass-dir", COMPASS_DIR]),
     "--story", story,
     // THE BRANCH NAME'S KEYWORDS COME FROM HERE. `_work_branch_name` builds

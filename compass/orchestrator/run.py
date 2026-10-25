@@ -56,6 +56,7 @@ from .jira import (
     _splice_md_section,
     _work_item_jira_key,
 )
+from .spec_source import SpecMissing, SpecUnavailable, from_env as specs_from_env, prompt_file
 from .outcome import _classify_outcome, _is_refusal, _review_recommendation
 from .pr import (
     _CODE_WORKFLOWS,
@@ -1049,19 +1050,6 @@ def _load_story_context(project_dir: Path, epic_id: str, story_id: str) -> str:
     return "\n".join(parts)
 
 
-def _resolve_compass_file(compass_dir: Path, project_dir: Path, rel_path: str):
-    """Override resolution (stack-agnostic core): a project overrides any
-    Compass-shipped file (stack profile, and later templates/workflows) WITHOUT
-    forking by placing it under `<project>/compass-overrides/<rel_path>`. Returns the
-    project override if present, else the Compass default, else None. 'Opinionated
-    defaults, fully overridable' — the same resolver extends to templates/workflows."""
-    override = project_dir / "compass-overrides" / rel_path
-    if override.exists():
-        return override
-    default = compass_dir / rel_path
-    return default if default.exists() else None
-
-
 def _config_candidates(compass_dir: Path, project_dir=None) -> list:
     """#122: the config files that may declare framework-level settings, in precedence
     order — the PROJECT's `compass/config.yaml` first, the framework's second. The two
@@ -1100,15 +1088,21 @@ def _read_stack_from_config(compass_dir: Path, project_dir=None):
     return None
 
 
-def _load_stack_context(compass_dir: Path, project_dir: Path, stack: str) -> str:
+def _load_stack_context(specs, stack: str) -> str:
     """Load the active stack profile as agent context. Agents carry stack-neutral
     methodology; the profile supplies the stack's build/test commands, runtime-artifact
-    paths, and framework runtime contracts the agents verify. Override-resolved.
-    Returns '' if no profile file is found for `stack`."""
-    profile = _resolve_compass_file(compass_dir, project_dir, f"stacks/{stack}.md")
-    if profile is None:
+    paths, and framework runtime contracts the agents verify.
+
+    From the spec table: the engagement's `stacks/<stack>.md` row, else the org default. That
+    replaces the on-disk `<project>/compass-overrides/` resolver — an override is now an
+    engagement-tier row. Returns '' with a printed warning if no row exists for `stack`: the
+    config named a stack, so agents running stack-neutral is worth saying out loud."""
+    try:
+        profile = specs.spec(f"stacks/{stack}.md")
+    except SpecMissing as exc:
+        print(f"[stack] {exc} — agents run stack-neutral.", file=sys.stderr)
         return ""
-    return f"## Active stack profile — {stack}\n\n{profile.read_text(encoding='utf-8')}\n"
+    return f"## Active stack profile — {stack}\n\n{profile}\n"
 
 
 def _cross_workflow_context(workflow_name: str, prior_outputs: list, artifact_paths: list) -> str:
@@ -1443,32 +1437,37 @@ def _run_workflow(
     run_id_override: str = None,
     auto_merge: bool = False,
     work_item_key: str = None,
+    specs=None,
 ) -> tuple:
     """
     Execute a single workflow dispatch graph.
+
+    `specs` is the SpecSource that framework content (workflow, agent files, stack profile) is read
+    from. `compass_dir` is now only where `config.yaml` is found.
 
     Returns (prior_outputs, artifact_paths):
       prior_outputs  — list of step output dicts (step, agent, task, host, output)
       artifact_paths — list of relative path strings for written artifacts
     """
-    from .graph import load_workflow, load_workflow_meta
+    from .graph import parse_workflow, parse_workflow_meta
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host, deep_model
     from .logger import log_step, log_hitl, default_actor
     from . import events as ev
 
-    workflow_file = compass_dir / "workflows" / f"{workflow_name}.md"
-    if not workflow_file.exists():
-        print(
-            f"Error: workflow file not found: {workflow_file}",
-            file=sys.stderr,
-        )
+    if specs is None:
+        raise ValueError("_run_workflow needs a SpecSource (specs=) — framework content is not read from disk")
+    workflow_path = f"workflows/{workflow_name}.md"
+    try:
+        workflow_text = specs.spec(workflow_path)
+    except SpecMissing as exc:
+        print(f"Error: workflow not found: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    steps = load_workflow(workflow_file)
+    steps = parse_workflow(workflow_text)
     if not steps:
         print(
-            f"Warning: no dispatch steps found in {workflow_file}.\n"
+            f"Warning: no dispatch steps found in {workflow_path}.\n"
             f"  Is this workflow in dispatch-graph shape? "
             f"See the canon (removed — the rule is inlined here) [workflow-as-dispatch-graph].",
             file=sys.stderr,
@@ -1488,7 +1487,7 @@ def _run_workflow(
     # A workflow's frontmatter may declare `requires_approved:` artifact paths.
     # PASS per path: approved hitl.jsonl record OR `status: approved`
     # frontmatter (v0.3.x dual acceptance — the orchestrator/manual bridge).
-    requirements = load_workflow_meta(workflow_file)["requires_approved"]
+    requirements = parse_workflow_meta(workflow_text)["requires_approved"]
     if requirements:
         unmet = []
         print(f"\nRequirement gate — {workflow_name} requires approved:")
@@ -1624,18 +1623,16 @@ def _run_workflow(
                 marker, label = "[HITL]", "human gate"
             elif s.agent and s.task:
                 marker = f"[{s.agent}.{s.task}]"
-                agent_file = None
-                for subdir in ("agents", "roles"):
-                    candidate = compass_dir / subdir / (s.agent_file or f"{s.agent}.md")
-                    if candidate.exists():
-                        agent_file = candidate
-                        break
-                if agent_file:
-                    ph = _read_preferred_hosts(agent_file)
+                try:
+                    listed_agent = specs.spec(f"agents/{s.agent_file or f'{s.agent}.md'}")
+                except SpecMissing:
+                    listed_agent = None
+                if listed_agent is not None:
+                    ph = parse_preferred_hosts(listed_agent)
                     selected = select_host(ph)
                     label = f"→ {selected or 'NO HOST AVAILABLE'} (preferred: {ph})"
                 else:
-                    label = f"→ agent file not found"
+                    label = f"→ agent file not found in the spec table"
             else:
                 marker, label = "[workflow]", s.title
             print(f"  Step {s.number:2d}  {marker:45s}  {label}")
@@ -1705,7 +1702,7 @@ def _run_workflow(
     # #122: pass project_dir so the injected PROFILE and the stack-default CHECK SUITE
     # can never disagree about which stack is active (both resolve project-first).
     stack = _read_stack_from_config(compass_dir, project_dir)
-    stack_profile_text = _load_stack_context(compass_dir, project_dir, stack) if stack else ""
+    stack_profile_text = _load_stack_context(specs, stack) if stack else ""
     if stack and stack_profile_text:
         print(f"[stack] Loaded stack profile '{stack}'")
     elif stack:
@@ -2084,14 +2081,14 @@ def _run_workflow(
             continue
 
         # ── resolve agent file ───────────────────────────────────────────────
-        agent_file = None
-        for subdir in ("agents", "roles"):
-            candidate = compass_dir / subdir / (step.agent_file or f"{step.agent}.md")
-            if candidate.exists():
-                agent_file = candidate
-                break
+        agent_name = step.agent_file or f"{step.agent}.md"
+        agent_path = f"agents/{agent_name}"
+        try:
+            agent_text = specs.spec(agent_path)
+        except SpecMissing:
+            agent_text = None
 
-        if agent_file is None:
+        if agent_text is None:
             if skip_missing:
                 print(
                     f"STEP {step.number} SKIPPED (explicit --skip-missing): "
@@ -2102,7 +2099,7 @@ def _run_workflow(
                 continue
             print(
                 f"Error: agent file for '{step.agent}' not found "
-                f"(looked in {compass_dir}/agents/ and {compass_dir}/roles/).\n"
+                f"(no spec_file row for {agent_path}).\n"
                 f"  Halting — no silent skips (AGENTS.md principle).\n"
                 f"  Fix the dispatch graph or agent file, then resume with "
                 f"--from-step {step.number}.\n"
@@ -2115,7 +2112,7 @@ def _run_workflow(
             sys.exit(2)
 
         # ── host selection ───────────────────────────────────────────────────
-        preferred_hosts = _read_preferred_hosts(agent_file)
+        preferred_hosts = parse_preferred_hosts(agent_text)
         if claude_cli:
             preferred_hosts = _remap_claude_cli(preferred_hosts)
         if codex_cli:
@@ -2148,13 +2145,10 @@ def _run_workflow(
                  reason=f"no host for {step.agent}.{step.task} (step {step.number})")
             sys.exit(2)
 
-        try:
-            agent_label = agent_file.relative_to(project_dir)
-        except ValueError:
-            agent_label = agent_file
+        agent_label = f"{agent_path} (spec table)"
         # Per-step model (#115): explicit --model wins; else `model_tier: deep`
         # → frontier model; else None → router default (Sonnet, the economy tier).
-        tier = _read_model_tier(agent_file)
+        tier = parse_model_tier(agent_text)
         step_model = model or (deep_model(host) if tier == "deep" else None)
 
         print(f"Agent      : {agent_label}")
@@ -2189,7 +2183,7 @@ def _run_workflow(
         # Bet catalog (#109): agents that declare `loads_bet_catalog: true` (e.g.
         # support.classify-intake) get the existing-bets list prepended so they can
         # right-size an enhancement and name the bet a slice belongs to.
-        if _reads_bet_catalog(agent_file):
+        if parse_reads_bet_catalog(agent_text):
             catalog = _load_bet_catalog(project_dir)
             if catalog:
                 user_context = catalog + "\n" + user_context
@@ -2217,7 +2211,7 @@ def _run_workflow(
                   f"output(s) from {step.agent} (maker ≠ checker)")
         user_message = _build_user_message(step.task, user_context, step_prior)
 
-        agent_tools = _read_agent_tools(agent_file)
+        agent_tools = parse_agent_tools(agent_text)
         if agent_tools and host == "claude":
             granted = [t for t in agent_tools if t in ("read_file", "glob", "grep") or allow_write]
             mode = "read+write" if allow_write else "read-only"
@@ -2237,12 +2231,15 @@ def _run_workflow(
             print("  (first model turn can take ~1–2 min before tool activity appears — "
                   "watch `python3 -m compass.orchestrator.cockpit --run <id>`)")
         try:
-            result = dispatch_to_host(
-                host, str(agent_file), step.task, user_message, model=step_model,
-                tools=agent_tools or None, project_dir=exec_dir,  # #174: worktree when isolated
-                allow_write=allow_write, max_tool_iterations=max_tool_iterations,
-                on_event=_sink,
-            )
+            # Hosts take the prompt as a file path; the text came from the spec table, so it is
+            # held in a temp file for exactly this dispatch.
+            with prompt_file(agent_text) as agent_prompt_path:
+                result = dispatch_to_host(
+                    host, agent_prompt_path, step.task, user_message, model=step_model,
+                    tools=agent_tools or None, project_dir=exec_dir,  # #174: worktree when isolated
+                    allow_write=allow_write, max_tool_iterations=max_tool_iterations,
+                    on_event=_sink,
+                )
         except BudgetExceeded as exc:
             print(
                 f"\n💰 Budget cap reached at step {step.number}: {exc}\n"
@@ -2565,6 +2562,16 @@ def main(argv=None):
             "Bet ID to work on (e.g., CB-4). Automatically loads "
             "docs/epics/<ID>/brief.md, architecture.md, and story summaries "
             "as context for the first agent step."
+        ),
+    )
+    parser.add_argument(
+        "--engagement",
+        default=None,
+        metavar="ID",
+        help=(
+            "Engagement whose spec_file / template / role rows apply — an engagement-tier row "
+            "overrides the org default. Without it only the org default is read. The app passes "
+            "this when it spawns a code step."
         ),
     )
     parser.add_argument(
@@ -3040,6 +3047,14 @@ def main(argv=None):
         else project_dir / "compass"
     )
 
+    # Framework content (workflow graph, agent prompts, stack profiles) comes from the database.
+    # No credentials is a halt, never a reason to read `compass/` instead.
+    try:
+        specs = specs_from_env(args.engagement)
+    except SpecUnavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
     # #120: subscription CLI host — --claude-cli flag OR COMPASS_CLAUDE_HOST=cli
     # (the env var is how the dashboard opts in: spawned runs inherit os.environ).
     claude_cli = args.claude_cli or os.environ.get(
@@ -3122,6 +3137,7 @@ def main(argv=None):
             workflow_name=args.workflow,
             project_dir=project_dir,
             compass_dir=compass_dir,
+            specs=specs,
             context=args.context,
             epic_id=args.bet,
             story_id=story_id,
@@ -3173,6 +3189,7 @@ def main(argv=None):
                 workflow_name=wf,
                 project_dir=project_dir,
                 compass_dir=compass_dir,
+                specs=specs,
                 dry_run=True,
             )
         return
@@ -3194,6 +3211,7 @@ def main(argv=None):
             workflow_name=wf_name,
             project_dir=project_dir,
             compass_dir=compass_dir,
+            specs=specs,
             context=next_context,
             epic_id=args.bet if idx == 0 else None,
             story_id=story_id if idx == 0 else None,

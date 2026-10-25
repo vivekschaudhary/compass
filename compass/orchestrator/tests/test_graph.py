@@ -730,34 +730,30 @@ class TestStackProfile(unittest.TestCase):
             # no config file → None
             self.assertIsNone(self.runmod._read_stack_from_config(Path(d, "absent")))
 
-    def test_resolve_compass_file_override_wins(self):
-        with tempfile.TemporaryDirectory() as d:
-            project = Path(d)
-            compass = project / "compass"; (compass / "stacks").mkdir(parents=True)
-            (compass / "stacks" / "nextjs-ts.md").write_text("DEFAULT")
-            # default resolves when no override
-            r = self.runmod._resolve_compass_file(compass, project, "stacks/nextjs-ts.md")
-            self.assertEqual(r.read_text(), "DEFAULT")
-            # project override wins (no forking)
-            ov = project / "compass-overrides" / "stacks"; ov.mkdir(parents=True)
-            (ov / "nextjs-ts.md").write_text("OVERRIDE")
-            r = self.runmod._resolve_compass_file(compass, project, "stacks/nextjs-ts.md")
-            self.assertEqual(r.read_text(), "OVERRIDE")
-            # neither → None
-            self.assertIsNone(
-                self.runmod._resolve_compass_file(compass, project, "stacks/missing.md"))
+    def test_stack_profile_engagement_row_beats_org_default(self):
+        """An override is an engagement-tier row now, not `<project>/compass-overrides/`."""
+        from compass.orchestrator.spec_source import InMemorySpecSource
+        specs = InMemorySpecSource(engagement_id="e1", specs=[
+            {"path": "stacks/nextjs-ts.md", "org_id": "default", "engagement_id": None, "content": "DEFAULT"},
+            {"path": "stacks/nextjs-ts.md", "org_id": None, "engagement_id": "e1", "content": "OVERRIDE"}])
+        self.assertIn("OVERRIDE", self.runmod._load_stack_context(specs, "nextjs-ts"))
+        specs.engagement_id = None
+        self.assertIn("DEFAULT", self.runmod._load_stack_context(specs, "nextjs-ts"))
 
     def test_load_stack_context(self):
-        with tempfile.TemporaryDirectory() as d:
-            project = Path(d)
-            compass = project / "compass"; (compass / "stacks").mkdir(parents=True)
-            (compass / "stacks" / "dotnet-blazor.md").write_text(
-                "# Stack profile: .NET + Blazor\nproduction build: dotnet build -c Release")
-            ctx = self.runmod._load_stack_context(compass, project, "dotnet-blazor")
-            self.assertIn("Active stack profile — dotnet-blazor", ctx)
-            self.assertIn("dotnet build -c Release", ctx)
-            # unknown stack → '' (agents run stack-neutral)
-            self.assertEqual(self.runmod._load_stack_context(compass, project, "nope"), "")
+        from compass.orchestrator.spec_source import InMemorySpecSource
+        specs = InMemorySpecSource(specs=[
+            {"path": "stacks/dotnet-blazor.md", "org_id": "default", "engagement_id": None,
+             "content": "# Stack profile: .NET + Blazor\nproduction build: dotnet build -c Release"}])
+        ctx = self.runmod._load_stack_context(specs, "dotnet-blazor")
+        self.assertIn("Active stack profile — dotnet-blazor", ctx)
+        self.assertIn("dotnet build -c Release", ctx)
+        # unknown stack → '' (agents run stack-neutral), and it says so rather than staying quiet
+        import io, contextlib
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(self.runmod._load_stack_context(specs, "nope"), "")
+        self.assertIn("stacks/nope.md", err.getvalue())
 
     def test_shipped_reference_profiles_exist(self):
         # the two reference profiles ship with the framework (the sample's defaults)
