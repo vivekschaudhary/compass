@@ -162,17 +162,21 @@ def compass_dir(override=None) -> Path:
     return Path("compass")
 
 
-def load_graph_steps(workflow: str, cdir) -> list:
-    """[(n, agent, task, is_hitl, title)] for a workflow, or [] if unavailable
-    (no graph → step view falls back to spine-seen steps only)."""
-    try:
-        from .graph import load_workflow
-        wf = Path(cdir) / "workflows" / f"{workflow}.md"
-        if not wf.exists():
-            return []
-        return [(s.number, s.agent, s.task, s.is_hitl, s.title) for s in load_workflow(wf)]
-    except Exception:
+def load_graph_steps(workflow: str, specs) -> list:
+    """[(n, agent, task, is_hitl, title)] for a workflow from its published `workflow_step` rows,
+    or [] when there is no such workflow (the step view then shows spine-seen steps only).
+
+    A failed read is NOT "no workflow": `SpecUnavailable` propagates, so a database that is down
+    reads as down rather than as a run with no pending steps."""
+    from .graph import steps_from_rows
+    from .spec_source import SpecMissing
+    if specs is None or not workflow:
         return []
+    try:
+        steps = steps_from_rows(specs.workflow_steps(workflow))
+    except SpecMissing:
+        return []
+    return [(s.number, s.agent, s.task, s.is_hitl, s.title) for s in steps]
 
 
 def _step_label(agent, task, title) -> str:
@@ -327,7 +331,7 @@ def _approve_cmd(run: dict) -> str:
     return " ".join(parts) + "   (or --decide reject)"
 
 
-def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -> str:
+def render(runs: dict, project_filter: str = None, limit: int = 10, specs=None) -> str:
     vals = list(runs.values())
     if project_filter:
         vals = [r for r in vals if r.get("project") == project_filter]
@@ -335,7 +339,7 @@ def render(runs: dict, project_filter: str = None, limit: int = 10, cdir=None) -
     _totals = {}
     def _total_steps(workflow):
         if workflow not in _totals:
-            gs = load_graph_steps(workflow, cdir) if (cdir and workflow) else []
+            gs = load_graph_steps(workflow, specs) if (specs and workflow) else []
             _totals[workflow] = len(gs)
         return _totals[workflow]
 
@@ -466,23 +470,7 @@ def _esc(s) -> str:
     return _htmllib.escape(str(s)) if s is not None else ""
 
 
-def _gate_routes(workflow, step, cdir) -> list:
-    """Route labels for a routing gate (#119) — so the cockpit can render one
-    button per branch. [] if the graph is unavailable or the step isn't routing."""
-    try:
-        from .graph import load_workflow
-        wf = Path(cdir) / "workflows" / f"{workflow}.md"
-        if not wf.exists():
-            return []
-        for s in load_workflow(wf):
-            if s.number == step and s.routes:
-                return [lbl for lbl, _ in s.routes]
-    except Exception:
-        pass
-    return []
-
-
-def _decide_forms(r: dict, cdir) -> str:
+def _decide_forms(r: dict) -> str:
     """Approve/reject buttons (HITL gate) or one button per route (routing gate),
     each a tiny POST /decide form (#119). Relays only — run.py still decides."""
     g = r["open_gate"]
@@ -509,16 +497,13 @@ def _decide_forms(r: dict, cdir) -> str:
                 f"<button{c}>{_esc(label)}</button></form>")
 
     if g.get("kind") == "routing":
-        routes = _gate_routes(r.get("workflow"), g.get("step"), cdir)
-        for lbl in routes:
-            out.append(form(lbl, f"{lbl} →",
-                            confirm=f"Route {loc} to ‘{lbl}’? This resumes the run."))
-        if not routes:  # graph unavailable — let the operator type the route
-            out.append("<form class='act' method='POST' action='/decide' "
-                       "onsubmit=\"return _act(this,'Resume this run with the typed route?')\">"
-                       + hid +
-                       "<input name='decide' placeholder='route label'>"
-                       "<button>route →</button></form>")
+        # The published `workflow_step` rows carry no routing targets (they lived only in the old
+        # `.md` graph), so there are no branch buttons to draw — the operator types the route.
+        out.append("<form class='act' method='POST' action='/decide' "
+                   "onsubmit=\"return _act(this,'Resume this run with the typed route?')\">"
+                   + hid +
+                   "<input name='decide' placeholder='route label'>"
+                   "<button>route →</button></form>")
     else:
         out.append(form("approve", "approve",
                         confirm=f"Approve {loc} and continue?"))
@@ -527,7 +512,7 @@ def _decide_forms(r: dict, cdir) -> str:
     return "".join(out)
 
 
-def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
+def render_html(runs: dict, project_filter=None, limit=10, specs=None,
                 refresh=5, snapshot_ts="", actions=False, default_project_dir="",
                 now=None, code_stale=False) -> str:
     """Self-contained HTML cockpit (#113) — same data as the text view, browser layout.
@@ -575,7 +560,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
 
     # 🚀 Launch (only with --allow-actions) — relays to compass-run; gates + cap still fire
     if actions:
-        opts = "".join(f"<option>{_esc(w)}</option>" for w in _known_workflows(cdir))
+        opts = "".join(f"<option>{_esc(w)}</option>" for w in _known_workflows(specs))
         p.append("<div class='launch'><h2>🚀 Launch a workflow</h2>"
                  "<form class='act' method='POST' action='/run' "
                  "onsubmit=\"return _act(this,'Launch this workflow? It runs through its gates and the cost cap.')\">"
@@ -598,7 +583,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     for r in awaiting:
         g = r["open_gate"]
         loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
-        act = _decide_forms(r, cdir) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
+        act = _decide_forms(r) if actions else f"<code>{_esc(_approve_cmd(r))}</code>"
         age = _gate_age_str(g, now)
         age_html = f" <span class='dur'>awaiting {_esc(age)}</span>" if age else ""
         p.append(f"<div class='run'><span class='loc'>{loc}</span> "
@@ -612,7 +597,7 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
         p.append("<div class='empty'>no runs in progress</div>")
     for r in in_flight:
         loc = " · ".join(_esc(x) for x in [r.get("project"), r.get("workflow"), _scope_label(r)] if x)
-        rows, _hg = _run_step_rows(r, load_graph_steps(r.get("workflow"), cdir), now=now)
+        rows, _hg = _run_step_rows(r, load_graph_steps(r.get("workflow"), specs), now=now)
         total = len(rows) if rows else 0
         cur = r.get("current_step")
         head = f"<span class='loc'>{loc}</span>" + (f" <span class='muted'>step {cur}/{total}</span>" if cur and total else "")
@@ -693,12 +678,12 @@ def render_html(runs: dict, project_filter=None, limit=10, cdir=None,
     return "".join(p)
 
 
-def build_page(events: list, project_filter=None, limit=10, cdir=None,
+def build_page(events: list, project_filter=None, limit=10, specs=None,
                refresh=5, snapshot_ts="", actions=False, default_project_dir="",
                now=None, code_stale=False) -> bytes:
     """events → HTML bytes (what the --serve handler returns per request, #113)."""
     runs = fold_runs(events)
-    return render_html(runs, project_filter, limit, cdir, refresh, snapshot_ts,
+    return render_html(runs, project_filter, limit, specs, refresh, snapshot_ts,
                        actions=actions, default_project_dir=default_project_dir,
                        now=now or datetime.now(timezone.utc),
                        code_stale=code_stale).encode("utf-8")
@@ -744,15 +729,14 @@ _WORKFLOW_RE = _re.compile(r"^[a-z][a-z0-9-]+$")
 _RUN_ID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]+$")
 
 
-def _known_workflows(cdir) -> list:
-    """Sorted workflow names from compass/workflows/*.md — the launch allow-list.
-    Excludes the deprecated `advance` shim (prints a migration table, not runnable)."""
-    try:
-        d = Path(cdir) / "workflows"
-        names = sorted(p.stem for p in d.glob("*.md") if _WORKFLOW_RE.match(p.stem))
-        return [n for n in names if n != "advance"]
-    except Exception:
+def _known_workflows(specs) -> list:
+    """Sorted codes of the enabled workflows with a published version — the launch allow-list.
+
+    From the database, so a workflow that is not published cannot be launched from the browser. No
+    spec source (no credentials) is an empty list, and `main` has already said so."""
+    if specs is None:
         return []
+    return [n for n in specs.workflow_codes() if _WORKFLOW_RE.match(n)]
 
 
 def _build_run_argv(action, params, defaults):
@@ -778,6 +762,8 @@ def _build_run_argv(action, params, defaults):
     cdir = defaults.get("compass_dir")
     if cdir:
         argv += ["--compass-dir", str(cdir)]
+    if defaults.get("engagement"):
+        argv += ["--engagement", str(defaults["engagement"])]
 
     if action == "run":
         if params.get("context"):
@@ -950,16 +936,33 @@ def main(argv=None):
                         help="Default project dir for browser launches (#119); also prefilled in the launch form.")
     parser.add_argument("--max-cost", type=float, default=None, dest="max_cost",
                         help="USD cap applied to every browser-launched run (#119) — the server-level budget guard.")
+    parser.add_argument("--engagement", default=None, metavar="ID",
+                        help="Engagement whose workflows and rows apply (engagement tier over the org default). "
+                             "Passed on to every browser-launched run.")
     args = parser.parse_args(argv)
 
     path = args.home if args.home else None
     cdir = compass_dir(args.compass_dir)
 
+    # Workflows come from the database (published `workflow_step` rows), not `compass/workflows/`.
+    # The read-only views still work without credentials — they just cannot show pending steps — and
+    # say so. Launching from the browser cannot work without them, so that is a halt.
+    from .spec_source import SpecUnavailable, from_env as specs_from_env
+    try:
+        specs = specs_from_env(args.engagement)
+    except SpecUnavailable as exc:
+        if args.serve and args.allow_actions:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(2)
+        print(f"[cockpit] no database credentials — pending steps and the launch list are unavailable. ({exc})",
+              file=sys.stderr)
+        specs = None
+
     # ── --serve: live localhost feed (read-only, or actionable with --allow-actions) ──
     if args.serve:
         _serve(path, cdir, args.project, args.limit, args.port,
                allow_actions=args.allow_actions, max_cost=args.max_cost,
-               default_project_dir=args.project_dir)
+               default_project_dir=args.project_dir, specs=specs, engagement=args.engagement)
         return
 
     # ── --html: write a self-contained snapshot ──
@@ -970,7 +973,7 @@ def main(argv=None):
         out_path = Path(args.html) if args.html else (ev.compass_home() / "orchestrator" / "cockpit.html")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         html_doc = render_html(fold_runs(events), project_filter=args.project,
-                               limit=args.limit, cdir=cdir, snapshot_ts=ts,
+                               limit=args.limit, specs=specs, snapshot_ts=ts,
                                now=datetime.now(timezone.utc))
         out_path.write_text(html_doc, encoding="utf-8")
         print(f"Wrote cockpit snapshot → {out_path}\n  open: file://{out_path}")
@@ -993,14 +996,14 @@ def main(argv=None):
             for r in recent[: args.limit]:
                 print(f"  {r['run_id']}")
             return
-        print(render_run(run, load_graph_steps(run.get("workflow"), cdir)))
+        print(render_run(run, load_graph_steps(run.get("workflow"), specs)))
         return
 
-    print(render(runs, project_filter=args.project, limit=args.limit, cdir=cdir))
+    print(render(runs, project_filter=args.project, limit=args.limit, specs=specs))
 
 
 def _serve(events_path, cdir, project_filter, limit, port,
-           allow_actions=False, max_cost=None, default_project_dir=None):
+           allow_actions=False, max_cost=None, default_project_dir=None, specs=None, engagement=None):
     """Localhost HTTP server (#113/#119) — the live cockpit feed. Each GET /
     re-reads the spine and renders fresh HTML; the page meta-refreshes. With
     --allow-actions, POST /run + /decide relay to compass-run (the server only
@@ -1015,8 +1018,9 @@ def _serve(events_path, cdir, project_filter, limit, port,
     global _START_FINGERPRINT                 # #30/#82: snapshot the code content-hash at startup
     _START_FINGERPRINT = _code_fingerprint()  #          so a later merged fix surfaces a banner
 
-    defaults = {"known": _known_workflows(cdir), "project_dir": default_project_dir,
-                "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None}
+    defaults = {"known": _known_workflows(specs), "project_dir": default_project_dir,
+                "max_cost": max_cost, "compass_dir": str(cdir) if cdir else None,
+                "engagement": engagement}
 
     class Handler(BaseHTTPRequestHandler):
         def _serve_log(self):
@@ -1159,7 +1163,7 @@ def _serve(events_path, cdir, project_filter, limit, port,
             events = ev.load_events(events_path)
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             body = build_page(events, project_filter=project_filter, limit=limit,
-                              cdir=cdir, snapshot_ts=ts, actions=allow_actions,
+                              specs=specs, snapshot_ts=ts, actions=allow_actions,
                               default_project_dir=default_project_dir or "",
                               code_stale=_code_is_stale(_START_FINGERPRINT))  # #30/#82
             self.send_response(200)

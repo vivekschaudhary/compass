@@ -194,6 +194,27 @@ class TestWorkflowSteps(unittest.TestCase):
             src.workflow_steps("other")
 
 
+class TestWorkflowCodes(unittest.TestCase):
+    def test_only_enabled_workflows_with_a_published_version(self):
+        t = Recorder((200, [{"id": "o1"}]),
+                     (200, [{"id": "w1", "code": "build"}, {"id": "w2", "code": "draft-only"}]),
+                     (200, [{"workflow_id": "w1"}]))
+        self.assertEqual(db(t).workflow_codes(), ["build"])
+        self.assertIn("enabled=eq.true", t.calls[1][1])
+        self.assertIn("status=eq.published", t.calls[2][1])
+
+    def test_none_enabled_is_empty(self):
+        self.assertEqual(db(Recorder((200, [{"id": "o1"}]), (200, []))).workflow_codes(), [])
+
+    def test_in_memory(self):
+        src = S.InMemorySpecSource(engagement_id="e1", workflows=[
+            {"code": "b", "engagement_id": None, "steps": [{"ord": 1}]},
+            {"code": "a", "engagement_id": "e1", "steps": [{"ord": 1}]},
+            {"code": "x", "engagement_id": "e2", "steps": [{"ord": 1}]},
+            {"code": "empty", "engagement_id": None, "steps": []}])
+        self.assertEqual(src.workflow_codes(), ["a", "b"])
+
+
 class TestFromEnv(unittest.TestCase):
     def test_absent_credentials_halt_rather_than_fall_back(self):
         with self.assertRaises(S.SpecUnavailable) as cm:

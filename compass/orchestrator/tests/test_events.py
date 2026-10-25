@@ -336,12 +336,25 @@ class TestStepCockpit(unittest.TestCase):
         self.assertIn("graph unavailable", out)
         self.assertIn("✓  1", out)
 
-    def test_load_graph_steps_real_workflow(self):
-        from pathlib import Path
-        repo = Path(__file__).resolve().parents[3]
-        steps = cockpit.load_graph_steps("fix", repo / "compass")
+    def test_load_graph_steps_comes_from_the_spec_source(self):
+        steps = cockpit.load_graph_steps("fix", compass_specs())
         self.assertEqual(len(steps), 6)      # the collapsed /fix (#108)
         self.assertEqual(steps[0][1:3], ("engineer", "triage-and-fix"))
+
+    def test_load_graph_steps_unknown_workflow_is_empty_not_an_error(self):
+        self.assertEqual(cockpit.load_graph_steps("nope", compass_specs()), [])
+
+    def test_load_graph_steps_without_a_spec_source_is_empty(self):
+        self.assertEqual(cockpit.load_graph_steps("fix", None), [])
+
+    def test_a_failed_read_is_not_a_missing_workflow(self):
+        from compass.orchestrator import spec_source as S
+
+        class Down(S.InMemorySpecSource):
+            def workflow_steps(self, code):
+                raise S.SpecUnavailable("connection refused")
+        with self.assertRaises(S.SpecUnavailable):
+            cockpit.load_graph_steps("fix", Down())
 
 
 class TestHtmlCockpit(unittest.TestCase):
@@ -722,11 +735,24 @@ class TestActionEndpoints(unittest.TestCase):
         runs = cockpit.fold_runs(events)
         self.assertEqual(runs["r1"]["project_dir"], "/abs/home")
 
-    def test_known_workflows_excludes_advance(self):
-        repo = Path(__file__).resolve().parents[3]
-        names = cockpit._known_workflows(repo / "compass")
+    def test_known_workflows_are_the_published_ones(self):
+        names = cockpit._known_workflows(compass_specs())
         self.assertIn("triage", names)
-        self.assertNotIn("advance", names)
+        self.assertEqual(names, sorted(names))
+
+    def test_known_workflows_without_a_spec_source_is_empty(self):
+        self.assertEqual(cockpit._known_workflows(None), [])
+
+    def test_a_routing_gate_gets_a_typed_route_form_not_branch_buttons(self):
+        run = {"run_id": "r1", "workflow": "triage", "project_dir": "/p",
+               "open_gate": {"kind": "routing", "step": 2}}
+        html = cockpit._decide_forms(run)
+        self.assertIn("placeholder='route label'", html)
+
+    def test_launches_carry_the_engagement(self):
+        argv = cockpit._build_run_argv("run", {"workflow": "build", "project_dir": "."},
+                                       {"known": ["build"], "engagement": "e1"})
+        self.assertEqual(argv[argv.index("--engagement") + 1], "e1")
 
     def test_run_log_path_and_link(self):
         # #133: valid run id → a log path under runs/; invalid id → None (no traversal)

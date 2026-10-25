@@ -137,6 +137,10 @@ class SpecSource:
         """The role row (`agent`, `hosts`, `capabilities`, ...). Raises `SpecMissing`."""
         raise NotImplementedError
 
+    def workflow_codes(self) -> list:
+        """Codes of the enabled workflows that have a published version — what can be launched."""
+        raise NotImplementedError
+
     def workflow_steps(self, code: str) -> list:
         """The PUBLISHED version's steps, in `ord` order. Raises `SpecMissing`.
 
@@ -176,6 +180,10 @@ class InMemorySpecSource(SpecSource):
         if hit is None:
             raise SpecMissing(f"no role row for {code!r}")
         return hit
+
+    def workflow_codes(self):
+        return sorted({w["code"] for w in self.workflows
+                       if w.get("steps") and (not w.get("engagement_id") or w["engagement_id"] == self.engagement_id)})
 
     def workflow_steps(self, code):
         hit = pick_workflow(self.workflows, self.engagement_id, code)
@@ -261,6 +269,16 @@ class DbSpecSource(SpecSource):
 
     def workflow_steps(self, code):
         return _steps_from_db(self, code)
+
+    def workflow_codes(self):
+        wfs = self._get("workflow", select="id,code", org_id=f"eq.{self._org()}", enabled="eq.true",
+                        **{"or": self._wf_scope()})
+        if not wfs:
+            return []
+        ids = ",".join(w["id"] for w in wfs)
+        published = {v["workflow_id"] for v in self._get(
+            "workflow_version", select="workflow_id", status="eq.published", workflow_id=f"in.({ids})")}
+        return sorted({w["code"] for w in wfs if w["id"] in published})
 
     def role(self, code):
         scope = "(engagement_id.is.null" + (f",engagement_id.eq.{self.engagement_id})" if self.engagement_id else ")")
