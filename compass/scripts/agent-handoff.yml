@@ -7,6 +7,16 @@
 # GitHub MCP next session — no terminal switch, no manual prompt paste.
 #
 # ─────────────────────────────────────────────────────────────────────────
+# SCOPE — only for a repo that vendors the whole `compass/` folder
+# ─────────────────────────────────────────────────────────────────────────
+# Option A below runs `compass/scripts/dispatch.py`, which reads the reviewer prompt from
+# `compass/agents/reviewer.md` and its context from `docs/foundation/*` ON DISK. A repo on the
+# database model carries only `compass/config.yaml`, so Option A cannot run there as written. This is
+# NOT how Compass builds a client repo — the build is `compass.orchestrator.run`, and its own review is
+# step 3 (`reviewer.review-pr`). Porting this template needs project documents readable from the
+# database and a decision on CI database access; see #227.
+#
+# ─────────────────────────────────────────────────────────────────────────
 # SETUP IN YOUR CONSUMING REPO
 # ─────────────────────────────────────────────────────────────────────────
 #   1. Copy this file to .github/workflows/ai-review.yml in your repo.

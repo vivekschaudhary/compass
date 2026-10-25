@@ -6,6 +6,19 @@ LLM-agnostic dispatcher for CI/CD and script contexts.
 The LLM is determined by preferred_hosts: in the agent file frontmatter,
 routed through the same router.py the orchestrator uses. No LLM is hardcoded here.
 
+SCOPE — read this before assuming the build depends on it. This script is NOT how Compass builds a
+client repo: the build is `python -m compass.orchestrator.run`, which the app spawns from
+`code-run.ts`, and its own review is step 3 (`reviewer.review-pr`). The only caller of this script is
+the optional CI reviewer template `compass/scripts/agent-handoff.yml`.
+
+It reads the agent prompt and the context files FROM DISK, so it works only in a repo that vendors the
+whole `compass/` folder (`compass/agents/`, plus `docs/foundation/*` for context). A client repo on the
+database model carries only `compass/config.yaml`; its agent prompts live in the `spec_file` table
+and its documents in the `document` table, and the orchestrator reads them through
+`compass/orchestrator/spec_source.py`. This script does not, deliberately, for now: doing it needs
+(1) a way to read project documents from the database (phase 2 of #227) and (2) a decision on how CI
+gets database access without holding the service-role key. See #227.
+
 Usage:
     python3 compass/scripts/dispatch.py \\
       --agent-file compass/agents/reviewer.md \\
