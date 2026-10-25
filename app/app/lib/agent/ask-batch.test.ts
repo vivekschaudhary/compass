@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from "vitest";
 // its own cap would pass with the two out of step.
 vi.mock("server-only", () => ({}));
 vi.mock("../supabase", () => ({ supabaseAdmin: () => null }));
-vi.mock("../specs", () => ({ resolveSpec: async () => null }));
+vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null }));
 vi.mock("../data/events", () => ({ emit: async () => {}, orgIdFor: async () => null }));
 vi.mock("../data/tracker", () => ({ mirrorState: async () => ({ ok: true }) }));
 vi.mock("@anthropic-ai/sdk", () => ({ default: class { messages = { stream: () => {} }; } }));

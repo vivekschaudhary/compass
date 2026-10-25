@@ -26,15 +26,23 @@ import { ASK_BATCH, ASK_ROUNDS_MAX, type AgentContext, type SprintContext, type 
  */
 export function withoutTaskCatalogue(md: string): string {
   const lines = md.split("\n");
-  const start = lines.findIndex((l) => /^## Tasks I own\s*$/.test(l));
+
+  // A heading inside a code fence is an EXAMPLE, not structure. tech-writer's catalogue carries a
+  // fenced `## PR #<number>` changelog sample; read as a heading it ended the section there and
+  // left the rest of the catalogue — including a second `### Task:` — in the prompt.
+  const headings: number[] = [];
+  let fenced = false;
+  lines.forEach((l, i) => {
+    if (/^\s*```/.test(l)) fenced = !fenced;
+    else if (!fenced && /^## /.test(l)) headings.push(i);
+  });
+
+  const start = lines.findIndex((l, i) => headings.includes(i) && /^## Tasks I own\s*$/.test(l));
   if (start === -1) return md;              // nothing to remove is not an error
 
   // The next SIBLING heading. `^## ` cannot match `### `, so the task subsections inside are
   // consumed rather than ending the scan at the first one.
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    if (/^## /.test(lines[i])) { end = i; break; }
-  }
+  const end = headings.find((i) => i > start) ?? lines.length;
 
   return [...lines.slice(0, start), ...lines.slice(end)]
     .join("\n")

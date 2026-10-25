@@ -6,12 +6,9 @@
 // trips that behave the same every time beat one that behaves differently for org rows than for
 // engagement rows.
 
-import { readdirSync, existsSync } from "fs";
-import { join } from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../supabase";
 import { readShippedDocTree } from "../doctree";
-import { COMPASS_DIR } from "../specs";
 import type { ConfigStore } from "./apply";
 import type { Existing, StepRow, CriterionRow, WorkstreamRow, PhaseRow, TicketBriefRow, RoleRow, WorkflowRow } from "./plan";
 
@@ -338,10 +335,11 @@ export async function readExistingFor(orgCode: string, engagementId: string | nu
 export async function readExisting(
   sb: SupabaseClient, orgCode: string, engagementId: string | null,
 ): Promise<Existing> {
-  const agentsDir = join(COMPASS_DIR, "agents");
-  const agents = existsSync(agentsDir)
-    ? readdirSync(agentsDir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3))
-    : [];
+  // The agent files a role may name are the ones in the TABLE — that is what a run reads.
+  const { data: agentRows, error: agentErr } = await sb.from("spec_file").select("path")
+    .eq("org_id", "default").like("path", "agents/%.md");
+  if (agentErr) throw new Error(`read spec_file agents: ${agentErr.message}`);
+  const agents = (agentRows ?? []).map((r: { path: string }) => r.path.slice("agents/".length, -3));
 
   const { data: org } = await sb.from("org").select("id").eq("code", orgCode).maybeSingle();
   if (!org) return { workstreams: [], roles: [], agents, phases: [], ticketBriefs: [], documents: [], workflows: [] };
@@ -426,7 +424,7 @@ export async function readExisting(
   //
   // Without this, declaring a NEW document and the step that reads it can never be one commit: the
   // import refuses until the row exists, and the row is created by the import.
-  const declared = readShippedDocTree().filter((n) => n.kind !== "folder").map((n) => n.path);
+  const declared = (await readShippedDocTree()).filter((n) => n.kind !== "folder").map((n) => n.path);
 
   return {
     workstreams: await list("workstream"),

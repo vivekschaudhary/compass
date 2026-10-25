@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from "fs";
 // pure string transform, so the side-effecting neighbours are stubbed away.
 vi.mock("server-only", () => ({}));
 vi.mock("../supabase", () => ({ supabaseAdmin: () => null }));
-vi.mock("../specs", () => ({ resolveSpec: async () => null }));
+vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null }));
 
 const { withoutTaskCatalogue } = await import("./context");
 
@@ -142,3 +142,25 @@ describe("the shipped agent files", () => {
     }
   });
 });
+
+describe("withoutTaskCatalogue — headings inside a code fence", () => {
+  const FENCED = [
+    "## Identity", "", "Writer.", "", "## Tasks I own", "", "### Task: `one`", "",
+    "```markdown", "## PR #<number> — <title>", "# Changelog", "```", "",
+    "### Task: `two`", "", "Second task body.", "", "## Refusal rules", "", "Refuse.", "",
+  ].join("\n");
+  const out = withoutTaskCatalogue(FENCED);
+
+  it("does not end the catalogue at a fenced heading", () => {
+    expect(out).not.toContain("Task:");
+    expect(out).not.toContain("Second task body");
+    expect(out).not.toContain("## PR #");
+  });
+
+  it("keeps the sections on either side", () => {
+    expect(out).toContain("## Identity");
+    expect(out).toContain("## Refusal rules");
+    expect(out).toContain("Refuse.");
+  });
+});
+

@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from "vitest";
 // at their own running task was told it does not exist.
 
 vi.mock("server-only", () => ({}));
-vi.mock("../specs", () => ({ resolveSpec: async () => null, COMPASS_DIR: "/nowhere" }));
+vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null, COMPASS_DIR: "/nowhere" }));
 
 /** A Supabase stub whose FIRST read — work_task — resolves to whatever is handed in. */
 function clientWhoseTaskReadReturns(result: unknown) {

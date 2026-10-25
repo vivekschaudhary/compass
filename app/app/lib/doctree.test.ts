@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
-// `readShippedDocTree` against the REAL compass/templates/doc-tree.md.
+// `parseDocTree` against the REAL compass/templates/doc-tree.md.
 //
 // It replaced scripts/test-doctree.mjs, a manual node script from before this app had a test runner.
 // That one re-implemented the parser instead of calling it, asserted a hardcoded count of 20 nodes
@@ -11,11 +11,12 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("./supabase", () => ({ supabaseAdmin: () => null }));
 
-const { readShippedDocTree } = await import("./doctree");
-const tree = readShippedDocTree();
+const { parseDocTree } = await import("./doctree");
+const { readFileSync } = await import("fs");
+const tree = parseDocTree(readFileSync(`${process.cwd()}/../compass/templates/doc-tree.md`, "utf8"));
 const byPath = new Map(tree.map((n) => [n.path, n]));
 
-describe("readShippedDocTree", () => {
+describe("parseDocTree", () => {
   // Empty is the failure that would pass silently: every declared path vanishes, and the importer
   // starts refusing steps that name documents which have always existed.
   it("parses the shipped template into nodes", () => {

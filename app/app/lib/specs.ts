@@ -119,6 +119,44 @@ export async function resolveSpec(engagementId: string | null, path: string): Pr
   return content === null ? null : { path: p, content, tier: "framework" };
 }
 
+/**
+ * One framework file from the TABLE only — engagement override, then org default, and never the disk.
+ *
+ * `resolveSpec` ends in `readFrameworkDefault`, which is how an empty `spec_file` looked healthy:
+ * every agent run quietly read `compass/agents/<x>.md` from the repo, the table held nothing, and
+ * nothing said so. A prompt is what makes an agent behave as its role; where it comes from must not
+ * depend on whether a checkout happens to sit next to the server (a Vercel function has none).
+ *
+ * Null means no row, and callers REPORT it. `scripts/seed-specs.mts` is what puts the rows
+ * there.
+ */
+export async function resolveSpecFromTable(engagementId: string | null, path: string): Promise<ResolvedSpec | null> {
+  const p = assertEditable(path);
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+
+  const cols = "content, updated_at, updated_by, base_hash, base_content";
+  type Row = {
+    content: string; updated_at?: string; updated_by?: string;
+    base_hash?: string | null; base_content?: string | null;
+  };
+  const toSpec = (row: Row, tier: Tier): ResolvedSpec => ({
+    path: p, content: row.content, tier, updatedAt: row.updated_at, updatedBy: row.updated_by,
+    baseHash: row.base_hash, baseContent: row.base_content,
+  });
+
+  if (engagementId) {
+    const { data, error } = await sb.from("spec_file").select(cols)
+      .eq("engagement_id", engagementId).eq("path", p).maybeSingle();
+    if (error) throw new Error(`read spec_file ${p}: ${error.message}`);   // a failed read is not an absent row
+    if (data) return toSpec(data, "engagement");
+  }
+  const { data: org, error } = await sb.from("spec_file").select(cols)
+    .eq("org_id", DEFAULT_ORG).eq("path", p).maybeSingle();
+  if (error) throw new Error(`read spec_file ${p}: ${error.message}`);
+  return org ? toSpec(org, "org") : null;
+}
+
 /** Just the text, or "" — for callers that only want to parse it. */
 export async function resolveSpecContent(engagementId: string | null, path: string): Promise<string> {
   return (await resolveSpec(engagementId, path))?.content ?? "";
