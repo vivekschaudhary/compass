@@ -1,5 +1,5 @@
 {
-  "_why": "Tier resolution is implemented twice \u2014 app/app/lib/specs.ts (resolveSpecFromTable, templateFor, resolveActor) and compass/orchestrator/spec_source.py. These cases pin the rules so a change to either has to change this file. Run by test_spec_source.py; the TS side should assert the same cases.",
+  "_why": "Tier resolution is implemented twice \u2014 app/app/lib/specs.ts (resolveSpecFromTable, templateFor, resolveActor) and compass/orchestrator/spec_source.py. These cases pin the rules so a change to either has to change this file. Run by test_spec_source.py and by app/app/lib/spec-vectors.test.ts (spec and template; role and workflow are asserted from Python only).",
   "spec": [
     {
       "name": "engagement override beats org default",
@@ -81,7 +81,8 @@
   ],
   "template": [
     {
-      "name": "sow",
+      "name": "engagement beats org beats default",
+      "template": "sow",
       "rows": [
         {
           "name": "sow",
@@ -113,7 +114,8 @@
       }
     },
     {
-      "name": "sow",
+      "name": "org beats default",
+      "template": "sow",
       "rows": [
         {
           "name": "sow",
@@ -138,7 +140,8 @@
       }
     },
     {
-      "name": "sow",
+      "name": "another org's row is ignored",
+      "template": "sow",
       "rows": [
         {
           "name": "sow",
@@ -163,7 +166,8 @@
       }
     },
     {
-      "name": "sow",
+      "name": "an empty body is not a template",
+      "template": "sow",
       "rows": [
         {
           "name": "sow",

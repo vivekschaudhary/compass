@@ -8,6 +8,7 @@ This closes the P0 drift from Retro #009: every step dispatches to the host its 
 
 ## Requirements
 
+- **Database access.** The orchestrator reads its workflow graph, agent prompts and stack profiles from the database (`spec_file`, `workflow_step`, `role`) through `spec_source.py`, using `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Without them it halts — there is no disk fallback. A missing row halts too, naming the row and the command that loads it (`app/scripts/seed-specs.mts`).
 - Python 3.9+
 - **Claude API** (for agents with `claude` in preferred_hosts): `pip3 install anthropic` + `ANTHROPIC_API_KEY`
 - **OpenAI API** (for agents with `codex`/`chatgpt`/`openai` in preferred_hosts): `pip3 install openai` + `OPENAI_API_KEY`
@@ -52,7 +53,8 @@ python3 -m compass.orchestrator.run create-product-brief --step 1 \
 | Flag | Description |
 |---|---|
 | `--project-dir PATH` | Root of the project repo (default: current directory) |
-| `--compass-dir PATH` | Framework directory override (default: `<project-dir>/compass`) — use when Compass lives in a separate repo |
+| `--compass-dir PATH` | The directory holding `config.yaml` (checks, stack, connectors); default `<project-dir>/compass`. Agent prompts, workflows and stack profiles are NOT read from here |
+| `--engagement ID` | The engagement whose `spec_file` / `role` / `workflow` rows apply; an engagement-tier row overrides the org default. Without it only the org default is read |
 | `--pipeline W1,W2,…` | Run workflows in sequence with cross-workflow context handoff |
 | `--dry-run` | Print dispatch graph with host routing (no API calls) |
 | `--step N` | Execute only step N (1-indexed) |
@@ -71,21 +73,23 @@ Exit codes: `0` complete · `1` HITL rejection (run halted) · `2` missing host/
 
 ## Requirement gates + artifact promotion (improvement #70)
 
+> `requires_approved:` lived in the `.md` frontmatter. The published `workflow_step` rows do not carry it, so a run built from them evaluates no requirement gate: the app opens a task only when its `depends_on` are done.
+
 - A workflow's frontmatter may declare `requires_approved:` — artifact paths that must be approved before dispatch. PASS per path (v0.3.x dual acceptance): an approved hitl.jsonl record (latest decision wins) **or** the file existing with `status: approved` frontmatter. Unmet → live runs halt (exit 3) naming the producing workflow; `--dry-run` reports without halting. Paths may use a `<epic-id>` placeholder resolved from `--bet`.
 - HITL gate steps may declare `**Artifact target:** \`<path>\``. On approval, the orchestrator promotes the gated draft (the preceding step's output, with its `## Output summary` tail stripped) to that canonical path with `status: approved` frontmatter, via the connector layer (`connector.py` — filesystem backend; configured-but-unimplemented connectors fall back with an honest label in the hitl.jsonl record).
 - The two mechanisms close the loop: approval writes the canonical artifact, which satisfies the next workflow's requirement gate — `--pipeline` chains are no longer gate-broken.
 
 ## How it works
 
-1. Reads `compass/workflows/<workflow>.md` dispatch graph
-2. Parses steps: `### Step N. <agent>.<task>` headers
+1. Reads the workflow's published `workflow_step` rows from the database
+2. Builds the steps: `number` is the row's `ord`; the agent is the role's `agent`
 3. For each step:
    - **HITL gate:** pauses, prompts user for approval (y/n)
    - **Workflow-level step** (merge constraints, etc.): prints a "handle manually" note
    - **Agent step:**
-     1. Reads `preferred_hosts:` from agent file frontmatter
+     1. Reads `preferred_hosts:` from the frontmatter of the agent's `spec_file` row
      2. Selects first host with API credentials available
-     3. Loads agent `.md` as system prompt → dispatches to selected host's API
+     3. Takes the agent's text from `spec_file` as the system prompt (held in a temp file for the dispatch) → dispatches to selected host's API
      4. Prints and optionally writes output to `docs/orchestrator-runs/`
 4. Passes prior step outputs as context to each subsequent step
 

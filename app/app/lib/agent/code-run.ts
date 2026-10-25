@@ -163,11 +163,11 @@ export async function runCode(
     };
   }
 
-  // `--compass-dir` when the project does not vendor its own projection, exactly as the v1 launcher
-  // resolves it. Probing `compass/workflows` rather than `compass/`: a project can carry a
-  // `compass/config.yaml` (which every project needs, to declare the checks a code run halts
-  // without) and no workflows, and probing the bare directory drops the flag for those.
-  const vendored = existsSync(`${repo.path}/compass/workflows`);
+  // `--compass-dir` is now only where the orchestrator finds `config.yaml` (the checks, the stack,
+  // the connectors); the workflow graph, agent prompts and stack profiles come from the database.
+  // It used to be omitted when the project vendored `compass/workflows`, because that decided where
+  // the graph was read from. Nothing is read from there any more, so it is always passed: the
+  // project's own `compass/config.yaml` is still read first, and this is the fallback.
 
   // ── one step per invocation, and the flags are load-bearing ────────────────────────────────
   //
@@ -207,7 +207,7 @@ export async function runCode(
     // The orchestrator reads its workflow graph, agent prompts and stack profile from `spec_file`;
     // the engagement is what makes an engagement-tier row win over the org default.
     "--engagement", engagementId,
-    ...(vendored ? [] : ["--compass-dir", COMPASS_DIR]),
+    "--compass-dir", COMPASS_DIR,
     "--story", story,
     // THE BRANCH NAME'S KEYWORDS COME FROM HERE. `_work_branch_name` builds
     // `<type>/<story>-<slug>` and `_slug` takes the first six meaningful words of the context —
