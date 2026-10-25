@@ -58,12 +58,11 @@ class TestRunReadsSpecSource(unittest.TestCase):
     def test_missing_workflow_halts_naming_the_row(self):
         code, err = run_halting(S.InMemorySpecSource())
         self.assertEqual(code, 1)
-        self.assertIn("workflows/triage.md", err)
-        self.assertIn("seed-specs", err)
+        self.assertIn("no published workflow 'triage'", err)
 
     def test_missing_agent_row_halts_rather_than_skipping(self):
         full = compass_specs()
-        no_agents = S.InMemorySpecSource(specs=[r for r in full.specs if r["path"].startswith("workflows/")])
+        no_agents = S.InMemorySpecSource(workflows=full.workflows)
         code, err = run_halting(no_agents)
         self.assertEqual(code, 2)
         self.assertIn("no spec_file row for agents/", err)

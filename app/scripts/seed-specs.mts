@@ -10,11 +10,12 @@
 // re-running this would overwrite it. So a row whose `updated_by` is not 'seed' (someone edited it)
 // is left alone unless `--force`. Engagement overrides are never touched.
 //
-// Loaded: `agents/*.md` (the prompt), `workflows/*.md` and `stacks/*.md` (the orchestrator), and `templates/*.md` — doc-tree.md, which the importer reads, and
+// Loaded: `agents/*.md` (the prompt), `stacks/*.md` (the orchestrator), and `templates/*.md` — doc-tree.md, which the importer reads, and
 // the framework-authoring templates. A template whose name already has a `document_template` row is
 // SKIPPED: those are deliverable shapes with their own table, and a second copy is a second source.
-// `workflows/` and `stacks/` are loaded for the Python orchestrator, which reads them through
-// `spec_source` (#227); the app does not read them. `config.yaml` stays on disk.
+// `stacks/` is loaded for the Python orchestrator, which reads it through `spec_source` (#227); the
+// app does not read it. `workflows/` is NOT loaded: the orchestrator builds its graph from the
+// published `workflow_step` rows. `config.yaml` stays on disk.
 
 import { readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
@@ -36,7 +37,7 @@ const { data: shapes, error: shapesErr } = await sb.from("document_template").se
 if (shapesErr) { console.error(`✗ read document_template: ${shapesErr.message}`); process.exit(1); }
 const owned = new Set((shapes ?? []).map((t: { name: string }) => t.name));
 
-const files = ["agents", "templates", "workflows", "stacks"].flatMap((dir) =>
+const files = ["agents", "templates", "stacks"].flatMap((dir) =>
   readdirSync(resolve(ROOT, dir)).filter((f) => f.endsWith(".md"))
     .filter((f) => dir !== "templates" || !owned.has(f.slice(0, -3)))
     .map((f) => `${dir}/${f}`)).sort();

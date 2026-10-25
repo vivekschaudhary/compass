@@ -1449,7 +1449,7 @@ def _run_workflow(
       prior_outputs  — list of step output dicts (step, agent, task, host, output)
       artifact_paths — list of relative path strings for written artifacts
     """
-    from .graph import parse_workflow, parse_workflow_meta
+    from .graph import steps_from_rows
     from .hitl import handle_hitl_gate
     from .hosts.router import select_host, dispatch_to_host, deep_model
     from .logger import log_step, log_hitl, default_actor
@@ -1457,14 +1457,12 @@ def _run_workflow(
 
     if specs is None:
         raise ValueError("_run_workflow needs a SpecSource (specs=) — framework content is not read from disk")
-    workflow_path = f"workflows/{workflow_name}.md"
+    workflow_path = f"workflow '{workflow_name}'"
     try:
-        workflow_text = specs.spec(workflow_path)
+        steps = steps_from_rows(specs.workflow_steps(workflow_name))
     except SpecMissing as exc:
         print(f"Error: workflow not found: {exc}", file=sys.stderr)
         sys.exit(1)
-
-    steps = parse_workflow(workflow_text)
     if not steps:
         print(
             f"Warning: no dispatch steps found in {workflow_path}.\n"
@@ -1487,7 +1485,9 @@ def _run_workflow(
     # A workflow's frontmatter may declare `requires_approved:` artifact paths.
     # PASS per path: approved hitl.jsonl record OR `status: approved`
     # frontmatter (v0.3.x dual acceptance — the orchestrator/manual bridge).
-    requirements = parse_workflow_meta(workflow_text)["requires_approved"]
+    # The `.md` frontmatter's `requires_approved:` is not in the rows: the app opens a task only when
+    # its `depends_on` are done, so there is no document-path gate to evaluate here.
+    requirements = []
     if requirements:
         unmet = []
         print(f"\nRequirement gate — {workflow_name} requires approved:")

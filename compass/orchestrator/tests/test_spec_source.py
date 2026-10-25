@@ -38,6 +38,13 @@ class TestVectors(unittest.TestCase):
                 self.assertEqual(got["agent"] if got else None, c["expect_agent"])
 
 
+    def test_workflow_tiers(self):
+        for c in VECTORS["workflow"]:
+            with self.subTest(c["name"]):
+                got = S.pick_workflow(c["rows"], c["engagement"], c["code"])
+                self.assertEqual(got["id"] if got else None, c["expect_id"])
+
+
 class TestInMemory(unittest.TestCase):
     def test_resolves_through_the_same_rules(self):
         src = S.InMemorySpecSource(
@@ -125,6 +132,66 @@ class TestDbSource(unittest.TestCase):
     def test_lists_a_prefix(self):
         t = Recorder((200, [{"path": "agents/b.md"}, {"path": "agents/a.md"}, {"path": "agents/a.md"}]))
         self.assertEqual(db(t).spec_paths("agents/"), ["agents/a.md", "agents/b.md"])
+
+
+BUILD_STEPS = [
+    {"ord": 1, "kind": "agent", "role_code": "engineer", "task": "implement-story", "title": "Implement the story",
+     "nests_workflow_code": None, "depends_on": []},
+    {"ord": 2, "kind": "agent", "role_code": "automation", "task": "write-e2e-tests", "title": "Tests",
+     "nests_workflow_code": None, "depends_on": ["implement-story"]},
+    {"ord": 3, "kind": "hitl", "role_code": "principal-engineer", "task": "approve-build", "title": "Accept",
+     "nests_workflow_code": None, "depends_on": ["write-e2e-tests"]},
+]
+
+
+def build_transport(steps=BUILD_STEPS, versions=None, roles=None):
+    """Replies in the order DbSpecSource asks: org, workflow, version, steps, then one per role."""
+    versions = [{"id": "v1", "version": 1}] if versions is None else versions
+    roles = roles if roles is not None else {"engineer": "engineer", "automation": "automation",
+                                              "principal-engineer": "principal-engineer"}
+    replies = [(200, [{"id": "o1"}]), (200, [{"id": "w1", "code": "build", "engagement_id": None}]),
+               (200, versions), (200, steps)]
+    for code in ("engineer", "automation", "principal-engineer"):
+        replies.append((200, [{"code": code, "engagement_id": None, "agent": roles[code]}] if code in roles else []))
+    return Recorder(*replies)
+
+
+class TestWorkflowSteps(unittest.TestCase):
+    def test_reads_the_published_version_in_ord_order_with_agents_resolved(self):
+        t = build_transport()
+        steps = db(t).workflow_steps("build")
+        self.assertEqual([(s["ord"], s["agent"], s["task"]) for s in steps],
+                         [(1, "engineer", "implement-story"), (2, "automation", "write-e2e-tests"),
+                          (3, "principal-engineer", "approve-build")])
+        urls = [c[1] for c in t.calls]
+        self.assertIn("status=eq.published", urls[2])
+        self.assertIn("order=ord.asc", urls[3])
+        self.assertIn("enabled=eq.true", urls[1])
+
+    def test_no_published_version_is_missing(self):
+        with self.assertRaises(S.SpecMissing) as cm:
+            db(build_transport(versions=[])).workflow_steps("build")
+        self.assertIn("no published version", str(cm.exception))
+
+    def test_unknown_workflow_is_missing(self):
+        with self.assertRaises(S.SpecMissing):
+            db(Recorder((200, [{"id": "o1"}]), (200, []))).workflow_steps("nope")
+
+    def test_an_agent_step_for_a_role_that_does_not_exist_halts(self):
+        with self.assertRaises(S.SpecMissing) as cm:
+            db(build_transport(roles={"automation": "automation"})).workflow_steps("build")
+        self.assertIn("engineer", str(cm.exception))
+
+    def test_a_gate_row_may_name_a_role_with_no_row(self):
+        steps = db(build_transport(roles={"engineer": "engineer", "automation": "automation"})).workflow_steps("build")
+        self.assertIsNone(steps[2]["agent"])
+
+    def test_in_memory_serves_the_same_shape(self):
+        src = S.InMemorySpecSource(workflows=[{"code": "build", "engagement_id": None,
+                                                "steps": [{"ord": 2, "agent": "b"}, {"ord": 1, "agent": "a"}]}])
+        self.assertEqual([s["ord"] for s in src.workflow_steps("build")], [1, 2])
+        with self.assertRaises(S.SpecMissing):
+            src.workflow_steps("other")
 
 
 class TestFromEnv(unittest.TestCase):

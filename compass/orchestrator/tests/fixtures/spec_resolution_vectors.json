@@ -1,49 +1,273 @@
 {
-  "_why": "Tier resolution is implemented twice — app/app/lib/specs.ts (resolveSpecFromTable, templateFor, resolveActor) and compass/orchestrator/spec_source.py. These cases pin the rules so a change to either has to change this file. Run by test_spec_source.py; the TS side should assert the same cases.",
+  "_why": "Tier resolution is implemented twice \u2014 app/app/lib/specs.ts (resolveSpecFromTable, templateFor, resolveActor) and compass/orchestrator/spec_source.py. These cases pin the rules so a change to either has to change this file. Run by test_spec_source.py; the TS side should assert the same cases.",
   "spec": [
-    {"name": "engagement override beats org default",
-     "rows": [{"path": "agents/x.md", "org_id": "default", "engagement_id": null, "content": "ORG"},
-              {"path": "agents/x.md", "org_id": null, "engagement_id": "e1", "content": "ENG"}],
-     "engagement": "e1", "path": "agents/x.md", "expect": {"content": "ENG", "tier": "engagement"}},
-    {"name": "another engagement's override is ignored",
-     "rows": [{"path": "agents/x.md", "org_id": "default", "engagement_id": null, "content": "ORG"},
-              {"path": "agents/x.md", "org_id": null, "engagement_id": "e2", "content": "ENG2"}],
-     "engagement": "e1", "path": "agents/x.md", "expect": {"content": "ORG", "tier": "org"}},
-    {"name": "no engagement resolves the org default",
-     "rows": [{"path": "agents/x.md", "org_id": "default", "engagement_id": null, "content": "ORG"}],
-     "engagement": null, "path": "agents/x.md", "expect": {"content": "ORG", "tier": "org"}},
-    {"name": "no row at any tier is absent, not empty",
-     "rows": [{"path": "agents/y.md", "org_id": "default", "engagement_id": null, "content": "OTHER"}],
-     "engagement": "e1", "path": "agents/x.md", "expect": null}
+    {
+      "name": "engagement override beats org default",
+      "rows": [
+        {
+          "path": "agents/x.md",
+          "org_id": "default",
+          "engagement_id": null,
+          "content": "ORG"
+        },
+        {
+          "path": "agents/x.md",
+          "org_id": null,
+          "engagement_id": "e1",
+          "content": "ENG"
+        }
+      ],
+      "engagement": "e1",
+      "path": "agents/x.md",
+      "expect": {
+        "content": "ENG",
+        "tier": "engagement"
+      }
+    },
+    {
+      "name": "another engagement's override is ignored",
+      "rows": [
+        {
+          "path": "agents/x.md",
+          "org_id": "default",
+          "engagement_id": null,
+          "content": "ORG"
+        },
+        {
+          "path": "agents/x.md",
+          "org_id": null,
+          "engagement_id": "e2",
+          "content": "ENG2"
+        }
+      ],
+      "engagement": "e1",
+      "path": "agents/x.md",
+      "expect": {
+        "content": "ORG",
+        "tier": "org"
+      }
+    },
+    {
+      "name": "no engagement resolves the org default",
+      "rows": [
+        {
+          "path": "agents/x.md",
+          "org_id": "default",
+          "engagement_id": null,
+          "content": "ORG"
+        }
+      ],
+      "engagement": null,
+      "path": "agents/x.md",
+      "expect": {
+        "content": "ORG",
+        "tier": "org"
+      }
+    },
+    {
+      "name": "no row at any tier is absent, not empty",
+      "rows": [
+        {
+          "path": "agents/y.md",
+          "org_id": "default",
+          "engagement_id": null,
+          "content": "OTHER"
+        }
+      ],
+      "engagement": "e1",
+      "path": "agents/x.md",
+      "expect": null
+    }
   ],
   "template": [
-    {"name": "engagement beats org beats default",
-     "rows": [{"name": "sow", "org_id": null, "engagement_id": null, "body": "DEFAULT", "title": "t"},
-              {"name": "sow", "org_id": "o1", "engagement_id": null, "body": "ORG", "title": "t"},
-              {"name": "sow", "org_id": "o1", "engagement_id": "e1", "body": "ENG", "title": "t"}],
-     "engagement": "e1", "org": "o1", "name": "sow", "expect": {"body": "ENG", "tier": "engagement"}},
-    {"name": "org beats default",
-     "rows": [{"name": "sow", "org_id": null, "engagement_id": null, "body": "DEFAULT", "title": "t"},
-              {"name": "sow", "org_id": "o1", "engagement_id": null, "body": "ORG", "title": "t"}],
-     "engagement": "e1", "org": "o1", "name": "sow", "expect": {"body": "ORG", "tier": "org"}},
-    {"name": "another org's row is ignored",
-     "rows": [{"name": "sow", "org_id": null, "engagement_id": null, "body": "DEFAULT", "title": "t"},
-              {"name": "sow", "org_id": "o2", "engagement_id": null, "body": "OTHER", "title": "t"}],
-     "engagement": "e1", "org": "o1", "name": "sow", "expect": {"body": "DEFAULT", "tier": "default"}},
-    {"name": "an empty body is not a template",
-     "rows": [{"name": "sow", "org_id": null, "engagement_id": null, "body": "", "title": "t"}],
-     "engagement": null, "org": "o1", "name": "sow", "expect": null}
+    {
+      "name": "sow",
+      "rows": [
+        {
+          "name": "sow",
+          "org_id": null,
+          "engagement_id": null,
+          "body": "DEFAULT",
+          "title": "t"
+        },
+        {
+          "name": "sow",
+          "org_id": "o1",
+          "engagement_id": null,
+          "body": "ORG",
+          "title": "t"
+        },
+        {
+          "name": "sow",
+          "org_id": "o1",
+          "engagement_id": "e1",
+          "body": "ENG",
+          "title": "t"
+        }
+      ],
+      "engagement": "e1",
+      "org": "o1",
+      "expect": {
+        "body": "ENG",
+        "tier": "engagement"
+      }
+    },
+    {
+      "name": "sow",
+      "rows": [
+        {
+          "name": "sow",
+          "org_id": null,
+          "engagement_id": null,
+          "body": "DEFAULT",
+          "title": "t"
+        },
+        {
+          "name": "sow",
+          "org_id": "o1",
+          "engagement_id": null,
+          "body": "ORG",
+          "title": "t"
+        }
+      ],
+      "engagement": "e1",
+      "org": "o1",
+      "expect": {
+        "body": "ORG",
+        "tier": "org"
+      }
+    },
+    {
+      "name": "sow",
+      "rows": [
+        {
+          "name": "sow",
+          "org_id": null,
+          "engagement_id": null,
+          "body": "DEFAULT",
+          "title": "t"
+        },
+        {
+          "name": "sow",
+          "org_id": "o2",
+          "engagement_id": null,
+          "body": "OTHER",
+          "title": "t"
+        }
+      ],
+      "engagement": "e1",
+      "org": "o1",
+      "expect": {
+        "body": "DEFAULT",
+        "tier": "default"
+      }
+    },
+    {
+      "name": "sow",
+      "rows": [
+        {
+          "name": "sow",
+          "org_id": null,
+          "engagement_id": null,
+          "body": "",
+          "title": "t"
+        }
+      ],
+      "engagement": null,
+      "org": "o1",
+      "expect": null
+    }
   ],
   "role": [
-    {"name": "engagement row beats org row",
-     "rows": [{"code": "engineer", "engagement_id": null, "agent": "engineer"},
-              {"code": "engineer", "engagement_id": "e1", "agent": "engineer-x"}],
-     "engagement": "e1", "code": "engineer", "expect_agent": "engineer-x"},
-    {"name": "org row serves an engagement with no override",
-     "rows": [{"code": "engineer", "engagement_id": null, "agent": "engineer"}],
-     "engagement": "e1", "code": "engineer", "expect_agent": "engineer"},
-    {"name": "unknown code is absent",
-     "rows": [{"code": "engineer", "engagement_id": null, "agent": "engineer"}],
-     "engagement": "e1", "code": "nope", "expect_agent": null}
+    {
+      "name": "engagement row beats org row",
+      "rows": [
+        {
+          "code": "engineer",
+          "engagement_id": null,
+          "agent": "engineer"
+        },
+        {
+          "code": "engineer",
+          "engagement_id": "e1",
+          "agent": "engineer-x"
+        }
+      ],
+      "engagement": "e1",
+      "code": "engineer",
+      "expect_agent": "engineer-x"
+    },
+    {
+      "name": "org row serves an engagement with no override",
+      "rows": [
+        {
+          "code": "engineer",
+          "engagement_id": null,
+          "agent": "engineer"
+        }
+      ],
+      "engagement": "e1",
+      "code": "engineer",
+      "expect_agent": "engineer"
+    },
+    {
+      "name": "unknown code is absent",
+      "rows": [
+        {
+          "code": "engineer",
+          "engagement_id": null,
+          "agent": "engineer"
+        }
+      ],
+      "engagement": "e1",
+      "code": "nope",
+      "expect_agent": null
+    }
+  ],
+  "workflow": [
+    {
+      "name": "engagement workflow beats org workflow",
+      "rows": [
+        {
+          "code": "build",
+          "engagement_id": null,
+          "id": "org"
+        },
+        {
+          "code": "build",
+          "engagement_id": "e1",
+          "id": "eng"
+        }
+      ],
+      "engagement": "e1",
+      "code": "build",
+      "expect_id": "eng"
+    },
+    {
+      "name": "org workflow serves an engagement with no override",
+      "rows": [
+        {
+          "code": "build",
+          "engagement_id": null,
+          "id": "org"
+        }
+      ],
+      "engagement": "e1",
+      "code": "build",
+      "expect_id": "org"
+    },
+    {
+      "name": "another engagement's workflow is ignored",
+      "rows": [
+        {
+          "code": "build",
+          "engagement_id": "e2",
+          "id": "other"
+        }
+      ],
+      "engagement": "e1",
+      "code": "build",
+      "expect_id": null
+    }
   ]
 }
