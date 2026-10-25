@@ -112,7 +112,7 @@ Several places describe the same workflows. Know which one executes:
   builds its steps from the published `workflow_step` rows. They are design documents, compared
   against the seed by `seed-consistency-check.py`. Two formats: the old `### Step N.` headings and
   the newer table used by the three phase files — `setup.md`, `sprint-0.md` and `sprint.md`.
-  `graph.py` still parses both, for `validate.py` and the tests.
+  `graph.py` still parses both, for the tests.
 - `.claude/skills/` — slash commands, most of which map to workflows the app cannot run.
 - `compass/reference/workflow-catalog.csv` — derived from the .md, CI-checked.
 - **prose inside the code** — migration headers, module docstrings, the `### Task:` sections. These
