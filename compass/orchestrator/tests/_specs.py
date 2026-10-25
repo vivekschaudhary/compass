@@ -25,7 +25,7 @@ def workflows_from_md() -> list:
     """Each shipped workflow as the DB would serve it: `workflow_steps()`'s shape. Test-only — the
     `.md` is parsed here so a test has a graph to run; the product reads `workflow_step` rows."""
     out = []
-    for f in sorted((COMPASS / "workflows").glob("*.md")):
+    for f in sorted((COMPASS / "archive" / "workflows").glob("*.md")):
         steps = []
         for st in parse_workflow(f.read_text(encoding="utf-8")):
             steps.append({"ord": st.number, "kind": "hitl" if st.is_hitl else "agent",

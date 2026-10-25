@@ -165,7 +165,7 @@ export async function runCode(
 
   // `--compass-dir` is now only where the orchestrator finds `config.yaml` (the checks, the stack,
   // the connectors); the workflow graph, agent prompts and stack profiles come from the database.
-  // It used to be omitted when the project vendored `compass/workflows`, because that decided where
+  // It used to be omitted when the project vendored `compass/archive/workflows`, because that decided where
   // the graph was read from. Nothing is read from there any more, so it is always passed: the
   // project's own `compass/config.yaml` is still read first, and this is the fallback.
 

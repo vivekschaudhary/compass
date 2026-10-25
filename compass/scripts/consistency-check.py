@@ -11,8 +11,9 @@ old phrasing; this one needs nothing — it computes the truth and compares).
 Two checks were removed when AGENTS.md stopped describing the product's runtime:
 a dispatch-graph count and a supported-hosts list, both of which compared a PROSE
 CLAIM in AGENTS.md against reality. With no claim to police there is nothing to
-check — and seed-consistency-check.py already covers seed-vs-graph drift, which
-is the part that mattered. Do not re-add them by re-adding the prose.
+check. (A seed-vs-graph check, seed-consistency-check.py, existed while the `.md` graphs were
+executable; they are archived design history now, so it was retired with them.) Do not re-add the
+removed checks by re-adding the prose.
 
 Checks (all COMPUTABLE, no human input):
   1. Version self-claims — no hardcoded "alpha-<N>" in the doc/code surfaces
@@ -46,7 +47,7 @@ VERSION_SELF_CLAIM_FILES = [
 
 
 def _workflow_files(repo_root: Path):
-    wdir = repo_root / "compass" / "workflows"
+    wdir = repo_root / "compass" / "archive" / "workflows"
     return [p for p in wdir.glob("*.md") if p.name != "improvements.md"]
 
 

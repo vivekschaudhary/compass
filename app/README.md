@@ -4,7 +4,7 @@ The Next.js 16 / Supabase control-tower UI for Compass. This is the **app half**
 monorepo:
 
 - **`/` (repo root)** — the Compass **framework**: the Python orchestrator (`compass.orchestrator`),
-  `compass/agents/`, `compass/workflows/`, templates, docs. This is what consumer projects vendor.
+  `compass/agents/`, `compass/archive/workflows/`, templates, docs. This is what consumer projects vendor.
 - **`/app`** — this app. It runs every workflow step itself, reads agent files and specs
   out of the framework's `compass/` dir, and shells into `python -m compass.orchestrator.run` only
   for steps that write code.

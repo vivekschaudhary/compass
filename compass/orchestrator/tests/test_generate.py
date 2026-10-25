@@ -252,7 +252,7 @@ class Safety(Fixture):
         self.assertIn("app router, tailwind", open_pr.opened[0][1])
 
     def test_generator_reads_nothing_from_the_framework_folder(self):
-        framework_markers = ("/compass/agents", "/compass/workflows", "/compass/seed",
+        framework_markers = ("/compass/agents", "/compass/archive/workflows", "/compass/seed",
                              "/compass/templates", "/compass/orchestrator/graph", "config.yaml")
         real_open = builtins.open
         seen = []

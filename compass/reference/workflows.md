@@ -1,6 +1,6 @@
 # Compass — workflows and steps
 
-Compiled from `compass/seed/*.csv` at `8ef8e2f6` — the rows v2 imports and executes. Not from `compass/workflows/*.md`, which are the dispatch graphs, and not from the `### Task:` sections in `compass/agents/*.md`, which do not run.
+Compiled from `compass/seed/*.csv` at `8ef8e2f6` — the rows v2 imports and executes. Not from `compass/archive/workflows/*.md`, which are the dispatch graphs, and not from the `### Task:` sections in `compass/agents/*.md`, which do not run.
 
 **21 workflows · 102 steps · 226 criteria · 16 roles**
 

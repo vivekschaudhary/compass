@@ -23,7 +23,7 @@ class TestShippedFilesParse(unittest.TestCase):
     to compare against, so this pins that the parsers accept what is actually in `compass/`."""
 
     def test_every_workflow_md_parses(self):
-        for wf in sorted((COMPASS / "workflows").glob("*.md")):
+        for wf in sorted((COMPASS / "archive" / "workflows").glob("*.md")):
             with self.subTest(wf.name):
                 text = wf.read_text(encoding="utf-8")
                 self.assertIsInstance(graph.parse_workflow(text), list)
@@ -41,7 +41,7 @@ class TestShippedFilesParse(unittest.TestCase):
 
 class TestTextParsersDoNotTouchTheDisk(unittest.TestCase):
     def test_no_read_happens(self):
-        wf = (COMPASS / "workflows" / "build.md").read_text()
+        wf = (COMPASS / "archive" / "workflows" / "build.md").read_text()
         agent = (COMPASS / "agents" / "engineer.md").read_text(encoding="utf-8")
         boom = mock.Mock(side_effect=AssertionError("a text parser read the disk"))
         with mock.patch.object(Path, "read_text", boom), mock.patch("builtins.open", boom):

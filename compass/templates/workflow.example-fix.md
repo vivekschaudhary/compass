@@ -1,4 +1,4 @@
-<!-- WORKED EXAMPLE #2 (the stress test) — the live `compass/workflows/fix.md` (v0.3.55) re-cut
+<!-- WORKED EXAMPLE #2 (the stress test) — the live `compass/archive/workflows/fix.md` (v0.3.55) re-cut
      into workflow.md. A REACTIVE workflow: no approval gate, regression-test-first, orchestrator-owned
      Jira projection. Illustrative only; not the active workflow file. See the stress-test notes at the end. -->
 ---

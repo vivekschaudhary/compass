@@ -12,7 +12,7 @@ from pathlib import Path
 from compass.orchestrator.tests._specs import load_workflow, load_workflow_meta
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
-WORKFLOWS = COMPASS_DIR / "workflows"
+WORKFLOWS = COMPASS_DIR / "archive" / "workflows"
 
 
 def _parse(markdown: str):

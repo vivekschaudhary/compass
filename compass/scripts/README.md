@@ -38,7 +38,7 @@ python compass/scripts/token-usage.py ~/.config/claude-code/sessions/<session>.j
 python compass/scripts/token-usage.py <session-log> --out docs/usage/build-2026-05-27.md
 
 # Force a specific workflow file (otherwise auto-detected from the first slash-command in the session)
-python compass/scripts/token-usage.py <session-log> --workflow compass/workflows/build.md
+python compass/scripts/token-usage.py <session-log> --workflow compass/archive/workflows/build.md
 
 # Custom pricing (defaults: $3/M input, $15/M output — adjust to your model)
 python compass/scripts/token-usage.py <session-log> --price-in 3.0 --price-out 15.0
@@ -290,7 +290,6 @@ Delivery-Manager-owned by convention — see `compass/agents/delivery-manager.md
 Mechanizes the drift classes the retro full-surface audits kept catching (Retro #017/#018/#019). Computes the truth and compares — **no arguments needed** (unlike `pre-push-consistency-check.py`, which needs the human to name the amended term).
 
 ### What it checks
-- **Dispatch-graph count** — AGENTS.md "N of 17 workflows" == actual count of `compass/workflows/*.md` containing `## Dispatch graph`.
 - **Catalog count** — AGENTS.md "7 shapes / N patterns" == `### ` entries under canon.md `## Compass-original patterns`.
 - **Version self-claims** — no hardcoded `alpha-<N>` in README / CLAUDE / `orchestrator/run.py` / `orchestrator/README.md` (CHANGELOG.md is the single source).
 
@@ -304,24 +303,6 @@ python3 compass/scripts/consistency-check.py            # exit 0 consistent, 1 d
 git config core.hooksPath compass/scripts/githooks
 ```
 `compass/scripts/githooks/pre-commit` then runs this check + the orchestrator tests on every commit. Also enforced in CI via `.github/workflows/consistency-check.yml`. This is the commit-time complement to rule 8's term-sweep; together they close the Principle #17 gap for framework-edit sessions.
-
----
-
-## `workflow-catalog.py` — every workflow's steps, as one table
-
-Flattens all twenty dispatch graphs into `compass/reference/workflow-catalog.csv` — one row per step. Two uses: reviewing the catalogue as a whole, which is hard to do across twenty markdown files, and **authoring** — the columns are the shape a step actually has, so a spreadsheet round-trip is a plausible way for a practice to draft or amend a workflow.
-
-The `kind` column is the load-bearing one. `agent` is work someone holds; `hitl` is a human gate; `machine` is a mechanical check (CI, branch protection) that **nobody holds** and therefore belongs on a gate as a criterion rather than in a queue; `refresh` is a workflow with no dispatch graph at all — one agent, recurring. A workflow reporting `refresh` that is genuinely multi-role has its steps written in some other format, which is a finding about the file.
-
-Derived, so **regenerate rather than edit**. `--check` fails when the CSV no longer matches the workflow files, the same discipline as `consistency-check.py`.
-
-```bash
-python3 compass/scripts/workflow-catalog.py            # write the CSV
-python3 compass/scripts/workflow-catalog.py --check    # fail if stale (CI / pre-commit)
-python3 compass/scripts/workflow-catalog.py --stdout   # print instead of writing
-```
-
-Current state: 64 steps across 20 workflows — 38 agent, 14 HITL, 10 refresh, 1 machine, 1 unclassified. `advance`, `measure` and `metrics` name no agent anywhere and are flagged for review.
 
 ---
 

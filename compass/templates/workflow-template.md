@@ -2,7 +2,7 @@
   HOW TO USE THIS TEMPLATE
   ─────────────────────────────────────────────────────────────────────────
   This is the canonical v0.3+ workflow shape. Every workflow file in
-  compass/workflows/ should follow this structure exactly. The HTML
+  compass/archive/workflows/ should follow this structure exactly. The HTML
   comments inline explain each section's purpose; preserve them when
   translating an existing workflow so future translators inherit intent.
 

@@ -308,7 +308,7 @@ setup:
 # ─── Continuous quality scanner ───────────────────────────────────────
 # Snyk-style continuous scanner across the six SDLC phases.
 # Findings, not failures. Severity + confidence + suppression.
-# Full check catalog lives in `compass/workflows/scan.md`.
+# Full check catalog lives in `compass/archive/workflows/scan.md`.
 scanner:
   mode: strict            # strict (block on Critical) | advisory (warn only)
   per_phase:              # phase-level override of mode

@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from compass.orchestrator import run as R
 from compass.orchestrator.tests._specs import load_workflow
 
-WORKFLOWS = Path(__file__).resolve().parents[2] / "workflows"
+WORKFLOWS = Path(__file__).resolve().parents[2] / "archive" / "workflows"
 
 
 def _steps(workflow_name):

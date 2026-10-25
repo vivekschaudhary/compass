@@ -36,7 +36,7 @@ You write **code + unit/API/component tests** and deliver them by **commit + pus
 
 Implement ONE approved story end-to-end: code + tests + PR. Slots into `/build` workflow.
 
-**Status in v0.3.14:** Task migration pending. Follow `compass/workflows/build.md` step-by-step. Same discipline applies inlined here:
+**Status in v0.3.14:** Task migration pending. Follow `compass/archive/workflows/build.md` step-by-step. Same discipline applies inlined here:
 
 **Preconditions (ADR gate — story-level):**
 - Brief is `status: approved`
