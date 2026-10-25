@@ -8,6 +8,7 @@ from pathlib import Path
 
 from compass.orchestrator import events as ev
 from compass.orchestrator import cockpit
+from compass.orchestrator.tests._specs import compass_specs
 
 
 class TestMakeEvent(unittest.TestCase):
@@ -528,7 +529,7 @@ class TestRunEmitsLifecycle(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     runmod._run_workflow(
                         "triage", Path(proj), compass_dir,
-                        context="something broke",
+                        context="something broke", specs=compass_specs(),
                     )
                 events = ev.load_events(Path(ch) / "orchestrator" / "events.jsonl")
                 types = [e["type"] for e in events]
@@ -560,7 +561,7 @@ class TestRunEmitsLifecycle(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     runmod._run_workflow(
                         "triage", Path(proj), compass_dir,
-                        context="x", run_id_override="fixed-run-id-42",
+                        context="x", run_id_override="fixed-run-id-42", specs=compass_specs(),
                     )
                 events = ev.load_events(Path(ch) / "orchestrator" / "events.jsonl")
                 self.assertTrue(events)

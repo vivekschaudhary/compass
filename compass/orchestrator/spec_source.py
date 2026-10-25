@@ -29,8 +29,10 @@ vector file can pin them from both languages; the DB source only fetches candida
 The HTTP transport is injectable (`transport=`), as in `stores.py`, so this is tested without a
 database. The default uses urllib — no added dependency.
 """
+import contextlib
 import json
 import os
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -247,3 +249,24 @@ def from_env(engagement_id: Optional[str], env=None, transport=None) -> DbSpecSo
             "NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set — the orchestrator "
             "reads framework content from the database and has no disk fallback.")
     return DbSpecSource(url, key, engagement_id, transport=transport)
+
+
+@contextlib.contextmanager
+def prompt_file(text: str):
+    """Hold `text` in a temp file for the length of a dispatch, then delete it.
+
+    Every host adapter takes the agent prompt as a FILE PATH (`claude_code` hands it to
+    `--append-system-prompt-file`), and the prompt now comes from the database as text. This is the
+    only place it touches the disk, and it lives for one dispatch — the file is never read back as a
+    source, so it cannot become a second copy that drifts.
+    """
+    fh = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+    try:
+        fh.write(text)
+        fh.close()
+        yield fh.name
+    finally:
+        try:
+            os.unlink(fh.name)
+        except OSError:
+            pass
