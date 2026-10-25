@@ -39,7 +39,7 @@ prose about roles.
 
 Both halves live here; a change spanning them is one commit.
 
-- **repo root** — the framework a consumer vendors: `compass/agents/`, `compass/workflows/`,
+- **repo root** — the framework a consumer vendors: `compass/agents/`,
   `compass/seed/`, `compass/templates/`, `compass/scripts/`, and the Python orchestrator (v1).
 - **`app/`** — the control tower (Next.js 16 / Supabase). Its own toolchain; see `app/AGENTS.md`,
   which carries a Next 16 breaking-change warning worth heeding.
@@ -59,7 +59,7 @@ What remains of v1 is the Python orchestrator, and the app still uses it for exa
 | | the app — `app/app/lib/data`, `lib/agent`, `lib/import`, its pages, `app/app/api/*` | v1 orchestrator — `compass/orchestrator/` |
 |---|---|---|
 | runs | every step, calling a model host itself | only steps whose `output` is `code`, spawned by `lib/agent/code-run.ts` |
-| step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same published rows, by `ord` (what `code-run.ts` passes as `--step`), through `spec_source.workflow_steps` — never `compass/workflows/*.md` |
+| step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same published rows, by `ord` (what `code-run.ts` passes as `--step`), through `spec_source.workflow_steps` — never `compass/archive/workflows/*.md` |
 | host routing | `lib/agent/hosts/select.ts` — `COMPASS_CLAUDE_HOST` picks the API or the `claude` CLI; one model, not chosen per role | `router.py` → `preferred_hosts`, read from the agent's `spec_file` row |
 | database | yes | reads framework content — `spec_file`, `document_template`, `role`, `workflow_step` — through `compass/orchestrator/spec_source.py`. `config.yaml` is the one framework file still read from disk. A missing row halts; there is no disk fallback |
 
@@ -108,13 +108,12 @@ Several places describe the same workflows. Know which one executes:
   criteria and `title`.
 - **the database** — a *versioned* copy of the seed. Published versions match it row for row; older
   versions accumulate, so raw counts overstate.
-- `compass/workflows/*.md` — the dispatch graphs. **Nothing executes them any more:** the orchestrator
-  builds its steps from the published `workflow_step` rows. They are design documents, compared
-  against the seed by `seed-consistency-check.py`. Two formats: the old `### Step N.` headings and
-  the newer table used by the three phase files — `setup.md`, `sprint-0.md` and `sprint.md`.
-  `graph.py` still parses both, for the tests.
+- `compass/archive/workflows/*.md` — the framework's v1 dispatch graphs, **archived design history.**
+  Nothing executes them and nothing checks them against the seed: the orchestrator builds its steps
+  from the published `workflow_step` rows. 19 of the 32 have no database row at all (`fix`, `triage`,
+  `ops`, `release`…), so they are the only record of those designs. Read them for intent, never for
+  what runs. See `compass/archive/workflows/README.md`.
 - `.claude/skills/` — slash commands, most of which map to workflows the app cannot run.
-- `compass/reference/workflow-catalog.csv` — derived from the .md, CI-checked.
 - **prose inside the code** — migration headers, module docstrings, the `### Task:` sections. These
   record why a change was made ON THE DAY IT WAS MADE; `app/supabase/MIGRATIONS.md` asks for exactly
   that ("the diff says what changed and the comment says why"). So a header's opening paragraph is
@@ -122,9 +121,8 @@ Several places describe the same workflows. Know which one executes:
   `047_backlog_item` opens "`draft-epics` produced a DOCUMENT" inside the very commit that stopped
   it doing only that. Read them for reasoning. Never quote them for current behaviour.
 
-**Run `python3 compass/scripts/seed-consistency-check.py` before believing the .md files describe
-what runs.** It fails on NEW drift only; today's known gaps are baselined in
-`compass/seed/known-drift.txt`. When it reports an entry RESOLVED, delete that line.
+**What runs is the database**, loaded from `compass/seed/*.csv`. There is no longer a check that
+compares it to a second description; if two places disagree, the published `workflow_step` rows win.
 
 ---
 

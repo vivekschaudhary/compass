@@ -12,7 +12,7 @@ Stdlib only. Python 3.9+.
 
 Usage:
     python compass/scripts/token-usage.py <session-log.jsonl>
-    python compass/scripts/token-usage.py <session-log.jsonl> --workflow compass/workflows/build.md
+    python compass/scripts/token-usage.py <session-log.jsonl> --workflow compass/archive/workflows/build.md
     python compass/scripts/token-usage.py <session-log.jsonl> --out docs/usage/build-2026-05-27.md
     python compass/scripts/token-usage.py <session-log.jsonl> --price-in 3.0 --price-out 15.0
 
@@ -331,8 +331,8 @@ def main():
     )
     ap.add_argument(
         "--workflows-dir",
-        default="compass/workflows",
-        help="Workflows directory for auto-detection (default: compass/workflows)",
+        default="compass/archive/workflows",
+        help="Workflows directory for auto-detection (default: compass/archive/workflows)",
     )
     ap.add_argument("--out", default=None, help="Output path for the report (default: stdout)")
     ap.add_argument(

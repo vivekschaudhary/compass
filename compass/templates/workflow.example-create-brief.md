@@ -1,4 +1,4 @@
-<!-- WORKED EXAMPLE #3 (the shape test) — the live `compass/workflows/create-brief.md` (v0.3.51)
+<!-- WORKED EXAMPLE #3 (the shape test) — the live `compass/archive/workflows/create-brief.md` (v0.3.51)
      re-cut into workflow.md. An AUTHORING workflow: produces DOCS + an approval, no code / PR / GitHub.
      Confirms the template holds for doc-producing flows. Illustrative only; not the active file. -->
 ---

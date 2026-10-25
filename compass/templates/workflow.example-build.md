@@ -1,4 +1,4 @@
-<!-- WORKED EXAMPLE — the live `compass/workflows/build.md` (v0.3.40, ~275 lines of prose)
+<!-- WORKED EXAMPLE — the live `compass/archive/workflows/build.md` (v0.3.40, ~275 lines of prose)
      re-cut into the workflow.md template. Illustrative only; not the active workflow file.
      Compare the two to see what the template removes (methodology → agent files) and what it
      structures (gate → predicates, dispatch graph → table). ~35 lines, same behavior. -->

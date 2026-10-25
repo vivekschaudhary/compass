@@ -43,7 +43,7 @@ def _isolate_compass_home(case):
                     if old is not None else os.environ.pop("COMPASS_HOME", None))
 
 COMPASS_DIR = Path(__file__).resolve().parents[2]
-WORKFLOWS = COMPASS_DIR / "workflows"
+WORKFLOWS = COMPASS_DIR / "archive" / "workflows"
 
 
 def _tmp_md(content: str, dirpath: Path = None) -> Path:

@@ -3,7 +3,7 @@ name: create-product-brief
 description: Create the engagement's product brief (PM + Researcher) as a page in the docs system, gated by two Jira approval tickets. Head of the lifecycle — run before the MVP plan and any epic.
 ---
 
-Execute the workflow at `compass/workflows/create-product-brief.md`.
+Execute the workflow at `compass/archive/workflows/create-product-brief.md`.
 
 Read that workflow file now and follow it step by step. Load the agent file named by each step (`compass/agents/researcher.md`, `compass/agents/pm.md`, `compass/agents/delivery-manager.md`) when entering it.
 

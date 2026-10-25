@@ -64,7 +64,7 @@ on:
 jobs:
   review:
     # Run only after CI succeeded on a pull_request event.
-    # Per compass/workflows/build.md Phase 5 step 13: review starts AFTER CI green.
+    # Per compass/archive/workflows/build.md Phase 5 step 13: review starts AFTER CI green.
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request'
