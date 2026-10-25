@@ -25,7 +25,7 @@ class TestVectors(unittest.TestCase):
     def test_template_tiers(self):
         for c in VECTORS["template"]:
             with self.subTest(c["name"]):
-                got = S.pick_template(c["rows"], c["engagement"], c["org"], c["name"])
+                got = S.pick_template(c["rows"], c["engagement"], c["org"], c["template"])
                 if c["expect"] is None:
                     self.assertIsNone(got)
                 else:

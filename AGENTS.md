@@ -59,14 +59,17 @@ What remains of v1 is the Python orchestrator, and the app still uses it for exa
 | | the app — `app/app/lib/data`, `lib/agent`, `lib/import`, its pages, `app/app/api/*` | v1 orchestrator — `compass/orchestrator/` |
 |---|---|---|
 | runs | every step, calling a model host itself | only steps whose `output` is `code`, spawned by `lib/agent/code-run.ts` |
-| step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same step by number, from `compass/workflows/*.md` via `graph.py` |
-| host routing | `lib/agent/hosts/select.ts` — `COMPASS_CLAUDE_HOST` picks the API or the `claude` CLI; one model, not chosen per role | `router.py` → `preferred_hosts` |
-| database | yes | none |
+| step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same published rows, by `ord` (what `code-run.ts` passes as `--step`), through `spec_source.workflow_steps` — never `compass/workflows/*.md` |
+| host routing | `lib/agent/hosts/select.ts` — `COMPASS_CLAUDE_HOST` picks the API or the `claude` CLI; one model, not chosen per role | `router.py` → `preferred_hosts`, read from the agent's `spec_file` row |
+| database | yes | reads framework content — `spec_file`, `document_template`, `role`, `workflow_step` — through `compass/orchestrator/spec_source.py`. `config.yaml` is the one framework file still read from disk. A missing row halts; there is no disk fallback |
 
 Two v1 remnants are still live, and look deletable when they are not:
 - **`lib/authz.ts` + `user_role` / `app_user`** — kept on purpose as the groundwork for real identity.
-- **`spec_file` (+ `spec_file_version`)** — `lib/specs.ts` resolveSpec reads it on every agent run for
-  agent-file overrides. Nothing can write it since v1's spec editor went, so overrides are frozen.
+- **`spec_file` (+ `spec_file_version`)** — the source of agent prompts and the doc tree. The app reads
+  it through `resolveSpecFromTable`, the orchestrator through `spec_source`; neither falls back to the
+  disk. `app/scripts/seed-specs.mts` loads it from `compass/agents/`, `compass/stacks/` and the
+  remaining `compass/templates/`; nothing else writes it, so a change is a direct edit of the row.
+  `resolveSpec` in `lib/specs.ts` still falls back to the disk — nothing that runs calls it.
 
 Before dropping a table, search ALL remaining source for it and trace each hit to a caller — a
 root-level `lib/*.ts` module is not v1 just because of where it sits.
@@ -84,6 +87,12 @@ So do not treat those sections as the source of a task, do not add a task there 
 dispatched, and do not report a row as broken because its slug is missing from an agent file. The
 task lives in `compass/seed/workflow-steps.csv`.
 
+**The one exception is the orchestrator's code steps.** The app strips `## Tasks I own` from the
+prompt at read time (`withoutTaskCatalogue`); the orchestrator does not, and a `build` step takes its
+instruction from the `### Task:` section of its agent file (`implement-story`, `respond-to-review`,
+`review-pr`, `write-e2e-tests`). So the `engineer`, `reviewer` and `automation` rows in `spec_file`
+keep those sections, and the other rows do not. Do not strip them from those three.
+
 What an agent file still owes is what a ROLE brings and a row cannot: identity, the discipline it
 carries, and the house standard for what it produces. The stale task sections are dead weight in a
 file pasted whole into every prompt for that role — they will be cleared when the agent files are
@@ -99,9 +108,11 @@ Several places describe the same workflows. Know which one executes:
   criteria and `title`.
 - **the database** — a *versioned* copy of the seed. Published versions match it row for row; older
   versions accumulate, so raw counts overstate.
-- `compass/workflows/*.md` — the dispatch graphs. Two formats: the old `### Step N.` headings and
+- `compass/workflows/*.md` — the dispatch graphs. **Nothing executes them any more:** the orchestrator
+  builds its steps from the published `workflow_step` rows. They are design documents, compared
+  against the seed by `seed-consistency-check.py`. Two formats: the old `### Step N.` headings and
   the newer table used by the three phase files — `setup.md`, `sprint-0.md` and `sprint.md`.
-  `graph.py` parses both.
+  `graph.py` still parses both, for `validate.py` and the tests.
 - `.claude/skills/` — slash commands, most of which map to workflows the app cannot run.
 - `compass/reference/workflow-catalog.csv` — derived from the .md, CI-checked.
 - **prose inside the code** — migration headers, module docstrings, the `### Task:` sections. These
