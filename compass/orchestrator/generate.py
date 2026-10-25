@@ -117,6 +117,30 @@ def _log_path(handoff_call_id: str) -> Path:
     return d / "generate.log"
 
 
+def _config_yaml(framework: str, checks) -> str:
+    """The `compass/config.yaml` a scaffolded repo carries: the stack, and the checks the orchestrator
+    runs before it opens a pull request on that repo (`run._read_checks_from_config` reads this).
+
+    Written as plain block-list scalars because that reader takes the text after `- ` and strips quotes
+    at the ends only; it cannot unescape. A command it would misread is refused HERE, before anything
+    runs, rather than shipped as a config that quietly checks something else.
+    """
+    for cmd in checks:
+        if "#" in cmd or "\n" in cmd or cmd.strip()[:1] in ("\"", "'", "[", "-") or not cmd.strip():
+            raise ValueError(
+                f"The check {cmd!r} cannot be written to compass/config.yaml as the orchestrator reads it "
+                "(no '#', no newline, and it must not start with a quote, '[' or '-'). Use a command "
+                "without them, or put it in a script the check calls.")
+    lines = [
+        "# Written by the Compass scaffold. The orchestrator runs `checks:` before it opens a pull",
+        "# request on this repo and uses `stack:` to pick the stack profile.",
+        f"stack: {framework}",
+        "checks:",
+        *[f"  - {cmd.strip()}" for cmd in checks],
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _branch_for(repo_key: str) -> str:
     safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in repo_key).strip("-") or "repo"
     return f"feat/scaffold-{safe}"
@@ -146,6 +170,13 @@ def run_generate(
     log_path = _log_path(req.caller.handoff_call_id)
     log_ref = str(log_path)
     log: list = []
+
+    # Decided up front so a check the config cannot carry is refused before anything runs.
+    checks = tuple(req.checks) if req.checks is not None else stack.default_checks
+    try:
+        config_text = _config_yaml(req.framework, checks)
+    except ValueError as exc:
+        return _refused(str(exc), log_ref)
 
     def note(line: str) -> None:
         log.append(line)
@@ -193,7 +224,6 @@ def run_generate(
     if conflict:
         return _generator_failed(conflict, branch, log_ref)
 
-    checks = req.checks if req.checks is not None else stack.default_checks
     ran: list = []
     for cmd in checks:
         ran.append(cmd)
@@ -208,10 +238,23 @@ def run_generate(
                                   checks=Checks(ran=tuple(ran), failed=cmd, tail=_tail(r.stdout + r.stderr)),
                                   refusal=None, log_ref=log_ref)
 
+    # The repo's own config. Without it the orchestrator halts "no checks declared" on this repo's first
+    # build, so the scaffold is what gives the repo its checks — and the checks it just passed are the
+    # ones it records. A file the generator already wrote is the repo's own and is kept.
+    config_file = worktree / "compass" / "config.yaml"
+    if config_file.exists():
+        note("compass/config.yaml was written by the generator — kept as is")
+    else:
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(config_text, encoding="utf-8")
+        note(f"wrote compass/config.yaml (stack: {req.framework}, {len(checks)} checks)")
+
     # Green. Commit and push, then open the PR. A PR is only ever opened after this point.
     _git(worktree, "add", "-A")
     staged = _git(worktree, "diff", "--cached", "--name-only").stdout.split()
-    if not staged:
+    # The config is ours, not the generator's: a run that produced nothing must not ship a pull request
+    # whose only content is the file we wrote ourselves.
+    if not [p for p in staged if p != "compass/config.yaml"]:
         return _generator_failed("The generator produced no files to commit.", branch, log_ref, tuple(ran))
     commit = _git(worktree, "commit", "-m", f"Scaffold {req.framework} for {req.repo.key}")
     if commit.returncode != 0:

@@ -97,7 +97,7 @@ class ShippedAndFailures(Fixture):
         self.assertEqual(r.status, "shipped")
         self.assertEqual(r.pr_url, "https://github.com/o/r/pull/7")
         self.assertEqual(r.branch, "feat/scaffold-app")
-        self.assertEqual(r.files_changed, 2)
+        self.assertEqual(r.files_changed, 3)   # package.json, app/page.tsx, compass/config.yaml
         self.assertEqual(r.checks.ran, ("true",))
         self.assertEqual(len(open_pr.opened), 1)
         self.assertTrue(Path(r.log_ref).exists())
@@ -136,6 +136,70 @@ class ShippedAndFailures(Fixture):
                              open_pr=self.pr(url=None), make_worktree=self.make_worktree)
         self.assertEqual(r.status, "generator_failed")
         self.assertIn("no pull request", r.refusal)
+
+
+class ConfigYaml(Fixture):
+    """The scaffold gives the repo its own compass/config.yaml, so the first build does not halt."""
+
+    def committed(self, r, path):
+        out = subprocess.run(["git", "-C", str(self.checkout), "show", f"{r.branch}:{path}"],
+                             capture_output=True, text=True)
+        return out.stdout if out.returncode == 0 else None
+
+    def test_the_commit_carries_a_config_the_orchestrator_reads_back(self):
+        from compass.orchestrator import run as R
+        checks = ["npm ci", "npm run lint", "npm run build"]
+        r = gen.run_generate(self.request(checks=checks), runner=self.runner(), open_pr=self.pr(),
+                             make_worktree=self.make_worktree)
+        self.assertEqual(r.status, "shipped")
+        text = self.committed(r, "compass/config.yaml")
+        self.assertIsNotNone(text, "the scaffold commit has no compass/config.yaml")
+        # Read it back with the orchestrator's OWN readers, from a checkout of that commit.
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "compass").mkdir()
+            (Path(d) / "compass" / "config.yaml").write_text(text)
+            self.assertEqual(R._read_checks_from_config(d), checks)
+            self.assertEqual(R._read_stack_from_config(Path("/nonexistent"), d), "nextjs-ts")
+
+    def test_the_default_checks_are_what_gets_recorded(self):
+        r = gen.run_generate(self.request(), runner=self.runner(), open_pr=self.pr(),
+                             make_worktree=self.make_worktree)
+        text = self.committed(r, "compass/config.yaml")
+        for cmd in gen.STACKS["nextjs-ts"].default_checks:
+            self.assertIn(f"  - {cmd}\n", text)
+
+    def test_a_config_the_generator_wrote_is_kept(self):
+        base = self.runner()
+
+        def run(argv, cwd, timeout):
+            if argv[0] == "npx":
+                (Path(cwd) / "compass").mkdir()
+                (Path(cwd) / "compass" / "config.yaml").write_text("stack: custom\n")
+            return base(argv, cwd, timeout)
+        r = gen.run_generate(self.request(checks=["true"]), runner=run, open_pr=self.pr(),
+                             make_worktree=self.make_worktree)
+        self.assertEqual(self.committed(r, "compass/config.yaml"), "stack: custom\n")
+
+    def test_a_check_the_config_cannot_carry_is_refused_before_anything_runs(self):
+        for bad in ("echo a # b", "'quoted'", "- dash", "[x]", ""):
+            with self.subTest(bad):
+                self.calls.clear()
+                r = gen.run_generate(self.request(checks=[bad]), runner=self.runner(), open_pr=self.pr(),
+                                     make_worktree=self.make_worktree)
+                self.assertEqual(r.status, "refused")
+                self.assertEqual(self.calls, [], "nothing may run for a refused request")
+
+    def test_a_run_that_generated_nothing_does_not_ship_just_the_config(self):
+        r = gen.run_generate(self.request(checks=["true"]), runner=self.runner(generator_writes=False),
+                             open_pr=self.pr(), make_worktree=self.make_worktree)
+        self.assertEqual(r.status, "generator_failed")
+        self.assertIn("no files", r.refusal.lower())
+
+    def test_a_failed_check_leaves_no_config_behind(self):
+        r = gen.run_generate(self.request(checks=["lint"]), runner=self.runner(check_rc=1),
+                             open_pr=self.pr(), make_worktree=self.make_worktree)
+        self.assertEqual(r.status, "checks_failed")
+        self.assertIsNone(self.committed(r, "compass/config.yaml"))
 
 
 class Refusals(Fixture):
