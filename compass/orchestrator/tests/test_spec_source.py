@@ -215,6 +215,76 @@ class TestWorkflowCodes(unittest.TestCase):
         self.assertEqual(src.workflow_codes(), ["a", "b"])
 
 
+class TestDocumentsAndWorkItems(unittest.TestCase):
+    def test_document_reads_the_current_version_and_its_sections_in_order(self):
+        t = Recorder((200, [{"id": "d1", "current_version_id": "v9"}]),
+                     (200, [{"version": 3, "status": "published"}]),
+                     (200, [{"ord": 0, "heading": "ACC-E1-S1 — A", "body": "one"},
+                            {"ord": 1, "heading": "ACC-E1-S2 — B", "body": "two"}]))
+        d = db(t).document("stories/CT-288")
+        self.assertEqual((d["path"], d["version"], d["status"]), ("stories/CT-288", "3", "published"))
+        self.assertEqual([s["heading"] for s in d["sections"]], ["ACC-E1-S1 — A", "ACC-E1-S2 — B"])
+        self.assertIn("## ACC-E1-S2 — B\n\ntwo", d["text"])
+        urls = [c[1] for c in t.calls]
+        self.assertIn("engagement_id=eq.e1", urls[0])
+        self.assertIn("path=eq.stories%2FCT-288", urls[0])
+        self.assertIn("id=eq.v9", urls[1])
+        self.assertIn("document_version_id=eq.v9", urls[2])
+        self.assertIn("order=ord.asc", urls[2])
+
+    def test_a_missing_document_or_version_halts(self):
+        with self.assertRaises(S.SpecMissing) as cm:
+            db(Recorder((200, []))).document("epic/CT-288")
+        self.assertIn("epic/CT-288", str(cm.exception))
+        with self.assertRaises(S.SpecMissing) as cm:
+            db(Recorder((200, [{"id": "d1", "current_version_id": None}]))).document("epic/CT-288")
+        self.assertIn("no current version", str(cm.exception))
+
+    def test_documents_belong_to_an_engagement(self):
+        with self.assertRaises(S.SpecMissing) as cm:
+            S.DbSpecSource("https://x.supabase.co", "K", None, transport=Recorder()).document("sow")
+        self.assertIn("--engagement", str(cm.exception))
+        with self.assertRaises(S.SpecMissing):
+            S.InMemorySpecSource().document("sow")
+
+    def test_a_failed_document_read_is_unavailable_not_missing(self):
+        with self.assertRaises(S.SpecUnavailable):
+            db(Recorder((500, {"error": "boom"}))).document("sow")
+
+    def test_work_item_by_key_or_ref_prefers_the_key(self):
+        rows = [{"ref": "CT-349", "ticket_key": None, "kind": "story"},          # a ref that looks like a key
+                {"ref": "ACC-E1-S1", "ticket_key": "CT-349", "kind": "story"}]
+        self.assertEqual(S.pick_work_item(rows, "CT-349")["ref"], "ACC-E1-S1")
+        self.assertEqual(S.pick_work_item(rows, "ACC-E1-S1")["ticket_key"], "CT-349")
+        self.assertIsNone(S.pick_work_item(rows, "CT-1"))
+
+    def test_work_item_query_and_children(self):
+        t = Recorder((200, [{"ref": "ACC-E1-S1", "ticket_key": "CT-349", "kind": "story", "parent_ref": "ACC-E1"}]),
+                     (200, [{"ref": "ACC-E1-S1"}, {"ref": "ACC-E1-S2"}]))
+        src = db(t)
+        self.assertEqual(src.work_item("CT-349")["ref"], "ACC-E1-S1")
+        self.assertIn("ticket_key.eq.CT-349,ref.eq.CT-349", t.calls[0][1].replace("%2C", ","))
+        self.assertEqual([c["ref"] for c in src.work_items("ACC-E1")], ["ACC-E1-S1", "ACC-E1-S2"])
+        with self.assertRaises(S.SpecMissing):
+            db(Recorder((200, []))).work_item("CT-1")
+
+    def test_section_for_does_not_confuse_s1_with_s10(self):
+        doc = S._shape_document("p", "1.0", "published", [
+            {"heading": "ACC-E1-S10 — ten", "body": "10"}, {"heading": "ACC-E1-S1 — one", "body": "1"}])
+        self.assertEqual(S.section_for(doc, "ACC-E1-S1")["body"], "1")
+        self.assertIsNone(S.section_for(doc, "ACC-E1-S2"))
+
+    def test_in_memory_serves_the_same_shapes(self):
+        src = S.InMemorySpecSource(engagement_id="e1",
+                                   documents={"sow": {"version": "1.0", "status": "published",
+                                                      "sections": [{"heading": "Scope", "body": "x"}]}},
+                                   backlog=[{"ref": "E", "kind": "epic", "parent_ref": None, "ticket_key": "CT-1", "ord": 0},
+                                            {"ref": "S", "kind": "story", "parent_ref": "E", "ticket_key": "CT-2", "ord": 1}])
+        self.assertEqual(src.document("sow")["version"], "1.0")
+        self.assertEqual(src.work_item("CT-2")["parent_ref"], "E")
+        self.assertEqual([c["ref"] for c in src.work_items("E")], ["S"])
+
+
 class TestFromEnv(unittest.TestCase):
     def test_absent_credentials_halt_rather_than_fall_back(self):
         with self.assertRaises(S.SpecUnavailable) as cm:

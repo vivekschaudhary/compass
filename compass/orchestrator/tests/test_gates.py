@@ -399,34 +399,6 @@ class TestStoryScoping(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_resolve_bet_from_filesystem(self):
-        self.assertEqual(_resolve_bet_for_story(self.project, "WLT-27-1"), "WLT-27")
-
-    def test_resolve_bet_fallback_strips_segment(self):
-        # No dir on disk yet (e.g. dry-run before stories exist) → strip trailing -<n>.
-        self.assertEqual(_resolve_bet_for_story(self.project, "CB-9-3"), "CB-9")
-
-    def test_resolve_bet_unresolvable(self):
-        self.assertIsNone(_resolve_bet_for_story(self.project, "noseparator"))
-
-    def test_is_story_id_true_for_story(self):
-        self.assertTrue(_is_story_id(self.project, "WLT-27-1"))
-
-    def test_is_story_id_false_for_bet(self):
-        # A bet dir exists → it's a bet, not a story (even though it has a dash).
-        self.assertFalse(_is_story_id(self.project, "WLT-27"))
-
-    def test_is_story_id_false_for_unknown(self):
-        self.assertFalse(_is_story_id(self.project, "WLT-99-1"))
-
-    def test_story_context_is_focused(self):
-        ctx = _load_story_context(self.project, "WLT-27", "WLT-27-1")
-        self.assertIn("Implement ONLY story WLT-27-1", ctx)
-        self.assertIn("Manual account form", ctx)   # the target story
-        self.assertIn("# Bet", ctx)                  # parent bet brief
-        self.assertIn("# Arch", ctx)                 # parent bet architecture
-        self.assertNotIn("CSV wizard", ctx)          # sibling story stays out of scope
-
     def test_branch_name_keyed_on_story(self):
         # Parallel story builds get distinct branches (feat/<story>-…), not one feat/<bet>-….
         b1 = _work_branch_name("build", "WLT-27-1", "manual account form")
@@ -474,42 +446,110 @@ class TestStoryScoping(unittest.TestCase):
         self._set("WLT-27-1", type="story", owner="agent", status="ready", dependencies="[]")
         self.assertEqual(_story_human_deliverable_blockers(self.project, "WLT-27", "WLT-27-1"), [])
 
+
+class TestStoryScopingFromDb(unittest.TestCase):
+    """#172 / #103, from the database. A story id resolves to its parent EPIC's Jira key, the build is
+    handed that story's text plus the epic's design and the architecture, and a bet named without a
+    story is refused — all read through the SpecSource, nothing from `docs/` in the client repo."""
+
+    def setUp(self):
+        from compass.orchestrator.spec_source import InMemorySpecSource
+        self.specs = InMemorySpecSource(
+            engagement_id="e1",
+            backlog=[
+                {"ref": "ACC-E1", "kind": "epic", "parent_ref": None, "title": "Sign-in", "ticket_key": "CT-288", "ord": 0},
+                {"ref": "ACC-E1-S1", "kind": "story", "parent_ref": "ACC-E1", "title": "Apple", "ticket_key": "CT-349", "ord": 1},
+                {"ref": "ACC-E1-S10", "kind": "story", "parent_ref": "ACC-E1", "title": "Tenth", "ticket_key": "CT-359", "ord": 2},
+                {"ref": "LST-E1", "kind": "epic", "parent_ref": None, "title": "Listings", "ticket_key": "CT-290", "ord": 3},
+                {"ref": "NOKEY", "kind": "epic", "parent_ref": None, "title": "No key", "ticket_key": None, "ord": 4},
+                {"ref": "NOKEY-S1", "kind": "story", "parent_ref": "NOKEY", "title": "s", "ticket_key": "CT-400", "ord": 5},
+            ],
+            documents={
+                "stories/CT-288": {"version": "3.0", "status": "published", "sections": [
+                    {"heading": "ACC-E1-S1 — Create an account", "body": "## Description\nApple sign-in."},
+                    {"heading": "ACC-E1-S10 — Tenth", "body": "TENTH STORY — sibling, out of scope."}]},
+                "epic/CT-288": {"version": "1.0", "status": "published", "sections": [{"heading": "Design", "body": "TECH DESIGN BODY"}]},
+                "foundational-architecture": {"version": "1.0", "status": "published", "sections": [{"heading": "Decision", "body": "FOUNDATION BODY"}]},
+                "feature-architecture": {"version": "3.0", "status": "published", "sections": [{"heading": "Features", "body": "FEATURE ARCH BODY"}]},
+                "design-library": {"version": "1.0", "status": "published", "sections": [{"heading": "Tokens", "body": "DESIGN LIB BODY"}]},
+            })
+
+    def test_resolve_epic_from_a_story_key_or_ref(self):
+        self.assertEqual(_resolve_bet_for_story(self.specs, "CT-349"), "CT-288")
+        self.assertEqual(_resolve_bet_for_story(self.specs, "ACC-E1-S1"), "CT-288")
+
+    def test_resolve_epic_unresolvable(self):
+        self.assertIsNone(_resolve_bet_for_story(self.specs, "CT-9999"))
+        self.assertIsNone(_resolve_bet_for_story(self.specs, "CT-288"), "an epic is not a story")
+        self.assertIsNone(_resolve_bet_for_story(self.specs, "CT-400"), "the epic has no Jira key")
+        self.assertIsNone(_resolve_bet_for_story(self.specs, ""))
+
+    def test_is_story_id(self):
+        self.assertTrue(_is_story_id(self.specs, "CT-349"))
+        self.assertFalse(_is_story_id(self.specs, "CT-288"), "an epic")
+        self.assertFalse(_is_story_id(self.specs, "CT-9999"), "unknown")
+
+    def test_story_context_is_focused_and_complete(self):
+        ctx = _load_story_context(self.specs, "CT-349")
+        self.assertIn("Implement ONLY story ACC-E1-S1", ctx)
+        self.assertIn("Apple sign-in.", ctx)                      # the story's own text
+        for body in ("TECH DESIGN BODY", "FOUNDATION BODY", "FEATURE ARCH BODY", "DESIGN LIB BODY"):
+            self.assertIn(body, ctx)
+        self.assertNotIn("TENTH STORY", ctx, "ACC-E1-S1 must not pull in ACC-E1-S10")
+        self.assertIn("`epic/CT-288` v1.0 (published)", ctx)      # which version the engineer was given
+        self.assertLess(ctx.index("Apple sign-in."), ctx.index("TECH DESIGN BODY"))
+
+    def test_the_design_library_is_optional(self):
+        del self.specs.documents["design-library"]
+        self.assertNotIn("DESIGN LIB BODY", _load_story_context(self.specs, "CT-349"))
+
+    def test_a_missing_required_document_halts_naming_it(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        for path in ("epic/CT-288", "foundational-architecture", "feature-architecture", "stories/CT-288"):
+            with self.subTest(path):
+                specs = self.specs
+                saved = specs.documents.pop(path)
+                try:
+                    with self.assertRaises(SpecMissing) as cm:
+                        _load_story_context(specs, "CT-349")
+                    self.assertIn(path, str(cm.exception))
+                finally:
+                    specs.documents[path] = saved
+
+    def test_a_story_with_no_section_in_its_document_halts(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        self.specs.documents["stories/CT-288"]["sections"] = []
+        with self.assertRaises(SpecMissing):
+            _load_story_context(self.specs, "CT-349")
+
+    def test_an_epic_is_not_buildable_as_a_story(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        with self.assertRaises(SpecMissing):
+            _load_story_context(self.specs, "CT-288")
+
     # ── #103 build story-scope gate ───────────────────────────────────────────
-    def test_build_refuses_bet_with_stories(self):
-        # /build WLT-27 (a bet with 2 stories) must refuse and name a story to pick.
-        msg = _build_story_gate(self.project, "build", "WLT-27", None)
-        self.assertIsNotNone(msg)
+    def test_build_refuses_an_epic_with_stories(self):
+        msg = _build_story_gate(self.specs, "build", "CT-288", None)
         self.assertIn("story-scoped", msg)
         self.assertIn("2 story", msg)
-        self.assertIn("WLT-27-1", msg)  # points at a concrete story to run
+        self.assertIn("CT-349", msg)          # points at a concrete story to run
 
-    def test_build_refuses_bet_with_no_stories(self):
-        # A bet with no stories yet → point at /create-story, not a story id.
-        (self.project / "docs" / "epics" / "CB-9").mkdir(parents=True)
-        msg = _build_story_gate(self.project, "build", "CB-9", None)
-        self.assertIsNotNone(msg)
+    def test_build_refuses_an_epic_with_no_stories(self):
+        msg = _build_story_gate(self.specs, "build", "CT-290", None)
         self.assertIn("no stories yet", msg)
-        self.assertIn("/create-story CB-9", msg)
 
-    def test_build_allows_real_story(self):
-        # story_id resolved → no refusal.
-        self.assertIsNone(_build_story_gate(self.project, "build", "WLT-27", "WLT-27-1"))
+    def test_build_allows_a_real_story(self):
+        self.assertIsNone(_build_story_gate(self.specs, "build", "CT-288", "CT-349"))
 
-    def test_gate_is_build_only(self):
-        # fix/ops are NOT story-scoped — never refused by this gate.
-        self.assertIsNone(_build_story_gate(self.project, "fix", "WLT-27", None))
-        self.assertIsNone(_build_story_gate(self.project, "ops", "WLT-27", None))
-
-    def test_gate_noop_without_bet(self):
-        self.assertIsNone(_build_story_gate(self.project, "build", None, None))
+    def test_gate_is_build_only_and_noop_without_an_epic(self):
+        self.assertIsNone(_build_story_gate(self.specs, "fix", "CT-288", None))
+        self.assertIsNone(_build_story_gate(self.specs, "ops", "CT-288", None))
+        self.assertIsNone(_build_story_gate(self.specs, "build", None, None))
 
     def test_gate_does_not_fire_on_resume(self):
-        # #107: the cockpit's merge-gate resume passes the PARENT bet (--bet WLT-27) +
-        # --from-step N without the story scope. The entry gate must NOT re-fire and
-        # block the human's merge approval. from_step set → always None.
-        self.assertIsNone(_build_story_gate(self.project, "build", "WLT-27", None, from_step=6))
-        # sanity: same args WITHOUT from_step still refuses (proves the guard frees it)
-        self.assertIsNotNone(_build_story_gate(self.project, "build", "WLT-27", None))
+        # #107: a merge-gate resume passes the PARENT epic plus --from-step and no story scope.
+        self.assertIsNone(_build_story_gate(self.specs, "build", "CT-288", None, from_step=6))
+        self.assertIsNotNone(_build_story_gate(self.specs, "build", "CT-288", None))
 
 
 class TestTicketLifecycle(unittest.TestCase):

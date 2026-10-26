@@ -56,7 +56,7 @@ from .jira import (
     _splice_md_section,
     _work_item_jira_key,
 )
-from .spec_source import SpecMissing, SpecUnavailable, from_env as specs_from_env, prompt_file
+from .spec_source import SpecMissing, SpecUnavailable, from_env as specs_from_env, prompt_file, section_for
 from .outcome import _classify_outcome, _is_refusal, _review_recommendation
 from .pr import (
     _CODE_WORKFLOWS,
@@ -832,40 +832,35 @@ def _load_bet_context(project_dir: Path, epic_id: str) -> str:
     return "\n".join(parts)
 
 
-def _resolve_bet_for_story(project_dir: Path, story_id: str):
-    """#172: map a story id (e.g. WLT-27-1) to its parent bet so a story-scoped
-    build/fix can run. Authoritative source is the filesystem — the bet whose
-    `docs/epics/<bet>/stories/<story_id>/story.md` exists. Falls back to stripping
-    the trailing `-<n>` segment (WLT-27-1 → WLT-27) when the dir isn't found yet
-    (e.g. a dry-run before stories exist). Returns the bet id, or None if neither
-    resolves."""
+def _resolve_bet_for_story(specs, story_id: str):
+    """#172: map a story (its Jira key or ref) to its parent EPIC's Jira key, so a story-scoped
+    build can run. The epic is the story's `backlog_item.parent_ref`, and the epic's own row carries
+    the key its documents are filed under (`stories/<key>`, `epic/<key>`). Returns None when the
+    story, its parent, or the parent's key is not in the database."""
     if not story_id:
         return None
-    bets_dir = project_dir / "docs" / "epics"
-    if bets_dir.is_dir():
-        for story_md in bets_dir.glob(f"*/stories/{story_id}/story.md"):
-            # docs/epics/<bet>/stories/<story_id>/story.md → parent bet is 3 up
-            return story_md.parent.parent.parent.name
-    # Fallback: strip the trailing numeric story segment.
-    m = re.match(r"^(.*)-\d+$", story_id)
-    return m.group(1) if m else None
+    try:
+        story = specs.work_item(story_id)
+        if story.get("kind") != "story" or not story.get("parent_ref"):
+            return None
+        return specs.work_item(story["parent_ref"]).get("ticket_key")
+    except SpecMissing:
+        return None
 
 
-def _is_story_id(project_dir: Path, candidate: str) -> bool:
-    """#172: True if `candidate` names a story (a `docs/epics/*/stories/<candidate>/`
-    dir exists) rather than a bet (`docs/epics/<candidate>/`). Lets a single id field
-    (the dashboard's, or `--bet`) accept either — a story id auto-resolves to its
-    parent bet + story scope instead of failing the requirement gate on a bet brief
-    that never existed (the WLT-27-1 'looks hung' bug)."""
+def _is_story_id(specs, candidate: str) -> bool:
+    """#172: True if `candidate` names a STORY (not an epic) in this engagement's backlog. Lets a
+    single id field accept either — a story id then routes to story scope instead of failing the
+    requirement gate on an epic that was never meant."""
     if not candidate:
         return False
-    bets_dir = project_dir / "docs" / "epics"
-    if (bets_dir / candidate).is_dir():
-        return False  # it's a bet
-    return any(bets_dir.glob(f"*/stories/{candidate}/story.md"))
+    try:
+        return specs.work_item(candidate).get("kind") == "story"
+    except SpecMissing:
+        return False
 
 
-def _build_story_gate(project_dir: Path, workflow_name: str, epic_id, story_id, from_step=None):
+def _build_story_gate(specs, workflow_name: str, epic_id, story_id, from_step=None):
     """#103: /build is STORY-scoped (`/build <story-id>` implements ONE story). If an
     operator names a BET instead (epic_id resolved, story_id not), refuse — building a
     bet collapses the whole Epic into one un-decomposed, un-reviewable mega-PR (live:
@@ -880,13 +875,17 @@ def _build_story_gate(project_dir: Path, workflow_name: str, epic_id, story_id, 
     at step 6). On resume the story was already chosen at dispatch, so never re-gate."""
     if from_step or workflow_name != "build" or story_id or not epic_id:
         return None
-    stories = sorted(
-        (project_dir / "docs" / "epics" / epic_id / "stories").glob("*/story.md"))
+    try:
+        epic = specs.work_item(epic_id)
+        stories = [c for c in specs.work_items(epic["ref"]) if c.get("kind") == "story"]
+    except SpecMissing:
+        stories = []
     if stories:
-        return (f"{epic_id} is a bet with {len(stories)} story(ies) — /build is "
-                f"story-scoped. Run /build <story-id> (e.g. {stories[0].parent.name}).")
-    return (f"{epic_id} is a bet, not a story, and has no stories yet — run "
-            f"/create-story {epic_id} to slice it, then /build <story-id>.")
+        first = stories[0].get("ticket_key") or stories[0]["ref"]
+        return (f"{epic_id} is an epic with {len(stories)} story(ies) — /build is "
+                f"story-scoped. Run /build <story> (e.g. {first}).")
+    return (f"{epic_id} is an epic, not a story, and has no stories yet — refine its stories "
+            f"first, then /build <story>.")
 
 
 def _story_dependencies(content: str) -> list:
@@ -1004,29 +1003,61 @@ def _overlapping_inflight_builds(project_dir: Path, epic_id: str, story_id: str,
     return overlaps
 
 
-def _load_story_context(project_dir: Path, epic_id: str, story_id: str) -> str:
-    """#172: focused context for a story-scoped build — the parent bet's brief +
-    architecture (the load-bearing decisions) plus the FULL target story, with an
-    explicit instruction to implement ONLY this story. Distinct from
-    _load_bet_context (which summarizes every story for whole-bet work): a parallel
-    story build must not wander into sibling stories' scope."""
-    bet_dir = project_dir / "docs" / "epics" / epic_id
-    parts = [f"## Build scope — story {story_id} (bet {epic_id})\n",
-             f"**Implement ONLY story {story_id}.** Other stories in this bet are "
-             f"out of scope for this run — they build in their own runs/branches.\n"]
-    for artifact_name in ("brief.md", "architecture.md"):
-        artifact = bet_dir / artifact_name
-        if artifact.exists():
-            parts.append(f"### bet {artifact_name}\n\n{artifact.read_text(encoding='utf-8')}\n")
-    story_md = bet_dir / "stories" / story_id / "story.md"
-    if story_md.exists():
-        parts.append(f"### story {story_id}\n\n{story_md.read_text(encoding='utf-8')}\n")
-    else:
-        parts.append(f"### story {story_id}\n\n(No story.md on disk at "
-                     f"docs/epics/{epic_id}/stories/{story_id}/ — run /create-story first.)\n")
-    project_md = project_dir / "PROJECT.md"
-    if project_md.exists():
-        parts.append(f"### PROJECT.md\n\n{project_md.read_text(encoding='utf-8')}\n")
+#: What a story build is handed besides the story itself, in this order. The tech design is what the
+#: engineer implements against; the two architecture documents are the decisions it must not contradict.
+_STORY_CONTEXT_REQUIRED = (
+    ("epic/{epic}", "the epic's technical design"),
+    ("foundational-architecture", "the foundational architecture"),
+    ("feature-architecture", "the feature architecture"),
+)
+#: Handed over when it exists — a UI story needs it, a backend one may not, and nothing here can tell which.
+_STORY_CONTEXT_OPTIONAL = (("design-library", "the design library"),)
+
+
+def _doc_block(title: str, doc: dict) -> str:
+    return f"### {title} — `{doc['path']}` v{doc['version']} ({doc['status']})\n\n{doc['text']}\n"
+
+
+def _load_story_context(specs, story_ident: str) -> str:
+    """#172, from the database: focused context for ONE story's build.
+
+    The story's own text comes from its epic's story document (`stories/<epic key>`, the section whose
+    heading starts with the story's ref) — the versioned, reviewed copy, the same text the tracker is
+    later updated from. Around it: the epic's technical design, the foundational and feature
+    architecture, and the design library when there is one.
+
+    Anything REQUIRED that is missing raises `SpecMissing` naming the document, and the caller halts:
+    a build that quietly runs without its design is the failure the gates exist to prevent. Reads no
+    file from the client repo.
+    """
+    story = specs.work_item(story_ident)
+    if story.get("kind") != "story":
+        raise SpecMissing(f"{story_ident} is {story.get('kind')!r}, not a story")
+    if not story.get("parent_ref"):
+        raise SpecMissing(f"story {story_ident} has no parent epic")
+    epic = specs.work_item(story["parent_ref"])
+    epic_key = epic.get("ticket_key")
+    if not epic_key:
+        raise SpecMissing(f"epic {epic['ref']} has no Jira key; its documents are filed under that key")
+
+    stories_doc = specs.document(f"stories/{epic_key}")
+    section = section_for(stories_doc, story["ref"])
+    if section is None:
+        raise SpecMissing(f"`{stories_doc['path']}` has no section for {story['ref']}")
+
+    key = story.get("ticket_key") or story["ref"]
+    parts = [f"## Build scope — story {key} ({story['ref']}), epic {epic_key} \"{epic.get('title', '')}\"\n",
+             f"**Implement ONLY story {story['ref']}.** Other stories in this epic are out of scope for this "
+             f"run — they build in their own runs and on their own branches.\n",
+             f"### story {story['ref']} — `{stories_doc['path']}` v{stories_doc['version']} "
+             f"({stories_doc['status']})\n\n## {section['heading']}\n\n{section['body']}\n"]
+    for path, label in _STORY_CONTEXT_REQUIRED:
+        parts.append(_doc_block(label, specs.document(path.format(epic=epic_key))))
+    for path, label in _STORY_CONTEXT_OPTIONAL:
+        try:
+            parts.append(_doc_block(label, specs.document(path)))
+        except SpecMissing:
+            pass
     return "\n".join(parts)
 
 
@@ -1527,7 +1558,7 @@ def _run_workflow(
     # WITHOUT the story scope. Re-running the gate then mis-read that as a bet-level build
     # and halted the human's merge approval (live: WLT-28-3 stuck at step 6). On resume the
     # story was already chosen at dispatch, so `from_step` set ⇒ skip this gate entirely.
-    _bsg = _build_story_gate(project_dir, workflow_name, epic_id, story_id, from_step)
+    _bsg = _build_story_gate(specs, workflow_name, epic_id, story_id, from_step)
     if _bsg:
         print(f"\nBuild scope gate — {_bsg}")
         if not dry_run:
@@ -1665,10 +1696,13 @@ def _run_workflow(
     # parent bet's brief/architecture, so a parallel story build stays in scope.
     # Falls through to whole-bet context when no story scope is set.
     if story_id and epic_id:
-        story_context = _load_story_context(project_dir, epic_id, story_id)
+        try:
+            story_context = _load_story_context(specs, story_id)
+        except SpecMissing as exc:
+            print(f"\nRefuse: cannot build {story_id} — {exc}.", file=sys.stderr)
+            sys.exit(3)
         context = story_context + ("\n\n" + context if context else "")
-        print(f"[story] Scoped to {story_id} (bet {epic_id}) — "
-              f"docs/epics/{epic_id}/stories/{story_id}/")
+        print(f"[story] Scoped to {story_id} (epic {epic_id}) — read from the database")
     elif epic_id:
         # --bet: load existing bet artifacts as initial context
         bet_context = _load_bet_context(project_dir, epic_id)
@@ -3076,15 +3110,15 @@ def main(argv=None):
     # of halting on a docs/epics/WLT-27-1/brief.md that never existed (the "looks
     # hung" bug). Resolve the parent bet; --bet always carries the BET id downstream.
     story_id = args.story
-    if not story_id and args.bet and _is_story_id(project_dir, args.bet):
+    if not story_id and args.bet and _is_story_id(specs, args.bet):
         story_id = args.bet
         args.bet = None
     if story_id and not args.bet:
-        args.bet = _resolve_bet_for_story(project_dir, story_id)
+        args.bet = _resolve_bet_for_story(specs, story_id)
         if not args.bet:
             parser.error(
-                f"--story {story_id}: could not resolve a parent bet "
-                f"(no docs/epics/*/stories/{story_id}/ and no <bet>-<n> pattern).")
+                f"--story {story_id}: could not resolve a parent epic — it is not a story in this "
+                f"engagement's backlog (pass --engagement), or its epic has no Jira key.")
 
     # ── single workflow ───────────────────────────────────────────────────────
     if args.workflow:
