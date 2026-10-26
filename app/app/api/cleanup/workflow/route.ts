@@ -1,5 +1,5 @@
 // Clear ONE nesting row's opened work, so it can be started again — `/api/cleanup` scoped to a
-// single row instead of the whole engagement.
+// single row instead of the whole engagement. Or ONE top-level run (see `ref` below).
 //
 //   GET  /api/cleanup/workflow?engagementId=<id>&ref=<taskId-or-workflowCode>          report only
 //   POST /api/cleanup/workflow?engagementId=<id>&ref=<taskId-or-workflowCode>&dry=1    report only
@@ -7,7 +7,12 @@
 //
 // `ref` is either the nesting row's own task id, or the workflow code it nests — "timeline" finds
 // `Timeline & Milestones` the same way its own id would, as long as exactly one row on this
-// engagement nests that code. Same shape as `/api/cleanup`, on purpose: GET reports, POST applies
+// engagement nests that code.
+//
+// OR a per-epic run that no row opened: its run id, or `<workflow code>:<epic key>` such as
+// `tech-design:CT-288`. That deletes the run, its tasks and — deliberately — their agent turns and
+// questions, the documents they filed and the events they wrote. There is no row to put back to idle.
+// A run with no subject (a phase) is refused: reset those through their nesting row. Same shape as `/api/cleanup`, on purpose: GET reports, POST applies
 // unless told to be dry, and the useful output of a destructive tool is the list of what it would
 // destroy.
 //
@@ -37,8 +42,25 @@ async function run(engagementId: string | null, ref: string | null, apply: boole
     const result = await resetWorkflow(engagementId, ref, { apply });
     if (!result.ok) return refuse(result.refusals);
 
+    if (result.kind === "run") {
+      return ok({
+        engagementId,
+        kind: "run",
+        workflowCode: result.plan.workflowCode,
+        runIds: result.plan.runIds,
+        cleared: result.cleared,
+        report: describeWorkflowReset(result.plan),
+        deletes: result.plan.deletes.map((d) => ({ table: d.table, rows: d.ids.length, cascades: d.cascades })),
+        documents: result.plan.documentPaths,
+        publishedElsewhere: result.plan.publishedElsewhere,
+        // Compass's side only. These issues stay in the tracker; closing them is a person's call.
+        ticketsLeftInTracker: result.plan.ticketsLeftInTracker,
+      });
+    }
+
     return ok({
       engagementId,
+      kind: "nesting",
       nestingTaskId: result.plan.nestingTaskId,
       nestsWorkflowCode: result.plan.nestsWorkflowCode,
       cleared: result.cleared,
