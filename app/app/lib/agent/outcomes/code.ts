@@ -11,10 +11,28 @@ import type { AgentOutcome, Turn } from "./types";
  * and the app writes the result.
  */
 export async function handleCode({ actor, taskId, ctx, message, call }: Turn): Promise<AgentOutcome> {
-  const input = call.input as { summary?: string; approach?: string; files?: unknown };
+  const input = call.input as { summary?: string; approach?: string; repo?: string; files?: unknown };
   const files = Array.isArray(input.files) ? (input.files as string[]).filter((f) => typeof f === "string") : [];
 
+  // The repo, before anything is recorded or spawned. With several registered, a missing or unknown
+  // `repo` is a refusal that names the choices: the model was told them, and guessing is how a story
+  // ends up in the wrong repository. With exactly one there is nothing to choose.
+  const repoKey = (input.repo ?? "").trim() || null;
+  if (ctx.repos.length > 1 && !ctx.repos.some((r) => r.key === repoKey)) {
+    const refusal =
+      `Name the repository in \`repo\`. ${repoKey ? `'${repoKey}' is not one of them. ` : ""}` +
+      `Choose one of: ${ctx.repos.map((r) => `\`${r.key}\`${r.area ? ` (${r.area})` : ""}`).join(", ")} — or \`ask\` if the design does not say.`;
+    // Same exits as a refusal from the orchestrator below: say why, give the claim back, close the
+    // run in the log. Skipping the release would leave the row looking claimed until the sweep.
+    await recordTurn(taskId, `**The build did not start.** ${refusal}`, ctx);
+    await releaseExecutor(taskId, ctx, { failed: true });
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "build-refused", message, { refusal });
+    return { kind: "error", message: refusal };
+  }
+  const repoName = ctx.repos.find((r) => r.key === repoKey)?.name ?? null;
+
   const intent =
+    (repoName ? `**Repository.** ${repoName} (\`${repoKey}\`)\n\n` : "") +
     `**Building.** ${input.summary ?? ""}\n\n` +
     `**Approach.** ${input.approach ?? ""}\n\n` +
     (files.length ? `**Files expected to change.**\n${files.map((f) => `- \`${f}\``).join("\n")}\n` : "");
@@ -23,7 +41,7 @@ export async function handleCode({ actor, taskId, ctx, message, call }: Turn): P
   // recorded on success, a run that died would leave no trace of what it was trying to do.
   await recordTurn(taskId, intent, ctx);
 
-  const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "" });
+  const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "", repo: repoKey });
 
   if (built.refusal) {
     // Recorded BEFORE releasing, same order as every other exit — the turn is why the row failed,

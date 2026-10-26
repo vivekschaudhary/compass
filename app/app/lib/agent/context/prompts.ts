@@ -249,8 +249,34 @@ export function inputPrompt(ctx: AgentContext): string {
   if (ctx.template) parts.push(templatePrompt(ctx.template));
   if (ctx.output === "supplied") parts.push(suppliedPrompt(ctx));
   if (ctx.output === "scaffold") parts.push(scaffoldPrompt(ctx));
+  if (ctx.output === "code" && ctx.repos.length) parts.push(codeReposPrompt(ctx));
 
   return parts.join("\n\n");
+}
+
+/**
+ * Which repo a build goes into.
+ *
+ * The story does not say, and neither does the data — both repos are `area: shared` until someone
+ * sets them. The model is the one holding the story and its technical design, so it names the repo
+ * with the `code` tool's `repo` field. With more than one registered repo the call is refused outright
+ * when `repo` is missing or unknown: a guess here puts one team's work in another team's repository.
+ */
+function codeReposPrompt(ctx: AgentContext): string {
+  const lines = ctx.repos.map((r) => `- \`${r.key}\` — ${r.name}${r.area ? ` (${r.area})` : ""}`);
+  return [
+    `<repos>`,
+    `This build goes into ONE of these repositories — set \`repo\` in the \`code\` call to its key:`,
+    ...lines,
+    ``,
+    ctx.repos.length > 1
+      ? `Choose by where the story's technical design puts the change. If the design spans more than one ` +
+        `repository, or you cannot tell which this story belongs in, call \`ask\` instead of guessing: ` +
+        `a \`code\` call without a known \`repo\` is refused, and a wrong guess puts the work in someone ` +
+        `else's repository.`
+      : `There is only one, so \`repo\` is \`${ctx.repos[0].key}\`.`,
+    `</repos>`,
+  ].join("\n");
 }
 
 /**
