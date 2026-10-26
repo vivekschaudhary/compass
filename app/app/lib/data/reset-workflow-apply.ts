@@ -5,8 +5,12 @@
 import { supabaseAdmin } from "../supabase.ts";
 import {
   planWorkflowReset,
+  planRunReset,
   type WorkflowResetPlan,
+  type WorkflowDeleteStep,
   type WorkflowResetSnapshot,
+  type RunResetPlan,
+  type RunResetSnapshot,
 } from "./reset-workflow.ts";
 import { resolveActor } from "./actor.ts";
 import { measureTask, type CriterionStatus } from "./gates.ts";
@@ -15,7 +19,8 @@ import type { Refusal } from "../envelope.ts";
 const CHUNK = 200;
 
 export type WorkflowResetRun =
-  | { ok: true; plan: WorkflowResetPlan; cleared: boolean; remeasured?: CriterionStatus[] }
+  | { ok: true; kind: "nesting"; plan: WorkflowResetPlan; cleared: boolean; remeasured?: CriterionStatus[] }
+  | { ok: true; kind: "run"; plan: RunResetPlan; cleared: boolean }
   | { ok: false; refusals: Refusal[] };
 
 /**
@@ -88,24 +93,13 @@ export async function resolveNestingTask(
   };
 }
 
-export async function snapshotWorkflowReset(
-  engagementId: string,
-  nestingTaskId: string,
-  nestsWorkflowCode: string,
-): Promise<WorkflowResetSnapshot> {
+/** What hangs off a set of runs: their tasks, the documents those tasks filed, the events they wrote. */
+async function snapshotRuns(runIds: string[]) {
   const sb = supabaseAdmin();
   if (!sb) throw new Error("Supabase is not configured.");
 
-  const { data: runs, error: runsError } = await sb
-    .from("workflow_run")
-    .select("id")
-    .eq("engagement_id", engagementId)
-    .eq("parent_task_id", nestingTaskId);
-  if (runsError) throw new Error(`read runs: ${runsError.message}`);
-  const runIds = (runs ?? []).map((r) => r.id as string);
-
   const { data: tasks, error: tasksError } = runIds.length
-    ? await sb.from("work_task").select("id").in("workflow_run_id", runIds)
+    ? await sb.from("work_task").select("id, ticket_key").in("workflow_run_id", runIds)
     : { data: [], error: null };
   if (tasksError) throw new Error(`read tasks: ${tasksError.message}`);
   const taskIds = (tasks ?? []).map((t) => t.id as string);
@@ -128,16 +122,124 @@ export async function snapshotWorkflowReset(
   if (eventsError) throw new Error(`read events: ${eventsError.message}`);
 
   return {
-    engagementId,
-    nestingTaskId,
-    nestsWorkflowCode,
-    runs: (runs ?? []).map((r) => ({ id: r.id as string })),
-    tasks: (tasks ?? []).map((t) => ({ id: t.id as string })),
+    tasks: (tasks ?? []).map((t) => ({ id: t.id as string, ticketKey: (t.ticket_key as string | null) ?? null })),
     documents: (documents ?? []).map((d) => ({
       id: d.id as string, path: d.path as string, externalUrl: (d.external_url as string | null) ?? null,
     })),
     events: (events ?? []).map((e) => ({ id: e.id as string })),
   };
+}
+
+export async function snapshotWorkflowReset(
+  engagementId: string,
+  nestingTaskId: string,
+  nestsWorkflowCode: string,
+): Promise<WorkflowResetSnapshot> {
+  const sb = supabaseAdmin();
+  if (!sb) throw new Error("Supabase is not configured.");
+
+  const { data: runs, error: runsError } = await sb
+    .from("workflow_run")
+    .select("id")
+    .eq("engagement_id", engagementId)
+    .eq("parent_task_id", nestingTaskId);
+  if (runsError) throw new Error(`read runs: ${runsError.message}`);
+  const runIds = (runs ?? []).map((r) => r.id as string);
+
+  const rest = await snapshotRuns(runIds);
+  return {
+    engagementId,
+    nestingTaskId,
+    nestsWorkflowCode,
+    runs: runIds.map((id) => ({ id })),
+    tasks: rest.tasks.map((t) => ({ id: t.id })),
+    documents: rest.documents,
+    events: rest.events,
+  };
+}
+
+/**
+ * The top-level run(s) a `ref` names. `ref` is a run id, or `<workflow code>:<subject>` where the
+ * subject is the epic's Jira key or ref (`tech-design:CT-288`). A run a nesting row opened is refused
+ * here — that is `resolveNestingTask`'s — so the two never both claim one run.
+ */
+export async function resolveTopLevelRuns(
+  engagementId: string,
+  ref: string,
+): Promise<{ ok: true; workflowCode: string; runs: RunResetSnapshot["runs"] } | { ok: false; error: string }> {
+  const sb = supabaseAdmin();
+  if (!sb) return { ok: false, error: "Supabase is not configured." };
+
+  const looksLikeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+  const colon = ref.indexOf(":");
+  if (!looksLikeId && colon < 1) {
+    return { ok: false, error: `'${ref}' is not a run id or <workflow code>:<subject> (e.g. tech-design:CT-288).` };
+  }
+
+  const { data, error } = await sb
+    .from("workflow_run")
+    .select("id, state, subject_ref, subject_key, parent_task_id, workflow(code)")
+    .eq("engagement_id", engagementId)
+    .is("parent_task_id", null);
+  if (error) return { ok: false, error: `resolve run: ${error.message}` };
+
+  const codeOf = (r: { workflow: unknown }) => {
+    const w = Array.isArray(r.workflow) ? r.workflow[0] : r.workflow;
+    return ((w as { code?: string } | null)?.code ?? "") as string;
+  };
+  const rows = data ?? [];
+  const hits = looksLikeId
+    ? rows.filter((r) => r.id === ref)
+    : rows.filter((r) => codeOf(r) === ref.slice(0, colon)
+        && (r.subject_key === ref.slice(colon + 1) || r.subject_ref === ref.slice(colon + 1)));
+
+  if (!hits.length) {
+    return { ok: false, error: `No top-level run matches '${ref}' on this engagement.` };
+  }
+  if (!looksLikeId && hits.length > 1) {
+    return { ok: false, error: `'${ref}' matches ${hits.length} runs (${hits.map((h) => h.id).join(", ")}). Pass the run id of the one to reset.` };
+  }
+  return {
+    ok: true,
+    workflowCode: codeOf(hits[0]),
+    runs: hits.map((r) => ({
+      id: r.id as string, state: r.state as string,
+      subjectRef: (r.subject_ref as string | null) ?? null, subjectKey: (r.subject_key as string | null) ?? null,
+    })),
+  };
+}
+
+export async function snapshotRunReset(
+  engagementId: string,
+  workflowCode: string,
+  runs: RunResetSnapshot["runs"],
+): Promise<RunResetSnapshot> {
+  const rest = await snapshotRuns(runs.map((r) => r.id));
+  return { engagementId, workflowCode, runs, tasks: rest.tasks, documents: rest.documents, events: rest.events };
+}
+
+/**
+ * Do the deletes a plan lists. Re-runnable, not atomic — no transaction through PostgREST, same as
+ * `resetEngagement`. Every step deletes by id, so running it twice removes nothing extra.
+ */
+async function applyDeletes(
+  sb: NonNullable<ReturnType<typeof supabaseAdmin>>,
+  deletes: WorkflowDeleteStep[],
+): Promise<void> {
+  // `document.current_version_id` has no `on delete` rule, so it is nulled first rather than
+  // depending on delete order.
+  const docIds = deletes.find((d) => d.table === "document")?.ids ?? [];
+  for (let i = 0; i < docIds.length; i += CHUNK) {
+    const { error } = await sb.from("document")
+      .update({ current_version_id: null }).in("id", docIds.slice(i, i + CHUNK));
+    if (error) throw new Error(`clear current_version_id: ${error.message}`);
+  }
+  for (const step of deletes) {
+    for (let i = 0; i < step.ids.length; i += CHUNK) {
+      const { error } = await sb.from(step.table).delete().in("id", step.ids.slice(i, i + CHUNK));
+      if (error) throw new Error(`delete ${step.table}: ${error.message}`);
+    }
+  }
 }
 
 export async function resetWorkflow(
@@ -149,28 +251,26 @@ export async function resetWorkflow(
   if (!sb) return { ok: false, refusals: [{ message: "Supabase is not configured." }] };
 
   const resolved = await resolveNestingTask(engagementId, ref);
-  if (!resolved.ok) return { ok: false, refusals: [{ message: resolved.error }] };
+  if (!resolved.ok) {
+    // Not a nesting row — a per-epic run (`tech-design:CT-288`, or a run id) has no row to point at.
+    const topLevel = await resolveTopLevelRuns(engagementId, ref);
+    if (!topLevel.ok) {
+      return { ok: false, refusals: [{ message: resolved.error }, { message: topLevel.error }] };
+    }
+    const snap = await snapshotRunReset(engagementId, topLevel.workflowCode, topLevel.runs);
+    const planned = planRunReset(snap);
+    if (!planned.ok) return { ok: false, refusals: planned.refusals };
+    if (!apply) return { ok: true, kind: "run", plan: planned.plan, cleared: false };
+    await applyDeletes(sb, planned.plan.deletes);
+    return { ok: true, kind: "run", plan: planned.plan, cleared: true };
+  }
 
   const snap = await snapshotWorkflowReset(engagementId, resolved.taskId, resolved.nestsWorkflowCode);
   const planned = planWorkflowReset(snap);
   if (!planned.ok) return { ok: false, refusals: planned.refusals };
-  if (!apply) return { ok: true, plan: planned.plan, cleared: false };
+  if (!apply) return { ok: true, kind: "nesting", plan: planned.plan, cleared: false };
 
-  const docIds = planned.plan.deletes.find((d) => d.table === "document")?.ids ?? [];
-  for (let i = 0; i < docIds.length; i += CHUNK) {
-    const { error } = await sb.from("document")
-      .update({ current_version_id: null }).in("id", docIds.slice(i, i + CHUNK));
-    if (error) throw new Error(`clear current_version_id: ${error.message}`);
-  }
-
-  // Re-runnable, not atomic — no transaction through PostgREST, same as `resetEngagement`. Every
-  // step deletes by id, so running it twice removes nothing extra.
-  for (const step of planned.plan.deletes) {
-    for (let i = 0; i < step.ids.length; i += CHUNK) {
-      const { error } = await sb.from(step.table).delete().in("id", step.ids.slice(i, i + CHUNK));
-      if (error) throw new Error(`delete ${step.table}: ${error.message}`);
-    }
-  }
+  await applyDeletes(sb, planned.plan.deletes);
 
   // The nesting row itself, LAST — deleting its child run first and only then clearing the row
   // means a failure partway through never leaves the row looking idle while its old run still
@@ -190,5 +290,5 @@ export async function resetWorkflow(
   const actor = await resolveActor(engagementId, resolved.roleCode);
   const remeasured = actor ? await measureTask(actor, resolved.taskId) : undefined;
 
-  return { ok: true, plan: planned.plan, cleared: true, remeasured };
+  return { ok: true, kind: "nesting", plan: planned.plan, cleared: true, remeasured };
 }

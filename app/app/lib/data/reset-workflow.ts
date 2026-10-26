@@ -67,6 +67,44 @@ export const IDLE_FIELDS = {
   next_attempt_at: null,
 } as const;
 
+/** The deletes, in the order they have to happen — tasks before the runs they belong to, and so on. */
+function deleteSteps(
+  code: string,
+  runIds: string[],
+  taskIds: string[],
+  documents: { id: string }[],
+  events: { id: string }[],
+): WorkflowDeleteStep[] {
+  return [
+    {
+      table: "work_task",
+      ids: taskIds,
+      cascades: ["task_input", "measurement", "turn", "question", "backlog_item"],
+      why: `the ${code} run's own rows, their gate measurements and agent turns`,
+    },
+    {
+      table: "workflow_run",
+      ids: runIds,
+      cascades: [],
+      why: `every ${code} run this reset names, open or already closed`,
+    },
+    {
+      // Same ordering note as `reset.ts`: `document.current_version_id` has no `on delete` rule,
+      // so the caller nulls it before this rather than depending on delete order.
+      table: "document",
+      ids: documents.map((d) => d.id),
+      cascades: ["document_version", "document_section", "citation"],
+      why: "the deliverables those rows filed, and every version, section and citation under them",
+    },
+    {
+      table: "event",
+      ids: events.map((e) => e.id),
+      cascades: [],
+      why: "the audit log entries this run and its rows wrote",
+    },
+  ];
+}
+
 export function planWorkflowReset(snap: WorkflowResetSnapshot): WorkflowResetResult {
   if (!snap.engagementId) {
     return { ok: false, refusals: [{ message: "No engagement named." }] };
@@ -91,34 +129,7 @@ export function planWorkflowReset(snap: WorkflowResetSnapshot): WorkflowResetRes
     engagementId: snap.engagementId,
     nestingTaskId: snap.nestingTaskId,
     nestsWorkflowCode: snap.nestsWorkflowCode,
-    deletes: [
-      {
-        table: "work_task",
-        ids: taskIds,
-        cascades: ["task_input", "measurement", "turn", "question", "backlog_item"],
-        why: `the ${snap.nestsWorkflowCode} run's own rows, their gate measurements and agent turns`,
-      },
-      {
-        table: "workflow_run",
-        ids: runIds,
-        cascades: [],
-        why: `every ${snap.nestsWorkflowCode} run this row opened, open or already closed`,
-      },
-      {
-        // Same ordering note as `reset.ts`: `document.current_version_id` has no `on delete` rule,
-        // so the caller nulls it before this rather than depending on delete order.
-        table: "document",
-        ids: snap.documents.map((d) => d.id),
-        cascades: ["document_version", "document_section", "citation"],
-        why: "the deliverables those rows filed, and every version, section and citation under them",
-      },
-      {
-        table: "event",
-        ids: snap.events.map((e) => e.id),
-        cascades: [],
-        why: "the audit log entries this run and its rows wrote",
-      },
-    ],
+    deletes: deleteSteps(snap.nestsWorkflowCode, runIds, taskIds, snap.documents, snap.events),
     resets: [
       {
         table: "work_task",
@@ -131,8 +142,77 @@ export function planWorkflowReset(snap: WorkflowResetSnapshot): WorkflowResetRes
   } };
 }
 
+// ── a top-level run ──────────────────────────────────────────────────────────────────────────────
+//
+// Not every run is opened by a nesting row. A per-subject run — `tech-design` for one epic,
+// `refine-stories` for one epic — is started from the workflow list with a SUBJECT and no parent
+// task, so there is no row to point `planWorkflowReset` at, and `drop-run.mts` refuses it as soon as
+// anyone has talked to the agent. This is the same reset aimed at the run itself: its tasks (and so
+// their turns, questions and gate measurements), the documents they filed, the events they wrote,
+// then the run. There is no row to put back to idle — the run was the thing that existed.
+//
+// It deletes the conversation, on purpose: that is what "start it again from scratch" means, and
+// this is a dev-mode tool. The report says so before anything is applied.
+
+export type RunResetSnapshot = {
+  engagementId: string;
+  workflowCode: string;
+  runs: { id: string; state: string; subjectRef: string | null; subjectKey: string | null }[];
+  tasks: { id: string; ticketKey: string | null }[];
+  documents: { id: string; path: string; externalUrl: string | null }[];
+  events: { id: string }[];
+};
+
+export type RunResetPlan = {
+  engagementId: string;
+  workflowCode: string;
+  runIds: string[];
+  deletes: WorkflowDeleteStep[];
+  resets: WorkflowResetStep[];
+  publishedElsewhere: number;
+  /** Issues already created in the tracker for these rows. They stay — deleting them is a person's call. */
+  ticketsLeftInTracker: string[];
+  documentPaths: string[];
+};
+
+export type RunResetResult =
+  | { ok: true; plan: RunResetPlan }
+  | { ok: false; refusals: Refusal[] };
+
+export function planRunReset(snap: RunResetSnapshot): RunResetResult {
+  if (!snap.engagementId) return { ok: false, refusals: [{ message: "No engagement named." }] };
+  if (!snap.runs.length) {
+    return { ok: false, refusals: [{
+      message: `No ${snap.workflowCode || "such"} run to reset.`,
+      fix: "Pass a run id, or `<workflow code>:<epic key>` such as `tech-design:CT-288`.",
+    }] };
+  }
+  // A run with no subject is a PHASE (sprint-0, setup…): hundreds of rows, the whole engagement's
+  // spine. This reset is for the one-epic-at-a-time runs, and silently widening it to a phase is how a
+  // reset meant for one design deletes a month of work.
+  const phase = snap.runs.filter((r) => !r.subjectRef && !r.subjectKey);
+  if (phase.length) {
+    return { ok: false, refusals: [{
+      message: `Run ${phase[0].id} has no subject — it is a phase run, not a per-epic one.`,
+      fix: "Reset a phase through its nesting row (`/api/cleanup/workflow`), or the whole engagement (`/api/cleanup`).",
+    }] };
+  }
+
+  const runIds = snap.runs.map((r) => r.id);
+  return { ok: true, plan: {
+    engagementId: snap.engagementId,
+    workflowCode: snap.workflowCode,
+    runIds,
+    deletes: deleteSteps(snap.workflowCode, runIds, snap.tasks.map((t) => t.id), snap.documents, snap.events),
+    resets: [],
+    publishedElsewhere: snap.documents.filter((d) => d.externalUrl).length,
+    ticketsLeftInTracker: snap.tasks.map((t) => t.ticketKey).filter((k): k is string => !!k),
+    documentPaths: snap.documents.map((d) => d.path),
+  } };
+}
+
 /** One line per step, matching `describeReset`'s shape so both reports read the same way. */
-export function describeWorkflowReset(plan: WorkflowResetPlan): string[] {
+export function describeWorkflowReset(plan: { deletes: WorkflowDeleteStep[]; resets: WorkflowResetStep[] }): string[] {
   const out = plan.deletes.map((d) => {
     const cascade = d.cascades.length ? `  → cascades to ${d.cascades.join(", ")}` : "";
     return `  ${String(d.ids.length).padStart(5)}  ${d.table.padEnd(14)} ${d.why}${cascade}`;
