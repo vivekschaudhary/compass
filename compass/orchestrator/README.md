@@ -91,7 +91,8 @@ Exit codes: `0` complete · `1` HITL rejection (run halted) · `2` missing host/
      2. Selects first host with API credentials available
      3. Takes the agent's text from `spec_file` as the system prompt (held in a temp file for the dispatch) → dispatches to selected host's API
      4. Prints and optionally writes output to `docs/orchestrator-runs/`
-4. Passes prior step outputs as context to each subsequent step
+4. For a story build (`--story <key>`), hands the engineer the story's own text (its section of the epic's `stories/<epic key>` document), the epic's technical design (`epic/<key>`), the foundational and feature architecture, and the design library when there is one — all read from the database, none from `docs/` in the repo. A required document that is missing halts the run (exit 3), naming it.
+5. Passes prior step outputs as context to each subsequent step
 
 ## Host routing example — /build workflow
 

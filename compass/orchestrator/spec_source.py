@@ -23,6 +23,8 @@ Resolution mirrors the app (`resolveSpecFromTable`, `templateFor`, `resolveActor
   template  engagement → org → default
   role      engagement → org
   workflow  engagement → org (published version only)
+  document  this engagement's `document` row, at its current version (no org tier)
+  work item this engagement's `backlog_item` row (an epic or a story)
 
 The tier rules are pure functions over rows (`pick_spec`, `pick_template`, `pick_role`) so a shared
 vector file can pin them from both languages; the DB source only fetches candidate rows.
@@ -116,6 +118,32 @@ def pick_workflow(rows: list, engagement_id: Optional[str], code: str) -> Option
     return None
 
 
+def pick_work_item(rows: list, ident: str) -> Optional[dict]:
+    """A backlog row by Jira key, else by ref. A key wins: refs are per engagement, keys are the tracker's."""
+    for field in ("ticket_key", "ref"):
+        for r in rows:
+            if r.get(field) == ident:
+                return dict(r)
+    return None
+
+
+def _shape_document(path, version, status, sections) -> dict:
+    sections = [{"heading": s.get("heading", ""), "body": s.get("body", "")} for s in sections]
+    text = "\n\n".join(f"## {s['heading']}\n\n{s['body']}".rstrip() for s in sections)
+    return {"path": path, "version": str(version), "status": status, "sections": sections, "text": text}
+
+
+def section_for(doc: dict, ref: str) -> Optional[dict]:
+    """The section of a document whose heading starts with `ref` — `ACC-E1-S1 — Create an account`.
+    `ACC-E1-S1` must not match `ACC-E1-S10`, so the ref has to end where the heading's next word starts."""
+    import re
+    pat = re.compile(r"^\s*" + re.escape(ref) + r"(?![A-Za-z0-9-])")
+    for s in doc.get("sections", []):
+        if pat.match(s["heading"]):
+            return s
+    return None
+
+
 # ── the interface ────────────────────────────────────────────────────────────────────────────
 
 class SpecSource:
@@ -137,6 +165,21 @@ class SpecSource:
         """The role row (`agent`, `hosts`, `capabilities`, ...). Raises `SpecMissing`."""
         raise NotImplementedError
 
+    def document(self, path: str) -> dict:
+        """An engagement document at its CURRENT version: `{path, version, status, sections, text}`.
+        `sections` is `[{heading, body}]` in order. Raises `SpecMissing` — no document at that path, no
+        current version, or no engagement to scope it (documents belong to one)."""
+        raise NotImplementedError
+
+    def work_item(self, ident: str) -> dict:
+        """An epic or story from `backlog_item`, found by Jira key OR ref: `{ref, kind, parent_ref, title,
+        ticket_key, body}`. Raises `SpecMissing`."""
+        raise NotImplementedError
+
+    def work_items(self, parent_ref: str) -> list:
+        """The children of an epic, in `ord` order — `work_item`'s shape."""
+        raise NotImplementedError
+
     def workflow_codes(self) -> list:
         """Codes of the enabled workflows that have a published version — what can be launched."""
         raise NotImplementedError
@@ -154,8 +197,11 @@ class SpecSource:
 class InMemorySpecSource(SpecSource):
     """Rows held in lists, resolved by the same pure functions. For tests, and for the vectors."""
 
-    def __init__(self, specs=None, templates=None, roles=None, engagement_id=None, org_id=None, workflows=None):
+    def __init__(self, specs=None, templates=None, roles=None, engagement_id=None, org_id=None, workflows=None,
+                 documents=None, backlog=None):
         self.specs, self.templates, self.roles = specs or [], templates or [], roles or []
+        self.documents = documents or {}    # path -> {version, status, sections: [{heading, body}]}
+        self.backlog = backlog or []        # backlog_item rows
         self.workflows = workflows or []   # {code, engagement_id, steps: [normalised step, as workflow_steps returns]}
         self.engagement_id, self.org_id = engagement_id, org_id
 
@@ -180,6 +226,25 @@ class InMemorySpecSource(SpecSource):
         if hit is None:
             raise SpecMissing(f"no role row for {code!r}")
         return hit
+
+    def document(self, path):
+        _check_path(path)
+        if not self.engagement_id:
+            raise SpecMissing(f"document {path}: documents belong to an engagement; pass --engagement")
+        doc = self.documents.get(path)
+        if doc is None:
+            raise SpecMissing(f"no document at {path} for this engagement")
+        return _shape_document(path, doc["version"], doc["status"], doc["sections"])
+
+    def work_item(self, ident):
+        hit = pick_work_item(self.backlog, ident)
+        if hit is None:
+            raise SpecMissing(f"no epic or story {ident!r} for this engagement")
+        return hit
+
+    def work_items(self, parent_ref):
+        return sorted((dict(r) for r in self.backlog if r.get("parent_ref") == parent_ref),
+                      key=lambda r: r.get("ord", 0))
 
     def workflow_codes(self):
         return sorted({w["code"] for w in self.workflows
@@ -263,6 +328,41 @@ class DbSpecSource(SpecSource):
         if hit is None:
             raise SpecMissing(f"no document_template row for {name!r} at any scope")
         return hit
+
+    def _engagement(self, what: str) -> str:
+        if not self.engagement_id:
+            raise SpecMissing(f"{what}: this belongs to an engagement; pass --engagement")
+        return self.engagement_id
+
+    def document(self, path):
+        _check_path(path)
+        eng = self._engagement(f"document {path}")
+        docs = self._get("document", select="id,current_version_id", engagement_id=f"eq.{eng}", path=f"eq.{path}")
+        if not docs:
+            raise SpecMissing(f"no document at {path} for engagement {eng}")
+        version_id = docs[0].get("current_version_id")
+        if not version_id:
+            raise SpecMissing(f"document {path} has no current version")
+        vers = self._get("document_version", select="version,status", id=f"eq.{version_id}")
+        if not vers:
+            raise SpecMissing(f"document {path}: its current version row is missing")
+        secs = self._get("document_section", select="ord,heading,body",
+                         document_version_id=f"eq.{version_id}", order="ord.asc")
+        return _shape_document(path, vers[0]["version"], vers[0]["status"], secs)
+
+    def work_item(self, ident):
+        eng = self._engagement(f"work item {ident}")
+        rows = self._get("backlog_item", select="ref,kind,parent_ref,title,ticket_key,body,ord",
+                         engagement_id=f"eq.{eng}", **{"or": f"(ticket_key.eq.{ident},ref.eq.{ident})"})
+        hit = pick_work_item(rows, ident)
+        if hit is None:
+            raise SpecMissing(f"no epic or story {ident!r} for engagement {eng}")
+        return hit
+
+    def work_items(self, parent_ref):
+        eng = self._engagement(f"children of {parent_ref}")
+        return self._get("backlog_item", select="ref,kind,parent_ref,title,ticket_key,body,ord",
+                         engagement_id=f"eq.{eng}", parent_ref=f"eq.{parent_ref}", order="ord.asc")
 
     def _wf_scope(self) -> str:
         return "(engagement_id.is.null" + (f",engagement_id.eq.{self.engagement_id})" if self.engagement_id else ")")
