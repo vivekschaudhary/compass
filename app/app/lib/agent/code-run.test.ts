@@ -66,6 +66,8 @@ function seed(opts: {
   // `isFirstCodeStep` is computed from. Defaults to "every ord before this one" so build's
   // existing tests (ords 1-4, all consecutive code rows of one PR) keep working unchanged.
   codeOrdsBefore?: number[];
+  // Several registered repos, in `ord` order. `local_path: ""` is a repo with no checkout.
+  repos?: { key: string; name: string; local_path: string }[];
 } = {}) {
   const ord = opts.ord ?? 1;
   const codeOrdsBefore = opts.codeOrdsBefore ?? Array.from({ length: Math.max(0, ord - 1) }, (_, i) => i + 1);
@@ -76,7 +78,8 @@ function seed(opts: {
   ];
   state.workflows = [{ id: "w1", code: opts.workflow ?? "build" }];
   state.runs = [{ id: "r1", workflow_id: "w1", subject_key: opts.subjectKey === undefined ? "KAN-42" : opts.subjectKey, subject_ref: "E1-S3" }];
-  state.repos = opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
+  state.repos = opts.repos ? opts.repos.map((r) => ({ engagement_id: "e1", ...r }))
+    : opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
 }
 
 beforeEach(() => { proc.stdout = ""; proc.exit = 0; proc.spawned = []; });
@@ -273,5 +276,65 @@ describe("which workflow it runs", () => {
     const r = await runCode("e1", "t1");
     expect(r.refusal).toMatch(/no step to execute/i);
     expect(proc.spawned).toEqual([]);
+  });
+});
+
+// ── which repo the build goes into ───────────────────────────────────────────────────────────────
+//
+// It used to be the first registered repo with a checkout, whatever the story was about — a backend
+// story landed in the iOS app. Now the build names its repo, and with several registered a build
+// that does not is refused rather than guessed.
+
+const TWO = [
+  { key: "app", name: "kindtree-swap", local_path: "/tmp/kindtree-swap" },
+  { key: "backend", name: "art-swap-backend", local_path: "/tmp/art-swap-backend" },
+];
+const projectDirOf = (args: string[]) => args[args.indexOf("--project-dir") + 1];
+
+describe("choosing the repo", () => {
+  it("builds in the repo it is told to, not the first one", async () => {
+    seed({ repos: TWO });
+    proc.stdout = "https://github.com/a/b/pull/1";
+    const r = await runCode("e1", "t1", { repo: "backend" });
+    expect(r.refusal).toBeNull();
+    expect(projectDirOf(proc.spawned[0])).toBe("/tmp/art-swap-backend");
+    expect(r.repoName).toBe("art-swap-backend");
+  });
+
+  it("builds in the first repo when it IS told to", async () => {
+    seed({ repos: TWO });
+    await runCode("e1", "t1", { repo: "app" });
+    expect(projectDirOf(proc.spawned[0])).toBe("/tmp/kindtree-swap");
+  });
+
+  it("REFUSES to guess when there are several repos and none is named", async () => {
+    seed({ repos: TWO });
+    const r = await runCode("e1", "t1");
+    expect(r.refusal).toContain("app");
+    expect(r.refusal).toContain("backend");
+    expect(r.refusal).toMatch(/did not name one/i);
+    expect(proc.spawned, "nothing may be spawned for a guess").toEqual([]);
+  });
+
+  it("refuses a repo that is not registered, and lists the ones that are", async () => {
+    seed({ repos: TWO });
+    const r = await runCode("e1", "t1", { repo: "web" });
+    expect(r.refusal).toContain("No repository 'web'");
+    expect(r.refusal).toContain("app, backend");
+    expect(proc.spawned).toEqual([]);
+  });
+
+  it("refuses a registered repo that has no checkout, and says where to set it", async () => {
+    seed({ repos: [TWO[0], { ...TWO[1], local_path: "" }] });
+    const r = await runCode("e1", "t1", { repo: "backend" });
+    expect(r.refusal).toMatch(/no working local checkout/i);
+    expect(r.refusal).toContain("Settings");
+    expect(proc.spawned).toEqual([]);
+  });
+
+  it("with exactly one buildable repo, needs no name", async () => {
+    seed({ repos: [TWO[0], { ...TWO[1], local_path: "" }] });
+    await runCode("e1", "t1");
+    expect(projectDirOf(proc.spawned[0])).toBe("/tmp/kindtree-swap");
   });
 });

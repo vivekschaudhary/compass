@@ -89,6 +89,26 @@ async function repoNameFor(engagementId: string, key: string): Promise<string | 
 }
 
 /**
+ * The repos a build can go into: registered for this engagement AND with a checkout path set.
+ * A repo with no `local_path` cannot be built in, so offering it would only invite a refusal.
+ */
+export async function buildableRepos(
+  engagementId: string,
+): Promise<{ key: string; name: string; area: string | null }[]> {
+  const sb = supabaseAdmin();
+  if (!sb) return [];
+  const { data } = await sb.from("repo").select("key, name, area, local_path")
+    .eq("engagement_id", engagementId).order("ord");
+  return (data ?? [])
+    .filter((r) => ((r.local_path as string | null) ?? "").trim() !== "")
+    .map((r) => ({
+      key: r.key as string,
+      name: ((r.name as string | null) || (r.key as string)),
+      area: (r.area as string | null) ?? null,
+    }));
+}
+
+/**
  * Re-point pins that were recorded with the subject still unfilled.
  *
  * Pins written before `pinInputs` resolved a subject carry the literal path (`stories/{epic}`), and
@@ -548,6 +568,7 @@ export async function buildContext(actor: Actor, taskId: string): Promise<AgentC
     repoName: output === "scaffold" && subject?.ref
       ? await repoNameFor(actor.engagementId, subject.ref)
       : null,
+    repos: output === "code" ? await buildableRepos(actor.engagementId) : [],
     hasWebSearch: actor.capabilities.includes("web-search"),
     destination,
     output,

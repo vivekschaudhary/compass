@@ -167,6 +167,8 @@ const baseCtx = {
   doneCriteria: [], inventory: [], phaseRows: [],
   template: null, templateName: null,
   priorDraft: null, rejections: [], sprint: null,
+  // A build with no registered repos listed defers to `runCode`, which refuses with the real reason.
+  repos: [],
   hasWebSearch: false,
 };
 

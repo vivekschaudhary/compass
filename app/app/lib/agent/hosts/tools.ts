@@ -290,6 +290,13 @@ export const TOOLS: Anthropic.Tool[] = [
             "Bounded by the story's technical design; name any departure from it rather than " +
             "taking it quietly.",
         },
+        repo: {
+          type: "string",
+          description:
+            "The key of the repository this story is built in — one of the keys listed in <repos>. " +
+            "Required. Choose by where the technical design puts the change; if you cannot tell, " +
+            "`ask` rather than guess.",
+        },
         files: {
           type: "array",
           description:
@@ -299,7 +306,7 @@ export const TOOLS: Anthropic.Tool[] = [
           items: { type: "string" },
         },
       },
-      required: ["summary", "approach", "files"],
+      required: ["summary", "approach", "repo", "files"],
       additionalProperties: false,
     },
     strict: true,

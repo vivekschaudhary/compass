@@ -42,23 +42,60 @@ export type CodeRun = {
 };
 
 /**
- * Which repo this engagement builds in.
+ * Which repo this build goes into.
  *
  * `local_path` is the discriminator, not the presence of a row: a repo configured with a remote and
  * no checkout cannot be built in, and spawning against a path that does not exist would fail deep
  * inside the orchestrator with a message about a missing workflow file. Refusing here says the
  * true thing — nobody set a local path — and says where to set it.
+ *
+ * `key` names the repo the build is for. WITHOUT one this used to take the first repo that had a
+ * checkout, which put a backend story into whichever repo happened to be registered first. Now it
+ * does that only when there is exactly one to take; with several, it refuses and lists them, because
+ * a guess here lands one team's work in another team's repository.
  */
-async function repoFor(engagementId: string): Promise<{ path: string; name: string } | null> {
+export async function repoFor(
+  engagementId: string,
+  key?: string | null,
+): Promise<{ ok: true; path: string; name: string; key: string } | { ok: false; refusal: string }> {
   const sb = supabaseAdmin();
-  if (!sb) return null;
+  if (!sb) return { ok: false, refusal: "Supabase is not configured." };
   const { data } = await sb.from("repo")
     .select("key, name, local_path").eq("engagement_id", engagementId).order("ord");
-  for (const r of data ?? []) {
-    const p = (r.local_path as string | null)?.trim();
-    if (p && existsSync(p)) return { path: p, name: (r.name as string) || (r.key as string) };
+
+  const usable = (data ?? [])
+    .map((r) => ({
+      key: r.key as string,
+      name: ((r.name as string | null) || (r.key as string)),
+      path: ((r.local_path as string | null) ?? "").trim(),
+    }))
+    .filter((r) => r.path && existsSync(r.path));
+
+  if (key) {
+    const hit = usable.find((r) => r.key === key);
+    if (hit) return { ok: true, ...hit };
+    const known = (data ?? []).map((r) => r.key as string);
+    return {
+      ok: false,
+      refusal: known.includes(key)
+        ? `Repository '${key}' has no working local checkout. Set its local path in Settings → Repositories.`
+        : `No repository '${key}' is registered for this engagement. Registered: ${known.join(", ") || "none"}.`,
+    };
   }
-  return null;
+  if (usable.length === 1) return { ok: true, ...usable[0] };
+  if (usable.length === 0) {
+    return {
+      ok: false,
+      refusal:
+        "No repository with a working local path is configured for this engagement. Set one in " +
+        "Settings → Repositories; without a checkout there is nowhere to build.",
+    };
+  }
+  return {
+    ok: false,
+    refusal: `This engagement has ${usable.length} repositories (${usable.map((r) => r.key).join(", ")}) and the build did not name one. ` +
+      `Pass the repo the story is built in; a build is never put in "the first" one.`,
+  };
 }
 
 /** What a code step needs to know about itself: the story, its position, its run, its workflow. */
@@ -132,7 +169,7 @@ const BRANCH_RE = /(?:work branch|branch)\s+[`'"]?([\w./-]+)[`'"]?/i;
 export async function runCode(
   engagementId: string,
   taskId: string,
-  opts: { timeoutMs?: number; context?: string } = {},
+  opts: { timeoutMs?: number; context?: string; repo?: string | null } = {},
 ): Promise<CodeRun> {
   const empty = { ok: false, exit: null, branch: null, prUrl: null, log: "", repoName: null };
 
@@ -153,15 +190,9 @@ export async function runCode(
     };
   }
 
-  const repo = await repoFor(engagementId);
-  if (!repo) {
-    return {
-      ...empty,
-      refusal:
-        "No repository with a working local path is configured for this engagement. Set one in " +
-        "Settings → Repositories; without a checkout there is nowhere to build.",
-    };
-  }
+  const found = await repoFor(engagementId, opts.repo);
+  if (!found.ok) return { ...empty, refusal: found.refusal };
+  const repo = found;
 
   // `--compass-dir` is now only where the orchestrator finds `config.yaml` (the checks, the stack,
   // the connectors); the workflow graph, agent prompts and stack profiles come from the database.

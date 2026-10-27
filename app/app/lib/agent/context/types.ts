@@ -80,6 +80,13 @@ export type AgentContext = {
   /** The registered repo the subject names, when `output === "scaffold"`. Null otherwise. */
   repoName: string | null;
   /**
+   * The repos a `code` row may build in, when `output === "code"` (empty otherwise): every registered
+   * repo that has a local checkout. The model is told them and names one — a story does not carry its
+   * repo, and the build used to go into whichever came first, so a backend story could land in the iOS
+   * app. Only `key`, `name` and `area` reach the prompt; the checkout path never does.
+   */
+  repos: { key: string; name: string; area: string | null }[];
+  /**
    * Resolved once here from `actor.capabilities`, not re-derived wherever it is needed — read by
    * `systemPrompt` (to tell the model it actually has this, rather than leaving it to notice the
    * gap between its own agent file's `required_tools: [... web_search ...]` and what it was
