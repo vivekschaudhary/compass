@@ -472,6 +472,7 @@ class TestStoryScopingFromDb(unittest.TestCase):
                 "foundational-architecture": {"version": "1.0", "status": "published", "sections": [{"heading": "Decision", "body": "FOUNDATION BODY"}]},
                 "feature-architecture": {"version": "3.0", "status": "published", "sections": [{"heading": "Features", "body": "FEATURE ARCH BODY"}]},
                 "design-library": {"version": "1.0", "status": "published", "sections": [{"heading": "Tokens", "body": "DESIGN LIB BODY"}]},
+                "scaffold-record": {"version": "1.0", "status": "published", "sections": [{"heading": "Repositories", "body": "SCAFFOLD RECORD BODY: Next.js"}]},
             })
 
     def test_resolve_epic_from_a_story_key_or_ref(self):
@@ -498,6 +499,28 @@ class TestStoryScopingFromDb(unittest.TestCase):
         self.assertNotIn("TENTH STORY", ctx, "ACC-E1-S1 must not pull in ACC-E1-S10")
         self.assertIn("`epic/CT-288` v1.0 (published)", ctx)      # which version the engineer was given
         self.assertLess(ctx.index("Apple sign-in."), ctx.index("TECH DESIGN BODY"))
+
+    def test_the_scaffold_record_is_handed_over_and_comes_before_the_design_library(self):
+        ctx = _load_story_context(self.specs, "CT-349")
+        self.assertIn("SCAFFOLD RECORD BODY", ctx)
+        self.assertIn("`scaffold-record` v1.0 (published)", ctx)
+        self.assertLess(ctx.index("FEATURE ARCH BODY"), ctx.index("SCAFFOLD RECORD BODY"))
+        self.assertLess(ctx.index("SCAFFOLD RECORD BODY"), ctx.index("DESIGN LIB BODY"))
+
+    def test_the_scaffold_record_is_optional_not_a_reason_to_halt(self):
+        del self.specs.documents["scaffold-record"]
+        ctx = _load_story_context(self.specs, "CT-349")
+        self.assertNotIn("SCAFFOLD RECORD BODY", ctx)
+        self.assertIn("TECH DESIGN BODY", ctx)
+
+    def test_the_engineer_is_told_which_repository_and_which_document_wins(self):
+        ctx = _load_story_context(self.specs, "CT-349", repo_name="art-swap-backend")
+        self.assertIn("working in the repository `art-swap-backend`", ctx)
+        self.assertIn("the scaffold record describes what was actually created", ctx)
+        self.assertLess(ctx.index("working in the repository"), ctx.index("Apple sign-in."))
+
+    def test_without_a_repo_name_it_says_nothing_about_one(self):
+        self.assertNotIn("working in the repository", _load_story_context(self.specs, "CT-349"))
 
     def test_the_design_library_is_optional(self):
         del self.specs.documents["design-library"]

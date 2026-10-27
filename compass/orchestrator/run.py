@@ -1010,21 +1010,30 @@ _STORY_CONTEXT_REQUIRED = (
     ("foundational-architecture", "the foundational architecture"),
     ("feature-architecture", "the feature architecture"),
 )
-#: Handed over when it exists — a UI story needs it, a backend one may not, and nothing here can tell which.
-_STORY_CONTEXT_OPTIONAL = (("design-library", "the design library"),)
+#: Handed over when it exists. The scaffold record is what was ACTUALLY created — the framework, the layout,
+#: the commands — and the architecture documents can disagree with it (they say Fastify; the backend was
+#: scaffolded as Next.js, a deviation only the scaffold record states). The design library is for a UI
+#: story; a backend one may not need it, and nothing here can tell which.
+_STORY_CONTEXT_OPTIONAL = (
+    ("scaffold-record", "the scaffold record — what each repository actually is"),
+    ("design-library", "the design library"),
+)
 
 
 def _doc_block(title: str, doc: dict) -> str:
     return f"### {title} — `{doc['path']}` v{doc['version']} ({doc['status']})\n\n{doc['text']}\n"
 
 
-def _load_story_context(specs, story_ident: str) -> str:
+def _load_story_context(specs, story_ident: str, repo_name: str = None) -> str:
     """#172, from the database: focused context for ONE story's build.
 
     The story's own text comes from its epic's story document (`stories/<epic key>`, the section whose
     heading starts with the story's ref) — the versioned, reviewed copy, the same text the tracker is
     later updated from. Around it: the epic's technical design, the foundational and feature
     architecture, and the design library when there is one.
+
+    `repo_name` is the repository the build runs in (the checkout directory's name). It is said to the
+    engineer, along with which document wins where the scaffold record and the architecture differ.
 
     Anything REQUIRED that is missing raises `SpecMissing` naming the document, and the caller halts:
     a build that quietly runs without its design is the failure the gates exist to prevent. Reads no
@@ -1049,6 +1058,10 @@ def _load_story_context(specs, story_ident: str) -> str:
     parts = [f"## Build scope — story {key} ({story['ref']}), epic {epic_key} \"{epic.get('title', '')}\"\n",
              f"**Implement ONLY story {story['ref']}.** Other stories in this epic are out of scope for this "
              f"run — they build in their own runs and on their own branches.\n",
+             *([f"**You are working in the repository `{repo_name}`.** Where the scaffold record and the "
+                f"architecture documents disagree about what this repository is — its framework, its "
+                f"layout, its commands — the scaffold record describes what was actually created; build "
+                f"to that, and say where the design assumed otherwise.\n"] if repo_name else []),
              f"### story {story['ref']} — `{stories_doc['path']}` v{stories_doc['version']} "
              f"({stories_doc['status']})\n\n## {section['heading']}\n\n{section['body']}\n"]
     for path, label in _STORY_CONTEXT_REQUIRED:
@@ -1697,7 +1710,7 @@ def _run_workflow(
     # Falls through to whole-bet context when no story scope is set.
     if story_id and epic_id:
         try:
-            story_context = _load_story_context(specs, story_id)
+            story_context = _load_story_context(specs, story_id, repo_name=Path(project_dir).name)
         except SpecMissing as exc:
             print(f"\nRefuse: cannot build {story_id} — {exc}.", file=sys.stderr)
             sys.exit(3)
