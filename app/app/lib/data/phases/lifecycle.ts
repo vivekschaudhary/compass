@@ -6,7 +6,8 @@ import { measureTask, evaluate, type CriterionRow } from "../gates";
 import { mirrorPhase, mirrorEpicTasks, type Mirrored } from "../tracker";
 import { composeTicketBodies } from "../ticket-body";
 import { startTask } from "../tasks";
-import { fanOutKindOf } from "../../fan-out-kinds";
+import { subjectKindOfOutputs, type SubjectKind } from "../../subject-kinds";
+import { usableSubject } from "../subject-choices";
 import type { BoardResult, Initiated } from "./types";
 
 /**
@@ -60,9 +61,24 @@ async function putOnBoard(
   // over the real one. Its rows hang under the epic it is ABOUT, as Tasks, and no bodies are composed:
   // the epic is not ours to describe.
   if (await isSubjectRun(runId)) {
+    // A run about a STORY adds nothing to the board. The story is already the ticket; the build
+    // records its pull request and its outcome on that ticket itself. Creating a Task under a story
+    // is not something Jira allows without a sub-task type, and five sub-tasks per build would bury
+    // the one thing the board needs to show.
+    if (await isStoryRun(runId)) {
+      return { epic: null, stories: [], expected: 0, problems: [], reason: "nothing-to-mirror" };
+    }
     return mirrorEpicTasks(engagementId, runId, roleCode);
   }
   return mirrorAndCompose(engagementId, runId, roleCode, () => mirrorPhase(engagementId, runId, roleCode));
+}
+
+/** Is this run about a story — its workflow's published steps name `{subject}`? */
+async function isStoryRun(runId: string): Promise<boolean> {
+  const sb = supabaseAdmin();
+  if (!sb) return false;
+  const { data } = await sb.from("workflow_run").select("workflow_id").eq("id", runId).maybeSingle();
+  return data?.workflow_id ? (await subjectKindOf(data.workflow_id as string)) === "story" : false;
 }
 
 /** A top-level run opened about one thing. Nested runs carry a subject too and are NOT this. */
@@ -75,10 +91,10 @@ async function isSubjectRun(runId: string): Promise<boolean> {
 }
 
 /**
- * The fan-out kind a workflow's PUBLISHED version declares in its produced paths (`{epic}`), or null
- * for a workflow that covers its whole engagement.
+ * The kind of thing a workflow's PUBLISHED version declares it is about in its produced paths
+ * (`{epic}`, `{subject}`), or null for a workflow that covers its whole engagement.
  */
-async function subjectKindOf(workflowId: string): Promise<string | null> {
+async function subjectKindOf(workflowId: string): Promise<SubjectKind | null> {
   const sb = supabaseAdmin();
   if (!sb) return null;
   const { data: ver } = await sb.from("workflow_version")
@@ -86,7 +102,7 @@ async function subjectKindOf(workflowId: string): Promise<string | null> {
   if (!ver) return null;
   const { data: steps } = await sb.from("workflow_step")
     .select("produces").eq("workflow_version_id", ver.id);
-  return fanOutKindOf((steps ?? []).map((s) => s.produces as string | null));
+  return subjectKindOfOutputs((steps ?? []).map((s) => s.produces as string | null));
 }
 
 /**
@@ -262,14 +278,15 @@ export async function initiatePhase(
   if (subject && !kind) {
     return { ok: false, error: `${wf.label} does not take a subject; start it without one.` };
   }
-  if (subject && kind !== "epic") {
-    return { ok: false, error: `Starting a ${wf.label} run for a ${kind} is not supported yet.` };
-  }
   let epicInfo: { ref: string; title: string; ticketKey: string } | null = null;
-  if (subject) {
-    const epic = await usableEpic(actor.engagementId, subject);
-    if (!epic.ok) return { ok: false, error: epic.error };
-    epicInfo = epic.epic;
+  if (subject && kind) {
+    const found = kind === "epic"
+      ? await usableEpic(actor.engagementId, subject)
+      : await usableSubject(actor.engagementId, kind, subject);
+    if (!found.ok) return { ok: false, error: found.error };
+    // Named for what it was first used for — the ticket this run's rows are labelled with, whatever
+    // kind of thing it is.
+    epicInfo = "epic" in found ? found.epic : found.subject;
   }
 
   const blocked = await unmetEntryGate(actor, wf.id);

@@ -31,7 +31,8 @@ import "server-only";
 import { supabaseAdmin } from "../supabase";
 import type { Actor } from "./actor";
 import { orgIdFor } from "./events";
-import { fanOutKindOf } from "../fan-out-kinds";
+import { subjectKindOfOutputs, type SubjectKind, type SubjectChoice } from "../subject-kinds";
+import { subjectChoicesFor } from "./subject-choices";
 
 export type WorkflowCard = {
   /** A run's id once open; the nesting task's own id before it is. Stable across a render either way. */
@@ -50,48 +51,24 @@ export type WorkflowCard = {
    * Set on the card that STARTS a workflow which is about one thing (`refine-stories`: one epic).
    * Starting it needs a choice, so the card offers a picker instead of a bare button.
    */
-  needsSubject?: "epic";
+  needsSubject?: SubjectKind;
 };
 
-/** An epic a per-epic workflow can be started for — one the board already has. */
-export type EpicChoice = { ref: string; title: string; ticketKey: string; stories: number };
+/** An epic a per-epic workflow can be started for — one the board already has. Kept for callers that predate the generic picker. */
+export type EpicChoice = SubjectChoice;
 
-/**
- * The epics a per-epic workflow may be started for: those on the board (a story drafted for an epic
- * with no ticket would have no parent to be filed under), each with how many stories it has so the
- * person can see what has been refined and what has not.
- */
+/** The epics a per-epic workflow may be started for — `subjectChoicesFor` with the kind fixed. */
 export async function epicChoicesFor(actor: Actor): Promise<EpicChoice[]> {
-  const sb = supabaseAdmin();
-  if (!sb) return [];
-  const { data } = await sb.from("backlog_item")
-    .select("kind, ref, title, ticket_key, parent_ref, created_at, ord")
-    .eq("engagement_id", actor.engagementId)
-    .order("created_at", { ascending: false });
-  const epics = new Map<string, { ref: string; title: string; ticketKey: string; ord: number }>();
-  const stories = new Map<string, number>();
-  for (const r of data ?? []) {
-    if (r.kind === "epic" && r.ticket_key && !epics.has(r.ref as string)) {
-      epics.set(r.ref as string, {
-        ref: r.ref as string, title: r.title as string, ticketKey: r.ticket_key as string, ord: r.ord as number,
-      });
-    }
-    if (r.kind === "story" && r.parent_ref) {
-      stories.set(r.parent_ref as string, (stories.get(r.parent_ref as string) ?? 0) + 1);
-    }
-  }
-  return [...epics.values()]
-    .sort((a, b) => a.ord - b.ord)
-    .map((e) => ({ ref: e.ref, title: e.title, ticketKey: e.ticketKey, stories: stories.get(e.ref) ?? 0 }));
+  return (await subjectChoicesFor(actor, ["epic"])).epic ?? [];
 }
 
-/** Which of these workflows are about one thing, by what their published version produces. */
-async function subjectWorkflows(workflowIds: string[]): Promise<Set<string>> {
+/** Which of these workflows are about one thing, and what kind, by what their published version produces. */
+async function subjectWorkflows(workflowIds: string[]): Promise<Map<string, SubjectKind>> {
   const sb = supabaseAdmin();
-  if (!sb || !workflowIds.length) return new Set();
+  if (!sb || !workflowIds.length) return new Map();
   const { data: versions } = await sb.from("workflow_version")
     .select("id, workflow_id").in("workflow_id", workflowIds).eq("status", "published");
-  if (!versions?.length) return new Set();
+  if (!versions?.length) return new Map();
   const { data: steps } = await sb.from("workflow_step")
     .select("workflow_version_id, produces").in("workflow_version_id", versions.map((v) => v.id as string));
   const byVersion = new Map<string, (string | null)[]>();
@@ -100,9 +77,10 @@ async function subjectWorkflows(workflowIds: string[]): Promise<Set<string>> {
     list.push(st.produces as string | null);
     byVersion.set(st.workflow_version_id as string, list);
   }
-  const out = new Set<string>();
+  const out = new Map<string, SubjectKind>();
   for (const v of versions) {
-    if (fanOutKindOf(byVersion.get(v.id as string) ?? []) === "epic") out.add(v.workflow_id as string);
+    const kind = subjectKindOfOutputs(byVersion.get(v.id as string) ?? []);
+    if (kind) out.set(v.workflow_id as string, kind);
   }
   return out;
 }
@@ -189,13 +167,14 @@ export async function workflowsFor(actor: Actor): Promise<WorkflowCard[]> {
   const wfById = new Map(standalone.map((w) => [w.id as string, w]));
 
   for (const w of standalone) {
-    if (subjectIds.has(w.id as string)) {
-      // About one epic: a card to start it for a chosen epic (always offered — it repeats), then one
+    const subjectKind = subjectIds.get(w.id as string);
+    if (subjectKind) {
+      // About one epic or story: a card to start it for a chosen one (always offered — it repeats), then one
       // card per run below. Never a single "latest run" for the whole workflow.
       cards.push({
         key: w.id as string, code: w.code as string, label: w.label as string,
         state: "available", subject: null, runId: null, taskId: null,
-        closedCount: 0, totalCount: 0, needsSubject: "epic",
+        closedCount: 0, totalCount: 0, needsSubject: subjectKind,
       });
       continue;
     }

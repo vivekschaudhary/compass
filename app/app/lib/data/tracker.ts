@@ -99,7 +99,9 @@ export type Mirrored = {
    * English.
    */
   reason?: "no-supabase" | "no-tracker" | "no-run" | "epic-refused" | "story-refused"
-        | "no-parent-ticket" | "no-subtask-type" | "nested-too-deep";
+        | "no-parent-ticket" | "no-subtask-type" | "nested-too-deep"
+        /** A run about a story: the story is the ticket, so nothing is owed to the board. */
+        | "nothing-to-mirror";
 };
 
 /**
@@ -110,7 +112,7 @@ export type Mirrored = {
  * every engagement that deliberately runs without a board.
  */
 export function mirrorIncomplete(m: Mirrored): boolean {
-  if (m.reason === "no-tracker" || m.reason === "no-supabase") return false;
+  if (m.reason === "no-tracker" || m.reason === "no-supabase" || m.reason === "nothing-to-mirror") return false;
   return !m.epic || m.stories.length < m.expected;
 }
 
