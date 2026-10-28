@@ -11,7 +11,7 @@ vi.mock("../jira", () => ({
 }));
 vi.mock("./events", () => ({ emit: async () => {} }));
 
-const { moveFailed } = await import("./tracker");
+const { moveFailed, mirrorIncomplete } = await import("./tracker");
 
 describe("moveFailed", () => {
   // The whole point of the discriminator: a close must be blocked when the board was asked and
@@ -37,5 +37,14 @@ describe("moveFailed", () => {
   // block every close the moment a new early-return forgets to tag itself.
   it("is false when no reason was given", () => {
     expect(moveFailed({ ok: false, note: "something unexplained" })).toBe(false);
+  });
+});
+
+describe("mirrorIncomplete", () => {
+  it("a run about a story owes the board nothing — the story is the ticket", () => {
+    expect(mirrorIncomplete({ epic: null, stories: [], expected: 0, problems: [], reason: "nothing-to-mirror" })).toBe(false);
+  });
+  it("a run that should have hung under an epic and found none is still incomplete", () => {
+    expect(mirrorIncomplete({ epic: null, stories: [], expected: 2, problems: ["x"], reason: "no-parent-ticket" })).toBe(true);
   });
 });
