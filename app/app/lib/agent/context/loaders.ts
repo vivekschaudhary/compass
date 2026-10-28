@@ -8,6 +8,7 @@ import { nextSprintNumber, committedJql } from "../../data/sprint";
 import { holdersOn, type Actor } from "../../data/actor";
 import { sortByStep } from "../../data/steps";
 import { subjectOfRun } from "../../data/run-subject";
+import { externalFallback } from "./external-fallback";
 import { withoutTaskCatalogue } from "./prompts";
 import { resolveReviewedTask } from "./resolve-reviewed-task";
 import type { AgentContext, PhaseRow, PinnedInput, SprintContext, StoriesContext, WorkflowSummary } from "./types";
@@ -258,11 +259,25 @@ async function loadInputs(taskId: string, engagementId: string): Promise<PinnedI
   if (!pins?.length) return [];
 
   const out: PinnedInput[] = [];
+  let subject: Awaited<ReturnType<typeof subjectOfRun>> | undefined;
   for (const pin of pins) {
     // No pinned version means nothing was there to pin. Reported as an absence with whatever title
     // the document has, rather than resolved forward to the current version — a task must not read
     // text that did not exist when it started.
+    //
+    // Before calling it absent, ask where else the client keeps it: the provider page the row points
+    // at, or the ticket the path names. That text is not a Compass version and says so; if nothing
+    // answers it is still an absence, reported with its path.
     if (!pin.document_version) {
+      if (subject === undefined) {
+        const { data: task } = await sb.from("work_task")
+          .select("workflow_run_id, subject_ref").eq("id", taskId).maybeSingle();
+        subject = await subjectOfRun(
+          (task?.workflow_run_id as string | null) ?? null, (task?.subject_ref as string | null) ?? null,
+        );
+      }
+      const elsewhere = await externalFallback(engagementId, pin.document_path, subject);
+      if (elsewhere) { out.push(elsewhere); continue; }
       const { data: doc } = await sb.from("document")
         .select("title").eq("engagement_id", engagementId).eq("path", pin.document_path).maybeSingle();
       out.push({ path: pin.document_path, title: doc?.title ?? null, version: null, body: null });

@@ -70,6 +70,18 @@ describe("resolvePath", () => {
       .toBe("03-architecture/epic/KAN-12-review");
   });
 
+  // A run about a story reads its EPIC's pages: `{epic}` is the epic's key, `{subject}` stays the story's.
+  it("fills {epic} with the epic's key and {subject} with the story's, for a run about a story", () => {
+    const story = { ref: "E1-S1", key: "CT-359", epicKey: "CT-288" };
+    expect(resolvePath("epic/{epic}", story)).toBe("epic/CT-288");
+    expect(resolvePath("stories/{epic}", story)).toBe("stories/CT-288");
+    expect(resolvePath("x/{subject}", story)).toBe("x/CT-359");
+  });
+
+  it("will not fall back to the story's key for {epic} when its epic has no ticket", () => {
+    expect(resolvePath("epic/{epic}", { ref: "E1-S1", key: "CT-359", epicKey: null })).toBeNull();
+  });
+
   it("fills {repo} from the subject, which is the repo's key", () => {
     expect(resolvePath("scaffold/{repo}", { ref: "api", key: null })).toBe("scaffold/api");
     expect(resolvePath("scaffold/{repo}", { ref: "ios", key: null })).toBe("scaffold/ios");

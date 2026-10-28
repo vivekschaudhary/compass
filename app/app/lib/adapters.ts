@@ -226,7 +226,7 @@ export function destinationOf(produces: string | null | undefined): Destination 
  */
 export function resolvePath(
   raw: string | null | undefined,
-  subject: { ref?: string | null; key?: string | null } | null,
+  subject: { ref?: string | null; key?: string | null; epicKey?: string | null } | null,
 ): string | null {
   const path = (raw ?? "").trim();
   if (!path) return null;
@@ -235,6 +235,11 @@ export function resolvePath(
   // The tracker's name is preferred: a page called `KAN-12` is findable by someone holding the
   // ticket, and `E1` is meaningful only inside the turn that drafted it.
   const filled = subject?.key || subject?.ref || null;
+  // A run about a STORY still reads its epic's pages (`epic/{epic}`, `stories/{epic}`). `epicKey` is
+  // set only for such a run: undefined means the subject IS the epic, so `{epic}` is the subject;
+  // null means a story whose epic has no ticket, and `{epic}` must NOT fall back to the story's key —
+  // that would read a page named for the wrong ticket and call it the design.
+  const epicFill = subject?.epicKey === undefined ? filled : subject.epicKey;
 
   let bad = false;
   const out = path.replace(/\{([a-z_]+)\}/g, (whole, token) => {
@@ -243,8 +248,9 @@ export function resolvePath(
     // this function will actually fill in. A token recognized by one and not the other is a run
     // that opens correctly and then fails to file anything, or a token nobody can ever reach.
     if (token !== "epic" && token !== "subject" && token !== "repo") { bad = true; return whole; }
-    if (!filled) { bad = true; return whole; }
-    return filled;
+    const fill = token === "epic" ? epicFill : filled;
+    if (!fill) { bad = true; return whole; }
+    return fill;
   });
   if (bad || out.includes("{")) return null;
   return out;

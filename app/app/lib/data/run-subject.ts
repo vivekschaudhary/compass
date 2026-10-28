@@ -20,7 +20,7 @@ import { supabaseAdmin } from "../supabase";
 export async function subjectOfRun(
   runId: string | null,
   taskSubjectRef: string | null = null,
-): Promise<{ ref: string | null; key: string | null } | null> {
+): Promise<{ ref: string | null; key: string | null; epicKey?: string | null } | null> {
   // A task that names its own subject (a materialized per-repo task inside a parent run) is about
   // that subject, whatever the run it sits in is about. The run's subject is the fallback.
   if (taskSubjectRef) return { ref: taskSubjectRef, key: null };
@@ -28,7 +28,34 @@ export async function subjectOfRun(
   const sb = supabaseAdmin();
   if (!sb) return null;
   const { data } = await sb.from("workflow_run")
-    .select("subject_ref, subject_key").eq("id", runId).maybeSingle();
+    .select("subject_ref, subject_key, engagement_id, parent_task_id").eq("id", runId).maybeSingle();
   if (!data?.subject_ref && !data?.subject_key) return null;
-  return { ref: data.subject_ref ?? null, key: data.subject_key ?? null };
+  const subject: { ref: string | null; key: string | null; epicKey?: string | null } =
+    { ref: data.subject_ref ?? null, key: data.subject_key ?? null };
+  // A top-level run about a story: say which epic the story is under, so a path naming `{epic}`
+  // reads that epic's pages. An epic's ref matches no story row, so every other run is untouched.
+  if (data.subject_ref && !data.parent_task_id) {
+    subject.epicKey = await epicKeyOfStory(data.engagement_id as string, data.subject_ref as string);
+  }
+  return subject;
+}
+
+/**
+ * The ticket key of the epic a story belongs to. Undefined when `ref` is not a story at all;
+ * null when it is a story whose epic is not on the board — the caller must tell those apart, since
+ * the second means "this run is about a story and its epic is unknown", not "this is an epic run".
+ */
+async function epicKeyOfStory(engagementId: string, ref: string): Promise<string | null | undefined> {
+  const sb = supabaseAdmin();
+  if (!sb) return undefined;
+  const { data: stories } = await sb.from("backlog_item")
+    .select("parent_ref, created_at").eq("engagement_id", engagementId).eq("kind", "story").eq("ref", ref)
+    .order("created_at", { ascending: false });
+  if (!stories?.length) return undefined;
+  const parent = stories.find((s) => s.parent_ref)?.parent_ref as string | undefined;
+  if (!parent) return null;
+  const { data: epics } = await sb.from("backlog_item")
+    .select("ticket_key").eq("engagement_id", engagementId).eq("kind", "epic").eq("ref", parent)
+    .not("ticket_key", "is", null).order("created_at", { ascending: false });
+  return (epics?.[0]?.ticket_key as string | undefined) ?? null;
 }
