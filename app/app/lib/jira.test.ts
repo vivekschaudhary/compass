@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("./supabase", () => ({ supabaseAdmin: () => null }));
 vi.mock("./crypto", () => ({ decryptSecret: (s?: string) => s ?? "" }));
 
-const { adf, updateIssue, findUser, searchIssues } = await import("./jira");
+const { adf, adfText, updateIssue, findUser, searchIssues } = await import("./jira");
 
 type Node = { type: string; attrs?: { level?: number }; content?: Node[]; text?: string };
 const blocks = (text: string) => adf(text).content as Node[];
@@ -237,5 +237,19 @@ describe("searchIssues", () => {
     expect((await searchIssues(creds, "project = CT", ["assignee"]))?.map((i) => i.key))
       .toEqual(["CT-1", "CT-2"]);
     expect(url(fetchMock, 1)).toContain("nextPageToken=p2");
+  });
+});
+
+describe("adfText", () => {
+  it("reads what adf() wrote back out as text, a block per line and bullets marked", () => {
+    const text = adfText(adf("## Heading\nA sentence.\n- one\n- two"));
+    expect(text).toContain("Heading");
+    expect(text).toContain("A sentence.");
+    expect(text).toContain("- one");
+    expect(text).toContain("- two");
+  });
+  it("is empty for nothing", () => {
+    expect(adfText(null)).toBe("");
+    expect(adfText({ type: "doc", content: [] })).toBe("");
   });
 });

@@ -353,3 +353,30 @@ export async function remoteLinks(c: JiraCreds, key: string): Promise<{ url: str
     return null;
   }
 }
+
+/** Plain text out of an Atlassian Document Format body — text nodes joined, a newline per block. */
+export function adfText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as { type?: string; text?: string; content?: unknown[] };
+  if (n.type === "text") return n.text ?? "";
+  if (n.type === "hardBreak") return "\n";
+  const inner = (n.content ?? []).map(adfText).join(n.type === "doc" || n.type === "bulletList" || n.type === "orderedList" ? "\n" : "");
+  return n.type === "listItem" ? `- ${inner}` : inner;
+}
+
+/**
+ * An issue's summary and description as text, for a reader that wants what the ticket SAYS — the
+ * fallback when Compass has no document for it. Null when the issue cannot be read (missing,
+ * unauthorised, outage): a failed read is not an empty ticket, and collapsing the two would tell the
+ * agent a ticket with a design on it has none.
+ */
+export async function issueText(c: JiraCreds, key: string): Promise<{ summary: string; description: string } | null> {
+  try {
+    const res = await jreq(c, `/issue/${encodeURIComponent(key)}?fields=summary,description`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { fields?: { summary?: string; description?: unknown } };
+    return { summary: body.fields?.summary ?? key, description: adfText(body.fields?.description).trim() };
+  } catch {
+    return null;
+  }
+}
