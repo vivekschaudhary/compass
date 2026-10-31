@@ -240,6 +240,9 @@ export async function runCode(
     "--engagement", engagementId,
     "--compass-dir", COMPASS_DIR,
     "--story", story,
+    // The task whose pins name the versions of the documents to read. The orchestrator reads the
+    // step's `reads` at exactly these versions, so it builds from what the agent was shown.
+    "--task-id", taskId,
     // THE BRANCH NAME'S KEYWORDS COME FROM HERE. `_work_branch_name` builds
     // `<type>/<story>-<slug>` and `_slug` takes the first six meaningful words of the context —
     // so with nothing passed, every branch came out `feat/KAN-42-` with a trailing hyphen and

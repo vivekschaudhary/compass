@@ -135,6 +135,7 @@ describe("running a build", () => {
     const args = proc.spawned[0];
     expect(args).toContain("KAN-42");
     expect(args).not.toContain("E1-S3");
+    expect(args[args.indexOf("--task-id") + 1], "the pins name the versions to read").toBe("t1");
     expect(args).toContain("--non-interactive");
     expect(args[args.indexOf("--engagement") + 1], "the engagement scopes the spec rows").toBe("e1");
     expect(args, "config.yaml is found through --compass-dir, whether or not the project vendors anything").toContain("--compass-dir");

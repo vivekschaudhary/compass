@@ -1,5 +1,6 @@
 import { runCode, storyFor } from "../code-run";
 import { jiraForEngagement, addRemoteLink, addComment } from "../../jira";
+import { missingReads } from "../context/loaders";
 import { recordTurn } from "./turn-context";
 import { finished, handOver, releaseExecutor } from "./effects";
 import type { AgentOutcome, Turn } from "./types";
@@ -30,6 +31,22 @@ export async function handleCode({ actor, taskId, ctx, message, call }: Turn): P
     return { kind: "error", message: refusal };
   }
   const repoName = ctx.repos.find((r) => r.key === repoKey)?.name ?? null;
+
+  // The documents the step declares, before anything is spawned. The orchestrator reads the same
+  // list at the same pinned versions and halts on a missing one — after it has cut a branch. Asking
+  // here says which input is missing while nothing has been created. Every read is required: the
+  // story's design and the design library are what the work is built to.
+  const missing = await missingReads(taskId, ctx.engagementId);
+  if (missing.length) {
+    const refusal =
+      `The build needs ${missing.length === 1 ? "this document" : "these documents"} and ` +
+      `${missing.length === 1 ? "it is" : "they are"} not in Compass: ${missing.map((p) => `\`${p}\``).join(", ")}. ` +
+      `Have ${missing.length === 1 ? "it" : "them"} filed, then start the build again.`;
+    await recordTurn(taskId, `**The build did not start.** ${refusal}`, ctx);
+    await releaseExecutor(taskId, ctx, { failed: true });
+    await finished(ctx.engagementId, taskId, ctx.roleCode, "build-refused", message, { refusal, missing });
+    return { kind: "error", message: refusal };
+  }
 
   const intent =
     (repoName ? `**Repository.** ${repoName} (\`${repoKey}\`)\n\n` : "") +

@@ -165,10 +165,16 @@ class SpecSource:
         """The role row (`agent`, `hosts`, `capabilities`, ...). Raises `SpecMissing`."""
         raise NotImplementedError
 
-    def document(self, path: str) -> dict:
-        """An engagement document at its CURRENT version: `{path, version, status, sections, text}`.
-        `sections` is `[{heading, body}]` in order. Raises `SpecMissing` — no document at that path, no
-        current version, or no engagement to scope it (documents belong to one)."""
+    def document(self, path: str, version: Optional[str] = None) -> dict:
+        """An engagement document: `{path, version, status, sections, text}`. `sections` is
+        `[{heading, body}]` in order. `version` omitted is the CURRENT version; given, exactly that one —
+        what a task pinned when it started. Raises `SpecMissing` — no document at that path, no such
+        version, or no engagement to scope it (documents belong to one)."""
+        raise NotImplementedError
+
+    def pinned_inputs(self, task_id: str) -> dict:
+        """What the app pinned for a task: `{document_path: version or None}`. `None` is a pin recorded
+        while nothing was there. A task with no pins is `{}`."""
         raise NotImplementedError
 
     def work_item(self, ident: str) -> dict:
@@ -187,7 +193,7 @@ class SpecSource:
     def workflow_steps(self, code: str) -> list:
         """The PUBLISHED version's steps, in `ord` order. Raises `SpecMissing`.
 
-        Each step is `{ord, kind, role_code, agent, task, title, nests, depends_on}`; `agent` is the
+        Each step is `{ord, kind, role_code, agent, task, title, nests, depends_on, reads}`; `agent` is the
         role's agent file stem (`role.agent`), resolved here so no caller has to know the mapping.
         This is the dispatch graph — the `workflows/*.md` copy is not read.
         """
@@ -198,9 +204,11 @@ class InMemorySpecSource(SpecSource):
     """Rows held in lists, resolved by the same pure functions. For tests, and for the vectors."""
 
     def __init__(self, specs=None, templates=None, roles=None, engagement_id=None, org_id=None, workflows=None,
-                 documents=None, backlog=None):
+                 documents=None, backlog=None, pins=None):
         self.specs, self.templates, self.roles = specs or [], templates or [], roles or []
-        self.documents = documents or {}    # path -> {version, status, sections: [{heading, body}]}
+        # path -> {version, status, sections: [{heading, body}], history?: {version: {status, sections}}}
+        self.documents = documents or {}
+        self.pins = pins or {}              # task_id -> {path: version or None}
         self.backlog = backlog or []        # backlog_item rows
         self.workflows = workflows or []   # {code, engagement_id, steps: [normalised step, as workflow_steps returns]}
         self.engagement_id, self.org_id = engagement_id, org_id
@@ -227,14 +235,22 @@ class InMemorySpecSource(SpecSource):
             raise SpecMissing(f"no role row for {code!r}")
         return hit
 
-    def document(self, path):
+    def document(self, path, version=None):
         _check_path(path)
         if not self.engagement_id:
             raise SpecMissing(f"document {path}: documents belong to an engagement; pass --engagement")
         doc = self.documents.get(path)
         if doc is None:
             raise SpecMissing(f"no document at {path} for this engagement")
+        if version is not None and str(version) != str(doc["version"]):
+            old = (doc.get("history") or {}).get(str(version))
+            if old is None:
+                raise SpecMissing(f"document {path} has no version {version}")
+            return _shape_document(path, version, old["status"], old["sections"])
         return _shape_document(path, doc["version"], doc["status"], doc["sections"])
+
+    def pinned_inputs(self, task_id):
+        return dict(self.pins.get(task_id, {}))
 
     def work_item(self, ident):
         hit = pick_work_item(self.backlog, ident)
@@ -334,21 +350,33 @@ class DbSpecSource(SpecSource):
             raise SpecMissing(f"{what}: this belongs to an engagement; pass --engagement")
         return self.engagement_id
 
-    def document(self, path):
+    def document(self, path, version=None):
         _check_path(path)
         eng = self._engagement(f"document {path}")
         docs = self._get("document", select="id,current_version_id", engagement_id=f"eq.{eng}", path=f"eq.{path}")
         if not docs:
             raise SpecMissing(f"no document at {path} for engagement {eng}")
-        version_id = docs[0].get("current_version_id")
-        if not version_id:
-            raise SpecMissing(f"document {path} has no current version")
-        vers = self._get("document_version", select="version,status", id=f"eq.{version_id}")
-        if not vers:
-            raise SpecMissing(f"document {path}: its current version row is missing")
+        if version is not None:
+            # The version the task pinned, not whatever is current now.
+            vers = self._get("document_version", select="id,version,status",
+                             document_id=f"eq.{docs[0]['id']}", version=f"eq.{version}")
+            if not vers:
+                raise SpecMissing(f"document {path} has no version {version}")
+            version_id = vers[0]["id"]
+        else:
+            version_id = docs[0].get("current_version_id")
+            if not version_id:
+                raise SpecMissing(f"document {path} has no current version")
+            vers = self._get("document_version", select="version,status", id=f"eq.{version_id}")
+            if not vers:
+                raise SpecMissing(f"document {path}: its current version row is missing")
         secs = self._get("document_section", select="ord,heading,body",
                          document_version_id=f"eq.{version_id}", order="ord.asc")
         return _shape_document(path, vers[0]["version"], vers[0]["status"], secs)
+
+    def pinned_inputs(self, task_id):
+        rows = self._get("task_input", select="document_path,document_version", task_id=f"eq.{task_id}")
+        return {r["document_path"]: r.get("document_version") for r in rows}
 
     def work_item(self, ident):
         eng = self._engagement(f"work item {ident}")
@@ -401,7 +429,7 @@ def _steps_from_db(src, code):
     if not vers:
         raise SpecMissing(f"workflow {code!r} has no published version")
     rows = src._get("workflow_step",
-                    select="ord,kind,role_code,task,title,nests_workflow_code,depends_on",
+                    select="ord,kind,role_code,task,title,nests_workflow_code,depends_on,reads",
                     workflow_version_id=f"eq.{vers[0]['id']}", order="ord.asc")
     if not rows:
         raise SpecMissing(f"workflow {code!r} version {vers[0]['version']} has no steps")
@@ -420,7 +448,8 @@ def _steps_from_db(src, code):
             agent = agents[r["role_code"]]
         out.append({"ord": r["ord"], "kind": r["kind"], "role_code": r.get("role_code"), "agent": agent,
                     "task": r.get("task"), "title": r.get("title"),
-                    "nests": r.get("nests_workflow_code"), "depends_on": r.get("depends_on") or []})
+                    "nests": r.get("nests_workflow_code"), "depends_on": r.get("depends_on") or [],
+                    "reads": r.get("reads") or []})
     return out
 
 

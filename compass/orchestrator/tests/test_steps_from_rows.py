@@ -42,6 +42,12 @@ class TestStepsFromRows(unittest.TestCase):
         self.assertIsNone(s.agent)
         self.assertIsNone(s.task)
 
+    def test_a_rows_reads_travel_with_its_step(self):
+        r = row(1, agent="engineer", task="implement-story")
+        r["reads"] = ["stories/{epic}", "epic/{epic}"]
+        self.assertEqual(graph.steps_from_rows([r])[0].reads, ["stories/{epic}", "epic/{epic}"])
+        self.assertEqual(graph.steps_from_rows([row(2, agent="a", task="t")])[0].reads, [])
+
     def test_missing_title_falls_back_to_the_task(self):
         s = graph.steps_from_rows([row(1, agent="a", task="do-it", title=None)])[0]
         self.assertEqual(s.title, "do-it")

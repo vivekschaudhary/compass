@@ -136,7 +136,7 @@ class TestDbSource(unittest.TestCase):
 
 BUILD_STEPS = [
     {"ord": 1, "kind": "agent", "role_code": "engineer", "task": "implement-story", "title": "Implement the story",
-     "nests_workflow_code": None, "depends_on": []},
+     "nests_workflow_code": None, "depends_on": [], "reads": ["stories/{epic}", "epic/{epic}"]},
     {"ord": 2, "kind": "agent", "role_code": "automation", "task": "write-e2e-tests", "title": "Tests",
      "nests_workflow_code": None, "depends_on": ["implement-story"]},
     {"ord": 3, "kind": "hitl", "role_code": "principal-engineer", "task": "approve-build", "title": "Accept",
@@ -167,6 +167,13 @@ class TestWorkflowSteps(unittest.TestCase):
         self.assertIn("status=eq.published", urls[2])
         self.assertIn("order=ord.asc", urls[3])
         self.assertIn("enabled=eq.true", urls[1])
+
+    def test_a_step_carries_its_declared_reads(self):
+        t = build_transport()
+        steps = db(t).workflow_steps("build")
+        self.assertEqual(steps[0]["reads"], ["stories/{epic}", "epic/{epic}"])
+        self.assertEqual(steps[1]["reads"], [], "a row with none declares none")
+        self.assertIn("reads", t.calls[3][1], "the step query must ask for the column")
 
     def test_no_published_version_is_missing(self):
         with self.assertRaises(S.SpecMissing) as cm:
@@ -231,6 +238,44 @@ class TestDocumentsAndWorkItems(unittest.TestCase):
         self.assertIn("id=eq.v9", urls[1])
         self.assertIn("document_version_id=eq.v9", urls[2])
         self.assertIn("order=ord.asc", urls[2])
+
+    def test_a_pinned_version_is_fetched_by_number_not_by_current(self):
+        t = Recorder((200, [{"id": "d1", "current_version_id": "v9"}]),
+                     (200, [{"id": "v2", "version": "1.0", "status": "published"}]),
+                     (200, [{"ord": 0, "heading": "Design", "body": "old text"}]))
+        d = db(t).document("epic/CT-288", "1.0")
+        self.assertEqual(d["version"], "1.0")
+        self.assertIn("old text", d["text"])
+        urls = [c[1] for c in t.calls]
+        self.assertIn("document_id=eq.d1", urls[1])
+        self.assertIn("version=eq.1.0", urls[1])
+        self.assertIn("document_version_id=eq.v2", urls[2], "sections of the pinned row, not the current one")
+        self.assertNotIn("v9", " ".join(urls))
+
+    def test_a_pinned_version_that_does_not_exist_halts_naming_it(self):
+        t = Recorder((200, [{"id": "d1", "current_version_id": "v9"}]), (200, []))
+        with self.assertRaises(S.SpecMissing) as cm:
+            db(t).document("epic/CT-288", "9.9")
+        self.assertIn("9.9", str(cm.exception))
+
+    def test_pinned_inputs_for_a_task(self):
+        t = Recorder((200, [{"document_path": "epic/CT-288", "document_version": "1.0"},
+                            {"document_path": "scaffold-record", "document_version": None}]))
+        self.assertEqual(db(t).pinned_inputs("t1"),
+                         {"epic/CT-288": "1.0", "scaffold-record": None})
+        self.assertIn("task_id=eq.t1", t.calls[0][1])
+        self.assertEqual(db(Recorder((200, []))).pinned_inputs("t2"), {})
+
+    def test_in_memory_pinned_versions_and_pins(self):
+        src = S.InMemorySpecSource(engagement_id="e1", pins={"t1": {"d": "1"}}, documents={
+            "d": {"version": "2", "status": "published", "sections": [{"heading": "h", "body": "new"}],
+                  "history": {"1": {"status": "published", "sections": [{"heading": "h", "body": "old"}]}}}})
+        self.assertIn("old", src.document("d", "1")["text"])
+        self.assertIn("new", src.document("d")["text"])
+        with self.assertRaises(S.SpecMissing):
+            src.document("d", "7")
+        self.assertEqual(src.pinned_inputs("t1"), {"d": "1"})
+        self.assertEqual(src.pinned_inputs("nope"), {})
 
     def test_a_missing_document_or_version_halts(self):
         with self.assertRaises(S.SpecMissing) as cm:
