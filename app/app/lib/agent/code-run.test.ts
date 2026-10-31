@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "fs";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Handing a build to the orchestrator, and what counts as having built something.
@@ -14,7 +15,7 @@ const state: { tasks: Row[]; runs: Row[]; repos: Row[]; steps: Row[]; workflows:
   { tasks: [], runs: [], repos: [], steps: [], workflows: [] };
 
 /** What the fake orchestrator prints, and what it exits with. */
-const proc = { stdout: "", exit: 0 as number | null, spawned: [] as string[][] };
+const proc = { stdout: "", exit: 0 as number | null, spawned: [] as string[][], inputs: [] as unknown[] };
 
 vi.mock("../supabase", () => ({
   supabaseAdmin: () => ({
@@ -39,11 +40,14 @@ vi.mock("../supabase", () => ({
 }));
 
 // Every path the module probes exists, so `existsSync` is not what any of these tests are about.
-vi.mock("fs", () => ({ existsSync: () => true }));
+vi.mock("fs", async (orig) => ({ ...(await orig<typeof import("fs")>()), existsSync: () => true }));
 
 vi.mock("child_process", () => ({
   spawn: (_cmd: string, args: string[]) => {
     proc.spawned.push(args);
+    // The inputs file is removed once the build is over, so what it held is captured at spawn.
+    const f = args.indexOf("--inputs-file");
+    if (f >= 0) proc.inputs.push(JSON.parse(readFileSync(args[f + 1], "utf8")));
     const handlers: Record<string, ((x: unknown) => void)[]> = {};
     const child = {
       stdout: { on: (_e: string, cb: (b: Buffer) => void) => cb(Buffer.from(proc.stdout)) },
@@ -82,7 +86,7 @@ function seed(opts: {
     : opts.localPath === null ? [] : [{ engagement_id: "e1", key: "web", name: "acme-web", local_path: opts.localPath ?? "/tmp/acme", ord: 0 }];
 }
 
-beforeEach(() => { proc.stdout = ""; proc.exit = 0; proc.spawned = []; });
+beforeEach(() => { proc.stdout = ""; proc.exit = 0; proc.spawned = []; proc.inputs = []; });
 
 describe("running a build", () => {
   it("reports a pull request as the outcome, not the exit code", async () => {
@@ -337,5 +341,32 @@ describe("choosing the repo", () => {
     seed({ repos: [TWO[0], { ...TWO[1], local_path: "" }] });
     await runCode("e1", "t1");
     expect(projectDirOf(proc.spawned[0])).toBe("/tmp/kindtree-swap");
+  });
+});
+
+describe("inputs Compass has no document for", () => {
+  const ext = [{ path: "design-library", title: "Design", version: "confluence", body: "tokens" }];
+
+  it("hands them to the build as a file, with where each came from", async () => {
+    seed();
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1", { external: ext });
+    expect(proc.spawned[0]).toContain("--inputs-file");
+    expect(proc.inputs[0]).toEqual({ "design-library": { title: "Design", source: "confluence", text: "tokens" } });
+  });
+
+  it("removes the file once the build is over", async () => {
+    seed();
+    proc.stdout = "https://github.com/a/b/pull/1";
+    await runCode("e1", "t1", { external: ext });
+    const path = proc.spawned[0][proc.spawned[0].indexOf("--inputs-file") + 1];
+    expect(() => statSync(path), "the file and its private directory are gone").toThrow();
+  });
+
+  it("passes no file when there is nothing to hand over", async () => {
+    seed();
+    await runCode("e1", "t1", { external: [] });
+    await runCode("e1", "t1", { external: [{ path: "x", title: null, version: "jira CT-1", body: null }] });
+    expect(proc.spawned.flat()).not.toContain("--inputs-file");
   });
 });
