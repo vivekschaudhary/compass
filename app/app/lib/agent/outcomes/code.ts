@@ -1,6 +1,6 @@
 import { runCode, storyFor } from "../code-run";
 import { jiraForEngagement, addRemoteLink, addComment } from "../../jira";
-import { missingReads } from "../context/loaders";
+import { buildReads } from "../context/loaders";
 import { recordTurn } from "./turn-context";
 import { finished, handOver, releaseExecutor } from "./effects";
 import type { AgentOutcome, Turn } from "./types";
@@ -35,8 +35,9 @@ export async function handleCode({ actor, taskId, ctx, message, call }: Turn): P
   // The documents the step declares, before anything is spawned. The orchestrator reads the same
   // list at the same pinned versions and halts on a missing one — after it has cut a branch. Asking
   // here says which input is missing while nothing has been created. Every read is required: the
-  // story's design and the design library are what the work is built to.
-  const missing = await missingReads(taskId, ctx.engagementId);
+  // story's design and the design library are what the work is built to. Ones Compass lacks but the
+  // client's Confluence or Jira has come back as `external` and are handed to the build as text.
+  const { missing, external } = await buildReads(taskId, ctx.engagementId);
   if (missing.length) {
     const refusal =
       `The build needs ${missing.length === 1 ? "this document" : "these documents"} and ` +
@@ -58,7 +59,7 @@ export async function handleCode({ actor, taskId, ctx, message, call }: Turn): P
   // recorded on success, a run that died would leave no trace of what it was trying to do.
   await recordTurn(taskId, intent, ctx);
 
-  const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "", repo: repoKey });
+  const built = await runCode(actor.engagementId, taskId, { context: input.summary ?? "", repo: repoKey, external });
 
   if (built.refusal) {
     // Recorded BEFORE releasing, same order as every other exit — the turn is why the row failed,

@@ -584,6 +584,65 @@ class TestStoryScopingFromDb(unittest.TestCase):
         with self.assertRaises(SpecMissing):
             self.ctx(reads=["stories/{epic}", "x/{nope}"])
 
+    def test_a_read_compass_lacks_is_filled_from_the_text_the_app_supplied(self):
+        del self.specs.documents["design-library"]
+        ctx = self.ctx(pins={"design-library": None},
+                       supplied={"design-library": {"title": "Design", "source": "confluence",
+                                                    "text": "FIGMA TOKENS FROM CONFLUENCE"}})
+        self.assertIn("FIGMA TOKENS FROM CONFLUENCE", ctx)
+        self.assertIn("`design-library` from confluence (not a Compass version)", ctx)
+
+    def test_a_ticket_can_stand_in_for_the_story_document(self):
+        del self.specs.documents["stories/CT-288"]
+        ctx = self.ctx(pins={"stories/CT-288": None},
+                       supplied={"stories/CT-288": {"title": "Sign in with Apple", "source": "jira CT-349",
+                                                    "text": "## Sign in with Apple\nNative sign-in."}})
+        self.assertIn("Native sign-in.", ctx)
+        self.assertIn("from jira CT-349", ctx)
+        self.assertIn("Implement ONLY story ACC-E1-S1", ctx)
+
+    def test_the_database_wins_when_the_document_has_arrived_since(self):
+        ctx = self.ctx(pins={"design-library": None},
+                       supplied={"design-library": {"title": "x", "source": "confluence", "text": "STALE ELSEWHERE"}})
+        self.assertIn("DESIGN LIB BODY", ctx)
+        self.assertNotIn("STALE ELSEWHERE", ctx)
+
+    def test_supplied_text_never_stands_in_for_a_pinned_version(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        with self.assertRaises(SpecMissing):
+            self.ctx(pins={"epic/CT-288": "9.9"},
+                     supplied={"epic/CT-288": {"title": "x", "source": "jira CT-288", "text": "other text"}})
+
+    def test_empty_supplied_text_is_still_missing(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        del self.specs.documents["design-library"]
+        with self.assertRaises(SpecMissing) as cm:
+            self.ctx(supplied={"design-library": {"title": "x", "source": "confluence", "text": "  "}})
+        self.assertIn("design-library", str(cm.exception))
+
+    def test_a_read_nobody_supplied_still_halts(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        del self.specs.documents["design-library"]
+        with self.assertRaises(SpecMissing):
+            self.ctx(supplied={"scaffold-record": {"title": "x", "source": "confluence", "text": "y"}})
+
+    def test_inputs_file_is_read_and_a_bad_one_halts(self):
+        import json, tempfile
+        from compass.orchestrator.run import _read_inputs_file
+        self.assertEqual(_read_inputs_file(None), {})
+        with tempfile.TemporaryDirectory() as d:
+            good = Path(d) / "i.json"
+            good.write_text(json.dumps({"a": {"text": "t"}}))
+            self.assertEqual(_read_inputs_file(str(good)), {"a": {"text": "t"}})
+            bad = Path(d) / "b.json"
+            bad.write_text("not json")
+            arr = Path(d) / "a.json"
+            arr.write_text("[]")
+            for p in (bad, arr, Path(d) / "missing.json"):
+                with self.assertRaises(SystemExit) as cm:
+                    _read_inputs_file(str(p))
+                self.assertEqual(cm.exception.code, 3)
+
     def test_a_story_with_no_section_in_its_document_halts(self):
         from compass.orchestrator.spec_source import SpecMissing
         self.specs.documents["stories/CT-288"]["sections"] = []

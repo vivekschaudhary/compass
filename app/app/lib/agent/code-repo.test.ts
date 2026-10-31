@@ -22,10 +22,10 @@ vi.mock("./outcomes/effects", () => ({
   handOver: (...a: unknown[]) => handOver(...(a as [])),
 }));
 
-const missingReads = vi.fn(async (): Promise<string[]> => []);
+const buildReads = vi.fn(async (): Promise<{ missing: string[]; external: unknown[] }> => ({ missing: [], external: [] }));
 vi.mock("./context/loaders", async (orig) => ({
   ...(await orig<typeof import("./context/loaders")>()),
-  missingReads: (...a: unknown[]) => missingReads(...(a as [])),
+  buildReads: (...a: unknown[]) => buildReads(...(a as [])),
 }));
 
 const { handleCode } = await import("./outcomes/code");
@@ -45,8 +45,8 @@ const turn = (repos: AgentContext["repos"], input: Record<string, unknown>) => (
 }) as never;
 
 beforeEach(() => {
-  for (const m of [runCode, recordTurn, releaseExecutor, finished, handOver, missingReads]) m.mockClear();
-  missingReads.mockResolvedValue([]);
+  for (const m of [runCode, recordTurn, releaseExecutor, finished, handOver, buildReads]) m.mockClear();
+  buildReads.mockResolvedValue({ missing: [], external: [] });
   runCode.mockResolvedValue({ ok: false, exit: null, branch: null, prUrl: null, log: "", refusal: "stop here", repoName: null });
 });
 
@@ -89,7 +89,7 @@ describe("the repo the model names", () => {
 
 describe("the documents the step reads", () => {
   it("REFUSES before spawning when a declared read is not in Compass, naming it", async () => {
-    missingReads.mockResolvedValue(["design-library", "scaffold-record"]);
+    buildReads.mockResolvedValue({ missing: ["design-library", "scaffold-record"], external: [] });
     const r = await handleCode(turn([TWO[0]], {}));
     expect(r.kind).toBe("error");
     expect(r.kind === "error" && r.message).toContain("`design-library`");
@@ -103,12 +103,19 @@ describe("the documents the step reads", () => {
 
   it("asks about this task's reads, and builds when none is missing", async () => {
     await handleCode(turn([TWO[0]], {}));
-    expect(missingReads).toHaveBeenCalledWith("t1", "e1");
+    expect(buildReads).toHaveBeenCalledWith("t1", "e1");
     expect(runCode).toHaveBeenCalled();
   });
 
+  it("hands the text found elsewhere to the build", async () => {
+    const external = [{ path: "design-library", title: "Design", version: "confluence", body: "tokens" }];
+    buildReads.mockResolvedValue({ missing: [], external });
+    await handleCode(turn([TWO[0]], {}));
+    expect(runCode).toHaveBeenCalledWith("e1", "t1", expect.objectContaining({ external }));
+  });
+
   it("does not record the build's intent for a build that never started", async () => {
-    missingReads.mockResolvedValue(["epic/CT-288"]);
+    buildReads.mockResolvedValue({ missing: ["epic/CT-288"], external: [] });
     await handleCode(turn([TWO[0]], {}));
     const said = (recordTurn.mock.calls as unknown[][]).map((c) => String(c[1]));
     expect(said.some((t) => t.includes("**Building.**"))).toBe(false);
