@@ -56,7 +56,9 @@ from .jira import (
     _splice_md_section,
     _work_item_jira_key,
 )
-from .spec_source import SpecMissing, SpecUnavailable, from_env as specs_from_env, prompt_file, section_for
+from .spec_source import (
+    SpecMissing, SpecUnavailable, _shape_document, from_env as specs_from_env, prompt_file, section_for,
+)
 from .outcome import _classify_outcome, _is_refusal, _review_recommendation
 from .pr import (
     _CODE_WORKFLOWS,
@@ -1063,11 +1065,59 @@ def _step_reads(steps, only_step=None, from_step=None) -> list:
     return out
 
 
+def _version_label(doc: dict) -> str:
+    """`v1.0 (published)` for a Compass version; `from jira CT-288 (not a Compass version)` for text found elsewhere."""
+    if doc.get("external"):
+        return f"from {doc['version']} ({doc['status']})"
+    return f"v{doc['version']} ({doc['status']})"
+
+
 def _doc_block(title: str, doc: dict) -> str:
-    return f"### {title} — `{doc['path']}` v{doc['version']} ({doc['status']})\n\n{doc['text']}\n"
+    return f"### {title} — `{doc['path']}` {_version_label(doc)}\n\n{doc['text']}\n"
 
 
-def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=(), pins=None) -> str:
+def _read_inputs_file(path) -> dict:
+    """The app's supplied text for reads Compass has no document for. Absent flag = none. A file that
+    cannot be read or parsed halts: carrying on would quietly turn supplied inputs into missing ones."""
+    if not path:
+        return {}
+    import json
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"\nRefuse: cannot read --inputs-file {path}: {exc}", file=sys.stderr)
+        sys.exit(3)
+    if not isinstance(data, dict):
+        print(f"\nRefuse: --inputs-file {path} must hold a JSON object keyed by document path.", file=sys.stderr)
+        sys.exit(3)
+    return data
+
+
+def _read_or_supplied(specs, path: str, version, supplied: dict) -> dict:
+    """A document at its pinned version; failing that, the text the app found elsewhere.
+
+    A pinned version is never traded for outside text: it names a Compass version that should exist,
+    and its absence is a fault. Only a read with no pin — Compass had nothing when the task started —
+    falls back, and only after the database has been asked again (the document may have arrived since).
+    The result says where it came from, so text from a ticket is not mistaken for a Compass version.
+    """
+    try:
+        return specs.document(path, version)
+    except SpecMissing:
+        if version is not None or path not in supplied:
+            raise
+    got = supplied[path]
+    text = (got.get("text") or "").strip()
+    if not text:
+        raise SpecMissing(f"no document at {path}, and the text supplied for it is empty")
+    sections = [{"heading": got.get("title") or path, "body": text}]
+    doc = _shape_document(path, got.get("source") or "external", "not a Compass version", sections)
+    doc["external"] = True
+    return doc
+
+
+def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=(), pins=None,
+                        supplied=None) -> str:
     """#172, from the database: focused context for ONE story's build.
 
     WHAT is read is the step rows' `reads` — the list the app pins for the task and tells the agent it was
@@ -1079,11 +1129,17 @@ def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=()
     `repo_name` is the repository the build runs in (the checkout directory's name). It is said to the
     engineer, along with which document wins where the scaffold record and the architecture differ.
 
+    `supplied` is text the app found for a read Compass has no document for — the provider page or the
+    ticket the client keeps it in (`--inputs-file`): `{path: {title, source, text}}`. It is used only
+    when there is no document to read, and it says where it came from. The lookup that finds it needs
+    the engagement's credentials, which this process does not hold; the app does it once.
+
     EVERY read is required. One that is missing raises `SpecMissing` naming it, and the caller halts: a
     build that quietly runs without its design, or without the design library, is the failure the gates
     exist to prevent. Reads no file from the client repo.
     """
     pins = pins or {}
+    supplied = supplied or {}
     if not reads:
         raise SpecMissing("the step declares no reads, so nothing says what to implement against")
     story = specs.work_item(story_ident)
@@ -1102,11 +1158,15 @@ def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=()
         path = _resolve_read(raw, story, epic)
         # A pin with no version says nothing was there when the task started; the app then reads the
         # current version once something exists, and so does this.
-        docs.append(specs.document(path, pins.get(path) or None))
+        docs.append(_read_or_supplied(specs, path, pins.get(path) or None, supplied))
     story_doc = next((d for d in docs if d["path"] == stories_path), None)
     if story_doc is None:
         raise SpecMissing(f"the step does not read `{stories_path}`, so the story's text is not in its inputs")
     section = section_for(story_doc, story["ref"])
+    if section is None and story_doc.get("external"):
+        # The ticket IS the story: its text carries no `<ref> — <title>` heading to find.
+        section = {"heading": f"{story['ref']} — {story.get('title', '')}".rstrip(" —"),
+                   "body": story_doc["sections"][0]["body"] if story_doc["sections"] else story_doc["text"]}
     if section is None:
         raise SpecMissing(f"`{story_doc['path']}` has no section for {story['ref']}")
 
@@ -1118,8 +1178,8 @@ def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=()
                 f"architecture documents disagree about what this repository is — its framework, its "
                 f"layout, its commands — the scaffold record describes what was actually created; build "
                 f"to that, and say where the design assumed otherwise.\n"] if repo_name else []),
-             f"### story {story['ref']} — `{story_doc['path']}` v{story_doc['version']} "
-             f"({story_doc['status']})\n\n## {section['heading']}\n\n{section['body']}\n"]
+             f"### story {story['ref']} — `{story_doc['path']}` {_version_label(story_doc)}"
+             f"\n\n## {section['heading']}\n\n{section['body']}\n"]
     for doc in docs:
         if doc is not story_doc:
             parts.append(_doc_block(_read_label(doc["path"]), doc))
@@ -1500,6 +1560,7 @@ def _run_workflow(
     only_step: int = None,
     from_step: int = None,
     task_id: str = None,
+    inputs_file: str = None,
     initial_prior_outputs: list = None,
     dry_run: bool = False,
     skip_missing: bool = False,
@@ -1766,7 +1827,8 @@ def _run_workflow(
             story_context = _load_story_context(
                 specs, story_id, repo_name=Path(project_dir).name,
                 reads=_step_reads(steps, only_step, from_step),
-                pins=specs.pinned_inputs(task_id) if task_id else {})
+                pins=specs.pinned_inputs(task_id) if task_id else {},
+                supplied=_read_inputs_file(inputs_file))
         except SpecMissing as exc:
             print(f"\nRefuse: cannot build {story_id} — {exc}.", file=sys.stderr)
             sys.exit(3)
@@ -2662,6 +2724,10 @@ def main(argv=None):
         "--task-id", default=None, metavar="ID", dest="task_id",
         help="the app's task for this step; its pinned inputs name the document versions to read",
     )
+    parser.add_argument(
+        "--inputs-file", default=None, metavar="PATH", dest="inputs_file",
+        help="JSON {path: {title, source, text}} — text the app found for reads Compass has no document for",
+    )
     parser.add_argument("--context", default="", metavar="TEXT")
     parser.add_argument(
         "--bet",
@@ -3259,6 +3325,7 @@ def main(argv=None):
             only_step=args.step,
             from_step=args.from_step,
             task_id=args.task_id,
+            inputs_file=args.inputs_file,
             dry_run=args.dry_run,
             skip_missing=args.skip_missing,
             allow_write=args.allow_write,

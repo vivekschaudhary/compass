@@ -19,12 +19,32 @@
 
 import "server-only";
 import { spawn } from "child_process";
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { dirname, join, resolve } from "path";
 import { supabaseAdmin } from "../supabase";
+import type { PinnedInput } from "./context/types";
 
 const REPO = process.env.COMPASS_REPO || resolve(process.cwd(), "..");
 const COMPASS_DIR = process.env.COMPASS_DIR || `${REPO}/compass`;
+
+/**
+ * The text of inputs Compass has no document for, as the file the orchestrator reads
+ * (`--inputs-file`): `{ "<path>": { title, source, text } }`. `source` says where it came from
+ * (`confluence`, `jira CT-288`) because a ticket's text is not a Compass version and must not be
+ * cited as one. Null when there is nothing to hand over. A private directory, removed by the caller.
+ */
+export function writeExternalInputs(external: PinnedInput[]): string | null {
+  const usable = external.filter((e) => e.body);
+  if (!usable.length) return null;
+  const dir = mkdtempSync(join(tmpdir(), "compass-inputs-"));
+  const file = join(dir, "inputs.json");
+  const payload = Object.fromEntries(
+    usable.map((e) => [e.path, { title: e.title, source: e.version, text: e.body }]),
+  );
+  writeFileSync(file, JSON.stringify(payload), { mode: 0o600 });
+  return file;
+}
 
 export type CodeRun = {
   ok: boolean;
@@ -169,7 +189,11 @@ const BRANCH_RE = /(?:work branch|branch)\s+[`'"]?([\w./-]+)[`'"]?/i;
 export async function runCode(
   engagementId: string,
   taskId: string,
-  opts: { timeoutMs?: number; context?: string; repo?: string | null } = {},
+  opts: {
+    timeoutMs?: number; context?: string; repo?: string | null;
+    /** Inputs only the client's own tools could answer, by path — handed to the build as text. */
+    external?: PinnedInput[];
+  } = {},
 ): Promise<CodeRun> {
   const empty = { ok: false, exit: null, branch: null, prUrl: null, log: "", repoName: null };
 
@@ -229,6 +253,7 @@ export async function runCode(
   // nothing enforces it: reorder either side and this sends the wrong step, silently. It is a
   // coupling to a file that is going away with v1, recorded here rather than discovered later.
   const orchestratorRunId = `v2-${runId}`;
+  const inputsFile = writeExternalInputs(opts.external ?? []);
   const args = [
     // The RUN's workflow, never a literal. This said `build`, which meant a `fix` step would have
     // walked build's graph — same step numbers, different tasks, and the mismatch is silent
@@ -243,6 +268,9 @@ export async function runCode(
     // The task whose pins name the versions of the documents to read. The orchestrator reads the
     // step's `reads` at exactly these versions, so it builds from what the agent was shown.
     "--task-id", taskId,
+    // Text for the pins Compass had no document for. Written to a file because it is a document,
+    // not an argument; removed once the build is over.
+    ...(inputsFile ? ["--inputs-file", inputsFile] : []),
     // THE BRANCH NAME'S KEYWORDS COME FROM HERE. `_work_branch_name` builds
     // `<type>/<story>-<slug>` and `_slug` takes the first six meaningful words of the context —
     // so with nothing passed, every branch came out `feat/KAN-42-` with a trailing hyphen and
@@ -281,6 +309,8 @@ export async function runCode(
     });
     child.on("close", (c) => { clearTimeout(timer); done(c); });
   });
+
+  if (inputsFile) rmSync(dirname(inputsFile), { recursive: true, force: true });
 
   const prUrl = log.match(PR_RE)?.[0] ?? null;
   const branch = log.match(BRANCH_RE)?.[1] ?? null;
