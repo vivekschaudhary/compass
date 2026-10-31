@@ -61,7 +61,7 @@ What remains of v1 is the Python orchestrator, and the app still uses it for exa
 | runs | every step, calling a model host itself | only steps whose `output` is `code`, spawned by `lib/agent/code-run.ts` |
 | step source | `workflow_step` rows imported from `compass/seed/*.csv` | the same published rows, by `ord` (what `code-run.ts` passes as `--step`), through `spec_source.workflow_steps` — never `compass/archive/workflows/*.md` |
 | host routing | `lib/agent/hosts/select.ts` — `COMPASS_CLAUDE_HOST` picks the API or the `claude` CLI; one model, not chosen per role | `router.py` → `preferred_hosts`, read from the agent's `spec_file` row |
-| database | yes | reads framework content — `spec_file`, `document_template`, `role`, `workflow_step` — through `compass/orchestrator/spec_source.py`. A story build also reads its story and its epic's documents (`document`, `backlog_item`) the same way — nothing from a `docs/` folder in the client repo. `config.yaml` is the one framework file still read from disk. A missing row halts; there is no disk fallback |
+| database | yes | reads framework content — `spec_file`, `document_template`, `role`, `workflow_step` — through `compass/orchestrator/spec_source.py`. A story build also reads the documents its step's `reads` name (`document`, `backlog_item`) the same way — the list the app pins for the task, at the versions pinned (`--task-id`), every one required — nothing from a `docs/` folder in the client repo. `config.yaml` is the one framework file still read from disk. A missing row halts; there is no disk fallback |
 
 Two v1 remnants are still live, and look deletable when they are not:
 - **`lib/authz.ts` + `user_role` / `app_user`** — kept on purpose as the groundwork for real identity.

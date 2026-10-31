@@ -17,6 +17,8 @@ class WorkflowStep:
     routes: Optional[list] = None          # [(label, target)] — routing gate (#96/#103);
                                            # target is int (inline step), "/<workflow>"
                                            # (cross-workflow hand-off), or "close" (terminal)
+    reads: Optional[list] = None           # the row's declared inputs, paths with `{epic}`/`{subject}` tokens —
+                                           # the same list the app pins for the task and shows the agent
     nests: Optional[str] = None            # the workflow this row nests — the row is done when
                                            # that run closes. A phase mixes agent tasks and nested
                                            # workflows freely; only the row knows which it is.
@@ -44,6 +46,7 @@ def steps_from_rows(rows: list) -> list:
             task=None if hitl or r.get("nests") else r.get("task"),
             agent_file=f"{agent}.md" if agent else None,
             nests=r.get("nests"),
+            reads=list(r.get("reads") or []),
         ))
     return steps
 

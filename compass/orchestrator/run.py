@@ -1003,42 +1003,88 @@ def _overlapping_inflight_builds(project_dir: Path, epic_id: str, story_id: str,
     return overlaps
 
 
-#: What a story build is handed besides the story itself, in this order. The tech design is what the
-#: engineer implements against; the two architecture documents are the decisions it must not contradict.
-_STORY_CONTEXT_REQUIRED = (
-    ("epic/{epic}", "the epic's technical design"),
+#: How a document a build reads is introduced to the engineer. Presentation only: WHICH documents a build
+#: reads is the step rows' `reads`, the same list the app pins for the task and shows the agent. A path not
+#: listed is introduced by its path.
+_READ_LABELS = (
+    ("epic/", "the epic's technical design"),
     ("foundational-architecture", "the foundational architecture"),
     ("feature-architecture", "the feature architecture"),
-)
-#: Handed over when it exists. The scaffold record is what was ACTUALLY created — the framework, the layout,
-#: the commands — and the architecture documents can disagree with it (they say Fastify; the backend was
-#: scaffolded as Next.js, a deviation only the scaffold record states). The design library is for a UI
-#: story; a backend one may not need it, and nothing here can tell which.
-_STORY_CONTEXT_OPTIONAL = (
     ("scaffold-record", "the scaffold record — what each repository actually is"),
     ("design-library", "the design library"),
 )
+
+
+def _read_label(path: str) -> str:
+    for prefix, label in _READ_LABELS:
+        if path == prefix or (prefix.endswith("/") and path.startswith(prefix)):
+            return label
+    return path
+
+
+def _resolve_read(raw: str, story: dict, epic: dict) -> str:
+    """A step's declared read, with its tokens filled the way the app fills them (`resolvePath`).
+
+    `{epic}` is the story's epic ticket; `{subject}` and `{repo}` are the story's own ticket. A token that
+    cannot be filled raises, rather than leaving a literal path nobody will ever find — the app returns null
+    for the same case and the document is reported missing.
+    """
+    own = story.get("ticket_key") or story["ref"]
+    fills = {"epic": epic.get("ticket_key"), "subject": own, "repo": own}
+
+    def fill(m):
+        value = fills.get(m.group(1))
+        if not value:
+            raise SpecMissing(f"`{raw}` cannot be resolved: {{{m.group(1)}}} has no value for {story['ref']}")
+        return value
+
+    out = re.sub(r"\{([a-z_]+)\}", fill, raw)
+    if "{" in out:
+        raise SpecMissing(f"`{raw}` cannot be resolved")
+    return out
+
+
+def _step_reads(steps, only_step=None, from_step=None) -> list:
+    """The declared reads of the steps this invocation will run, in order, each once. HITL and nesting
+    rows read nothing here: a person or another run does that work."""
+    seen, out = set(), []
+    for st in steps:
+        if only_step is not None and st.number != only_step:
+            continue
+        if from_step is not None and st.number < from_step:
+            continue
+        if st.is_hitl or st.nests:
+            continue
+        for raw in (st.reads or []):
+            if raw not in seen:
+                seen.add(raw)
+                out.append(raw)
+    return out
 
 
 def _doc_block(title: str, doc: dict) -> str:
     return f"### {title} — `{doc['path']}` v{doc['version']} ({doc['status']})\n\n{doc['text']}\n"
 
 
-def _load_story_context(specs, story_ident: str, repo_name: str = None) -> str:
+def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=(), pins=None) -> str:
     """#172, from the database: focused context for ONE story's build.
 
-    The story's own text comes from its epic's story document (`stories/<epic key>`, the section whose
-    heading starts with the story's ref) — the versioned, reviewed copy, the same text the tracker is
-    later updated from. Around it: the epic's technical design, the foundational and feature
-    architecture, and the design library when there is one.
+    WHAT is read is the step rows' `reads` — the list the app pins for the task and tells the agent it was
+    given — so the two sides cannot hold different lists. Each is read at the version the app pinned for the
+    task (`pins`: path → version), or the current version where nothing was pinned. The story's own text is
+    the section of its epic's story document (`stories/<epic key>`) whose heading starts with the story's
+    ref: the versioned, reviewed copy, the same text the tracker is later updated from.
 
     `repo_name` is the repository the build runs in (the checkout directory's name). It is said to the
     engineer, along with which document wins where the scaffold record and the architecture differ.
 
-    Anything REQUIRED that is missing raises `SpecMissing` naming the document, and the caller halts:
-    a build that quietly runs without its design is the failure the gates exist to prevent. Reads no
-    file from the client repo.
+    EVERY read is required. One that is missing raises `SpecMissing` naming it, and the caller halts: a
+    build that quietly runs without its design, or without the design library, is the failure the gates
+    exist to prevent. Reads no file from the client repo.
     """
+    pins = pins or {}
+    if not reads:
+        raise SpecMissing("the step declares no reads, so nothing says what to implement against")
     story = specs.work_item(story_ident)
     if story.get("kind") != "story":
         raise SpecMissing(f"{story_ident} is {story.get('kind')!r}, not a story")
@@ -1049,10 +1095,19 @@ def _load_story_context(specs, story_ident: str, repo_name: str = None) -> str:
     if not epic_key:
         raise SpecMissing(f"epic {epic['ref']} has no Jira key; its documents are filed under that key")
 
-    stories_doc = specs.document(f"stories/{epic_key}")
-    section = section_for(stories_doc, story["ref"])
+    stories_path = f"stories/{epic_key}"
+    docs = []
+    for raw in reads:
+        path = _resolve_read(raw, story, epic)
+        # A pin with no version says nothing was there when the task started; the app then reads the
+        # current version once something exists, and so does this.
+        docs.append(specs.document(path, pins.get(path) or None))
+    story_doc = next((d for d in docs if d["path"] == stories_path), None)
+    if story_doc is None:
+        raise SpecMissing(f"the step does not read `{stories_path}`, so the story's text is not in its inputs")
+    section = section_for(story_doc, story["ref"])
     if section is None:
-        raise SpecMissing(f"`{stories_doc['path']}` has no section for {story['ref']}")
+        raise SpecMissing(f"`{story_doc['path']}` has no section for {story['ref']}")
 
     key = story.get("ticket_key") or story["ref"]
     parts = [f"## Build scope — story {key} ({story['ref']}), epic {epic_key} \"{epic.get('title', '')}\"\n",
@@ -1062,15 +1117,11 @@ def _load_story_context(specs, story_ident: str, repo_name: str = None) -> str:
                 f"architecture documents disagree about what this repository is — its framework, its "
                 f"layout, its commands — the scaffold record describes what was actually created; build "
                 f"to that, and say where the design assumed otherwise.\n"] if repo_name else []),
-             f"### story {story['ref']} — `{stories_doc['path']}` v{stories_doc['version']} "
-             f"({stories_doc['status']})\n\n## {section['heading']}\n\n{section['body']}\n"]
-    for path, label in _STORY_CONTEXT_REQUIRED:
-        parts.append(_doc_block(label, specs.document(path.format(epic=epic_key))))
-    for path, label in _STORY_CONTEXT_OPTIONAL:
-        try:
-            parts.append(_doc_block(label, specs.document(path)))
-        except SpecMissing:
-            pass
+             f"### story {story['ref']} — `{story_doc['path']}` v{story_doc['version']} "
+             f"({story_doc['status']})\n\n## {section['heading']}\n\n{section['body']}\n"]
+    for doc in docs:
+        if doc is not story_doc:
+            parts.append(_doc_block(_read_label(doc["path"]), doc))
     return "\n".join(parts)
 
 
@@ -1447,6 +1498,7 @@ def _run_workflow(
     no_write: bool = False,
     only_step: int = None,
     from_step: int = None,
+    task_id: str = None,
     initial_prior_outputs: list = None,
     dry_run: bool = False,
     skip_missing: bool = False,
@@ -1710,7 +1762,10 @@ def _run_workflow(
     # Falls through to whole-bet context when no story scope is set.
     if story_id and epic_id:
         try:
-            story_context = _load_story_context(specs, story_id, repo_name=Path(project_dir).name)
+            story_context = _load_story_context(
+                specs, story_id, repo_name=Path(project_dir).name,
+                reads=_step_reads(steps, only_step, from_step),
+                pins=specs.pinned_inputs(task_id) if task_id else {})
         except SpecMissing as exc:
             print(f"\nRefuse: cannot build {story_id} — {exc}.", file=sys.stderr)
             sys.exit(3)
@@ -2599,6 +2654,10 @@ def main(argv=None):
     parser.add_argument(
         "--from-step", type=int, default=None, metavar="N", dest="from_step",
     )
+    parser.add_argument(
+        "--task-id", default=None, metavar="ID", dest="task_id",
+        help="the app's task for this step; its pinned inputs name the document versions to read",
+    )
     parser.add_argument("--context", default="", metavar="TEXT")
     parser.add_argument(
         "--bet",
@@ -3195,6 +3254,7 @@ def main(argv=None):
             no_write=args.no_write,
             only_step=args.step,
             from_step=args.from_step,
+            task_id=args.task_id,
             dry_run=args.dry_run,
             skip_missing=args.skip_missing,
             allow_write=args.allow_write,

@@ -22,6 +22,12 @@ vi.mock("./outcomes/effects", () => ({
   handOver: (...a: unknown[]) => handOver(...(a as [])),
 }));
 
+const missingReads = vi.fn(async (): Promise<string[]> => []);
+vi.mock("./context/loaders", async (orig) => ({
+  ...(await orig<typeof import("./context/loaders")>()),
+  missingReads: (...a: unknown[]) => missingReads(...(a as [])),
+}));
+
 const { handleCode } = await import("./outcomes/code");
 const { inputPrompt } = await import("./context");
 import type { AgentContext } from "./context";
@@ -39,7 +45,8 @@ const turn = (repos: AgentContext["repos"], input: Record<string, unknown>) => (
 }) as never;
 
 beforeEach(() => {
-  for (const m of [runCode, recordTurn, releaseExecutor, finished, handOver]) m.mockClear();
+  for (const m of [runCode, recordTurn, releaseExecutor, finished, handOver, missingReads]) m.mockClear();
+  missingReads.mockResolvedValue([]);
   runCode.mockResolvedValue({ ok: false, exit: null, branch: null, prUrl: null, log: "", refusal: "stop here", repoName: null });
 });
 
@@ -77,6 +84,34 @@ describe("the repo the model names", () => {
   it("with none listed, defers to runCode — which refuses with the real reason", async () => {
     await handleCode(turn([], {}));
     expect(runCode).toHaveBeenCalled();
+  });
+});
+
+describe("the documents the step reads", () => {
+  it("REFUSES before spawning when a declared read is not in Compass, naming it", async () => {
+    missingReads.mockResolvedValue(["design-library", "scaffold-record"]);
+    const r = await handleCode(turn([TWO[0]], {}));
+    expect(r.kind).toBe("error");
+    expect(r.kind === "error" && r.message).toContain("`design-library`");
+    expect(r.kind === "error" && r.message).toContain("`scaffold-record`");
+    expect(runCode, "nothing is spawned").not.toHaveBeenCalled();
+    expect(releaseExecutor, "the claim is given back").toHaveBeenCalled();
+    expect(finished).toHaveBeenCalledWith("e1", "t1", "engineer", "build-refused", expect.anything(),
+      expect.objectContaining({ missing: ["design-library", "scaffold-record"] }));
+    expect(String((recordTurn.mock.calls[0] as unknown[])[1])).toContain("did not start");
+  });
+
+  it("asks about this task's reads, and builds when none is missing", async () => {
+    await handleCode(turn([TWO[0]], {}));
+    expect(missingReads).toHaveBeenCalledWith("t1", "e1");
+    expect(runCode).toHaveBeenCalled();
+  });
+
+  it("does not record the build's intent for a build that never started", async () => {
+    missingReads.mockResolvedValue(["epic/CT-288"]);
+    await handleCode(turn([TWO[0]], {}));
+    const said = (recordTurn.mock.calls as unknown[][]).map((c) => String(c[1]));
+    expect(said.some((t) => t.includes("**Building.**"))).toBe(false);
   });
 });
 

@@ -23,7 +23,7 @@ import os
 
 from compass.orchestrator.run import (
     _manual_hitl_decision, _requirement_met, _promote_artifact,
-    _resolve_bet_for_story, _is_story_id, _build_story_gate, _load_story_context, _work_branch_name,
+    _resolve_bet_for_story, _is_story_id, _build_story_gate, _load_story_context, _step_reads, _work_branch_name,
     _story_dependencies, _story_human_deliverable_blockers, _ensure_work_branch,
     _ensure_work_worktree, prune_worktrees, _cleanup_merged_worktree, _module_mismatch_warning,
     _read_story_fm_list, _overlapping_inflight_builds,
@@ -490,8 +490,16 @@ class TestStoryScopingFromDb(unittest.TestCase):
         self.assertFalse(_is_story_id(self.specs, "CT-288"), "an epic")
         self.assertFalse(_is_story_id(self.specs, "CT-9999"), "unknown")
 
+    #: The `build` row's declared reads — the one list; the context is built from it, in this order.
+    READS = ["stories/{epic}", "epic/{epic}", "foundational-architecture", "feature-architecture",
+             "scaffold-record", "design-library"]
+
+    def ctx(self, ident="CT-349", **kw):
+        kw.setdefault("reads", self.READS)
+        return _load_story_context(self.specs, ident, **kw)
+
     def test_story_context_is_focused_and_complete(self):
-        ctx = _load_story_context(self.specs, "CT-349")
+        ctx = self.ctx()
         self.assertIn("Implement ONLY story ACC-E1-S1", ctx)
         self.assertIn("Apple sign-in.", ctx)                      # the story's own text
         for body in ("TECH DESIGN BODY", "FOUNDATION BODY", "FEATURE ARCH BODY", "DESIGN LIB BODY"):
@@ -500,55 +508,101 @@ class TestStoryScopingFromDb(unittest.TestCase):
         self.assertIn("`epic/CT-288` v1.0 (published)", ctx)      # which version the engineer was given
         self.assertLess(ctx.index("Apple sign-in."), ctx.index("TECH DESIGN BODY"))
 
-    def test_the_scaffold_record_is_handed_over_and_comes_before_the_design_library(self):
-        ctx = _load_story_context(self.specs, "CT-349")
-        self.assertIn("SCAFFOLD RECORD BODY", ctx)
-        self.assertIn("`scaffold-record` v1.0 (published)", ctx)
+    def test_the_documents_come_in_the_order_the_row_lists_them(self):
+        ctx = self.ctx()
         self.assertLess(ctx.index("FEATURE ARCH BODY"), ctx.index("SCAFFOLD RECORD BODY"))
         self.assertLess(ctx.index("SCAFFOLD RECORD BODY"), ctx.index("DESIGN LIB BODY"))
+        flipped = self.ctx(reads=["stories/{epic}", "design-library", "scaffold-record"])
+        self.assertLess(flipped.index("DESIGN LIB BODY"), flipped.index("SCAFFOLD RECORD BODY"))
 
-    def test_the_scaffold_record_is_optional_not_a_reason_to_halt(self):
-        del self.specs.documents["scaffold-record"]
-        ctx = _load_story_context(self.specs, "CT-349")
-        self.assertNotIn("SCAFFOLD RECORD BODY", ctx)
+    def test_only_what_the_row_reads_is_handed_over(self):
+        ctx = self.ctx(reads=["stories/{epic}", "epic/{epic}"])
         self.assertIn("TECH DESIGN BODY", ctx)
+        for body in ("FOUNDATION BODY", "FEATURE ARCH BODY", "SCAFFOLD RECORD BODY", "DESIGN LIB BODY"):
+            self.assertNotIn(body, ctx, "a document the row does not read is not part of the build")
 
     def test_the_engineer_is_told_which_repository_and_which_document_wins(self):
-        ctx = _load_story_context(self.specs, "CT-349", repo_name="art-swap-backend")
+        ctx = self.ctx(repo_name="art-swap-backend")
         self.assertIn("working in the repository `art-swap-backend`", ctx)
         self.assertIn("the scaffold record describes what was actually created", ctx)
         self.assertLess(ctx.index("working in the repository"), ctx.index("Apple sign-in."))
 
     def test_without_a_repo_name_it_says_nothing_about_one(self):
-        self.assertNotIn("working in the repository", _load_story_context(self.specs, "CT-349"))
+        self.assertNotIn("working in the repository", self.ctx())
 
-    def test_the_design_library_is_optional(self):
-        del self.specs.documents["design-library"]
-        self.assertNotIn("DESIGN LIB BODY", _load_story_context(self.specs, "CT-349"))
-
-    def test_a_missing_required_document_halts_naming_it(self):
+    def test_every_read_is_required_including_the_scaffold_record_and_design_library(self):
         from compass.orchestrator.spec_source import SpecMissing
-        for path in ("epic/CT-288", "foundational-architecture", "feature-architecture", "stories/CT-288"):
+        for path in ("epic/CT-288", "foundational-architecture", "feature-architecture", "stories/CT-288",
+                     "scaffold-record", "design-library"):
             with self.subTest(path):
                 specs = self.specs
                 saved = specs.documents.pop(path)
                 try:
                     with self.assertRaises(SpecMissing) as cm:
-                        _load_story_context(specs, "CT-349")
+                        self.ctx()
                     self.assertIn(path, str(cm.exception))
                 finally:
                     specs.documents[path] = saved
+
+    def test_a_task_reads_the_version_the_app_pinned_not_the_current_one(self):
+        self.specs.documents["epic/CT-288"]["version"] = "2.0"
+        self.specs.documents["epic/CT-288"]["sections"] = [{"heading": "Design", "body": "REVISED DESIGN"}]
+        self.specs.documents["epic/CT-288"]["history"] = {
+            "1.0": {"status": "published", "sections": [{"heading": "Design", "body": "TECH DESIGN BODY"}]}}
+        pinned = self.ctx(pins={"epic/CT-288": "1.0"})
+        self.assertIn("TECH DESIGN BODY", pinned)
+        self.assertNotIn("REVISED DESIGN", pinned)
+        self.assertIn("`epic/CT-288` v1.0", pinned)
+        current = self.ctx(pins={})
+        self.assertIn("REVISED DESIGN", current)
+
+    def test_a_pin_that_names_a_version_which_is_gone_halts(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        with self.assertRaises(SpecMissing) as cm:
+            self.ctx(pins={"epic/CT-288": "9.9"})
+        self.assertIn("epic/CT-288", str(cm.exception))
+
+    def test_an_empty_pin_reads_the_current_version(self):
+        # None = nothing was there when the task started; the app resolves it forward once the document exists.
+        self.assertIn("TECH DESIGN BODY", self.ctx(pins={"epic/CT-288": None}))
+
+    def test_a_step_that_declares_no_reads_halts(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        with self.assertRaises(SpecMissing):
+            self.ctx(reads=[])
+
+    def test_a_step_that_does_not_read_the_story_halts(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        with self.assertRaises(SpecMissing) as cm:
+            self.ctx(reads=["epic/{epic}"])
+        self.assertIn("stories/CT-288", str(cm.exception))
+
+    def test_a_token_that_cannot_be_filled_halts(self):
+        from compass.orchestrator.spec_source import SpecMissing
+        with self.assertRaises(SpecMissing):
+            self.ctx("CT-400", reads=["stories/{epic}"])      # NOKEY's epic has no ticket (also caught earlier)
+        with self.assertRaises(SpecMissing):
+            self.ctx(reads=["stories/{epic}", "x/{nope}"])
 
     def test_a_story_with_no_section_in_its_document_halts(self):
         from compass.orchestrator.spec_source import SpecMissing
         self.specs.documents["stories/CT-288"]["sections"] = []
         with self.assertRaises(SpecMissing):
-            _load_story_context(self.specs, "CT-349")
+            self.ctx()
+
+    def test_step_reads_are_those_of_the_steps_that_will_run(self):
+        from compass.orchestrator.graph import WorkflowStep
+        steps = [WorkflowStep(1, "a", reads=["x", "y"]), WorkflowStep(2, "b", reads=["y", "z"]),
+                 WorkflowStep(3, "c", is_hitl=True, reads=["h"]), WorkflowStep(4, "d", nests="w", reads=["n"])]
+        self.assertEqual(_step_reads(steps), ["x", "y", "z"])
+        self.assertEqual(_step_reads(steps, only_step=2), ["y", "z"])
+        self.assertEqual(_step_reads(steps, from_step=2), ["y", "z"])
+        self.assertEqual(_step_reads(steps, only_step=3), [], "a human gate reads nothing here")
 
     def test_an_epic_is_not_buildable_as_a_story(self):
         from compass.orchestrator.spec_source import SpecMissing
         with self.assertRaises(SpecMissing):
-            _load_story_context(self.specs, "CT-288")
+            self.ctx("CT-288")
 
     # ── #103 build story-scope gate ───────────────────────────────────────────
     def test_build_refuses_an_epic_with_stories(self):

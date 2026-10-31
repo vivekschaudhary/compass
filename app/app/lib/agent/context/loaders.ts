@@ -198,6 +198,15 @@ async function ensureInputs(taskId: string, engagementId: string): Promise<Pinne
   const sb = supabaseAdmin();
   if (!sb) return [];
 
+  await settlePins(taskId, engagementId);
+  return loadInputs(taskId, engagementId);
+}
+
+/** Pin what nobody has, re-point unresolved subjects, and fill absences that have since arrived. */
+async function settlePins(taskId: string, engagementId: string): Promise<void> {
+  const sb = supabaseAdmin();
+  if (!sb) return;
+
   const { count } = await sb.from("task_input")
     .select("*", { count: "exact", head: true }).eq("task_id", taskId);
   if (!count) await pinInputs(taskId, engagementId);
@@ -205,8 +214,24 @@ async function ensureInputs(taskId: string, engagementId: string): Promise<Pinne
     await healSubjectPins(taskId);
     await resolveEmptyPins(taskId, engagementId);
   }
+}
 
-  return loadInputs(taskId, engagementId);
+/**
+ * The paths this task declares that have no Compass document to read, once its pins are settled.
+ *
+ * A build hands off to a process that reads these same documents, at these same pinned versions
+ * (`--task-id`), and halts on a missing one. Asking first means the person is told which input is
+ * missing before anything is spawned, instead of after a branch has been cut. It deliberately does
+ * NOT consult the external fallback `loadInputs` uses: the process that builds cannot yet.
+ */
+export async function missingReads(taskId: string, engagementId: string): Promise<string[]> {
+  const sb = supabaseAdmin();
+  if (!sb) throw new Error("cannot check a build's inputs: the database is not configured");
+  await settlePins(taskId, engagementId);
+  const { data, error } = await sb.from("task_input")
+    .select("document_path").eq("task_id", taskId).is("document_version", null).order("document_path");
+  if (error) throw new Error(`check inputs: ${error.message}`);
+  return (data ?? []).map((r) => r.document_path as string);
 }
 
 /**
