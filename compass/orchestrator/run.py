@@ -1170,14 +1170,23 @@ def _load_story_context(specs, story_ident: str, repo_name: str = None, reads=()
     if section is None:
         raise SpecMissing(f"`{story_doc['path']}` has no section for {story['ref']}")
 
+    # Which document settles what the repository IS is said only about a document the engineer was
+    # actually handed. With the scaffold record among the reads it wins; without it, the files do.
+    if any(d["path"] == "scaffold-record" for d in docs):
+        which_wins = ("Where the scaffold record and the architecture documents disagree about what this "
+                      "repository is — its framework, its layout, its commands — the scaffold record "
+                      "describes what was actually created; build to that, and say where the design "
+                      "assumed otherwise.")
+    else:
+        which_wins = ("What this repository actually is — its framework, its layout, its commands — is what "
+                      "is in it and in its `compass/config.yaml`, not what the architecture documents "
+                      "assume; build to that, and say where the design assumed otherwise.")
+
     key = story.get("ticket_key") or story["ref"]
     parts = [f"## Build scope — story {key} ({story['ref']}), epic {epic_key} \"{epic.get('title', '')}\"\n",
              f"**Implement ONLY story {story['ref']}.** Other stories in this epic are out of scope for this "
              f"run — they build in their own runs and on their own branches.\n",
-             *([f"**You are working in the repository `{repo_name}`.** Where the scaffold record and the "
-                f"architecture documents disagree about what this repository is — its framework, its "
-                f"layout, its commands — the scaffold record describes what was actually created; build "
-                f"to that, and say where the design assumed otherwise.\n"] if repo_name else []),
+             *([f"**You are working in the repository `{repo_name}`.** {which_wins}\n"] if repo_name else []),
              f"### story {story['ref']} — `{story_doc['path']}` {_version_label(story_doc)}"
              f"\n\n## {section['heading']}\n\n{section['body']}\n"]
     for doc in docs:
