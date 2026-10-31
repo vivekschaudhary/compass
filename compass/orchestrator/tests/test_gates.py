@@ -527,6 +527,19 @@ class TestStoryScopingFromDb(unittest.TestCase):
         self.assertIn("the scaffold record describes what was actually created", ctx)
         self.assertLess(ctx.index("working in the repository"), ctx.index("Apple sign-in."))
 
+    def test_without_the_scaffold_record_the_repository_itself_is_the_truth(self):
+        reads = [r for r in self.READS if r != "scaffold-record"]
+        ctx = self.ctx(repo_name="kindtree-swap", reads=reads)
+        self.assertIn("working in the repository `kindtree-swap`", ctx)
+        self.assertNotIn("scaffold record", ctx, "a document the engineer was not given is not mentioned")
+        self.assertIn("compass/config.yaml", ctx)
+        self.assertLess(ctx.index("working in the repository"), ctx.index("Apple sign-in."))
+
+    def test_with_the_scaffold_record_it_is_the_one_that_wins(self):
+        ctx = self.ctx(repo_name="kindtree-swap")
+        self.assertIn("the scaffold record describes what was actually created", ctx)
+        self.assertNotIn("compass/config.yaml", ctx)
+
     def test_without_a_repo_name_it_says_nothing_about_one(self):
         self.assertNotIn("working in the repository", self.ctx())
 
