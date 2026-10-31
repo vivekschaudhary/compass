@@ -68,6 +68,7 @@ from .pr import (
     _merge_pr,
     _open_pr_url,
     _pr_title,
+    _post_pr_comment,
     _pr_url_any_state,
     _review_diff,
     _uncommitted_code,
@@ -2333,6 +2334,9 @@ def _run_workflow(
             _rv = _review_recommendation(result)
             if _rv:
                 last_review_verdict = _rv
+            if step.task == "review-pr" and work_branch:
+                _ok, _why = _post_pr_comment(exec_dir, work_branch, result)
+                print(f"[review → PR comment{' posted' if _ok else ' NOT posted'}: {_why}]")
 
         # Log structured record to runs.jsonl
         rec = log_step(
