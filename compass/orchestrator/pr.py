@@ -236,6 +236,46 @@ def _ensure_pr(exec_dir, work_branch, body_output):
         return None
 
 
+_PR_COMMENT_MAX = 60000          # GitHub rejects a comment body over 65,536 characters
+
+
+def _post_pr_comment(exec_dir, work_branch, body):
+    """Post the Reviewer's output on the branch's PR, so the review is where the people
+    reading the PR will look, not only in the run log. The agent is told to post it but
+    is not given a way to, so the ORCHESTRATOR does it, as it does for opening the PR.
+    Returns (True, url_or_empty) or (False, reason) — the caller prints a failure; it is
+    never swallowed, because a review nobody can find reads as no review."""
+    if not work_branch:
+        return False, "no work branch"
+    if not (body or "").strip():
+        return False, "the reviewer produced no output to post"
+    import subprocess
+    import tempfile
+    from .connector import extract_artifact_body
+    text = extract_artifact_body(body) or body
+    if len(text) > _PR_COMMENT_MAX:
+        text = text[:_PR_COMMENT_MAX] + "\n\n…(truncated; the full review is in the run log)"
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(text)
+            path = f.name
+        r = subprocess.run(["gh", "pr", "comment", work_branch, "--body-file", path],
+                           cwd=str(exec_dir), capture_output=True, text=True, timeout=120)
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+    finally:
+        if path:
+            import os
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    if r.returncode != 0:
+        return False, (r.stderr or r.stdout or f"gh exited {r.returncode}").strip()[:300]
+    return True, r.stdout.strip()
+
+
 def _dirty_pr_note(exec_dir, work_branch) -> str:
     """#109: after a FAILED check gate, an agent that (against #92) opened its OWN PR
     leaves it dirty with the failing code. Detect it so the halt message doesn't falsely
