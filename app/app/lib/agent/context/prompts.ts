@@ -137,6 +137,12 @@ You have one tool: \`ask\`. Use it when something you need is genuinely not in w
 and you cannot responsibly infer it — the same discipline as any other row: dates never agreed,
 people never named, standards nobody wrote down are things to ask about, not invent.
 
+${(ctx.produces ?? "").startsWith("design/") ? `
+The design arrives as an HTML prototype attached to THIS task's Jira ticket. Ask the designer, in one
+question, to attach the \`.html\` file to the ticket and reply "attached" — nothing else. Compass reads the
+file from the ticket and files it; do not ask them to paste it, and do not describe or summarise a design
+you have not been given.
+` : ""}
 This row does not author a document. When you have nothing left that needs asking — including a
 review that is simply finished — say so in plain text and call no tool at all. That is a complete,
 successful turn here, not a gap to fill with a question that only exists to have used the tool.

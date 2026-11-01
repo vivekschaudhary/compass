@@ -380,3 +380,45 @@ export async function issueText(c: JiraCreds, key: string): Promise<{ summary: s
     return null;
   }
 }
+
+export type JiraAttachment = { id: string; filename: string; mimeType: string; size: number; created: string };
+
+/**
+ * The files attached to an issue. Null when the issue cannot be read: a failed read is not an issue
+ * with nothing attached, and collapsing the two would tell a designer their file was never uploaded.
+ */
+export async function issueAttachments(c: JiraCreds, key: string): Promise<JiraAttachment[] | null> {
+  try {
+    const res = await jreq(c, `/issue/${encodeURIComponent(key)}?fields=attachment`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      fields?: { attachment?: { id?: string; filename?: string; mimeType?: string; size?: number; created?: string }[] };
+    };
+    return (body.fields?.attachment ?? [])
+      .filter((a) => a.id && a.filename)
+      .map((a) => ({
+        id: String(a.id), filename: String(a.filename), mimeType: a.mimeType ?? "",
+        size: Number(a.size ?? 0), created: a.created ?? "",
+      }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One attachment's bytes. Null on any failure, for the same reason as above.
+ *
+ * Not `jreq`: that sends `Accept: application/json`, and the content endpoint answers with a redirect
+ * to the file itself, which must be followed as a file.
+ */
+export async function attachmentBytes(c: JiraCreds, id: string): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(`${c.baseUrl}/rest/api/3/attachment/content/${encodeURIComponent(id)}`, {
+      headers: { Authorization: authHeader(c), Accept: "*/*" },
+      redirect: "follow",
+    });
+    return res.ok ? await res.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
