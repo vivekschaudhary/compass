@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("./supabase", () => ({ supabaseAdmin: () => null }));
 vi.mock("./crypto", () => ({ decryptSecret: (s?: string) => s ?? "" }));
 
-const { adf, adfText, updateIssue, findUser, searchIssues } = await import("./jira");
+const { adf, adfText, updateIssue, findUser, searchIssues, issueAttachments, attachmentBytes } = await import("./jira");
 
 type Node = { type: string; attrs?: { level?: number }; content?: Node[]; text?: string };
 const blocks = (text: string) => adf(text).content as Node[];
@@ -251,5 +251,53 @@ describe("adfText", () => {
   it("is empty for nothing", () => {
     expect(adfText(null)).toBe("");
     expect(adfText({ type: "doc", content: [] })).toBe("");
+  });
+});
+
+describe("issueAttachments / attachmentBytes", () => {
+  const creds = { baseUrl: "https://x.atlassian.net", email: "a@b.c", token: "T", project: "CT" };
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => { fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("lists an issue's attachments", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ fields: { attachment: [
+      { id: "10", filename: "signin.html", mimeType: "text/html", size: 1200, created: "2026-10-30T10:00:00.000+0000" },
+      { id: "11", filename: "notes.png", mimeType: "image/png", size: 50, created: "2026-10-30T11:00:00.000+0000" },
+    ] } }), { status: 200 }));
+    const out = await issueAttachments(creds, "CT-300");
+    expect(out?.map((a) => a.filename)).toEqual(["signin.html", "notes.png"]);
+    expect(out?.[0]).toMatchObject({ id: "10", size: 1200, mimeType: "text/html" });
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/issue/CT-300?fields=attachment");
+  });
+
+  it("an issue with nothing attached is an empty list, not a failure", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ fields: {} }), { status: 200 }));
+    expect(await issueAttachments(creds, "CT-300")).toEqual([]);
+  });
+
+  it("a failed read is null — never an empty list", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("nope", { status: 404 }));
+    expect(await issueAttachments(creds, "CT-300")).toBeNull();
+    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    expect(await issueAttachments(creds, "CT-300")).toBeNull();
+  });
+
+  it("downloads the file as a file, authenticated, following the redirect", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("<html>hi</html>", { status: 200 }));
+    const bytes = await attachmentBytes(creds, "10");
+    expect(new TextDecoder().decode(bytes!)).toBe("<html>hi</html>");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://x.atlassian.net/rest/api/3/attachment/content/10");
+    expect((init.headers as Record<string, string>).Authorization).toMatch(/^Basic /);
+    expect((init.headers as Record<string, string>).Accept, "not application/json — this is a file").toBe("*/*");
+    expect(init.redirect).toBe("follow");
+  });
+
+  it("a failed download is null", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
+    expect(await attachmentBytes(creds, "10")).toBeNull();
+    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    expect(await attachmentBytes(creds, "10")).toBeNull();
   });
 });

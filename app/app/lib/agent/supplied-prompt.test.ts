@@ -15,7 +15,7 @@ vi.mock("../data/sprint", () => ({ nextSprintNumber: async () => 1, committedJql
 vi.mock("../data/actor", () => ({ holdersOn: async () => [] }));
 vi.mock("../specs", () => ({ resolveSpec: async () => null, resolveSpecFromTable: async () => null, COMPASS_DIR: "/nowhere" }));
 
-const { inputPrompt, revisionPrompt } = await import("./context");
+const { inputPrompt, revisionPrompt, systemPrompt } = await import("./context");
 
 const FILED = {
   version: "1.0",
@@ -117,5 +117,21 @@ describe("an ordinary authoring row is untouched", () => {
     const out = inputPrompt(ctx({ output: null, priorDraft: FILED }));
     expect(out).not.toContain("<supplied");
     expect(out).toContain("The SOW text.");
+  });
+});
+
+describe("a design row", () => {
+  const design = (over: Record<string, unknown> = {}) =>
+    ctx({ roleCode: "designer", produces: "design/{epic}", taskTitle: "File the epic's design prototype", ...over });
+
+  it("is told the prototype is attached to the task's ticket, and to ask for exactly that", () => {
+    const out = systemPrompt(design());
+    expect(out).toContain("attached to THIS task's Jira ticket");
+    expect(out).toContain('reply "attached"');
+    expect(out).toContain("do not ask them to paste it");
+  });
+
+  it("another supplied row is not told about tickets", () => {
+    expect(systemPrompt(ctx())).not.toContain("Jira ticket");
   });
 });

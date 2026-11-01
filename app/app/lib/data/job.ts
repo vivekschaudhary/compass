@@ -5,6 +5,7 @@ import { supabaseAdmin } from "../supabase";
 import { emit } from "./events";
 import { expandLinks, type LinkRead } from "./links";
 import { publishToDocs } from "./publish";
+import { designFromTicket, isAttachedReply, isDesignPath } from "./design-attachments";
 import type { Actor } from "./actor";
 import { HEARTBEAT_STALE_MINUTES } from "../agent/heartbeat-config";
 
@@ -265,6 +266,16 @@ export async function recordAnswers(
     if (r.ok) expanded.set(id, r);
     else refusals.push(r.error);
   }));
+  // A design is read from the ticket it was attached to when the reply is "attached". Resolved before
+  // anything is written, like the links above: a ticket with no HTML on it is told to the designer
+  // now, and nothing is half-recorded.
+  const attached = new Map<string, Extract<Awaited<ReturnType<typeof designFromTicket>>, { ok: true }>>();
+  await Promise.all(given.map(async ([id, answer]) => {
+    if (!isDesignPath(filesToOf.get(id)) || !isAttachedReply(answer)) return;
+    const r = await designFromTicket(actor.engagementId, taskId);
+    if (r.ok) attached.set(id, r);
+    else refusals.push(r.reason);
+  }));
   if (refusals.length) return { ok: false, error: refusals.join(" ") };
 
   for (const q of declined) {
@@ -309,10 +320,11 @@ export async function recordAnswers(
     // An UPLOAD is a third source for the same document, beside typed text and a link that was
     // read. Its text never passes through `answer`, so it is taken from here.
     const upload = uploads[id];
+    const fromTicket = attached.get(id);
     if (path) {
       const result = await fileAnswer(
         actor, taskId, path, promptOf.get(id) ?? "Supplied material",
-        upload ? upload.text : soleLink ? soleLink.text : answer,
+        fromTicket ? fromTicket.text : upload ? upload.text : soleLink ? soleLink.text : answer,
         who, soleLink?.finalUrl ?? null,
       );
       if (result) filed.push({ questionId: id, path, ...result });
@@ -320,7 +332,9 @@ export async function recordAnswers(
 
     // A document filed from a link or a file is already the agent's input, pinned at `path`;
     // repeating its text in the conversation would hand the agent the same contract twice.
-    turnText.set(id, path && upload
+    turnText.set(id, path && fromTicket
+      ? `${answer}\n\n_Read ${fromTicket.names.map((n) => `\`${n}\``).join(", ")} from ${fromTicket.ticket} and filed ${fromTicket.text.length.toLocaleString()} characters at \`${path}\`._`
+      : path && upload
       ? `${answer}\n\n_Read ${upload.text.length.toLocaleString()} characters from \`${upload.filename}\` and filed them at \`${path}\`._`
       : path && soleLink
         ? `${answer}\n\n_Read ${soleLink.text.length.toLocaleString()} characters from the link and filed them at \`${path}\`._`
